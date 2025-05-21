@@ -51,6 +51,10 @@ function LandingPage() {
             {/* Feature cards */}
             {[
               {
+                title: 'AI Assistant',
+                description: 'Get instant feedback and suggestions for your music from ChatGPT, Claude, Gemini, and more',
+              },
+              {
                 title: 'Intuitive Timeline',
                 description: 'Arrange your tracks on our easy-to-use timeline interface',
               },
@@ -59,20 +63,16 @@ function LandingPage() {
                 description: 'Compose melodies and chord progressions with precision',
               },
               {
-                title: 'Audio Effects',
-                description: 'Apply professional-grade effects to your tracks',
+                title: 'Powerful Sampler',
+                description: 'Turn any sound into an instrument with our professional-grade sampler',
               },
               {
                 title: 'Project Management',
                 description: 'Save and organize your projects in the cloud',
               },
               {
-                title: 'Export Options',
-                description: 'Share your music in various formats',
-              },
-              {
-                title: 'Collaboration',
-                description: 'Work with other musicians on shared projects',
+                title: 'Drum Machine',
+                description: 'Create beats in seconds with our built-in drum machine',
               },
             ].map((feature, index) => (
               <div // Replaced Box
