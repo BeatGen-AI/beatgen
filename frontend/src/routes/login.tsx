@@ -114,15 +114,15 @@ function LoginPage() {
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div className="space-y-2">
-              <Label htmlFor="email-address">Email address</Label>
+              <Label htmlFor="email-address">Username or Email</Label>
               <Input
                 id="email-address"
                 name="email"
-                type="email"
-                autoComplete="email"
+                type="text"
+                autoComplete="username email"
                 required
                 className="w-full"
-                placeholder="name@example.com"
+                placeholder="Username or Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading || isGoogleLoading}

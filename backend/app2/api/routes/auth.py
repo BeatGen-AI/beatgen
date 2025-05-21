@@ -44,7 +44,7 @@ async def signup(
     """
     Register a new user account
     """
-    logger.info(f"Processing signup request for email: {user_data.email}")
+    logger.info(f"Processing signup request for email: {user_data.email}, username: {user_data.username}")
     try:
         # Call Supabase auth service to create user
         result = await auth_service.create_user(
@@ -99,7 +99,7 @@ async def login(
     try:
         # Call Supabase auth service to sign in user
         result = await auth_service.login_user(
-            email=form_data.username,  # OAuth2 form uses 'username' field for email
+            email_or_username=form_data.username,  # OAuth2 form uses 'username' field for email
             password=form_data.password,
         )
         logger.info(f"User logged in successfully: {result['user_id']}")

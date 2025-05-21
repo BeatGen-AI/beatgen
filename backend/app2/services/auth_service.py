@@ -95,12 +95,12 @@ class AuthService:
             logger.error(traceback.format_exc())
             raise ServiceException(f"User registration failed: {str(e)}")
 
-    async def login_user(self, email: str, password: str) -> Dict[str, Any]:
+    async def login_user(self, email_or_username: str, password: str) -> Dict[str, Any]:
         """
-        Authenticate user with email and password
+        Authenticate user with email/username and password
 
         Args:
-            email: User's email address
+            email_or_username: User's email address or username
             password: User's password
 
         Returns:
@@ -110,12 +110,38 @@ class AuthService:
             UnauthorizedException: If credentials are invalid
             ServiceException: If login fails due to other reasons
         """
-        logger.info(f"Authenticating user with email: {email}")
+        logger.info(f"Authenticating user with: {email_or_username}")
+        
+        # Determine if login is with email or username
+        # Basic check: if it contains '@', assume it's an email.
+        # More robust validation could be added here (e.g., regex for email).
+        is_email = "@" in email_or_username
+        
+        login_payload = {}
+        if is_email:
+            login_payload["email"] = email_or_username
+            logger.info(f"Attempting login with email: {email_or_username}")
+        else:
+            # If it's a username, we first need to get the email associated with it.
+            # This assumes Supabase Auth primarily uses email for sign_in_with_password.
+            # If Supabase supports direct username login, this logic would change.
+            logger.info(f"Attempting login with username: {email_or_username}. Looking up email.")
+            try:
+                user_profile = await self.user_repository.get_user_by_username(username=email_or_username)
+                if not user_profile or not user_profile.email:
+                    logger.error(f"No user found with username: {email_or_username} or email is missing.")
+                    raise UnauthorizedException("Invalid username or password")
+                login_payload["email"] = user_profile.email
+                logger.info(f"Found email {user_profile.email} for username {email_or_username}")
+            except Exception as e:
+                logger.error(f"Error fetching user by username {email_or_username}: {str(e)}")
+                raise UnauthorizedException("Invalid username or password")
+
+        login_payload["password"] = password
+
         try:
-            # Sign in with Supabase Auth
-            auth_response = supabase.client.auth.sign_in_with_password(
-                {"email": email, "password": password}
-            )
+            # Sign in with Supabase Auth using the determined email
+            auth_response = supabase.client.auth.sign_in_with_password(login_payload)
 
             # Extract user data
             if not auth_response.user:

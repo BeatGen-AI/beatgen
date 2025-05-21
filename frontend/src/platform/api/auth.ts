@@ -20,8 +20,8 @@ export interface OAuthRedirectResponse {
   url: string;
 }
 
-export const signUp = async (email: string, password: string): Promise<LoginResponse> => {
-  const response = await apiClient.post('/auth/signup', { email, password });
+export const signUp = async (email: string, password: string, username?: string): Promise<LoginResponse> => {
+  const response = await apiClient.post('/auth/signup', { email, password, username });
   return response.data;
 };
 

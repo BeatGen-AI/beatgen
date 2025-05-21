@@ -50,7 +50,7 @@ const beatGenTitleColor = logoColors[3]; // Purple for BeatGen title
 const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { open } = useSidebar();
-  const { signOut } = useAuth();
+  const { signOut, profile, user } = useAuth();
 
   const menuItems = [
     { text: 'Home', icon: <IconHomeFilled />, path: '/' },
@@ -87,16 +87,29 @@ const Sidebar: React.FC = () => {
                 tooltip="My Profile"
                 className="w-full justify-start translate-x-1.5"
               >
-                <IconUserCircle />
-                {open && <span>My Profile</span>}
+                {profile?.avatar_url ? (
+                  <img 
+                    src={profile.avatar_url} 
+                    alt={profile.display_name || profile.username || 'User Avatar'} 
+                    className="h-6 w-6 rounded-full object-cover mr-2 shrink-0"
+                  />
+                ) : (
+                  <IconUserCircle className="h-6 w-6 shrink-0" />
+                )}
+                {open && <span>{profile?.display_name || profile?.username || 'My Profile'}</span>}
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" side="right" align="start" sideOffset={open ? 5 : 10}>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">pranav100000@gmail.com</p>
+                  <p className="text-sm font-medium leading-none">
+                    {profile?.display_name || profile?.username || user?.email || 'User'}
+                  </p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    pranav100000@gmail.com
+                    {profile?.username || user?.email || 'User'}
+                  </p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {user?.email || 'No email available'}
                   </p>
                 </div>
               </DropdownMenuLabel>
