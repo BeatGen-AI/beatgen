@@ -14,7 +14,24 @@ export const Route = createFileRoute('/')({
 function LandingPage() {
   return (
     <>
-      <div className="container mx-auto px-4 xl:px-0 min-h-[calc(100vh-64px)] flex flex-col py-4"> {/* Replaced Container */}
+      {/* Header section */}
+      <header className="py-4 px-4 xl:px-0 bg-background border-b border-border">
+        <div className="container mx-auto flex justify-between items-center">
+          {/* Logo or site name can go here if needed in the future */}
+          <div></div>
+          
+          <div className="flex gap-2">
+            <Link to="/login">
+              <Button variant="ghost">Login</Button>
+            </Link>
+            <Link to="/signup">
+              <Button variant="ghost">Sign Up</Button>
+            </Link>
+          </div>
+        </div>
+      </header>
+      
+      <div className="container mx-auto px-4 xl:px-0 min-h-[calc(100vh-64px-57px)] flex flex-col py-4"> {/* Adjusted min-h for header, assuming header height is roughly 57px (py-4 + border-b) + 64px (existing calc) */}
         <div className="flex flex-col items-center justify-center text-center py-8 md:py-12 flex-1"> {/* Replaced Box */}
           <h1 className="mb-4 font-bold text-4xl sm:text-5xl md:text-6xl lg:text-7xl"> {/* Replaced Typography */}
             BeatGen Studio
