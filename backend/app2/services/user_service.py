@@ -216,4 +216,4 @@ class UserService:
             # Attempt to delete the file from storage if upload succeeded but DB update failed, to prevent orphans
             # This part is tricky as we don't know at which stage the error occurred precisely without more checks.
             # For simplicity, we are not adding cleanup logic here, but it's a consideration for robustness.
-            raise ServiceException(f"Failed to update avatar: {str(e)}")
+            raise ServiceException(f"Failed to update avatar: {str(e)}") from e
