@@ -1,13 +1,13 @@
 from datetime import datetime
 import uuid
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, File, UploadFile
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, EmailStr
 
 from app2.api.dependencies import get_current_user, get_user_service
 from app2.services.user_service import UserService
 from app2.core.logging import get_api_logger
-from app2.core.exceptions import NotFoundException
+from app2.core.exceptions import NotFoundException, UnauthorizedException
 
 router = APIRouter()
 logger = get_api_logger("users")
@@ -30,6 +30,7 @@ class UpdateProfileRequest(BaseModel):
 
     username: Optional[str] = None
     display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -129,4 +130,40 @@ async def change_password(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to change password: {str(e)}",
+        )
+
+
+@router.post("/me/avatar", response_model=UserProfile)
+async def upload_user_avatar(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+) -> Any:
+    """
+    Upload or update current user's avatar.
+    """
+    user_id = current_user["id"]
+    logger.info(f"Attempting to upload avatar for user ID: {user_id}")
+    try:
+        updated_profile = await user_service.update_avatar(
+            user_id=user_id,
+            file=file
+        )
+        logger.info(f"Successfully uploaded avatar for user ID: {user_id}. New URL: {updated_profile.avatar_url}")
+        return updated_profile
+    except NotFoundException:
+        logger.error(f"Profile not found for user ID during avatar upload: {user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found"
+        )
+    except ValueError as ve:
+        logger.error(f"Validation error during avatar upload for user {user_id}: {str(ve)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve)
+        )
+    except Exception as e:
+        logger.error(f"Error uploading avatar for user {user_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload avatar: {str(e)}",
         )

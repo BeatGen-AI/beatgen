@@ -185,3 +185,33 @@ class UserRepository(BaseRepository[User]):
             self.logger.error(f"Error finding user by email: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to find user by email: {str(e)}")
+
+    async def get_user_by_username(self, username: str) -> Optional[User]:
+        """
+        Find a user by username.
+
+        Args:
+            username: The username to search for.
+
+        Returns:
+            The user if found, None otherwise.
+
+        Raises:
+            DatabaseException: If the query fails.
+        """
+        self.logger.info(f"Finding user with username {username}")
+        try:
+            statement = select(self.model_class).where(self.model_class.username == username)
+            # Use session.exec for async execution if your BaseRepository/session setup supports it.
+            # Assuming self.session is an async-capable session or appropriately wrapped.
+            result = self.session.exec(statement).first()
+
+            if result:
+                self.logger.info(f"Found user with username {username}")
+            else:
+                self.logger.info(f"No user found with username {username}")
+            return result
+        except Exception as e:
+            self.logger.error(f"Error finding user by username: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise DatabaseException(f"Failed to find user by username: {str(e)}")

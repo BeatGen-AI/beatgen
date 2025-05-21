@@ -17,7 +17,7 @@ type AuthContextType = {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<{
+  signUp: (email: string, password: string, username?: string) => Promise<{
     error: Error | null;
     success: boolean;
     message?: string;
@@ -29,6 +29,7 @@ type AuthContextType = {
   }>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -47,6 +48,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Function to fetch and set the user profile
+  const fetchProfile = async () => {
+    try {
+      console.log('Refreshing user profile...');
+      const userProfile = await getUserProfile();
+      console.log('Profile refreshed successfully:', userProfile);
+      setProfile(userProfile);
+    } catch (error) {
+      console.error('Failed to refresh user profile:', error);
+      // Optionally handle profile refresh error, e.g., by signing out
+      // setProfile(null); // Or keep stale profile
+    }
+  };
+
   // Check for existing token on load or token in URL fragment
   useEffect(() => {
     const processToken = async (token: string) => {
@@ -61,18 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: decodedToken.sub || 'unknown',
           email: decodedToken.email || decodedToken.sub || '',
         });
-        try {
-          console.log('Loading user profile...');
-          const userProfile = await getUserProfile();
-          console.log('Profile loaded successfully:', userProfile);
-          setProfile(userProfile);
-        } catch (error) {
-          console.error('Failed to load user profile:', error);
-          // Consider sign out or specific error handling if profile load fails after login
-          localStorage.removeItem('access_token'); // Remove token if profile load fails?
-          setUser(null);
-          setProfile(null);
-        }
+        await fetchProfile(); // Use the new fetchProfile function
       } else {
         console.warn('Token is expired or invalid, removing');
         localStorage.removeItem('access_token');
@@ -165,11 +169,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, username?: string) => {
     try {
-      console.log('Creating account with:', { email });
+      console.log('Creating account with:', { email, username });
       
-      const response = await apiSignUp(email, password);
+      const response = await apiSignUp(email, password, username);
       console.log('Signup response:', response);
       
       // Check if we have a message about email verification
@@ -186,13 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(user);
         
         // Load user profile after signup
-        try {
-          const userProfile = await getUserProfile();
-          setProfile(userProfile);
-          console.log('User profile created:', userProfile);
-        } catch (profileError) {
-          console.error('Failed to load new user profile:', profileError);
-        }
+        await fetchProfile(); // Use the new fetchProfile function
         
         return { error: null, success: true };
       }
@@ -264,13 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(user);
         
         // Load user profile
-        try {
-          const userProfile = await getUserProfile();
-          setProfile(userProfile);
-          console.log('User profile loaded:', userProfile);
-        } catch (profileError) {
-          console.error('Failed to load user profile:', profileError);
-        }
+        await fetchProfile(); // Use the new fetchProfile function
         
         return { error: null, success: true };
       }
@@ -329,6 +321,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signInWithGoogle: googleSignIn,
     signOut,
+    refreshProfile: fetchProfile, // Expose fetchProfile as refreshProfile
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

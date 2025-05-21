@@ -33,6 +33,7 @@ function RegisterPage() {
   const navigate = useNavigate();
   const { signUp, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +61,7 @@ function RegisterPage() {
     setSuccess(null);
     
     try {
-      const result = await signUp(email, password);
+      const result = await signUp(email, password, username);
       
       if (result.success) {
         if (result.message) {
@@ -158,6 +159,21 @@ function RegisterPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading || isGoogleLoading}
                 autoFocus
+              />
+            </div>
+            <div className="space-y-2 pt-4">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                className="w-full"
+                placeholder="Choose a username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                disabled={isLoading || isGoogleLoading}
               />
             </div>
             <div className="space-y-2 pt-4">

@@ -1,5 +1,7 @@
 from typing import Dict, Any
 import traceback
+import uuid # For generating unique filenames
+from fastapi import UploadFile # For type hinting
 
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import (
@@ -140,3 +142,78 @@ class UserService:
             logger.error(f"Error changing password: {str(e)}")
             logger.error(traceback.format_exc())
             raise ServiceException(f"Failed to change password: {str(e)}")
+
+    async def update_avatar(self, user_id: str, file: UploadFile) -> Dict[str, Any]:
+        """
+        Uploads an avatar for the user, stores it in Supabase Storage, 
+        and updates the user's profile with the new avatar URL.
+
+        Args:
+            user_id: The ID of the user.
+            file: The avatar file to upload (FastAPI UploadFile object).
+
+        Returns:
+            The updated user profile including the new avatar_url.
+
+        Raises:
+            NotFoundException: If the user profile is not found.
+            ServiceException: If the file upload or profile update fails.
+            ValueError: If the file type is not supported.
+        """
+        logger.info(f"Updating avatar for user ID: {user_id}")
+
+        # Validate file type
+        allowed_content_types = ["image/jpeg", "image/png", "image/gif"]
+        if file.content_type not in allowed_content_types:
+            logger.error(f"Invalid file type for avatar: {file.content_type}. User ID: {user_id}")
+            raise ValueError(f"Invalid file type: {file.content_type}. Please upload a JPG, PNG, or GIF.")
+
+        # Ensure user profile exists (also fetches it for returning later)
+        profile = await self.get_profile(user_id) # This will raise NotFoundException if not found
+
+        file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'png'
+        # Sanitize filename further if needed, or use a fixed extension based on content_type
+        if file.content_type == "image/jpeg":
+            file_extension = "jpg"
+        elif file.content_type == "image/png":
+            file_extension = "png"
+        elif file.content_type == "image/gif":
+            file_extension = "gif"
+        
+        # Construct a unique path for the file in storage
+        storage_path = f"{user_id}/avatar_{uuid.uuid4()}.{file_extension}"
+        bucket_name = "profile-pics"
+
+        try:
+            logger.info(f"Uploading avatar to Supabase Storage. Bucket: {bucket_name}, Path: {storage_path}")
+            
+            # Read file content
+            file_content = await file.read()
+            
+            # Upload to Supabase Storage
+            # The Supabase Python client's `upload` method expects bytes.
+            upload_response = supabase.client.storage.from_(bucket_name).upload(
+                path=storage_path,
+                file=file_content,
+                file_options={"content-type": file.content_type, "cache-control": "3600"} # Set content type
+            )
+            
+            # Construct the public URL (Supabase doesn't return it directly on upload v2)
+            # The URL format is: {SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{FILE_PATH}
+            public_url_response = supabase.client.storage.from_(bucket_name).get_public_url(storage_path)
+            avatar_url = public_url_response
+
+            logger.info(f"Avatar uploaded successfully. Public URL: {avatar_url}")
+
+            # Update user profile with the new avatar URL
+            updated_profile = await self.update_profile(user_id, {"avatar_url": avatar_url})
+            logger.info(f"User profile updated with new avatar URL for user ID: {user_id}")
+            
+            return updated_profile # Return the full updated profile
+
+        except Exception as e:
+            logger.error(f"Failed to upload avatar or update profile for user {user_id}: {str(e)}", exc_info=True)
+            # Attempt to delete the file from storage if upload succeeded but DB update failed, to prevent orphans
+            # This part is tricky as we don't know at which stage the error occurred precisely without more checks.
+            # For simplicity, we are not adding cleanup logic here, but it's a consideration for robustness.
+            raise ServiceException(f"Failed to update avatar: {str(e)}") from e

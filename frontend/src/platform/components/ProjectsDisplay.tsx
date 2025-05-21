@@ -77,7 +77,6 @@ const ProjectsDisplay: React.FC<ProjectsDisplayProps> = ({
             gutterBottom
             style={{ 
               color: logoColors[1],
-              textShadow: `0 0 5px ${logoColors[1]}`
             }}
           >
             No projects yet

@@ -16,6 +16,7 @@ import { Route as SettingsImport } from './routes/settings'
 import { Route as SamplerTracksImport } from './routes/sampler-tracks'
 import { Route as RegisterImport } from './routes/register'
 import { Route as ProjectsImport } from './routes/projects'
+import { Route as ProfileImport } from './routes/profile'
 import { Route as OauthCallbackImport } from './routes/oauth-callback'
 import { Route as MidiTracksImport } from './routes/midi-tracks'
 import { Route as LoginImport } from './routes/login'
@@ -53,6 +54,12 @@ const RegisterRoute = RegisterImport.update({
 const ProjectsRoute = ProjectsImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const ProfileRoute = ProfileImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -151,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OauthCallbackImport
       parentRoute: typeof rootRoute
     }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileImport
+      parentRoute: typeof rootRoute
+    }
     '/projects': {
       id: '/projects'
       path: '/projects'
@@ -199,6 +213,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/midi-tracks': typeof MidiTracksRoute
   '/oauth-callback': typeof OauthCallbackRoute
+  '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/register': typeof RegisterRoute
   '/sampler-tracks': typeof SamplerTracksRoute
@@ -214,6 +229,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/midi-tracks': typeof MidiTracksRoute
   '/oauth-callback': typeof OauthCallbackRoute
+  '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/register': typeof RegisterRoute
   '/sampler-tracks': typeof SamplerTracksRoute
@@ -230,6 +246,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/midi-tracks': typeof MidiTracksRoute
   '/oauth-callback': typeof OauthCallbackRoute
+  '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/register': typeof RegisterRoute
   '/sampler-tracks': typeof SamplerTracksRoute
@@ -247,6 +264,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/midi-tracks'
     | '/oauth-callback'
+    | '/profile'
     | '/projects'
     | '/register'
     | '/sampler-tracks'
@@ -261,6 +279,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/midi-tracks'
     | '/oauth-callback'
+    | '/profile'
     | '/projects'
     | '/register'
     | '/sampler-tracks'
@@ -275,6 +294,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/midi-tracks'
     | '/oauth-callback'
+    | '/profile'
     | '/projects'
     | '/register'
     | '/sampler-tracks'
@@ -291,6 +311,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MidiTracksRoute: typeof MidiTracksRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
+  ProfileRoute: typeof ProfileRoute
   ProjectsRoute: typeof ProjectsRoute
   RegisterRoute: typeof RegisterRoute
   SamplerTracksRoute: typeof SamplerTracksRoute
@@ -306,6 +327,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MidiTracksRoute: MidiTracksRoute,
   OauthCallbackRoute: OauthCallbackRoute,
+  ProfileRoute: ProfileRoute,
   ProjectsRoute: ProjectsRoute,
   RegisterRoute: RegisterRoute,
   SamplerTracksRoute: SamplerTracksRoute,
@@ -330,6 +352,7 @@ export const routeTree = rootRoute
         "/login",
         "/midi-tracks",
         "/oauth-callback",
+        "/profile",
         "/projects",
         "/register",
         "/sampler-tracks",
@@ -357,6 +380,9 @@ export const routeTree = rootRoute
     },
     "/oauth-callback": {
       "filePath": "oauth-callback.tsx"
+    },
+    "/profile": {
+      "filePath": "profile.tsx"
     },
     "/projects": {
       "filePath": "projects.tsx"
