@@ -1,9 +1,9 @@
-import React, { forwardRef, memo } from 'react';
+import React, { forwardRef, memo, useRef } from 'react';
 import { Box, IconButton, Typography, TextField, Tooltip, useTheme } from '@mui/material';
 // Import components
 import BPMControl from './BPMControl';
 import TimeSignatureDisplay from './TimeSignatureDisplay';
-import { TimeDisplay } from './TimeDisplay';
+import { TimeDisplay, TimeDisplayHandle } from './TimeDisplay';
 import KeySelector from './KeySelector';
 import { SaveProjectButton } from './SaveProjectButton';
 import { useStudioStore } from '../../stores/studioStore';
@@ -68,10 +68,25 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     onSettingsToggle,
 }, ref) => {
     const theme = useTheme();
+    const timeDisplayRef = useRef<TimeDisplayHandle>(null);
+
+    const handlePlayPause = () => {
+        if (isPlaying) {
+            timeDisplayRef.current?.pause();
+        } else {
+            timeDisplayRef.current?.play();
+        }
+        onPlayPause();
+    };
+
+    const handleStop = () => {
+        timeDisplayRef.current?.reset(0);
+        onStop();
+    };
 
     return (
         <Box 
-            ref={ref} // Attach the forwarded ref here
+            ref={ref}
             sx={{
             display: 'grid',
             gridTemplateColumns: '1fr auto 1fr',
@@ -175,7 +190,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     <IconButton
                         size="small"
                         color="inherit"
-                        onClick={onPlayPause}
+                        onClick={handlePlayPause}
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
@@ -189,7 +204,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     <IconButton
                         size="small"
                         color="inherit"
-                        onClick={onStop}
+                        onClick={handleStop}
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
@@ -271,7 +286,8 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         <IconZoomOut />
                     </IconButton>
                     <TimeDisplay
-                        currentTime={currentTime}
+                        ref={timeDisplayRef}
+                        initialTime={currentTime}
                     />
                     {<SaveProjectButton
                         projectTitle={projectTitle}
