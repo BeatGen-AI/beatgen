@@ -62,6 +62,20 @@ ANTHROPIC_CLAUDE_3_7_SONNET = ModelInfo(
     api_key_env_var="ANTHROPIC_API_KEY"
 )
 
+ANTHROPIC_CLAUDE_4_SONNET = ModelInfo(
+    provider_name="anthropic",
+    display_name="Claude 4 Sonnet",
+    model_name="claude-sonnet-4-20250514",
+    api_key_env_var="ANTHROPIC_API_KEY"
+)
+
+ANTHROPIC_CLAUDE_4_OPUS = ModelInfo(
+    provider_name="anthropic",
+    display_name="Claude 4 Opus",
+    model_name="claude-opus-4-20250514",
+    api_key_env_var="ANTHROPIC_API_KEY"
+)
+
 GOOGLE_GEMINI_PRO = ModelInfo(
     provider_name="google-gla",
     display_name="Gemini Pro 2.5",
@@ -135,6 +149,10 @@ def get_model_by_name(model_name: str) -> ModelInfo:
             return OPENAI_GPT_4_1
         case "Claude 3.7 Sonnet":
             return ANTHROPIC_CLAUDE_3_7_SONNET
+        case "Claude 4 Sonnet":
+            return ANTHROPIC_CLAUDE_4_SONNET
+        case "Claude 4 Opus":
+            return ANTHROPIC_CLAUDE_4_OPUS
         case "Gemini Pro 2.5":
             return GOOGLE_GEMINI_PRO
         case "Gemini Flash 2.5":
