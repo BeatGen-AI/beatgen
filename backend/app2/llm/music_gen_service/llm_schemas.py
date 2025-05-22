@@ -130,7 +130,7 @@ class Note(BaseCoerceModel):
 class Bar(BaseCoerceModel):
     """Schema for a single bar of music containing notes."""
     bar: int = Field(..., description="The bar number (1-indexed).")
-    notes: List[Note] = Field(..., description="List of notes within this bar.")
+    notes: Optional[List[Note]] = Field(None, description="List of notes within this bar.")
 
 class MelodyData(BaseCoerceModel):
     """Schema for the structured melody data expected directly from the LLM."""
@@ -183,7 +183,7 @@ class IntervalNoteItem(BaseCoerceModel):
 class IntervalBarItem(BaseCoerceModel):
     bar_number: int = Field(description="The bar number associated with this bar of the melody.")
     musical_intention: Optional[str] = Field(None, description="The musical intention for this bar of the melody.")
-    notes: List[IntervalNoteItem]
+    notes: Optional[List[IntervalNoteItem]] = Field(None, description="List of notes within this bar.")
 
 class IntervalMelodyOutput(BaseCoerceModel):
     starting_octave: int = Field(description="The octave to start on (3-5)", ge=3, le=5)
