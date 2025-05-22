@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useLayoutEffect } from 'react';
-import { Box, Button, FormControlLabel, Switch, useTheme } from '@mui/material';
+import { Box, Button } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 
 // Import components
@@ -13,9 +12,6 @@ import { useStudioStore } from './stores/studioStore';
 
 // Import piano roll components
 import PianoRollWindows from './components/piano-roll-new/PianoRollWindows';
-
-// Import Drum Machine
-import DrumMachine from './components/drum-machine/DrumMachine';
 
 // Import custom hooks
 import { useStudioDBSession } from './hooks/useStudioDBSession';
@@ -234,16 +230,24 @@ function Studio({ projectId }: StudioProps) {
 
   // Control playback cursor directly when playback state changes
   useEffect(() => {
-    if (!store || !scrollRef.current?.playbackCursor) return;
-    
+    if (!scrollRef.current?.playbackCursor) {
+      return;
+    }
+    if (!store) {
+      throw new Error('No store available');
+    }
+
+    const cursor = scrollRef.current.playbackCursor;
+
     if (isPlaying) {
-      // Start the cursor animation when playback starts
-      scrollRef.current.playbackCursor.play();
-      console.log('Starting cursor animation via imperative API');
+      cursor.play();
     } else {
-      // Pause the cursor animation when playback stops
-      scrollRef.current.playbackCursor.pause();
-      console.log('Pausing cursor animation via imperative API');
+      // isPlaying is false. This could be a pause or a stop.
+      if (currentTime < 0.01) { // Check if time is (near) zero, indicating a stop
+        cursor.stop();
+      } else {
+        cursor.pause();
+      }
     }
     
     // Clean up any stray animation frames
@@ -253,7 +257,7 @@ function Studio({ projectId }: StudioProps) {
         animationFrameRef.current = null;
       }
     };
-  }, [isPlaying, store]);
+  }, [isPlaying, currentTime, store]); // Added currentTime to dependencies
 
   // Handle infinite scrolling for the timeline
   const handleScroll = React.useCallback(() => {
