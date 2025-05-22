@@ -698,6 +698,9 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
                     expect_json=True
                 )
                 
+                logger.info(f"Response data type: {type(response_data)}")
+                logger.info(f"Response data: {response_data}")
+                
                 if isinstance(response_data, str):
                     # Attempt to parse the JSON string
                     try:
@@ -868,34 +871,34 @@ Output only the JSON object."""
         
         # Fallback if no drums selected
         if not validated_drums and self._available_drum_samples:
-            raise Exception("No drum sounds selected by LLM or validated, attempting fallback.")
-            # logger.warning("No drum sounds selected by LLM or validated, attempting fallback.")
-            # # Simple fallback: try to pick common types if names are suggestive, else pick first few
-            # common_types = {'kick': False, 'snare': False, 'hat': False, 'clap': False}
-            # for sample in self._available_drum_samples:
-            #     sample_name_lower = sample.display_name.lower()
-            #     added = False
-            #     if 'kick' in sample_name_lower and not common_types['kick']:
-            #         validated_drums.append(sample.display_name)
-            #         common_types['kick'] = True
-            #         added = True
-            #     elif 'snare' in sample_name_lower and not common_types['snare']:
-            #         validated_drums.append(sample.display_name)
-            #         common_types['snare'] = True
-            #         added = True
-            #     elif ('hat' in sample_name_lower or 'hi-hat' in sample_name_lower) and not common_types['hat']:
-            #         validated_drums.append(sample.display_name)
-            #         common_types['hat'] = True
-            #         added = True
-            #     elif 'clap' in sample_name_lower and not common_types['clap']:
-            #         validated_drums.append(sample.display_name)
-            #         common_types['clap'] = True
-            #         added = True
-            #     if len(validated_drums) >= 4: break # Limit fallback to around 4 sounds
+            #raise Exception("No drum sounds selected by LLM or validated, attempting fallback.")
+            logger.warning("No drum sounds selected by LLM or validated, attempting fallback.")
+            # Simple fallback: try to pick common types if names are suggestive, else pick first few
+            common_types = {'kick': False, 'snare': False, 'hat': False, 'clap': False}
+            for sample in self._available_drum_samples:
+                sample_name_lower = sample.display_name.lower()
+                added = False
+                if 'kick' in sample_name_lower and not common_types['kick']:
+                    validated_drums.append(sample.display_name)
+                    common_types['kick'] = True
+                    added = True
+                elif 'snare' in sample_name_lower and not common_types['snare']:
+                    validated_drums.append(sample.display_name)
+                    common_types['snare'] = True
+                    added = True
+                elif ('hat' in sample_name_lower or 'hi-hat' in sample_name_lower) and not common_types['hat']:
+                    validated_drums.append(sample.display_name)
+                    common_types['hat'] = True
+                    added = True
+                elif 'clap' in sample_name_lower and not common_types['clap']:
+                    validated_drums.append(sample.display_name)
+                    common_types['clap'] = True
+                    added = True
+                if len(validated_drums) >= 4: break # Limit fallback to around 4 sounds
             
-            # if not validated_drums: # If name matching failed, just pick first few
-            #     validated_drums = [ds.display_name for ds in self._available_drum_samples[:min(4, len(self._available_drum_samples))]]
-            # logger.info(f"Fallback selected drums: {validated_drums}")
+            if not validated_drums: # If name matching failed, just pick first few
+                validated_drums = [ds.display_name for ds in self._available_drum_samples[:min(4, len(self._available_drum_samples))]]
+            logger.info(f"Fallback selected drums: {validated_drums}")
 
         return SelectDrumSounds(drum_sounds=validated_drums)
 
