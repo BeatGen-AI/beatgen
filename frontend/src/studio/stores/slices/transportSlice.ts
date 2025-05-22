@@ -49,7 +49,8 @@ export const createTransportSlice: StoreSliceCreator<TransportSlice> = (set, get
             case 'pause':
                 if (currentIsPlaying) {
                     transport.pause(); // Pause is usually synchronous
-                    setTransportState({ isPlaying: false });
+                    const newCurrentTime = transport.position; // Get current time from TransportController
+                    setTransportState({ isPlaying: false, currentTime: newCurrentTime });
                 }
                 break;
             case 'stop':
