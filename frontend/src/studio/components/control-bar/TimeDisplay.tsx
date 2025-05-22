@@ -72,10 +72,43 @@ export const TimeDisplay = forwardRef<TimeDisplayHandle, TimeDisplayProps>(
 
     // Effect to update currentTime if initialTime prop changes AND the timer isn't playing
     useEffect(() => {
-      if (!isPlaying) {
-        setCurrentTime(initialTime);
+      if (isPlaying) {
+        // If internally playing, and initialTime (from prop, global time) has changed
+        // significantly, it means there was a seek. We need to restart our internal timer from this new point.
+        // A threshold (e.g., 100ms) prevents reacting to minor jitter if initialTime updates very frequently
+        // for reasons other than a major seek.
+        if (initialTime !== undefined && Math.abs(currentTime - initialTime) > 0.1) {
+          // Stop current interval
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+          }
+          // Update internal current time to the new global time
+          setCurrentTime(initialTime);
+          // Reset timer references as if play was just pressed at this new global time
+          playWallClockStartTimeRef.current = Date.now();
+          timeAtPlayPressRef.current = initialTime;
+          // Restart interval
+          intervalRef.current = setInterval(() => {
+            const elapsedMilliseconds = Date.now() - playWallClockStartTimeRef.current;
+            // Ensure the setCurrentTime here references the correct, updated timeAtPlayPressRef
+            // This might be an issue if timeAtPlayPressRef is not stable in the closure.
+            // Let's ensure we use the ref's current value inside setInterval.
+            setCurrentTime(timeAtPlayPressRef.current + elapsedMilliseconds / 1000);
+          }, 50);
+        }
+        // If initialTime hasn't significantly changed, our current running interval is fine.
+      } else {
+        // If not internally playing, our display should directly reflect initialTime.
+        // This handles initial mount, and seeks that occur while TimeDisplay is paused.
+        if (initialTime !== undefined && currentTime !== initialTime) {
+          setCurrentTime(initialTime);
+        }
       }
-    }, [initialTime]);
+      // This effect reacts to changes in the global time (initialTime) or
+      // when the internal play/pause state of this component changes.
+      // currentTime is intentionally omitted from deps to prevent loops, as this effect sets it.
+      // The Math.abs(currentTime - initialTime) check uses the current state value of currentTime.
+    }, [initialTime, isPlaying]);
 
     // Cleanup effect to clear interval on component unmount
     useEffect(() => {

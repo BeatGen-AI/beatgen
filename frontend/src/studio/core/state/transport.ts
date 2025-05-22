@@ -111,6 +111,8 @@ export class TransportController implements Transport {
         if (this.isStarting) return;
         this.isStarting = true;
 
+        console.log(`[TransportController.play] Entry. Current Tone.Transport.seconds: ${Tone.getTransport().seconds.toFixed(4)}s`);
+
         try {
             await Tone.start();
             
@@ -119,8 +121,8 @@ export class TransportController implements Transport {
             
             // CRITICAL: Get the EXACT transport position right before playback starts
             // This ensures we're using the most current position for calculations
-            // Using 'let' instead of 'const' since we might need to update this if it changes
             let transportPosition = Tone.getTransport().seconds;
+            console.log(`[TransportController.play] transportPosition determined as: ${transportPosition.toFixed(4)}s`);
             console.log(`Starting playback at transport position: ${transportPosition}s`);
             
             // Ensure all players are completely reset before starting new playback
@@ -235,8 +237,8 @@ export class TransportController implements Transport {
             
             // Start soundfont player if available
             try {
-                console.log('Starting soundfont player');
-                await this.getSoundfontController().play();
+                console.log(`Starting soundfont player. Transport position: ${transportPosition}s`);
+                await this.getSoundfontController().play(transportPosition);
             } catch (error) {
                 console.error('Failed to start soundfont player:', error);
             }
@@ -250,9 +252,10 @@ export class TransportController implements Transport {
                 console.error('Failed to start sampler tracks:', error);
             }
             
-            // Start transport with a clean slate
-            Tone.getTransport().start();
-            console.log('Transport started, state:', Tone.getTransport().state);
+            // Start transport with a clean slate, BUT from the current transportPosition
+            Tone.getTransport().start(undefined, transportPosition);
+            console.log(`[TransportController.play] After Tone.Transport.start(undefined, ${transportPosition.toFixed(4)}). Current Tone.Transport.seconds: ${Tone.getTransport().seconds.toFixed(4)}s`);
+            console.log(`Transport started from offset ${transportPosition}s, state:`, Tone.getTransport().state);
         } catch (error) {
             console.error('Error starting playback:', error);
             this.stop();
@@ -518,6 +521,7 @@ export class TransportController implements Transport {
     }
     
     public setPosition(position: number): void {
+        console.log(`[TransportController.setPosition] Received position: ${typeof position === 'number' ? position.toFixed(4) : position}`);
         // Just an alias for seek - make sure we pass the position value directly
         this.seek(position);
     }

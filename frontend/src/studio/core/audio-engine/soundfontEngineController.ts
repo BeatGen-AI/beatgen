@@ -134,8 +134,12 @@ export class SoundfontEngineController implements TrackPlayer{
     /**
      * Start or resume playback
      */
-    async play(): Promise<void> {
-        console.log('SoundfontEngineController: Starting playback');
+    async play(startTimeInSeconds?: number): Promise<void> {
+        console.log(`SoundfontEngineController: Starting playback. Requested startTimeInSeconds: ${startTimeInSeconds}`);
+        if (startTimeInSeconds !== undefined) {
+            // MidiSoundfontPlayer.seek expects milliseconds
+            await this.midiPlayer.seek(startTimeInSeconds * 1000); 
+        }
         await this.midiPlayer.play();
     }
     
@@ -170,9 +174,9 @@ export class SoundfontEngineController implements TrackPlayer{
      * Seek to a specific position
      * @param position Position in milliseconds or seconds
      */
-    async seek(position: number): Promise<void> {
-        console.log(`SoundfontEngineController: Seeking to ${position}`);
-        await this.midiPlayer.seek(position);
+    async seek(positionInMilliseconds: number): Promise<void> {
+        console.log(`SoundfontEngineController: Seeking to ${positionInMilliseconds}ms`);
+        await this.midiPlayer.seek(positionInMilliseconds);
     }
     
     // Track operations
