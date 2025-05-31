@@ -13,31 +13,50 @@ import { getSounds, deleteSound } from '../api/sounds';
 import { AudioTrackRead } from '../../platform/types/track_models/audio_track';
 import AudioTrackCard from './DisplayCards/AudioTrackCard';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from "../../components/ui/button";
 
 interface SoundLibraryProps {
   onReload?: () => void;
   sectionColor: string;
 }
 
+// Constants for pagination and display
+const INITIAL_DISPLAY_COUNT = 12;
+const DISPLAY_INCREMENT = 6;
+
 export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryProps) {
   const queryClient = useQueryClient();
 
-  const [sounds, setSounds] = useState<AudioTrackRead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [displayedTracksCount, setDisplayedTracksCount] = useState<number>(INITIAL_DISPLAY_COUNT);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   
   const { 
-    data: soundsData = [],
+    data: allFetchedTracks = [],
     isLoading, 
-    error: fetchError 
+    error: fetchError
   } = useQuery<AudioTrackRead[], Error>({
     queryKey: ['sounds'],
     queryFn: getSounds,
   });
+
+  const totalTracksOnServer = allFetchedTracks.length;
+  
+  useEffect(() => {
+    if (allFetchedTracks.length > 0) {
+      setDisplayedTracksCount(Math.min(INITIAL_DISPLAY_COUNT, allFetchedTracks.length));
+    }
+  }, [allFetchedTracks.length]);
+
+  const handleShowMore = () => {
+    const newDisplayedCount = Math.min(
+      displayedTracksCount + DISPLAY_INCREMENT,
+      allFetchedTracks.length
+    );
+    setDisplayedTracksCount(newDisplayedCount);
+  };
   
   useEffect(() => {
     if (!audioElement) return;
@@ -149,7 +168,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
     );
   }
   
-  if (soundsData.length === 0) {
+  if (allFetchedTracks.length === 0 && !isLoading) {
     return (
       <Box sx={{ 
         display: 'flex', 
@@ -173,7 +192,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
   return (
     <Box sx={{ mt: 2 }}>
       <Grid container spacing={2}>
-        {soundsData.map((sound) => (
+        {allFetchedTracks.slice(0, displayedTracksCount).map((sound) => (
           <Grid item xs={12} sm={6} md={4} key={sound.id}>
             <AudioTrackCard
               sound={sound}
@@ -188,6 +207,18 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
           </Grid>
         ))}
       </Grid>
+      
+      {/* Show More Button */}
+      {!isLoading && displayedTracksCount < totalTracksOnServer && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+          <Button 
+            variant="outline"
+            onClick={handleShowMore}
+          >
+            Show More
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }
