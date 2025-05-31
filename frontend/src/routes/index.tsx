@@ -24,7 +24,7 @@ function LandingPage() {
             <Link to="/login">
               <Button variant="ghost">Login</Button>
             </Link>
-            <Link to="/signup">
+            <Link to="/register">
               <Button variant="ghost">Sign Up</Button>
             </Link>
           </div>
