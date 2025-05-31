@@ -9,6 +9,9 @@ import { Button } from "../../../components/ui/button";
 import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon, MusicNote as MusicNoteIcon } from '@mui/icons-material';
 import { MidiTrackRead } from '../../../platform/types/track_models/midi_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
+import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
+import { convertJsonToNotes } from '../../../types/note';
+import { Box } from '@mui/material';
 
 interface MidiTrackCardProps {
   track: MidiTrackRead;
@@ -37,6 +40,9 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
   const noteCount = track.midi_notes_json && track.midi_notes_json.notes ? 
     (track.midi_notes_json.notes as any[]).length : 
     0;
+
+  // Convert MIDI notes JSON to Note array for preview
+  const notes = track.midi_notes_json ? convertJsonToNotes(track.midi_notes_json, track.id) : [];
 
   return (
     <Card 
@@ -77,6 +83,27 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
           </Button>
         </div>
       </CardHeader>
+      
+      {/* MIDI Notes Preview */}
+      <Box sx={{ px: 1.5, pb: 1.5 }}>
+        <Box
+          sx={{
+            height: 60,
+            bgcolor: '#1a1a1a',
+            borderRadius: 1,
+            overflow: 'hidden',
+            position: 'relative'
+          }}
+        >
+          <MidiNotesPreview
+            trackId={track.id}
+            width={280}
+            height={60}
+            trackColor={sectionColor}
+            notes={notes}
+          />
+        </Box>
+      </Box>
       
       <CardFooter className="p-3 pt-1 flex justify-between items-center">
         <p className="text-xs text-muted-foreground">
