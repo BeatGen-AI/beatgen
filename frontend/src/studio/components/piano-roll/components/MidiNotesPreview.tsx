@@ -4,18 +4,16 @@ import { Note } from '../../../../types/note';
 import { scaleToPreview } from '../../../utils/noteConversion';
 
 interface MidiNotesPreviewProps {
-  trackId: string;
   width: number;
   height: number;
-  trackColor: string;
+  noteColor: string;
   notes: Note[];
 }
 
 const MidiNotesPreview: React.FC<MidiNotesPreviewProps> = ({ 
-  trackId, 
   width, 
   height,
-  trackColor,
+  noteColor,
   notes
 }) => {
   // Memoize the random heights so they don't change on every render
@@ -101,11 +99,11 @@ const MidiNotesPreview: React.FC<MidiNotesPreviewProps> = ({
               top: `${y}px`,
               width: `${w}px`,
               height: `${h}px`,
-              bgcolor: 'white',
+              bgcolor: noteColor,
               opacity: 1,
               borderRadius: '2px',
               boxSizing: 'border-box',
-              boxShadow: '0 0 3px rgba(255,255,255,0.7)'
+              boxShadow: `0 0 3px ${noteColor}33`
             }}
           />
         );
@@ -129,7 +127,7 @@ const MidiNotesPreview: React.FC<MidiNotesPreviewProps> = ({
                 height: height, // Use memoized height instead of calculating new random value
                 width: 4,
                 mx: 0.5,
-                bgcolor: 'white',
+                bgcolor: noteColor,
                 borderRadius: '2px'
               }}
             />

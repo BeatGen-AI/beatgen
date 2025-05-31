@@ -13,6 +13,7 @@ import { getMidiTracks, deleteMidiTrack } from '../api/sounds';
 import { MidiTrackRead } from '../types/track_models/midi_track';
 import MidiTrackCard from './DisplayCards/MidiTrackCard';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from "../../components/ui/button";
 import { Page } from '../types/pagination'; // Import Page type
 
 interface MidiLibraryProps {
@@ -20,11 +21,15 @@ interface MidiLibraryProps {
   sectionColor: string;
 }
 
-const ITEMS_PER_PAGE = 25; // Define items per page, as used before
+// Constants for pagination and display
+const INITIAL_DISPLAY_COUNT = 12;
+const DISPLAY_INCREMENT = 6;
+const ITEMS_PER_PAGE = 20;
 
 export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps) {
   const queryClient = useQueryClient();
-  const [currentPageApi, setCurrentPageApi] = useState<number>(1); // For pagination
+  const [displayedTracksCount, setDisplayedTracksCount] = useState<number>(INITIAL_DISPLAY_COUNT);
+  const [currentPageApi, setCurrentPageApi] = useState<number>(1);
 
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
@@ -42,7 +47,33 @@ export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps
     placeholderData: (previousData) => previousData,
   });
 
-  const midiTracks = midiTracksPage?.items ?? [];
+  const allFetchedTracks = midiTracksPage?.items ?? [];
+  const totalTracksOnServer = midiTracksPage?.total_items ?? 0;
+  const totalPagesApi = midiTracksPage?.total_pages ?? 0;
+  
+  useEffect(() => {
+    if (midiTracksPage?.items) {
+      if (currentPageApi === 1) {
+        setDisplayedTracksCount(Math.min(INITIAL_DISPLAY_COUNT, midiTracksPage.items.length));
+      } else {
+        setDisplayedTracksCount(prevCount => Math.min(prevCount, allFetchedTracks.length));
+      }
+    }
+  }, [midiTracksPage?.items, currentPageApi, allFetchedTracks.length]);
+
+  const handleShowMore = () => {
+    const newDisplayedCount = Math.min(
+      displayedTracksCount + DISPLAY_INCREMENT,
+      allFetchedTracks.length
+    );
+    setDisplayedTracksCount(newDisplayedCount);
+
+    if (newDisplayedCount >= allFetchedTracks.length && allFetchedTracks.length < totalTracksOnServer && !isFetching) {
+      if (currentPageApi < totalPagesApi) {
+        setCurrentPageApi(prev => prev + 1);
+      }
+    }
+  };
   
   // Set up timeupdate listener for tracking playback progress
   useEffect(() => {
@@ -136,7 +167,7 @@ export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps
     );
   }
   
-  if (midiTracks.length === 0 && !isFetching) { // Show no tracks only if not fetching more
+  if (allFetchedTracks.length === 0 && !isFetching) { // Show no tracks only if not fetching more
     return (
       <Box sx={{ 
         display: 'flex', 
@@ -160,7 +191,7 @@ export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps
   return (
     <Box sx={{ mt: 2 }}>
       <Grid container spacing={2}>
-        {midiTracks.map((track) => (
+        {allFetchedTracks.slice(0, displayedTracksCount).map((track) => (
           <Grid item xs={12} sm={6} md={4} key={track.id}>
             <MidiTrackCard
               track={track}
@@ -174,6 +205,19 @@ export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps
           </Grid>
         ))}
       </Grid>
+      
+      {/* Show More Button */}
+      {!isLoading && displayedTracksCount < totalTracksOnServer && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+          <Button 
+            variant="outline"
+            onClick={handleShowMore} 
+            disabled={isFetching}
+          >
+            {isFetching ? 'Loading...' : 'Show More'}
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }

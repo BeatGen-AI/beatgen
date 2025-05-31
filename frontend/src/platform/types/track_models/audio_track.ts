@@ -85,22 +85,7 @@ export interface AudioTrackUpdate {
   audio_file_sample_rate?: number;
   waveform_data?: number[] | null;
 }
-/**
- * Base model with default UUID primary key and default timestamp fields
- */
-export interface DefaultUUIDStandardBase {
-  created_at?: string;
-  updated_at?: string;
-  id?: string;
-}
 export interface SQLModel {}
-/**
- * Mixin that adds created_at and updated_at fields to models
- */
-export interface TimestampMixin {
-  created_at?: string;
-  updated_at?: string;
-}
 /**
  * Base model for tracks
  */

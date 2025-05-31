@@ -88,14 +88,6 @@ export interface MidiTrackUpdate {
     [k: string]: unknown;
   };
 }
-export interface SQLModel {}
-/**
- * Mixin that adds created_at and updated_at fields to models
- */
-export interface TimestampMixin {
-  created_at?: string;
-  updated_at?: string;
-}
 /**
  * Base model for tracks
  */

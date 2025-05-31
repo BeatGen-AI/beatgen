@@ -89,17 +89,16 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
         <Box
           sx={{
             height: 60,
-            bgcolor: '#1a1a1a',
+            bgcolor: 'white',
             borderRadius: 1,
             overflow: 'hidden',
             position: 'relative'
           }}
         >
           <MidiNotesPreview
-            trackId={track.id}
             width={280}
             height={60}
-            trackColor={sectionColor}
+            noteColor={sectionColor}
             notes={notes}
           />
         </Box>

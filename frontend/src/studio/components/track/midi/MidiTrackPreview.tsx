@@ -88,7 +88,7 @@ export const MidiTrackPreview: React.FC<TrackPreviewProps> = (props) => {
         trackId={track.id}
         width={fullContentWidth} // Always use the full content width
         height={GRID_CONSTANTS.trackHeight - 6}
-        trackColor={trackColor}
+        noteColor={'white'}
         notes={trackNotes}
       />
     </>

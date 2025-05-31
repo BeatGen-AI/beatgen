@@ -53,4 +53,3 @@ export interface InstrumentFileRead {
   is_public: boolean;
   description?: string | null;
 }
-export interface SQLModel {}

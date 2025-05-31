@@ -108,4 +108,3 @@ export interface ProjectTrackUpdate {
   track_id: string;
   track_type: TrackType;
 }
-export interface SQLModel {}

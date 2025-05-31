@@ -100,6 +100,7 @@ export interface AudioTrackOptions extends BaseTrackOptions {
   audio_file_sample_rate?: number;
   url?: string;
   storage_key?: string;
+  waveform_data?: number[] | null;
 }
 
 // Specific options for MIDI Tracks
@@ -125,6 +126,7 @@ export interface SamplerTrackOptions extends BaseTrackOptions {
   grainSize?: number;
   overlap?: number;
   midiNotes?: any[]; // TODO: Define a proper MidiNote type
+  waveform_data?: number[] | null;
 }
 
 // Unified options type for track creation
