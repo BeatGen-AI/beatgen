@@ -85,10 +85,9 @@ export const MidiTrackPreview: React.FC<TrackPreviewProps> = (props) => {
       {/* MidiNotesPreview is always rendered at full content width, 
           but only part of it is visible through the trimmed container */}
       <MidiNotesPreview 
-        trackId={track.id}
         width={fullContentWidth} // Always use the full content width
         height={GRID_CONSTANTS.trackHeight - 6}
-        noteColor={'white'}
+        noteColor={trackColor}
         notes={trackNotes}
       />
     </>
