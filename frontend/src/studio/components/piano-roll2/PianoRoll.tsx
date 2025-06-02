@@ -2733,6 +2733,10 @@ export const PianoRoll: FC<PianoRollProps> = ({
                 src="/icons/grid-on.svg"
                 alt="Grid snap"
                 onClick={handleGridIconClick}
+                onMouseDown={(e) => {
+                  // Prevent the drag handle from interfering with the grid icon click
+                  e.stopPropagation();
+                }}
                 style={{ 
                   width: "18px",
                   height: "18px",
@@ -2839,6 +2843,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
           anchorEl={gridSnapAnchorEl}
           open={gridSnapMenuOpen}
           onClose={handleGridSnapClose}
+          style={{ zIndex: 10001 }}
           slotProps={{
             paper: {
               style: {
