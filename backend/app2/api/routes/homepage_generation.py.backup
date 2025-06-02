@@ -1,0 +1,157 @@
+"""
+Simplified homepage music generation API routes
+Provides basic endpoints for homepage song generation with automatic project creation
+"""
+
+import uuid
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+
+from app2.api.dependencies import get_current_user, SessionDep
+from app2.models.project import ProjectCreate
+from app2.core.logging import get_api_logger
+
+logger = get_api_logger("homepage_generation")
+
+router = APIRouter(prefix="/homepage", tags=["homepage-generation"])
+
+# Request/Response Models
+class HomepageGenerationRequest(BaseModel):
+    prompt: str
+    genre: Optional[str] = None
+    mood: Optional[str] = None
+    model: str = "Claude 3.7 Sonnet"
+    auto_save: bool = True
+
+class HomepageGenerationResponse(BaseModel):
+    request_id: str
+    status: str
+    project_id: Optional[str] = None
+    estimated_time: Optional[int] = 45
+
+@router.post("/generate-song", response_model=HomepageGenerationResponse)
+async def create_homepage_generation_request(
+    request: HomepageGenerationRequest,
+    session: SessionDep,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> HomepageGenerationResponse:
+    """
+    Create a homepage song generation request with automatic project creation
+    Returns project ID if created successfully
+    """
+    try:
+        logger.info(f"🏠 HOMEPAGE API - Received generation request: {request}")
+        logger.info(f"🏠 HOMEPAGE API - User: {current_user['id']}")
+        
+        request_id = str(uuid.uuid4())
+        project_id = None
+        
+        # Create project immediately if auto_save is enabled
+        if request.auto_save:
+            logger.info(f"🏠 HOMEPAGE API - Auto-save enabled, creating project")
+            try:
+                from app2.repositories.project_repository import ProjectRepository
+                from app2.repositories.project_track_repository import ProjectTrackRepository
+                from app2.services.track_service import TrackService
+                from app2.services.project_service import ProjectService
+                from uuid import UUID
+                
+                # Create basic services
+                project_repo = ProjectRepository(session)
+                track_repo = ProjectTrackRepository(session)
+                track_service = TrackService(
+                    audio_repository=None,
+                    midi_repository=None, 
+                    sampler_repository=None,
+                    drum_repository=None,
+                    project_track_repository=track_repo,
+                    file_repository=None
+                )
+                project_service = ProjectService(project_repo, track_repo, track_service)
+                
+                # Create project
+                project_name = f"Generated Song - {request.prompt[:50]}"
+                if len(project_name) > 100:
+                    project_name = project_name[:97] + "..."
+                
+                project_data = {
+                    "name": project_name,
+                    "bpm": 120,
+                    "time_signature_numerator": 4,
+                    "time_signature_denominator": 4,
+                    "key_signature": "C major"
+                }
+                
+                new_project = await project_service.create_project(
+                    user_id=UUID(current_user["id"]),
+                    project_data=project_data
+                )
+                project_id = str(new_project.id)
+                
+                logger.info(f"🏠 HOMEPAGE API - Created project {project_id} for homepage generation")
+                
+            except Exception as e:
+                logger.warning(f"Failed to create project: {str(e)}")
+        
+        logger.info(f"🏠 HOMEPAGE API - Created homepage generation request {request_id} for user {current_user['id']}")
+        logger.info(f"🏠 HOMEPAGE API - Returning project_id: {project_id}")
+        
+        return HomepageGenerationResponse(
+            request_id=request_id,
+            status="created",
+            project_id=project_id,
+            estimated_time=45
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to create homepage generation request: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create generation request: {str(e)}")
+
+@router.get("/stream/{request_id}")
+async def stream_homepage_generation(
+    request_id: str,
+    session: SessionDep,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Stream homepage generation with project saving
+    """
+    from fastapi.responses import StreamingResponse
+    from app2.sse.sse_queue_manager import SSEQueueManager
+    from app2.llm.music_gen_service.music_gen_service import music_gen_service
+    from app2.repositories.project_repository import ProjectRepository
+    from app2.services.project_service import ProjectService
+    from app2.repositories.project_track_repository import ProjectTrackRepository
+    from app2.services.track_service import TrackService
+    from uuid import UUID
+    import asyncio
+    import json
+    
+    try:
+        # Get stored request data (we'll need to store this in the create endpoint)
+        # For now, let's redirect to assistant API with project context
+        return {
+            "status": "redirect_to_assistant",
+            "message": "Use assistant API for generation",
+            "request_id": request_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to start homepage generation stream: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start stream: {str(e)}")
+
+@router.delete("/request/{request_id}")
+async def cancel_homepage_generation(
+    request_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Cancel a homepage generation request"""
+    try:
+        logger.info(f"Received cancel request for {request_id}")
+        return {"status": "cancelled"}
+        
+    except Exception as e:
+        logger.error(f"Failed to cancel request {request_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel request: {str(e)}")

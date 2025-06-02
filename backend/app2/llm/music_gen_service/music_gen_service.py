@@ -115,38 +115,60 @@ class MusicGenService:
             "Starting research...",
             "Doing research online to find the best musical parameters...",
         )
-        (
-            research_result,
-            chord_research_result,
-            self.available_soundfonts,
-        ) = await asyncio.gather(
-            self.researcher.enhance_description(prompt),
-            self.researcher.research_chord_progression(prompt),
-            soundfont_service.get_public_soundfonts(),
-        )
+        
+        # Break down research into smaller status updates
+        await queue.status("Analyzing musical style and genre...")
+        research_result = await self.researcher.enhance_description(prompt)
+        
+        await queue.status("Researching chord progressions...")
+        chord_research_result = await self.researcher.research_chord_progression(prompt)
+        
+        await queue.status("Loading available instruments...")
+        self.available_soundfonts = await soundfont_service.get_public_soundfonts()
 
+        await queue.status("Research complete! Loading available sounds...")
         self.drum_sounds = await drum_sample_service.get_all_samples()
 
+        await queue.stage(
+            "Determining parameters...",
+            "AI is analyzing the prompt to determine key, tempo, and style...",
+        )
         await self._determine_musical_parameters(
             prompt, research_result, chord_research_result, queue
         )
 
+        await queue.stage(
+            "Selecting instruments...",
+            "Choosing the best instruments for your song...",
+        )
         await self._select_instruments_via_llm(queue)
 
+        await queue.stage(
+            "Creating chord progression...",
+            "Generating harmonic structure for your song...",
+        )
         await self._generate_chords(queue)
 
+        await queue.stage(
+            "Composing melody...",
+            "Creating the main melody line...",
+        )
         # Generate melody
         await self._generate_melody(prompt, queue)
 
+        await queue.status("Researching drum sounds...")
         # Get drum sounds
         drum_result = await self.researcher.research_drum_sounds(prompt)
         logger.info(f"Drum result: {drum_result}")
 
+        await queue.status("Selecting drum kit...")
         await self._select_drum_sounds(drum_result, queue)
 
         # Generate drum beat *after* selecting sounds
         await self._generate_drum_beat(queue)
 
+        await queue.status("Finalizing composition...")
+        
         instruments = []
         if self.musical_params.melody:
             instruments.append(self.musical_params.melody)
@@ -154,6 +176,11 @@ class MusicGenService:
             instruments.append(self.musical_params.chords)
         if self.musical_params.counter_melody:
             instruments.append(self.musical_params.counter_melody)
+
+        await queue.stage(
+            "Complete",
+            f"Song generated successfully! Created {len(instruments)} instrumental parts.",
+        )
 
         return {
             "tempo": self.musical_params.bpm,
@@ -205,6 +232,8 @@ And here is some research we've done on the chord progression: {chord_research_r
             message, queue, stream=True, tools=[]
         )
 
+        await queue.status("Finalizing musical parameters...")
+        
         message = """
         Now use the "determine_musical_parameters" tool to set the musical parameters based on your previous reasoning.
         """
@@ -351,6 +380,8 @@ After explaining, use the select_instruments tool to finalize your choices."""
             message, queue, stream=True, tools=[]
         )
 
+        await queue.status("Finalizing instrument choices...")
+        
         message = (
             "Now use the select_instruments tool to confirm your instrument selections."
         )
@@ -627,6 +658,8 @@ Then, use the create_melody tool to generate the notes."""
             message, queue, stream=True, tools=[]
         )
 
+        await queue.status("Creating melody notes...")
+        
         message = f"Now use the create_melody tool to generate the melody notes based on your description and the established musical parameters (Key: {self.musical_params.key} {self.musical_params.mode}, Tempo: {self.musical_params.bpm} BPM, Chord Progression: {self.musical_params.chord_progression}, Melody Instrument: {melody_instrument.name})."
 
         _, tool_use_json = await self.anthropic_client2.send_message_async(
