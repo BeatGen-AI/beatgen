@@ -15,6 +15,10 @@ import {
 import { IconWaveSine } from '@tabler/icons-react';
 import { SamplerTrackRead } from '../../../platform/types/track_models/sampler_track';
 import { formatTime, formatFileSize } from '../../../studio/utils/audioProcessing';
+import { WaveformDisplay } from '../../../studio/components/track/WaveformDisplay';
+import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
+import { convertJsonToNotes } from '../../../types/note';
+import { Box } from '@mui/material';
 
 interface SamplerTrackCardProps {
   track: SamplerTrackRead;
@@ -42,9 +46,12 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
   const isPlaying = playingId === track.id;
   
   // Calculate the number of notes in the track (if available)
-  const noteCount = track.midi_notes_json ? 
-    Object.keys(track.midi_notes_json).length : 
+  const noteCount = track.midi_notes_json && track.midi_notes_json.notes ? 
+    (track.midi_notes_json.notes as any[]).length : 
     0;
+
+  // Convert MIDI notes JSON to Note array for preview
+  const notes = track.midi_notes_json ? convertJsonToNotes(track.midi_notes_json, track.id) : [];
   
   // Format the base MIDI note to a more readable format (e.g., C3, D#4)
   const formatMidiNote = (midiNote: number): string => {
@@ -94,6 +101,40 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
         </div>
       </CardHeader>
       
+      {/* Waveform Preview */}
+      <div className="px-6 pb-3">
+        <div
+          className="h-[60px] bg-white rounded overflow-hidden relative"
+        >
+          <WaveformDisplay
+            waveformData={track.waveform_data}
+            trackColor={sectionColor}
+            duration={track.audio_file_duration}
+            width={280}
+          />
+        </div>
+      </div>
+      
+      {/* MIDI Notes Preview */}
+      <Box sx={{ px: 1.5, pb: 1.5 }}>
+        <Box
+          sx={{
+            height: 60,
+            bgcolor: 'white',
+            borderRadius: 1,
+            overflow: 'hidden',
+            position: 'relative'
+          }}
+        >
+          <MidiNotesPreview
+            width={280}
+            height={60}
+            noteColor={sectionColor}
+            notes={notes}
+          />
+        </Box>
+      </Box>
+      
       <CardFooter className="p-3 pt-1 flex justify-between items-center">
         <div className="flex flex-col">
           <p className="text-xs text-muted-foreground mb-1">
@@ -103,11 +144,9 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
             {formatTime(track.audio_file_duration, false)} {formatFileSize(track.audio_file_size)}
           </p>
         </div>
-        {isPlaying && (
-          <p className="text-xs text-muted-foreground">
-            {formatTime(currentTime, false)} / {formatTime(duration, false)}
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground">
+          {noteCount} notes {isPlaying && ` ${formatTime(currentTime, false)} / ${formatTime(duration, false)}`}
+        </p>
       </CardFooter>
     </Card>
   );

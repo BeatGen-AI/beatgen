@@ -3,6 +3,7 @@ import { Box } from '@mui/material';
 
 interface WaveformDisplayProps {
   audioFile?: File;
+  waveformData?: number[] | null;
   trackColor: string;
   duration: number;
   width: number;
@@ -10,6 +11,7 @@ interface WaveformDisplayProps {
 
 export const WaveformDisplay: React.FC<WaveformDisplayProps> = ({ 
   audioFile, 
+  waveformData,
   trackColor,
   duration,
   width
@@ -17,8 +19,27 @@ export const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   useEffect(() => {
-    if (!audioFile || !canvasRef.current) {
-      console.error("Missing audio file or canvas reference");
+    if (!canvasRef.current) {
+      console.error("Missing canvas reference");
+      return;
+    }
+    
+    // If we have waveform data but no audio file, use the data directly
+    if (!audioFile && waveformData) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        console.error("Failed to get canvas context");
+        return;
+      }
+      
+      setupCanvas(canvas, ctx, width);
+      drawWaveformFromData(waveformData, canvas, ctx, trackColor);
+      return;
+    }
+    
+    if (!audioFile) {
+      console.error("Missing audio file or waveform data");
       return;
     }
     
@@ -85,7 +106,7 @@ export const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
     
     // Start reading the file
     reader.readAsArrayBuffer(audioFile);
-  }, [audioFile, trackColor, width]);
+  }, [audioFile, waveformData, trackColor, width]);
   
   return (
     <Box sx={{ 
@@ -145,8 +166,8 @@ function drawWaveform(
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.fillRect(0, middle, width, 1);
   
-  // Change this line to use white with 75% opacity instead of the track color
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+  // Use track color with opacity for the waveform
+  ctx.fillStyle = `${trackColor}40`;
   
   // For each pixel column in the canvas
   for (let x = 0; x < width; x++) {
@@ -190,8 +211,8 @@ function drawWaveform(
     ctx.fillRect(x, topY, 1, barHeight);
   }
 
-  // Keep the outline white but maybe make it a bit more visible
-  ctx.strokeStyle = 'rgba(255,255,255,1.0)'; // Slightly more opaque white outline
+  // Use track color for outline
+  ctx.strokeStyle = trackColor;
   ctx.lineWidth = 1;
   
   // Top outline
@@ -221,6 +242,91 @@ function drawWaveform(
     // Draw the stroke
     ctx.stroke();
   }
+}
+
+// Setup canvas function
+function setupCanvas(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, width: number) {
+  const dpr = window.devicePixelRatio || 1;
+  const displayWidth = width;
+  const displayHeight = canvas.parentElement?.clientHeight || 80;
+  
+  canvas.style.width = `${displayWidth}px`;
+  canvas.style.height = `${displayHeight}px`;
+  
+  canvas.width = displayWidth * dpr;
+  canvas.height = displayHeight * dpr;
+  
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, displayWidth, displayHeight);
+}
+
+// Draw waveform from pre-computed data array
+function drawWaveformFromData(
+  data: number[],
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  trackColor: string
+) {
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.width / dpr;
+  const height = canvas.height / dpr;
+  const middle = height / 2;
+  
+  ctx.clearRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  
+  // Draw center line
+  ctx.fillStyle = `${trackColor}33`;
+  ctx.fillRect(0, middle, width, 1);
+  
+  // Use track color with opacity for the waveform
+  ctx.fillStyle = `${trackColor}CC`;
+  
+  const barWidth = width / data.length;
+  
+  // Draw each bar
+  data.forEach((value, index) => {
+    const x = index * barWidth;
+    const barHeight = Math.max(2, value * height * 0.8);
+    const y = middle - barHeight / 2;
+    
+    ctx.fillRect(x, y, Math.max(1, barWidth - 1), barHeight);
+  });
+  
+  // Draw outline
+  ctx.strokeStyle = trackColor;
+  ctx.lineWidth = 1;
+  
+  // Top outline
+  ctx.beginPath();
+  data.forEach((value, index) => {
+    const x = index * barWidth;
+    const barHeight = Math.max(2, value * height * 0.8);
+    const topY = middle - barHeight / 2;
+    
+    if (index === 0) {
+      ctx.moveTo(x, topY);
+    } else {
+      ctx.lineTo(x, topY);
+    }
+  });
+  ctx.stroke();
+  
+  // Bottom outline
+  ctx.beginPath();
+  data.forEach((value, index) => {
+    const x = index * barWidth;
+    const barHeight = Math.max(2, value * height * 0.8);
+    const bottomY = middle + barHeight / 2;
+    
+    if (index === 0) {
+      ctx.moveTo(x, bottomY);
+    } else {
+      ctx.lineTo(x, bottomY);
+    }
+  });
+  ctx.stroke();
 }
 
 export default WaveformDisplay;

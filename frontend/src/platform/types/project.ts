@@ -95,6 +95,7 @@ export interface SamplerTrackRead {
   midi_notes_json?: {
     [k: string]: unknown;
   };
+  waveform_data?: number[] | null;
   drum_track_id?: string | null;
 }
 /**
@@ -180,26 +181,6 @@ export interface ProjectTrack {
   track_number: number;
   project_id?: string;
   track_id?: string;
-  track_type: TrackType;
-}
-/**
- * Base DTO for Project-Track relationships
- */
-export interface ProjectTrackRead {
-  created_at?: string;
-  updated_at?: string;
-  name: string;
-  volume: number;
-  pan: number;
-  mute: boolean;
-  x_position: number;
-  y_position: number;
-  trim_start_ticks: number;
-  trim_end_ticks: number;
-  duration_ticks: number;
-  track_number: number;
-  project_id: string;
-  track_id: string;
   track_type: TrackType;
 }
 /**

@@ -152,6 +152,13 @@ export const getSounds = async (): Promise<AudioTrackRead[]> => {
   return response.data;
 };
 
+export const getSoundsPaginated = async (page: number = 1, size: number = 10): Promise<Page<AudioTrackRead>> => {
+  const response = await apiClient.get('/sounds/audio', {
+    params: { page, size }
+  });
+  return response.data;
+};
+
 /**
  * Get all MIDI tracks for the current user
  * @returns Array of MIDI tracks

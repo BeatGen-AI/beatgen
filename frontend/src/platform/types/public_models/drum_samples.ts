@@ -17,7 +17,26 @@ export type DrumSampleType =
   | "rim"
   | "clap"
   | "cymbal"
-  | "eight_o_eight";
+  | "eight_o_eight"
+  | "perc"
+  | "hit"
+  | "fx";
+export type GenreType1 = "pop" | "rock" | "jazz" | "blues" | "country" | "hip_hop" | "rap" | "electronic";
+export type DrumSampleType1 =
+  | "kick"
+  | "snare"
+  | "closed_hh"
+  | "open_hh"
+  | "crash"
+  | "ride"
+  | "tom"
+  | "rim"
+  | "clap"
+  | "cymbal"
+  | "eight_o_eight"
+  | "perc"
+  | "hit"
+  | "fx";
 
 /**
  * Drum sample model
@@ -113,8 +132,8 @@ export interface DrumSamplePublicUpdate {
   storage_key?: string;
   file_format?: string;
   file_size?: number;
-  genre?: GenreType;
-  category?: DrumSampleType;
+  genre?: GenreType1;
+  category?: DrumSampleType1;
   kit_name?: string;
   duration?: number | null;
   description?: string | null;

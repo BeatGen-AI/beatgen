@@ -2,7 +2,7 @@
 Sampler Track model for SQL database
 """
 
-from typing import Optional, TYPE_CHECKING, Dict
+from typing import List, Optional, TYPE_CHECKING, Dict
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship
@@ -30,6 +30,7 @@ class SamplerTrackBase(TrackBase):
     audio_file_duration: float
     audio_file_sample_rate: int
     midi_notes_json: Dict = Field(default_factory=dict, sa_column=Column(JSONB))
+    waveform_data: Optional[List[float]] = Field(default=None, sa_column=Column(JSONB))
 
 
 # Database model

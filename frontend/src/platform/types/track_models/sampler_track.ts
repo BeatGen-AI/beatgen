@@ -5,7 +5,6 @@
 /* Do not modify it by hand - just update the pydantic models and then re-run the script
 */
 
-export interface SQLModel {}
 /**
  * Sampler Track model for the database
  */
@@ -26,6 +25,7 @@ export interface SamplerTrack {
   midi_notes_json?: {
     [k: string]: unknown;
   };
+  waveform_data?: number[] | null;
   user_id: string;
   drum_track_id?: string | null;
 }
@@ -49,6 +49,7 @@ export interface SamplerTrackBase {
   midi_notes_json?: {
     [k: string]: unknown;
   };
+  waveform_data?: number[] | null;
 }
 /**
  * API request model for creating a sampler track
@@ -70,6 +71,7 @@ export interface SamplerTrackCreate {
   midi_notes_json?: {
     [k: string]: unknown;
   };
+  waveform_data?: number[] | null;
   drum_track_id?: string | null;
 }
 /**
@@ -92,6 +94,7 @@ export interface SamplerTrackRead {
   midi_notes_json?: {
     [k: string]: unknown;
   };
+  waveform_data?: number[] | null;
   drum_track_id?: string | null;
 }
 /**
@@ -114,14 +117,8 @@ export interface SamplerTrackUpdate {
   midi_notes_json?: {
     [k: string]: unknown;
   };
+  waveform_data?: number[] | null;
   drum_track_id?: string | null;
-}
-/**
- * Mixin that adds created_at and updated_at fields to models
- */
-export interface TimestampMixin {
-  created_at?: string;
-  updated_at?: string;
 }
 /**
  * Base model for tracks

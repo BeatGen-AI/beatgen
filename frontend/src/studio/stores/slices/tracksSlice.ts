@@ -11,6 +11,7 @@ import { StateCreator } from 'zustand';
 import { StoreApi } from 'zustand';
 import SampleManager from '../../core/samples/sampleManager';
 import { db } from '../../core/db/dexie-client';
+import { processAudioFile } from '../../utils/audioProcessing';
 
 // Define the state properties and actions for this slice
 export interface TracksSlice {
@@ -265,6 +266,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               audio_file_size: audioOptions.audio_file_size,
               audio_file_duration: audioOptions.audio_file_duration,
               audio_file_sample_rate: audioOptions.audio_file_sample_rate,
+              waveform_data: audioOptions.waveform_data,
           } // NO audioFile property here
       }
       else if (type === 'sampler') {
@@ -277,6 +279,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               audio_file_name: file?.name, // Get name from extracted file variable
               storage_key: samplerOptions.storage_key,
               drum_track_id: samplerOptions.drum_track_id || null,
+              waveform_data: samplerOptions.waveform_data,
               // NO sampleFile property here
            }
       }
@@ -638,9 +641,29 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         const trackName = file.name.split('.').slice(0, -1).join('.') || file.name; // Get filename without extension
         const trackType: TrackType = isSampler ? 'sampler' : 'audio';
         
+        // Process audio file to get metadata including waveform data
+        const metadata = await processAudioFile(file);
+        
         const options: TrackOptions = isSampler 
-            ? { id: crypto.randomUUID(), sampleFile: file, ...DEFAULT_SAMPLER_CONFIG } 
-            : { id: crypto.randomUUID(), audioFile: file };
+            ? { 
+                id: crypto.randomUUID(), 
+                sampleFile: file, 
+                ...DEFAULT_SAMPLER_CONFIG,
+                audio_file_format: metadata.format,
+                audio_file_duration: metadata.duration,
+                audio_file_size: file.size,
+                audio_file_sample_rate: metadata.sampleRate,
+                waveform_data: metadata.waveform
+            } 
+            : { 
+                id: crypto.randomUUID(), 
+                audioFile: file,
+                audio_file_format: metadata.format,
+                audio_file_duration: metadata.duration,
+                audio_file_size: file.size,
+                audio_file_sample_rate: metadata.sampleRate,
+                waveform_data: metadata.waveform
+            };
 
         await SampleManager.getInstance(db).putSampleBlob(options.id, file, 'sample', trackName);
         

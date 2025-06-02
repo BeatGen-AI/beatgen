@@ -94,6 +94,7 @@ export const uploadAudioTrack = async (track: CombinedTrack): Promise<void> => {
     audio_file_size: audioMetadata.audio_file_size,
     audio_file_sample_rate: audioMetadata.audio_file_sample_rate,
     audio_file_storage_key: storage_key,
+    waveform_data: metadata.waveform
   })
 }
 

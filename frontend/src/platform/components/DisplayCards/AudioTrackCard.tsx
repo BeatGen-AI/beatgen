@@ -9,6 +9,7 @@ import { Button } from "../../../components/ui/button";
 import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
 import { AudioTrackRead as Sound } from '../../../platform/types/track_models/audio_track'; 
 import { formatTime, formatFileSize } from '../../../studio/utils/audioProcessing';
+import { WaveformDisplay } from '../../../studio/components/track/WaveformDisplay';
 
 interface AudioTrackCardProps {
   sound: Sound;
@@ -56,6 +57,20 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
           </Button>
         </div>
       </CardHeader>
+      
+      {/* Waveform Preview */}
+      <div className="px-6 pb-6">
+        <div
+          className="h-[60px] bg-white rounded overflow-hidden relative"
+        >
+          <WaveformDisplay
+            waveformData={sound.waveform_data}
+            trackColor={sectionColor}
+            duration={sound.audio_file_duration}
+            width={280}
+          />
+        </div>
+      </div>
       
       <CardFooter className="p-3 pt-1 flex justify-end items-center">
         <p className="text-xs text-muted-foreground">

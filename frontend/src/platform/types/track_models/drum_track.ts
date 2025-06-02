@@ -6,14 +6,6 @@
 */
 
 /**
- * Base model with default UUID primary key and default timestamp fields
- */
-export interface DefaultUUIDStandardBase {
-  created_at?: string;
-  updated_at?: string;
-  id?: string;
-}
-/**
  * Drum Track model for the database
  */
 export interface DrumTrack {
@@ -72,6 +64,7 @@ export interface SamplerTrackRead {
   midi_notes_json?: {
     [k: string]: unknown;
   };
+  waveform_data?: number[] | null;
   drum_track_id?: string | null;
 }
 /**
@@ -82,14 +75,6 @@ export interface DrumTrackUpdate {
   updated_at?: string;
   id: string;
   name?: string;
-}
-export interface SQLModel {}
-/**
- * Mixin that adds created_at and updated_at fields to models
- */
-export interface TimestampMixin {
-  created_at?: string;
-  updated_at?: string;
 }
 /**
  * Base model for tracks

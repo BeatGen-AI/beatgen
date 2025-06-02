@@ -17,7 +17,10 @@ export type DrumSampleType =
   | "rim"
   | "clap"
   | "cymbal"
-  | "eight_o_eight";
+  | "eight_o_eight"
+  | "perc"
+  | "hit"
+  | "fx";
 
 /**
  * Mixin that adds UUID primary key (generates default value)
@@ -121,7 +124,7 @@ export interface StandardBase {
   id: string;
 }
 /**
- * Mixin that adds created_at and updated_at fields to models
+ * Mixin for created_at and updated_at timestamps
  */
 export interface TimestampMixin {
   created_at?: string;

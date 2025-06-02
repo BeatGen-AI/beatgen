@@ -5,6 +5,9 @@
 /* Do not modify it by hand - just update the pydantic models and then re-run the script
 */
 
+/**
+ * The type of action to perform
+ */
 export type ActionType =
   | "change_bpm"
   | "change_key"
@@ -21,17 +24,11 @@ export type ActionType =
  * Base class for all assistant actions
  */
 export interface AssistantAction {
-  /**
-   * The type of action to perform
-   */
   action_type: ActionType;
-  /**
-   * The data for this action
-   */
   data: ActionData;
 }
 /**
- * Base class for all action data
+ * The data for this action
  */
 export interface ActionData {
   [k: string]: unknown;
@@ -40,6 +37,7 @@ export interface ActionData {
  * Request data for the AI assistant (legacy)
  */
 export interface AssistantRequest {
+  model: string;
   prompt: string;
   project_id?: string | null;
   context?: {
@@ -51,6 +49,7 @@ export interface AssistantRequest {
  * Base request data for the AI assistant
  */
 export interface AssistantRequestBase {
+  model: string;
   prompt: string;
   project_id?: string | null;
   context?: {
@@ -76,6 +75,7 @@ export interface AssistantResponseBase {
  * Request for editing a specific track
  */
 export interface EditRequest {
+  model: string;
   prompt: string;
   project_id?: string | null;
   context?: {
@@ -106,6 +106,7 @@ export interface TrackData {
  * Request for generating multiple tracks
  */
 export interface GenerateRequest {
+  model: string;
   prompt: string;
   project_id?: string | null;
   context?: {
