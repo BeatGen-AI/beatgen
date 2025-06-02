@@ -111,12 +111,10 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
     
     audio.addEventListener('error', (e) => {
       console.error('Audio error details:', audio.error);
-      setError(`Failed to play sound: ${audio.error?.message || 'Unknown error'}`);
     });
     
     audio.play().catch(err => {
       console.error('Failed to play sound:', err);
-      setError(`Failed to play sound: ${err.message}`);
     });
     
     setAudioElement(audio);
