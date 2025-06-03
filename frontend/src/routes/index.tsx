@@ -1,10 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import React, { useState } from 'react'
+import React from 'react'
 // import { Box, Typography, Button, Container } from '@mui/material'
 import { Button } from "../components/ui/button" // Assuming shadcn/ui button path
-import { Input } from "../components/ui/input"
-import { Card } from "../components/ui/card"
-import { Badge } from "../components/ui/badge"
 import { publicRoute } from '../platform/auth/auth-utils.tsx'
 
 // Landing Page component - this will render at the root path '/'
