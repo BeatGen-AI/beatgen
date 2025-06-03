@@ -172,7 +172,7 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
           grainSize: DEFAULT_SAMPLER_CONFIG.grainSize,
           overlap: DEFAULT_SAMPLER_CONFIG.overlap,
       };
-      const samplerTrack = await createTrackAndRegisterWithHistory('sampler', defaultName, samplerTrackOptions);
+      const samplerTrack = await createTrackAndRegisterWithHistory('SAMPLER', defaultName, samplerTrackOptions);
       if (!samplerTrack) {
         throw new Error("Failed to create empty sampler track");
       }

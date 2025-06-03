@@ -502,7 +502,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
               // processTrack will apply defaults anyway, but being explicit helps clarity
               id: drumTrackData.id,
               name: drumTrackData.name || 'New MIDI Track', // Use name from data or default
-              type: 'drum',
+              type: 'DRUM',
               volume: 80, // Default volume
               pan: 0,    // Default pan
               mute: false, // Default mute state
@@ -537,7 +537,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
             const trackType = actionData.type;
             let actionTrackData;
             switch (trackType) {
-              case 'midi':
+              case 'MIDI':
                 const midiTrackData = actionData.track_data as MidiTrackRead;
                 // Ensure type is set, although it should come from action
                 console.log('🟢 Midi actionTrackData for CombinedTrack:', midiTrackData);
@@ -549,7 +549,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                   // processTrack will apply defaults anyway, but being explicit helps clarity
                   id: midiTrackData.id,
                   name: midiTrackData.name || 'New MIDI Track', // Use name from data or default
-                  type: 'midi',
+                  type: 'MIDI',
                   volume: 80, // Default volume
                   pan: 0,    // Default pan
                   mute: false, // Default mute state
@@ -611,7 +611,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                   instrumentName: "instrumentName",
                   instrumentStorageKey: storageKey
                 }
-                const newTrack = await handleAddTrack('midi', payload);
+                const newTrack = await handleAddTrack('MIDI', payload);
                 
                 // Get notes directly from the action data if available
                 const notesFromAction = actionData.notes || [];
@@ -788,7 +788,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                     instrumentName: trackName,
                     instrumentStorageKey: "instrumentStorageKey"
                   }
-                  await handleAddTrack('midi', payload);
+                  await handleAddTrack('MIDI', payload);
                 },
                 undo: async () => {
                   const tracks = useStudioStore.getState().tracks;

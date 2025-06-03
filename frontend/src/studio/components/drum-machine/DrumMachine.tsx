@@ -9,7 +9,7 @@ import { DrumMachineModal, DrumMachineModalProps } from '../modals/drum-machine/
 import { DrumSamplePublicRead } from 'src/platform/types/public_models/drum_samples';
 
 export interface DrumTrackState extends CombinedTrack {
-  type: 'drum';
+  type: 'DRUM';
   drumPattern?: boolean[][];
   samplerTrackIds?: string[];
 }

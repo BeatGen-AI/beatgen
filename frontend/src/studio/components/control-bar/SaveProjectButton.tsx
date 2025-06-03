@@ -50,13 +50,13 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
   // Function to mark tracks as clean (not dirty) after successful save
   const markTracksAsClean = (trackIds: string[]) => {
     trackIds.forEach(trackId => {
-      studioStore.updateTrack(trackId, { dirty: false });
+      studioStore.updateTrackState(trackId, { dirty: false });
     });
   };
 
   // Function to mark a track as dirty when it's modified
   const markTrackAsDirty = (trackId: string) => {
-    studioStore.updateTrack(trackId, { dirty: true });
+    studioStore.updateTrackState(trackId, { dirty: true });
   };
 
   // Prepare MIDI notes for each track before saving
@@ -146,7 +146,7 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
           setSnackbar({
             open: true,
             message: 'No changes to save',
-            severity: 'info'
+            severity: 'warning'
           });
           return; // Exit early - no need to save
         }

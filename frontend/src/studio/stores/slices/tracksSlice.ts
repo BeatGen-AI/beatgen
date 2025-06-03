@@ -758,7 +758,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           if (type === 'DRUM') {
               // 1. Create the main drum track first
               const count = rootState.tracks.length + 1; 
-              const mainDrumTrackName = TRACK_CONFIG.drum.getDefaultName(count, 'Drum Kit');
+              const mainDrumTrackName = TRACK_CONFIG.DRUM.getDefaultName(count, 'Drum Kit');
               const mainDrumTrack = await createTrackAndRegisterWithHistory('DRUM', mainDrumTrackName, {
                   instrumentName: 'Drum Sequencer', 
               });
