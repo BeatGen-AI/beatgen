@@ -2,13 +2,18 @@ import { createFileRoute } from '@tanstack/react-router'
 import React, { useEffect } from 'react'
 import Projects from '../platform/pages/Projects'
 import HomePage from '../platform/pages/HomePage'
-import { requireAuth, AuthErrorComponent, isAuthenticated } from '../platform/auth/auth-utils.tsx'
+import { requireAuth, AuthErrorComponent } from '../platform/auth/auth-utils.tsx'
 
 // Home/Projects route - this will render at the path '/home'
-// Allow guest access but redirect to login if they try to access without auth and have no generation intent
 export const Route = createFileRoute('/home')({
-  // Remove auth requirement to allow guest access
+  // Use requireAuth utility to protect this route
+  ...requireAuth('/login'),
+  
+  // Component to render
   component: HomePage,
+  
+  // Use shared error component for authentication failures
+  errorComponent: AuthErrorComponent,
 })
 
 function HomePageDemo() {
