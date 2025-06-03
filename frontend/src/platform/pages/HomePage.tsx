@@ -48,6 +48,10 @@ import DrumLibrary from '../components/DrumLibrary';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Page } from '../types/pagination';
 import { logoColors } from '../components/Sidebar';
+import GenerateSongModal from '../components/GenerateSongModal';
+import { createProject } from '../api/projects';
+import { ProjectCreate } from '../types/project';
+import { isAuthenticated } from '../auth/auth-utils';
 
 // Constants for pagination and display
 const INITIAL_DISPLAY_COUNT = 6;
@@ -63,11 +67,13 @@ export default function HomePage() {
   const { user } = useAuth();
   const { open: sidebarActualOpen } = useSidebar();
   const queryClient = useQueryClient();
+  const userIsAuthenticated = isAuthenticated();
 
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
   const [currentPageApi, setCurrentPageApi] = useState<number>(1);
 
   const [showSoundUploader, setShowSoundUploader] = useState(false);
+  const [showGenerateSongModal, setShowGenerateSongModal] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -169,6 +175,111 @@ export default function HomePage() {
     });
   };
 
+  const handleSaveGeneratedSong = async (generatedData: any) => {
+    // Check if user is authenticated
+    if (!userIsAuthenticated) {
+      // Show signup prompt for guests
+      if (window.confirm('You need to create an account to save your generated song. Would you like to sign up now?')) {
+        navigate({ to: '/register' });
+      }
+      return;
+    }
+    
+    try {
+      console.log('Saving generated song as project:', generatedData);
+      
+      // Check if project was already created by homepage API
+      if (generatedData.project_id) {
+        // Project already exists, just navigate to it
+        showSnackbar('Opening your generated song in studio...', 'success');
+        navigate({ 
+          to: '/studio',
+          search: { projectId: generatedData.project_id } as any
+        });
+        return;
+      }
+      
+      // Fallback: Create project manually (for assistant API results)
+      const projectData: ProjectCreate = {
+        name: generatedData.project_name || `Generated Song - ${new Date().toLocaleString()}`,
+        bpm: generatedData.tempo || 120,
+        time_signature_numerator: 4,
+        time_signature_denominator: 4,
+        key_signature: generatedData.key || generatedData.key_signature || 'C major',
+      };
+      
+      // Create the project
+      const newProject = await createProject(projectData);
+      
+      showSnackbar('Song saved as project! Opening in studio...', 'success');
+      
+      // Navigate to studio with the new project
+      navigate({ 
+        to: '/studio',
+        search: { projectId: newProject.id } as any
+      });
+      
+    } catch (error) {
+      console.error('Failed to save generated song as project:', error);
+      showSnackbar('Failed to save song as project. Please try again.', 'error');
+    }
+  };
+
+  // If user is not authenticated, show a simpler layout for guests
+  if (!userIsAuthenticated) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        {/* Header for guests */}
+        <header style={{ padding: '1rem 2rem', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', color: logoColors[3] }}>
+            BeatGen Studio
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button variant="outline" onClick={() => navigate({ to: '/login' })}>
+              Login
+            </Button>
+            <Button variant="default" onClick={() => navigate({ to: '/register' })}>
+              Sign Up
+            </Button>
+          </Box>
+        </header>
+
+        {/* Main content for guests */}
+        <main style={{ flexGrow: 1, padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <Paper elevation={2} sx={{ p: 4, maxWidth: 600, width: '100%', textAlign: 'center' }}>
+            <Typography variant="h4" sx={{ mb: 2, color: logoColors[1] }}>
+              Generate Your Song
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
+              Create music instantly with AI. Try our song generator for free!
+            </Typography>
+            
+            <Button
+              variant="default"
+              size="lg"
+              onClick={() => setShowGenerateSongModal(true)}
+              // startIcon={<MusicNoteIcon />}
+              // sx={{ mb: 2 }}
+            >
+              Generate Song
+            </Button>
+            
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Sign up to save your generated songs as projects
+            </Typography>
+          </Paper>
+        </main>
+
+        {/* Generate Song Modal */}
+        <GenerateSongModal
+          open={showGenerateSongModal}
+          onClose={() => setShowGenerateSongModal(false)}
+          onSaveAsProject={handleSaveGeneratedSong}
+        />
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ display: 'flex' }}>
       <Sidebar />
@@ -200,14 +311,24 @@ export default function HomePage() {
               >
                 Projects
               </Typography>
-              <Button
-                variant="default"
-                className="flex items-center gap-2"
-                onClick={handleCreateProject}
-              >
-                <AddIcon fontSize="small" />
-                New Project
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  onClick={() => setShowGenerateSongModal(true)}
+                >
+                  <MusicNoteIcon fontSize="small" />
+                  Generate Song
+                </Button>
+                <Button
+                  variant="default"
+                  className="flex items-center gap-2"
+                  onClick={handleCreateProject}
+                >
+                  <AddIcon fontSize="small" />
+                  New Project
+                </Button>
+              </Box>
             </Box>
             <ProjectsDisplay
               allFetchedProjects={allFetchedProjects}
@@ -306,6 +427,13 @@ export default function HomePage() {
           </Snackbar>
         </Container>
       </main>
+
+      {/* Generate Song Modal */}
+      <GenerateSongModal
+        open={showGenerateSongModal}
+        onClose={() => setShowGenerateSongModal(false)}
+        onSaveAsProject={handleSaveGeneratedSong}
+      />
     </Box>
   );
 }

@@ -55,6 +55,14 @@ sse_manager = SSEManager(heartbeat_interval=20)
 
 load_dotenv()
 
+
+# TODO: ProjectSavingSSEQueue will be implemented in a separate PR
+# This code is commented out to keep this merge focused on UI changes only
+
+# class ProjectSavingSSEQueue:
+#     """Wrapper around SSEQueueManager that also saves tracks to a specific project"""
+#     [Implementation temporarily removed - will be added back when project saving is fixed]
+
 # Request schema for unified assistant endpoint
 class AssistantRequestModel(AssistantRequest):
     """Unified request model for all assistant interaction types"""
@@ -84,9 +92,8 @@ async def create_assistant_request(
 ):
     # Debug logging at the start
     logger.info(
-        f"📝 CREATE REQUEST - Received request: mode={request.mode}, user_id={user.get('id') if user else 'None'}"
+        f"CREATE REQUEST - Received request: mode={request.mode}, user_id={user.get('id') if user else 'None'}"
     )
-    logger.info(f"📝 CREATE REQUEST - User profile: {user if user else 'None'}")
     """
     Create a new assistant request and return a request ID for streaming.
     
@@ -339,6 +346,11 @@ async def delayed_request_cleanup(request_id: str, delay_seconds: int = 10):
     request_manager.remove_request(request_id)
 
 
+# TODO: Project auto-creation will be implemented in a separate PR
+# async def _create_project_for_generation(context, session: Session, user_id: str) -> Optional[str]:
+#     [Implementation temporarily removed - will be added back when project saving is fixed]
+
+
 async def process_generate_request(
     request_id: str, context, sse_queue: SSEQueueManager, session: Session
 ):
@@ -346,18 +358,22 @@ async def process_generate_request(
 
     # Generate music with music_gen_service, passing the session
     try:
-        # response = await music_gen_service.compose_music(
-        #     context.prompt, sse_queue, session
-        # )
+        logger.info(f"Processing generate request: {request_id}")
+        
         selected_model_info = available_models.get_model_by_name(context.model)
         selected_model_info.api_key = selected_model_info.get_api_key()
         logger.info(f"Selected model: {selected_model_info}")
+        
+        # TODO: Project auto-creation and saving will be implemented separately
+        # For now, use regular SSE queue to keep this merge focused on UI changes
+        wrapped_queue = sse_queue
+        
         response = await music_agent.run(
             request_id=request_id,
             request=SongRequest(user_prompt=context.prompt,
                         duration_bars=4),
             model_info=selected_model_info,
-            queue=sse_queue,
+            queue=wrapped_queue,
             db_session=session
         )
         
