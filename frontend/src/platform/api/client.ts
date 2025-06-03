@@ -1,5 +1,6 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { logApiRequest, logApiResponse, logApiError } from './debug';
+import { ApiError } from './types';
 
 // In development, use a relative URL to leverage Vite's proxy
 // In production, this would be the actual API URL
@@ -103,7 +104,7 @@ apiClient.interceptors.response.use(
         error.response.data.detail || 
         error.response.data.message || 
         'Conflict detected - resource may have been modified'
-      );
+      ) as ApiError;
       conflictError.status = 409;
       conflictError.response = error.response;
       return Promise.reject(conflictError);
@@ -116,7 +117,7 @@ apiClient.interceptors.response.use(
         error.response.data.detail || 
         error.response.data.message || 
         `API Error (${error.response.status})`
-      );
+      ) as ApiError;
       backendError.status = error.response.status;
       backendError.response = error.response;
       return Promise.reject(backendError);

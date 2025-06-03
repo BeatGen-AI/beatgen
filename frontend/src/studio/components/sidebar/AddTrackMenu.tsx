@@ -142,7 +142,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
         onClose={() => setIsVirtualInstrumentModalOpen(false)}
         onSelect={(instrumentId: string, instrumentName: string, instrumentStorageKey?: string) => {
           const payload: MidiTrackPayload = { instrumentId, instrumentName, instrumentStorageKey };
-          onAddTrack('midi', payload);
+          onAddTrack('MIDI', payload);
           setIsVirtualInstrumentModalOpen(false);
         }}
       />
@@ -151,7 +151,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
         onClose={() => setIsDrumMachineModalOpen(false)}
         onConfirmSelection={(selectedSamples: DrumSamplePublicRead[]) => {
           const payload: DrumTrackPayload = { samples: selectedSamples };
-          onAddTrack('drum', payload);
+          onAddTrack('DRUM', payload);
           setIsDrumMachineModalOpen(false);
         }}
       />

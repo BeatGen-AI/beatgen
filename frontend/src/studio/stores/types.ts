@@ -8,7 +8,8 @@ import {
     AudioTrackRead, 
     MidiTrackRead, 
     SamplerTrackRead, 
-    DrumTrackRead
+    DrumTrackRead,
+    TrackType
 } from '../../platform/types/project';
 import { DrumSamplePublicRead } from '../../platform/types/public_models/drum_samples';
 // Remove the type re-export for now
@@ -39,8 +40,6 @@ export type TrackParameter = {
   y_position?: number; // Position components
 };
 
-// Define Track Types
-export type TrackType = 'midi' | 'audio' | 'drum' | 'sampler';
 
 // Define Payload Types
 export interface MidiTrackPayload {
@@ -279,7 +278,7 @@ export interface RootState {
 export type StoreSliceCreator<T> = (set: SetFn, get: GetFn) => T;
 
 // Re-export platform types if needed by other store files importing from here
-export type { AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead };
+export type { AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, TrackType };
 
 // Also define and export AnyTrackRead using the imported types
 export type AnyTrackRead = AudioTrackRead | MidiTrackRead | SamplerTrackRead | DrumTrackRead;

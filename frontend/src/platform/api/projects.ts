@@ -1,6 +1,7 @@
 import { uploadFileWithProgress } from '../../studio/utils/audioProcessing';
 import { processAudioFile } from '../../studio/utils/audioProcessing';
 import { apiClient } from './client';
+import { ApiError } from './types';
 import { createDrumTrackRecord, createMidiFileRecord, createSamplerTrackRecord, createSoundRecord, getUploadUrl } from './sounds';
 import { 
   Project as ApiProject, 
@@ -45,7 +46,7 @@ export const updateProject = async (id: string, updates: ProjectWithTracks): Pro
       const conflictError = new Error(
         error.response.data?.detail || 
         'Save conflict detected. The project may have been modified by another user or process.'
-      );
+      ) as ApiError;
       conflictError.status = 409;
       throw conflictError;
     }
@@ -79,7 +80,7 @@ export const deleteTrack = async (projectId: string, trackId: string): Promise<P
 
 export const uploadAudioTrack = async (track: CombinedTrack): Promise<void> => {
   const audioTrack = track.track as AudioTrack;
-  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'AUDIO', true);
+  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'audio', true);
   if (!upload_url) {
     console.log("Audio track already exists, skipping upload");
     return
@@ -124,7 +125,7 @@ export const uploadMidiTrack = async (track: CombinedTrack): Promise<void> => {
 
 export const uploadSamplerTrack = async (track: CombinedTrack): Promise<void> => {
   const samplerTrack = track.track as SamplerTrack;
-  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'AUDIO', true);
+  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'audio', true);
   if (!upload_url) {
     console.log("Sampler audio track already exists, skipping upload");
     return
@@ -205,7 +206,7 @@ export const saveProjectWithSounds = async (
       const conflictError = new Error(
         error.response.data?.detail || 
         'Save conflict detected. The project may have been modified by another user or process.'
-      );
+      ) as ApiError;
       conflictError.status = 409;
       throw conflictError;
     }
