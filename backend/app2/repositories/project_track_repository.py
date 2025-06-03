@@ -8,6 +8,8 @@ from sqlmodel import Session, select
 import traceback
 from datetime import datetime
 import uuid
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 
 from app2.core.exceptions import DatabaseException, NotFoundException
 from app2.core.logging import get_repository_logger
@@ -138,7 +140,7 @@ class ProjectTrackRepository:
 
     async def create(self, project_track_data: Dict[str, Any]) -> ProjectTrack:
         """
-        Create a new project-track association
+        Create a new project-track association with duplicate handling
 
         Args:
             project_track_data: The project-track data (must include project_id, track_type,
@@ -172,6 +174,21 @@ class ProjectTrackRepository:
                 f"Created project-track for project {project_track.project_id}"
             )
             return project_track
+        except IntegrityError as e:
+            self.session.rollback()
+            # Handle duplicate key constraint violation
+            if "duplicate key value violates unique constraint" in str(e):
+                self.logger.info(f"ProjectTrack already exists, attempting update instead")
+                # Try to update the existing record instead
+                return await self.update(
+                    project_track_data["project_id"],
+                    project_track_data["track_type"],
+                    project_track_data["track_id"],
+                    project_track_data
+                )
+            else:
+                self.logger.error(f"Integrity constraint violation: {str(e)}")
+                raise DatabaseException(f"Constraint violation: {str(e)}")
         except Exception as e:
             self.session.rollback()
             self.logger.error(f"Error creating project-track: {str(e)}")
@@ -367,6 +384,163 @@ class ProjectTrackRepository:
         except Exception as e:
             self.session.rollback()
             self.logger.error(f"Error deleting project-tracks: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise DatabaseException(f"Failed to delete project-tracks: {str(e)}")
+
+    async def upsert(self, project_track_data: Dict[str, Any]) -> ProjectTrack:
+        """
+        Insert or update project-track association using PostgreSQL UPSERT
+
+        Args:
+            project_track_data: The project-track data including all fields
+
+        Returns:
+            The created or updated project-track association
+
+        Raises:
+            DatabaseException: If there's a database error
+        """
+        self.logger.info(f"Upserting project-track: {project_track_data}")
+        try:
+            # Validate required fields
+            if (
+                "project_id" not in project_track_data
+                or "track_type" not in project_track_data
+                or "track_id" not in project_track_data
+            ):
+                raise ValueError("project_id, track_type, and track_id are required")
+
+            # Use raw SQL for PostgreSQL ON CONFLICT
+            query = text("""
+                INSERT INTO project_tracks 
+                (created_at, updated_at, project_id, track_id, track_type, name, volume, pan, mute, 
+                 x_position, y_position, trim_start_ticks, trim_end_ticks, 
+                 duration_ticks, track_number)
+                VALUES 
+                (:created_at, :updated_at, :project_id, :track_id, :track_type, :name, :volume, :pan, :mute,
+                 :x_position, :y_position, :trim_start_ticks, :trim_end_ticks,
+                 :duration_ticks, :track_number)
+                ON CONFLICT (project_id, track_id) 
+                DO UPDATE SET
+                    updated_at = EXCLUDED.updated_at,
+                    track_type = EXCLUDED.track_type,
+                    name = EXCLUDED.name,
+                    volume = EXCLUDED.volume,
+                    pan = EXCLUDED.pan,
+                    mute = EXCLUDED.mute,
+                    x_position = EXCLUDED.x_position,
+                    y_position = EXCLUDED.y_position,
+                    trim_start_ticks = EXCLUDED.trim_start_ticks,
+                    trim_end_ticks = EXCLUDED.trim_end_ticks,
+                    duration_ticks = EXCLUDED.duration_ticks,
+                    track_number = EXCLUDED.track_number
+                RETURNING *
+            """)
+            
+            # Prepare data with defaults for missing fields
+            from datetime import datetime
+            current_time = datetime.utcnow()
+            
+            upsert_data = {
+                "created_at": current_time,
+                "updated_at": current_time,
+                "project_id": project_track_data["project_id"],
+                "track_id": project_track_data["track_id"],
+                "track_type": project_track_data["track_type"],
+                "name": project_track_data.get("name", "Unnamed Track"),
+                "volume": project_track_data.get("volume", 1.0),
+                "pan": project_track_data.get("pan", 0.0),
+                "mute": project_track_data.get("mute", False),
+                "x_position": project_track_data.get("x_position", 0.0),
+                "y_position": project_track_data.get("y_position", 0.0),
+                "trim_start_ticks": project_track_data.get("trim_start_ticks", 0),
+                "trim_end_ticks": project_track_data.get("trim_end_ticks", 0),
+                "duration_ticks": project_track_data.get("duration_ticks", 0),
+                "track_number": project_track_data.get("track_number", 0),
+            }
+            
+            result = self.session.execute(query, upsert_data)
+            self.session.commit()
+            
+            # Convert result to ProjectTrack object
+            row = result.fetchone()
+            if row:
+                project_track = ProjectTrack(**dict(row._mapping))
+                self.logger.info(f"Upserted project-track for project {project_track.project_id}")
+                return project_track
+            else:
+                raise DatabaseException("Upsert operation did not return a result")
+                
+        except Exception as e:
+            self.session.rollback()
+            self.logger.error(f"Error upserting project-track: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise DatabaseException(f"Failed to upsert project-track: {str(e)}")
+
+    async def upsert_many(self, project_tracks_data: List[Dict[str, Any]]) -> List[ProjectTrack]:
+        """
+        Batch upsert for multiple project-track associations
+
+        Args:
+            project_tracks_data: List of project-track data dictionaries
+
+        Returns:
+            List of created or updated project-track associations
+
+        Raises:
+            DatabaseException: If there's a database error
+        """
+        self.logger.info(f"Batch upserting {len(project_tracks_data)} project-tracks")
+        try:
+            results = []
+            for project_track_data in project_tracks_data:
+                result = await self.upsert(project_track_data)
+                results.append(result)
+            
+            self.logger.info(f"Successfully upserted {len(results)} project-tracks")
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Error in batch upsert: {str(e)}")
+            raise DatabaseException(f"Failed to batch upsert project-tracks: {str(e)}")
+
+    async def delete_by_track_ids(self, project_id: uuid.UUID, track_ids: List[uuid.UUID]) -> int:
+        """
+        Delete project-track associations for specific track IDs within a project
+
+        Args:
+            project_id: The ID of the project
+            track_ids: List of track IDs to remove from the project
+
+        Returns:
+            The number of associations deleted
+
+        Raises:
+            DatabaseException: If there's a database error
+        """
+        self.logger.info(f"Deleting project-tracks for tracks {track_ids} in project {project_id}")
+        try:
+            # Get associations to delete
+            statement = select(ProjectTrack).where(
+                ProjectTrack.project_id == project_id,
+                ProjectTrack.track_id.in_(track_ids)
+            )
+            project_tracks = self.session.exec(statement).all()
+            
+            # Delete all associations
+            for pt in project_tracks:
+                self.session.delete(pt)
+            
+            # Commit changes
+            self.session.commit()
+            
+            self.logger.info(
+                f"Deleted {len(project_tracks)} project-tracks for project {project_id}"
+            )
+            return len(project_tracks)
+        except Exception as e:
+            self.session.rollback()
+            self.logger.error(f"Error deleting project-tracks by track IDs: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to delete project-tracks: {str(e)}")
 

@@ -327,11 +327,17 @@ class TrackService:
             # Create the track
             try:
                 track = await self.audio_repository.create(track_data)
-            except Exception:
-                logger.info(
-                    f"Audio track already with ID: {track_data['id']} exists. Updating track."
-                )
-                track = await self.audio_repository.update(track_data["id"], track_data)
+            except Exception as e:
+                # Check if it's specifically a duplicate key error
+                if "duplicate key" in str(e) or "UniqueViolation" in str(e):
+                    logger.info(
+                        f"Audio track already with ID: {track_data['id']} exists. Updating track."
+                    )
+                    track = await self.audio_repository.update(track_data["id"], track_data)
+                else:
+                    # Re-raise other types of errors
+                    logger.error(f"Error creating audio track: {str(e)}")
+                    raise
 
             logger.info(
                 f"Created audio track with ID: {track.id} for user ID: {user_id}"
@@ -372,13 +378,25 @@ class TrackService:
             logger.info(f"Creating MIDI track with data: {midi_track_data}")
             try:
                 track = await self.midi_repository.create(midi_track_data)
-            except Exception:
-                logger.info(
-                    f"MIDI track already with ID: {midi_track_data['id']} exists. Updating track."
-                )
-                track = await self.midi_repository.update(
-                    midi_track_data["id"], midi_track_data
-                )
+                logger.info(f"✅ Created new MIDI track with ID: {track.id}")
+            except Exception as e:
+                # Check if it's specifically a duplicate key error
+                if "duplicate key" in str(e) or "UniqueViolation" in str(e):
+                    logger.info(
+                        f"🔄 MIDI track with ID: {midi_track_data['id']} already exists. Updating instead."
+                    )
+                    try:
+                        track = await self.midi_repository.update(
+                            midi_track_data["id"], midi_track_data
+                        )
+                        logger.info(f"✅ Updated existing MIDI track with ID: {track.id}")
+                    except Exception as update_error:
+                        logger.error(f"❌ Failed to update MIDI track: {str(update_error)}")
+                        raise update_error
+                else:
+                    # Re-raise other types of errors
+                    logger.error(f"❌ Error creating MIDI track: {str(e)}")
+                    raise
 
             logger.info(
                 f"Created MIDI track with ID: {track.id} for user ID: {user_id}"
@@ -419,13 +437,19 @@ class TrackService:
             # Create the track
             try:
                 track = await self.sampler_repository.create(track_data)
-            except Exception:
-                logger.info(
-                    f"Sampler track already with ID: {track_data['id']} exists. Updating track."
-                )
-                track = await self.sampler_repository.update(
-                    track_data["id"], track_data
-                )
+            except Exception as e:
+                # Check if it's specifically a duplicate key error
+                if "duplicate key" in str(e) or "UniqueViolation" in str(e):
+                    logger.info(
+                        f"Sampler track already with ID: {track_data['id']} exists. Updating track."
+                    )
+                    track = await self.sampler_repository.update(
+                        track_data["id"], track_data
+                    )
+                else:
+                    # Re-raise other types of errors
+                    logger.error(f"Error creating sampler track: {str(e)}")
+                    raise
 
             logger.info(
                 f"Created sampler track with ID: {track.id} for user ID: {user_id}"
@@ -459,7 +483,21 @@ class TrackService:
             track_data["type"] = TrackType.DRUM
 
             # Create the track
-            track = await self.drum_repository.create(track_data)
+            try:
+                track = await self.drum_repository.create(track_data)
+            except Exception as e:
+                # Check if it's specifically a duplicate key error
+                if "duplicate key" in str(e) or "UniqueViolation" in str(e):
+                    logger.info(
+                        f"Drum track already with ID: {track_data['id']} exists. Updating track."
+                    )
+                    track = await self.drum_repository.update(
+                        track_data["id"], track_data
+                    )
+                else:
+                    # Re-raise other types of errors
+                    logger.error(f"Error creating drum track: {str(e)}")
+                    raise
 
             logger.info(
                 f"Created drum track with ID: {track.id} for user ID: {user_id}"
@@ -673,10 +711,17 @@ class TrackService:
             # Set track_id directly (not using type-specific foreign keys)
             project_track_data["track_id"] = track_id
 
-            # Create the association
-            project_track = await self.project_track_repository.create(
-                project_track_data
-            )
+            # Create the association with duplicate handling
+            try:
+                project_track = await self.project_track_repository.create(
+                    project_track_data
+                )
+            except Exception as e:
+                # If create fails due to duplicate, try upsert
+                logger.info(f"ProjectTrack create failed, trying upsert: {str(e)}")
+                project_track = await self.project_track_repository.upsert(
+                    project_track_data
+                )
 
             # Get track data with settings
             # Note: ProjectTrack uses a composite primary key (project_id, track_id), not a single id field

@@ -107,6 +107,7 @@ class ProjectBase(DefaultUUIDStandardBase):
     time_signature_numerator: int
     time_signature_denominator: int
     key_signature: str
+    version: int = Field(default=0)  # For optimistic locking
 
 
 class TrackBase(StandardBase):

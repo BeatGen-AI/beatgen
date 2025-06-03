@@ -36,8 +36,21 @@ export const createProject = async (project: ProjectCreate): Promise<Project> =>
 };
 
 export const updateProject = async (id: string, updates: ProjectWithTracks): Promise<Project> => {
-  const response = await apiClient.patch(`/projects/${id}`, updates);
-  return response.data;
+  try {
+    const response = await apiClient.patch(`/projects/${id}`, updates);
+    return response.data;
+  } catch (error: any) {
+    // Handle specific conflict errors with more detail
+    if (error.response?.status === 409) {
+      const conflictError = new Error(
+        error.response.data?.detail || 
+        'Save conflict detected. The project may have been modified by another user or process.'
+      );
+      conflictError.status = 409;
+      throw conflictError;
+    }
+    throw error;
+  }
 };
 
 export const deleteProject = async (id: string): Promise<void> => {
@@ -66,7 +79,7 @@ export const deleteTrack = async (projectId: string, trackId: string): Promise<P
 
 export const uploadAudioTrack = async (track: CombinedTrack): Promise<void> => {
   const audioTrack = track.track as AudioTrack;
-  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'audio', true);
+  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'AUDIO', true);
   if (!upload_url) {
     console.log("Audio track already exists, skipping upload");
     return
@@ -111,7 +124,7 @@ export const uploadMidiTrack = async (track: CombinedTrack): Promise<void> => {
 
 export const uploadSamplerTrack = async (track: CombinedTrack): Promise<void> => {
   const samplerTrack = track.track as SamplerTrack;
-  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'audio', true);
+  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'AUDIO', true);
   if (!upload_url) {
     console.log("Sampler audio track already exists, skipping upload");
     return
@@ -163,26 +176,39 @@ export const saveProjectWithSounds = async (
   console.log("Saving project with sounds:", projectId, projectData, tracks);
   for (const track of tracks) {
     switch (track.type) {
-      case 'audio':
+      case 'AUDIO':
         await uploadAudioTrack(track);
         break;
-      case 'midi':
+      case 'MIDI':
         await uploadMidiTrack(track);
         break;
-      case 'sampler':
+      case 'SAMPLER':
         await uploadSamplerTrack(track);
         break;
-      case 'drum':
+      case 'DRUM':
         await uploadDrumTrack(track);
         break;
     }
   }
   
   // 4. Update the project with all tracks
-  const response = await apiClient.patch(`/projects/${projectId}`, {
-    ...projectData,
-    tracks: tracks
-  });
-  
-  return response.data;
+  try {
+    const response = await apiClient.patch(`/projects/${projectId}`, {
+      ...projectData,
+      tracks: tracks
+    });
+    
+    return response.data;
+  } catch (error: any) {
+    // Handle specific conflict errors with more detail
+    if (error.response?.status === 409) {
+      const conflictError = new Error(
+        error.response.data?.detail || 
+        'Save conflict detected. The project may have been modified by another user or process.'
+      );
+      conflictError.status = 409;
+      throw conflictError;
+    }
+    throw error;
+  }
 };

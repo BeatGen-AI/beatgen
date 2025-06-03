@@ -49,7 +49,7 @@ class ProjectTrack(ProjectTrackBase, table=True):
     audio_track: Optional["AudioTrack"] = Relationship(
         back_populates="project_tracks",
         sa_relationship_kwargs={
-            "primaryjoin": "and_(ProjectTrack.track_id == AudioTrack.id, ProjectTrack.track_type == 'audio')",
+            "primaryjoin": "and_(ProjectTrack.track_id == AudioTrack.id, ProjectTrack.track_type == 'AUDIO')",
             "foreign_keys": "[ProjectTrack.track_id]",
             "overlaps": "midi_track, sampler_track, drum_track, project_tracks",
         },
@@ -58,7 +58,7 @@ class ProjectTrack(ProjectTrackBase, table=True):
     midi_track: Optional["MidiTrack"] = Relationship(
         back_populates="project_tracks",
         sa_relationship_kwargs={
-            "primaryjoin": "and_(ProjectTrack.track_id == MidiTrack.id, ProjectTrack.track_type == 'midi')",
+            "primaryjoin": "and_(ProjectTrack.track_id == MidiTrack.id, ProjectTrack.track_type == 'MIDI')",
             "foreign_keys": "[ProjectTrack.track_id]",
             "overlaps": "audio_track, sampler_track, drum_track, project_tracks",
         },
@@ -67,7 +67,7 @@ class ProjectTrack(ProjectTrackBase, table=True):
     sampler_track: Optional["SamplerTrack"] = Relationship(
         back_populates="project_tracks",
         sa_relationship_kwargs={
-            "primaryjoin": "and_(ProjectTrack.track_id == SamplerTrack.id, ProjectTrack.track_type == 'sampler')",
+            "primaryjoin": "and_(ProjectTrack.track_id == SamplerTrack.id, ProjectTrack.track_type == 'SAMPLER')",
             "foreign_keys": "[ProjectTrack.track_id]",
             "overlaps": "audio_track, midi_track, drum_track, project_tracks",
         },
@@ -76,7 +76,7 @@ class ProjectTrack(ProjectTrackBase, table=True):
     drum_track: Optional["DrumTrack"] = Relationship(
         back_populates="project_tracks",
         sa_relationship_kwargs={
-            "primaryjoin": "and_(ProjectTrack.track_id == DrumTrack.id, ProjectTrack.track_type == 'drum')",
+            "primaryjoin": "and_(ProjectTrack.track_id == DrumTrack.id, ProjectTrack.track_type == 'DRUM')",
             "foreign_keys": "[ProjectTrack.track_id]",
             "overlaps": "audio_track,midi_track,project_tracks,sampler_track",
         },

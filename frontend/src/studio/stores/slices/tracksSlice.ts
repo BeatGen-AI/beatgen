@@ -21,6 +21,7 @@ export interface TracksSlice {
   setTracks: (tracks: CombinedTrack[]) => void;
   updateTracks: (newTracks: CombinedTrack[]) => void;
   updateTrackState: (trackId: string, updates: Partial<CombinedTrack & TrackParameter>) => void;
+  updateTrack: (trackId: string, updates: Partial<CombinedTrack>) => void; // Alias for updateTrackState
   findTrackById: (trackId: string) => CombinedTrack | undefined;
   updateTrackIndices: () => void;
 
@@ -107,6 +108,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
         if (trackIndex !== -1) {
             Object.assign(draft.tracks[trackIndex], updates);
+            // Mark track as dirty when modified, unless explicitly setting dirty to false
+            if (updates.dirty !== false) {
+                draft.tracks[trackIndex].dirty = true;
+            }
         }
     }));
   };
@@ -147,7 +152,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           draft.tracks = newTracks;
           draft.tracks.forEach((track, index) => { 
               // !! IMPORTANT: Ensure CombinedTrack has track_number !!
-              track.track_number = index; 
+              track.track_number = index;
+              // Mark loaded tracks as clean (not dirty) since they come from database
+              track.dirty = false;
           });
       }), true);
   };
@@ -156,7 +163,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   const selectDrumTrackById = (trackId: string): DrumTrackRead | undefined => {
     const track = findTrackById(trackId); // Use the slice's findTrackById
     // Ensure track and track.track exist and type is correct
-    return (track && track.type === 'drum' && track.track) ? track.track as DrumTrackRead : undefined;
+    return (track && track.type === 'DRUM' && track.track) ? track.track as DrumTrackRead : undefined;
   };
 
   const selectSamplerTracksForDrumTrack = (drumTrackId: string): SamplerTrackRead[] => {
@@ -164,7 +171,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     return tracks
       // Ensure track and track.track exist before filtering
       .filter(t => 
-          t.type === 'sampler' && 
+          t.type === 'SAMPLER' && 
           t.track && 
           (t.track as SamplerTrackRead).drum_track_id === drumTrackId
       )
@@ -205,8 +212,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       if (!typeConfig) throw new Error(`Invalid track type: ${type}`);
       
       // Extract the file object early
-      const file = type === 'audio' ? (options as AudioTrackOptions).audioFile : 
-                   type === 'sampler' ? (options as SamplerTrackOptions).sampleFile : 
+      const file = type === 'AUDIO' ? (options as AudioTrackOptions).audioFile : 
+                   type === 'SAMPLER' ? (options as SamplerTrackOptions).sampleFile : 
                    undefined;
 
       await passedStore.getAudioEngine().createTrack(trackId, name); 
@@ -230,7 +237,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         y_position: position.y,
         trim_start_ticks: options.trim_start_ticks ?? 0,
         trim_end_ticks: options.trim_end_ticks ?? null,
-        duration_ticks: options.duration ?? defaultDurationTicks, 
+        duration_ticks: options.duration ?? defaultDurationTicks,
+        dirty: true, // New tracks are dirty by default (need to be saved)
       };
       
       // Get initial *serializable* nested track properties
@@ -239,7 +247,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       let nestedTrackDataObject: any = { ...typeSpecificProps, type, id: trackId, name: name };
       
       // Add only *serializable* type-specific data available at creation
-      if (type === 'midi') {
+      if (type === 'MIDI') {
           const midiOptions = options as MidiTrackOptions;
           nestedTrackDataObject = {
               ...nestedTrackDataObject,
@@ -255,7 +263,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               } : undefined
           } as MidiTrack;
       } 
-      else if (type === 'audio') {
+      else if (type === 'AUDIO') {
           const audioOptions = options as AudioTrackOptions;
           nestedTrackDataObject = {
               ...nestedTrackDataObject,
@@ -269,7 +277,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               waveform_data: audioOptions.waveform_data,
           } // NO audioFile property here
       }
-      else if (type === 'sampler') {
+      else if (type === 'SAMPLER') {
            const samplerOptions = options as SamplerTrackOptions;
            nestedTrackDataObject = {
               ...nestedTrackDataObject,
@@ -318,7 +326,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
       const deleteLogic = async (passedStore: Store) => {
           // --- Recursive delete for drum track --- 
-          if (trackToDelete.type === 'drum' && trackToDelete.track) {
+          if (trackToDelete.type === 'DRUM' && trackToDelete.track) {
               const drumTrack = trackToDelete.track as DrumTrackRead;
               const samplerIdsToRemove = drumTrack.sampler_track_ids ? [...drumTrack.sampler_track_ids] : []; 
               if (samplerIdsToRemove.length > 0) {
@@ -350,10 +358,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           }
 
           try {
-              if (trackToDelete.type === 'sampler') {
+              if (trackToDelete.type === 'SAMPLER') {
                   console.log(`Placeholder: Disconnect/cleanup sampler track ${trackId} subscription`);
               }
-              if (trackToDelete.type === 'midi') {
+              if (trackToDelete.type === 'MIDI') {
                   console.log(`Placeholder: Disconnect MIDI track ${trackId} from soundfont/manager`);
               }
           } catch (disconnectError) {
@@ -373,7 +381,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const samplerTrack = findTrackById(samplerTrackId); // Use slice's findTrackById
 
     // 1. Basic Validation
-    if (!samplerTrack || samplerTrack.type !== 'sampler' || !samplerTrack.track) {
+    if (!samplerTrack || samplerTrack.type !== 'SAMPLER' || !samplerTrack.track) {
         console.error(`Sampler track ${samplerTrackId} not found or invalid.`);
         return;
     }
@@ -639,7 +647,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     
     const uploadLogic = async (): Promise<CombinedTrack | null> => {
         const trackName = file.name.split('.').slice(0, -1).join('.') || file.name; // Get filename without extension
-        const trackType: TrackType = isSampler ? 'sampler' : 'audio';
+        const trackType: TrackType = isSampler ? 'SAMPLER' : 'AUDIO';
         
         // Process audio file to get metadata including waveform data
         const metadata = await processAudioFile(file);
@@ -740,18 +748,18 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const { createTrackAndRegisterWithHistory, addSamplerTrackToDrumTrack, openDrumMachine, _withErrorHandling } = rootState;
       
       // Ensure actions exist
-      if (!_withErrorHandling || !createTrackAndRegisterWithHistory || (type === 'drum' && !addSamplerTrackToDrumTrack)) {
+      if (!_withErrorHandling || !createTrackAndRegisterWithHistory || (type === 'DRUM' && !addSamplerTrackToDrumTrack)) {
           console.error("handleAddTrack: Missing dependencies");
           return null;
       }
 
       const addLogic = async () => {
           // --- Drum Track Creation with Samplers --- 
-          if (type === 'drum') {
+          if (type === 'DRUM') {
               // 1. Create the main drum track first
               const count = rootState.tracks.length + 1; 
               const mainDrumTrackName = TRACK_CONFIG.drum.getDefaultName(count, 'Drum Kit');
-              const mainDrumTrack = await createTrackAndRegisterWithHistory('drum', mainDrumTrackName, {
+              const mainDrumTrack = await createTrackAndRegisterWithHistory('DRUM', mainDrumTrackName, {
                   instrumentName: 'Drum Sequencer', 
               });
 
@@ -803,7 +811,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           const countStd = rootState.tracks.length + 1;
           let instrumentNameStd: string | undefined;
           let trackOptionsStd: TrackOptions = {};
-          if (type === 'midi' && payload && 'instrumentId' in payload) {
+          if (type === 'MIDI' && payload && 'instrumentId' in payload) {
               const midiPayload = payload as MidiTrackPayload;
               instrumentNameStd = midiPayload.instrumentName;
               trackOptionsStd = { 
@@ -879,7 +887,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
 
         // 2. Create the Sampler Track (handles its own history for creation)
-        const newSamplerTrack = await createTrackAndRegisterWithHistory('sampler', samplerTrackName, samplerOptions);
+        const newSamplerTrack = await createTrackAndRegisterWithHistory('SAMPLER', samplerTrackName, samplerOptions);
         console.log(`   Action Step 2: Calling createTrackAndRegisterWithHistory for sampler...`);
 
         if (!newSamplerTrack || !newSamplerTrack.id) {
@@ -943,6 +951,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     setTracks,
     updateTracks,
     updateTrackState,
+    updateTrack: updateTrackState, // Alias for updateTrackState
     findTrackById,
     updateTrackIndices,
 

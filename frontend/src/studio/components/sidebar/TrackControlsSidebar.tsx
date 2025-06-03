@@ -200,7 +200,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   // Render type-specific controls based on track type
   const renderTypeSpecificControls = () => {
     switch(track.type) {
-      case 'midi':
+      case 'MIDI':
         return (
           <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
             <Typography variant="caption" sx={{ 
@@ -228,7 +228,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
           </Box>
         );
       
-      case 'drum':
+      case 'DRUM':
         return (
           <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
             <Typography variant="caption" sx={{ 
@@ -259,7 +259,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
           </Box>
         );
         
-      case 'audio':
+      case 'AUDIO':
         // Cast track.track to AudioTrackRead
         const audioTrackData = track.track as AudioTrackRead;
         const audioFileName = audioTrackData.name;
@@ -303,7 +303,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
           </Box>
         );
         
-      case 'sampler':
+      case 'SAMPLER':
         // Cast track.track to SamplerTrackRead
         const samplerTrackData = track.track as SamplerTrackRead;
         const samplerFileName = samplerTrackData.audio_file_name;

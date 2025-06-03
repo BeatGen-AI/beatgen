@@ -6,6 +6,7 @@ from typing import Dict, Any, List
 import traceback
 from datetime import datetime
 import uuid
+from contextlib import asynccontextmanager
 
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import ServiceException, NotFoundException, ForbiddenException
@@ -39,6 +40,21 @@ class ProjectService:
         self.project_repository = project_repository
         self.project_track_repository = project_track_repository
         self.track_service = track_service
+
+    @asynccontextmanager
+    async def transaction_context(self):
+        """
+        Provide transactional context for complex operations
+        
+        Note: Individual repository methods handle their own session commit/rollback,
+        but this provides a logical transaction boundary for service-level operations
+        """
+        try:
+            yield
+        except Exception as e:
+            logger.error(f"Transaction failed: {str(e)}")
+            # Let individual repository rollbacks handle the database state
+            raise
 
     async def get_user_projects(
         self, user_id: uuid.UUID, page_params: PageParams
@@ -340,7 +356,7 @@ class ProjectService:
         tracks_data: List[Dict[str, Any]],
     ) -> None:
         """
-        Update the tracks of a project
+        Update the tracks of a project using atomic upsert pattern
 
         Args:
             project_id: The ID of the project
@@ -353,32 +369,32 @@ class ProjectService:
         logger.info(
             f"Updating tracks for project with ID: {project_id}, {len(tracks_data)} tracks"
         )
-        try:
-            # First clear existing project-track associations
-            await self.project_track_repository.delete_by_project_id(project_id)
-            logger.info(
-                f"Cleared existing project-track associations for project {project_id}"
-            )
-
-            # Add tracks to the project
-            for track_idx, track_data in enumerate(tracks_data):
-                if (
-                    isinstance(track_data, dict)
-                    and "id" in track_data
-                    and "type" in track_data
-                ):
-                    # Get track type and ID
+        
+        async with self.transaction_context():
+            try:
+                # Get existing tracks to identify what to remove
+                existing_tracks = await self.project_track_repository.get_by_project_id(project_id)
+                existing_track_ids = {str(track.track_id) for track in existing_tracks}
+                
+                # Track IDs that will be in the updated project
+                new_track_ids = set()
+                
+                # Process each track using upsert pattern
+                for track_idx, track_data in enumerate(tracks_data):
+                    if not isinstance(track_data, dict) or "id" not in track_data or "type" not in track_data:
+                        logger.warning(f"Invalid track data format: {track_data}")
+                        continue
+                        
                     track_type = TrackType(track_data["type"])
                     track_id = uuid.UUID(track_data["id"])
-
-                    # Set track number if not provided
-                    if "track_number" not in track_data:
-                        track_data["track_number"] = track_idx
-
-                    # Extract project-track settings
+                    new_track_ids.add(str(track_id))
+                    
+                    # Prepare project-track settings
                     project_track_settings = {
+                        "project_id": project_id,
+                        "track_id": track_id,
+                        "track_type": track_type,
                         "name": track_data.get("name", "Unnamed Track"),
-                        "track_id": track_data.get("id"),
                         "volume": track_data.get("volume", 1.0),
                         "pan": track_data.get("pan", 0.0),
                         "mute": track_data.get("mute", False),
@@ -387,24 +403,26 @@ class ProjectService:
                         "trim_start_ticks": track_data.get("trim_start_ticks", 0),
                         "trim_end_ticks": track_data.get("trim_end_ticks", 0),
                         "duration_ticks": track_data.get("duration_ticks", 0),
-                        "track_number": track_data.get("track_number", 0),
+                        "track_number": track_idx,
                     }
-
-                    # Add track to project
-                    await self.track_service.add_track_to_project(
-                        project_id=project_id,
-                        track_type=track_type,
-                        track_id=track_id,
-                        user_id=user_id,
-                        settings=project_track_settings,
+                    
+                    # Use upsert to safely create or update the project-track association
+                    await self.project_track_repository.upsert(project_track_settings)
+                    logger.info(f"Upserted track {track_id} to project {project_id}")
+                
+                # Remove tracks that are no longer in the project
+                tracks_to_remove = existing_track_ids - new_track_ids
+                if tracks_to_remove:
+                    track_ids_to_remove = [uuid.UUID(track_id) for track_id in tracks_to_remove]
+                    deleted_count = await self.project_track_repository.delete_by_track_ids(
+                        project_id, track_ids_to_remove
                     )
-                    logger.info(f"Added track {track_id} to project {project_id}")
-                else:
-                    logger.warning(f"Invalid track data format: {track_data}")
-        except Exception as e:
-            logger.error(f"Error updating project tracks: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to update project tracks: {str(e)}")
+                    logger.info(f"Removed {deleted_count} tracks from project {project_id}")
+                        
+            except Exception as e:
+                logger.error(f"Error updating project tracks: {str(e)}")
+                logger.error(traceback.format_exc())
+                raise ServiceException(f"Failed to update project tracks: {str(e)}")
 
     async def delete_project(self, project_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         """

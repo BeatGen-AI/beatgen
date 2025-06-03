@@ -70,9 +70,9 @@ function Track(props: TrackProps) {
   // Callbacks use memoized fullTrack or selected actions
   const handleTrackClick = useCallback((e: React.MouseEvent) => {
     if (!fullTrack) return;
-    if (fullTrack.type === 'drum') {
+    if (fullTrack.type === 'DRUM') {
       openDrumMachine(id); 
-    } else if (fullTrack.type === 'midi' || fullTrack.type === 'sampler') {
+    } else if (fullTrack.type === 'MIDI' || fullTrack.type === 'SAMPLER') {
       openPianoRoll(id); 
     }
   }, [fullTrack, id, openDrumMachine, openPianoRoll]);

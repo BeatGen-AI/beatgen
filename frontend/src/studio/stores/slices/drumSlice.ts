@@ -15,7 +15,7 @@ export const createDrumSlice: StoreSliceCreator<DrumSlice> = (set, get) => {
   // Action to set the drum pattern for a specific drum track using Immer
   const setDrumPattern = (trackId: string, pattern: boolean[][]): void => {
     set(produce((draft: RootState) => {
-        const drumTrackIndex = draft.tracks.findIndex(t => t.id === trackId && t.type === 'drum');
+        const drumTrackIndex = draft.tracks.findIndex(t => t.id === trackId && t.type === 'DRUM');
 
         if (drumTrackIndex === -1) {
           console.error(`Drum track ${trackId} not found for setting pattern.`);

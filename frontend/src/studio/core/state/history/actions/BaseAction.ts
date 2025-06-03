@@ -79,6 +79,16 @@ export abstract class NoteAction extends BaseAction {
         this.noteId = noteId;
     }
     
+    /**
+     * Helper method to mark a track as dirty when notes are modified
+     */
+    protected markTrackAsDirty(): void {
+        const { updateTrackState } = this.get();
+        if (updateTrackState) {
+            updateTrackState(this.trackId, { dirty: true });
+        }
+    }
+    
     abstract execute(): Promise<void>;
     abstract undo(): Promise<void>;
 }

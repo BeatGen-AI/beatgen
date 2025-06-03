@@ -51,7 +51,7 @@ export class TrackPositionAction extends TrackAction {
         }
         
         const track = this.get().findTrackById(this.trackId);
-        if (track && (track.type === 'midi' || track.type === 'drum' || track.type === 'sampler')) {
+        if (track && (track.type === 'MIDI' || track.type === 'DRUM' || track.type === 'SAMPLER')) {
             const bpm = this.get().bpm;
             const timeSignature = this.get().timeSignature;
             const PPQ = 480; 
@@ -128,7 +128,7 @@ export class AddTrackAction extends BaseAction {
         // Use the stored initialFile if available
         const fileToLoad = this.initialFile; 
         const trackSpecificData = this.trackData.track as any;
-        const instrumentId = this.trackData.type === 'midi' ? trackSpecificData?.instrument_id as string | undefined : undefined;
+        const instrumentId = this.trackData.type === 'MIDI' ? trackSpecificData?.instrument_id as string | undefined : undefined;
 
         console.log("instrumentId: ", instrumentId);
         
@@ -137,19 +137,19 @@ export class AddTrackAction extends BaseAction {
             // Pass the stored file object (or undefined)
             let options: TrackOptions;
             switch (this.trackData.type) {
-                case 'audio':
+                case 'AUDIO':
                     options = {
                         ...this.trackData.track,
                         audioFile: fileToLoad,
                     };
                     break;
-                case 'sampler':
+                case 'SAMPLER':
                     options = {
                         ...this.trackData.track,
                         sampleFile: fileToLoad,
                     };
                     break;
-                case 'midi':
+                case 'MIDI':
                     options = {
                         ...this.trackData.track,
                         instrumentId: instrumentId,
@@ -179,7 +179,7 @@ export class AddTrackAction extends BaseAction {
                 this.trackData.y_position ?? 0
             );
             // Connect soundfont if applicable (might be handled by initEngine for midi? Check config)
-            if ((this.trackData.type === 'midi' || this.trackData.type === 'drum') && instrumentId) {
+            if ((this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') && instrumentId) {
                  console.log('AddTrackAction: Re-connecting to soundfont during execute (check if redundant):', this.trackData.id);
                  await this.store.connectTrackToSoundfont(this.trackData.id, instrumentId);
             }
@@ -201,9 +201,9 @@ export class AddTrackAction extends BaseAction {
         try {
              console.log('AddTrackAction: Removing from engine/controllers for undo', this.trackData.id);
              await this.store.getAudioEngine().removeTrack(this.trackData.id);
-             if (this.trackData.type === 'midi' || this.trackData.type === 'drum') {
+             if (this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') {
                  this.store.getSoundfontController()?.removeTrack?.(this.trackData.id);
-             } else if (this.trackData.type === 'sampler') {
+             } else if (this.trackData.type === 'SAMPLER') {
                  this.store.getSamplerController()?.removeSampler?.(this.trackData.id);
                  console.log('AddTrackAction: Cleaned up sampler track', this.trackData.id);
              }
@@ -229,9 +229,9 @@ export class DeleteTrackAction extends BaseAction {
     
     async execute(): Promise<void> {
         await this.store.getAudioEngine().removeTrack(this.trackData.id);
-        if (this.trackData.type === 'midi' || this.trackData.type === 'drum') {
+        if (this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') {
             this.store.getSoundfontController()?.removeTrack?.(this.trackData.id);
-        } else if (this.trackData.type === 'sampler') {
+        } else if (this.trackData.type === 'SAMPLER') {
             this.store.getSamplerController()?.removeSampler?.(this.trackData.id);
         }
         
@@ -254,7 +254,7 @@ export class DeleteTrackAction extends BaseAction {
         const grainSize = trackSpecificData.grainSize as number | undefined;
         const overlap = trackSpecificData.overlap as number | undefined;
 
-        if (this.trackData.type === 'audio' && audioFile) {
+        if (this.trackData.type === 'AUDIO' && audioFile) {
             await this.store.loadAudioFile(this.trackData.id, audioFile);
         } else {
             await this.store.getAudioEngine().createTrack(this.trackData.id, this.trackData.name);
@@ -265,9 +265,9 @@ export class DeleteTrackAction extends BaseAction {
         this.store.getAudioEngine().setTrackPan(this.trackData.id, this.trackData.pan ?? 0);
         this.store.getAudioEngine().setTrackMute(this.trackData.id, this.trackData.mute ?? false);
         
-        if ((this.trackData.type === 'midi' || this.trackData.type === 'drum') && instrumentId) {
+        if ((this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') && instrumentId) {
             try { await this.store.connectTrackToSoundfont(this.trackData.id, instrumentId); } catch (error) { console.error(`Failed to connect track ${this.trackData.id} to soundfont:`, error); }
-        } else if (this.trackData.type === 'sampler' && sampleFile) { 
+        } else if (this.trackData.type === 'SAMPLER' && sampleFile) { 
             try {
                 await this.store.connectTrackToSampler(
                     this.trackData.id, 

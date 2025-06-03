@@ -27,6 +27,7 @@ export class AddNoteAction extends NoteAction {
 
         try {
             await midiManager.addNoteToTrack(this.trackId, { ...this.note, id: parseInt(this.noteId) });
+            this.markTrackAsDirty(); // Mark track as dirty when note is added
             
             this.log('Execute', {
                 trackId: this.trackId,
@@ -49,6 +50,7 @@ export class AddNoteAction extends NoteAction {
 
         try {
             await midiManager.removeNoteFromTrack(this.trackId, parseInt(this.noteId));
+            this.markTrackAsDirty(); // Mark track as dirty when note is removed (undo)
             
             this.log('Undo', {
                 trackId: this.trackId,
@@ -86,6 +88,7 @@ export class DeleteNoteAction extends NoteAction {
 
         try {
             await midiManager.removeNoteFromTrack(this.trackId, parseInt(this.noteId));
+            this.markTrackAsDirty(); // Mark track as dirty when note is deleted
             
             this.log('Execute', {
                 trackId: this.trackId,
@@ -105,6 +108,7 @@ export class DeleteNoteAction extends NoteAction {
 
         try {
             await midiManager.addNoteToTrack(this.trackId, this.note);
+            this.markTrackAsDirty(); // Mark track as dirty when note is restored (undo)
             
             this.log('Undo', {
                 trackId: this.trackId,
@@ -166,6 +170,7 @@ export class MoveNoteAction extends NoteAction {
 
     async execute(): Promise<void> {
         await this.updateNotePosition(this.newPosition);
+        this.markTrackAsDirty(); // Mark track as dirty when note is moved
         this.log('Execute', {
             trackId: this.trackId,
             noteId: this.noteId,
@@ -176,6 +181,7 @@ export class MoveNoteAction extends NoteAction {
 
     async undo(): Promise<void> {
         await this.updateNotePosition(this.oldPosition);
+        this.markTrackAsDirty(); // Mark track as dirty when note move is undone
         this.log('Undo', {
             trackId: this.trackId,
             noteId: this.noteId,
@@ -238,6 +244,7 @@ export class ResizeNoteAction extends NoteAction {
 
     async execute(): Promise<void> {
         await this.updateNoteSize(this.newLength, this.newColumn);
+        this.markTrackAsDirty(); // Mark track as dirty when note is resized
         this.log('Execute', {
             trackId: this.trackId,
             noteId: this.noteId,
@@ -248,6 +255,7 @@ export class ResizeNoteAction extends NoteAction {
 
     async undo(): Promise<void> {
         await this.updateNoteSize(this.oldLength, this.oldColumn);
+        this.markTrackAsDirty(); // Mark track as dirty when note resize is undone
         this.log('Undo', {
             trackId: this.trackId,
             noteId: this.noteId,

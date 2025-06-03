@@ -319,28 +319,45 @@ class ProjectRepository:
         self, project_id: uuid.UUID, project_data: Dict[str, Any]
     ) -> Project:
         """
-        Update a project
+        Update a project with optimistic locking
 
         Args:
             project_id: The ID of the project
-            project_data: The updated data
+            project_data: The updated data (may include 'expected_version' for optimistic locking)
 
         Returns:
             The updated project
 
         Raises:
             NotFoundException: If the project is not found
-            DatabaseException: If there's a database error
+            DatabaseException: If there's a database error or version conflict
         """
         self.logger.info(f"Updating project with ID: {project_id}")
         try:
             # First check if project exists
             project = await self.get_by_id(project_id)
 
-            # Update fields
+            # Check for version conflict (optimistic locking)
+            expected_version = project_data.get('expected_version')
+            if expected_version is not None and hasattr(project, 'version'):
+                if project.version != expected_version:
+                    self.logger.warning(
+                        f"Version conflict: expected {expected_version}, got {project.version}"
+                    )
+                    raise DatabaseException(
+                        f"Project has been modified by another user. "
+                        f"Expected version {expected_version}, current version is {project.version}. "
+                        f"Please refresh and try again."
+                    )
+
+            # Update fields (excluding expected_version which is not a model field)
             for key, value in project_data.items():
-                if hasattr(project, key):
+                if key != 'expected_version' and hasattr(project, key):
                     setattr(project, key, value)
+
+            # Increment version for optimistic locking
+            if hasattr(project, 'version'):
+                project.version += 1
 
             # Update timestamp if it exists
             if hasattr(project, "updated_at"):
@@ -351,7 +368,7 @@ class ProjectRepository:
             self.session.commit()
             self.session.refresh(project)
 
-            self.logger.info(f"Updated project with ID: {project_id}")
+            self.logger.info(f"Updated project with ID: {project_id}, new version: {project.version}")
             return project
         except Exception as e:
             self.session.rollback()
