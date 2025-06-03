@@ -235,10 +235,10 @@ export default function HomePage() {
             BeatGen Studio
           </Typography>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button variant="outlined" onClick={() => navigate({ to: '/login' })}>
+            <Button variant="outline" onClick={() => navigate({ to: '/login' })}>
               Login
             </Button>
-            <Button variant="contained" onClick={() => navigate({ to: '/register' })}>
+            <Button variant="default" onClick={() => navigate({ to: '/register' })}>
               Sign Up
             </Button>
           </Box>
@@ -255,11 +255,11 @@ export default function HomePage() {
             </Typography>
             
             <Button
-              variant="contained"
-              size="large"
+              variant="default"
+              size="lg"
               onClick={() => setShowGenerateSongModal(true)}
-              startIcon={<MusicNoteIcon />}
-              sx={{ mb: 2 }}
+              // startIcon={<MusicNoteIcon />}
+              // sx={{ mb: 2 }}
             >
               Generate Song
             </Button>
