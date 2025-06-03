@@ -5,7 +5,6 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Button,
   Box,
   Chip,
   Typography,
@@ -25,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import { interactWithAssistant, StreamCallbacks } from '../api/assistant';
 import { isAuthenticated } from '../auth/auth-utils';
+import { Button } from "@/components/ui/button";
 
 interface GenerateSongModalProps {
   open: boolean;
@@ -315,10 +315,10 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
 
             <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
               <Button
-                variant="outlined"
-                startIcon={isPlaying ? <StopIcon /> : <PlayIcon />}
+                variant="outline"
                 onClick={handlePlayPreview}
               >
+                {isPlaying ? <StopIcon /> : <PlayIcon />}
                 {isPlaying ? 'Stop Preview' : 'Play Preview'}
               </Button>
             </Box>
@@ -328,6 +328,7 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
 
       <DialogActions sx={{ p: 2, gap: 1 }}>
         <Button 
+          variant="ghost"
           onClick={handleClose}
           disabled={isGenerating}
         >
@@ -336,21 +337,21 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
         
         {!generatedData && (
           <Button
-            variant="contained"
+            variant="default"
             onClick={handleGenerate}
             disabled={!prompt.trim() || isGenerating}
-            startIcon={<MusicNoteIcon />}
           >
+            <MusicNoteIcon />
             {isGenerating ? 'Generating...' : 'Generate Song'}
           </Button>
         )}
 
         {generatedData && (
           <Button
-            variant="contained"
+            variant="default"
             onClick={handleSaveAsProject}
-            startIcon={<SaveIcon />}
           >
+            <SaveIcon />
             {userIsAuthenticated ? 'Save as Project' : 'Sign Up to Save'}
           </Button>
         )}

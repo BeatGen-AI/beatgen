@@ -43,8 +43,6 @@ from app2.llm.agents.music_agent import SongRequest, music_agent
 from pydantic import BaseModel
 from app2.infrastructure.database.sqlmodel_client import engine
 from sqlmodel import Session
-from uuid import UUID
-from app2.types.assistant_actions import ActionType
 
 # Set up logger
 logger = get_api_logger("assistant_streaming")
@@ -58,153 +56,12 @@ sse_manager = SSEManager(heartbeat_interval=20)
 load_dotenv()
 
 
-class ProjectSavingSSEQueue:
-    """Wrapper around SSEQueueManager that also saves tracks to a specific project"""
-    
-    def __init__(self, sse_queue: SSEQueueManager, session: Session, project_id: str):
-        self.sse_queue = sse_queue
-        self.session = session
-        self.project_id = project_id
-        self._user_id = None
-        
-    def __getattr__(self, name):
-        """Delegate all other methods to the wrapped queue"""
-        return getattr(self.sse_queue, name)
-    
-    async def action(self, action: AssistantAction):
-        """Override action method to save tracks to project"""
-        logger.info(f"🎵 ProjectSavingSSEQueue.action called with action_type: {action.action_type}")
-        
-        try:
-            # First send the action via SSE as normal
-            await self.sse_queue.action(action)
-            
-            # Then save to project if it's a track action
-            if action.action_type in [ActionType.ADD_TRACK, ActionType.ADD_DRUM_TRACK]:
-                logger.info(f"🎵 ProjectSavingSSEQueue - Track action detected, saving to project {self.project_id}")
-                await self._save_track_to_project(action)
-            else:
-                logger.info(f"🎵 ProjectSavingSSEQueue - Non-track action, skipping: {action.action_type}")
-                
-        except Exception as e:
-            logger.error(f"Error in ProjectSavingSSEQueue.action: {str(e)}")
-            # Still send the SSE action even if saving fails
-            await self.sse_queue.action(action)
-    
-    async def _save_track_to_project(self, action: AssistantAction):
-        """Save track data to the specified project"""
-        try:
-            from app2.repositories.project_repository import ProjectRepository
-            from app2.services.project_service import ProjectService
-            from app2.repositories.project_track_repository import ProjectTrackRepository
-            from app2.services.track_service import TrackService
-            
-            logger.info(f"Saving track to project {self.project_id}: {action.action_type}")
-            logger.info(f"Action data type: {action.data.type}")
-            logger.info(f"Track data: {action.data.track_data}")
-            
-            # Get user ID from project (we need this for security)
-            project_repo = ProjectRepository(self.session)
-            project = await project_repo.get_by_id(UUID(self.project_id))
-            
-            if not project:
-                logger.error(f"Project {self.project_id} not found")
-                return
-                
-            user_id = project.user_id
-            
-            # Create services
-            track_repo = ProjectTrackRepository(self.session)
-            track_service = TrackService(
-                audio_repository=None,
-                midi_repository=None, 
-                sampler_repository=None,
-                drum_repository=None,
-                project_track_repository=track_repo,
-                file_repository=None
-            )
-            project_service = ProjectService(project_repo, track_repo, track_service)
-            
-            # Convert track data to project track format
-            track_data = self._convert_action_to_track_data(action)
-            logger.info(f"Converted track data: {track_data}")
-            
-            if track_data:
-                logger.info(f"Calling project_service.add_track with project_id={self.project_id}, user_id={user_id}")
-                result = await project_service.add_track(
-                    UUID(self.project_id),
-                    user_id,
-                    track_data
-                )
-                logger.info(f"Successfully saved track to project {self.project_id}, result: {result}")
-            else:
-                logger.warning("No track data to save - conversion returned None")
-            
-        except Exception as e:
-            logger.error(f"Failed to save track to project: {str(e)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-    
-    def _convert_action_to_track_data(self, action: AssistantAction) -> dict:
-        """Convert SSE action to track data format for project service"""
-        try:
-            # action.data is a TrackData object with type, track_data, project_track_data
-            track_data = action.data.track_data
-            track_type = action.data.type
-            
-            if not track_data:
-                logger.warning("No track_data in action")
-                return None
-                
-            if track_type == 'midi' and action.action_type == ActionType.ADD_TRACK:
-                # track_data is a MidiTrackRead object
-                return {
-                    'type': 'midi',
-                    'name': track_data.name,
-                    'instrument_id': str(track_data.instrument_id),
-                    'midi_notes_json': track_data.midi_notes_json,
-                    'volume': 80,
-                    'pan': 0,
-                    'mute': False,
-                    'position': {'x': 0, 'y': 0}
-                }
-            elif track_type == 'drum' and action.action_type == ActionType.ADD_DRUM_TRACK:
-                # track_data is a DrumTrackRead object
-                # Convert sampler_tracks to the format expected by project service
-                sampler_tracks_data = []
-                if hasattr(track_data, 'sampler_tracks') and track_data.sampler_tracks:
-                    for sampler_track in track_data.sampler_tracks:
-                        sampler_tracks_data.append({
-                            'name': sampler_track.name,
-                            'audio_file_name': sampler_track.audio_file_name,
-                            'midi_notes_json': sampler_track.midi_notes_json,
-                            'base_midi_note': sampler_track.base_midi_note,
-                            'grain_size': sampler_track.grain_size,
-                            'overlap': sampler_track.overlap,
-                            'audio_storage_key': sampler_track.audio_storage_key,
-                            'audio_file_format': sampler_track.audio_file_format,
-                            'audio_file_size': sampler_track.audio_file_size,
-                            'audio_file_duration': sampler_track.audio_file_duration,
-                        })
-                
-                return {
-                    'type': 'drum',
-                    'name': track_data.name,
-                    'sampler_tracks': sampler_tracks_data,
-                    'volume': 80,
-                    'pan': 0,
-                    'mute': False,
-                    'position': {'x': 0, 'y': 0}
-                }
-            else:
-                logger.warning(f"Unhandled track type: {track_type} with action: {action.action_type}")
-                
-        except Exception as e:
-            logger.error(f"Error converting action to track data: {str(e)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-        
-        return None
+# TODO: ProjectSavingSSEQueue will be implemented in a separate PR
+# This code is commented out to keep this merge focused on UI changes only
+
+# class ProjectSavingSSEQueue:
+#     """Wrapper around SSEQueueManager that also saves tracks to a specific project"""
+#     [Implementation temporarily removed - will be added back when project saving is fixed]
 
 # Request schema for unified assistant endpoint
 class AssistantRequestModel(AssistantRequest):
@@ -491,53 +348,9 @@ async def delayed_request_cleanup(request_id: str, delay_seconds: int = 10):
     request_manager.remove_request(request_id)
 
 
-async def _create_project_for_generation(context, session: Session, user_id: str) -> Optional[str]:
-    """Create a project for music generation"""
-    try:
-        from app2.repositories.project_repository import ProjectRepository
-        from app2.repositories.project_track_repository import ProjectTrackRepository
-        from app2.services.track_service import TrackService
-        from app2.services.project_service import ProjectService
-        
-        # Create services
-        project_repo = ProjectRepository(session)
-        track_repo = ProjectTrackRepository(session)
-        track_service = TrackService(
-            audio_repository=None,
-            midi_repository=None, 
-            sampler_repository=None,
-            drum_repository=None,
-            project_track_repository=track_repo,
-            file_repository=None
-        )
-        project_service = ProjectService(project_repo, track_repo, track_service)
-        
-        # Create project data
-        project_name = f"Generated Song - {context.prompt[:50]}"
-        if len(project_name) > 100:
-            project_name = project_name[:97] + "..."
-        
-        project_data = {
-            "name": project_name,
-            "bpm": 120,
-            "time_signature_numerator": 4,
-            "time_signature_denominator": 4,
-            "key_signature": "C major"
-        }
-        
-        # Create the project
-        new_project = await project_service.create_project(
-            user_id=UUID(user_id),
-            project_data=project_data
-        )
-        
-        return str(new_project.id)
-        
-    except Exception as e:
-        logger.error(f"Failed to create project for generation: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return None
+# TODO: Project auto-creation will be implemented in a separate PR
+# async def _create_project_for_generation(context, session: Session, user_id: str) -> Optional[str]:
+#     [Implementation temporarily removed - will be added back when project saving is fixed]
 
 
 async def process_generate_request(
@@ -547,44 +360,15 @@ async def process_generate_request(
 
     # Generate music with music_gen_service, passing the session
     try:
-        logger.info(f"🎵 PROCESS_GENERATE - Request ID: {request_id}")
-        logger.info(f"🎵 PROCESS_GENERATE - Context: {context}")
-        logger.info(f"🎵 PROCESS_GENERATE - Context.context: {getattr(context, 'context', 'None')}")
+        logger.info(f"Processing generate request: {request_id}")
         
         selected_model_info = available_models.get_model_by_name(context.model)
         selected_model_info.api_key = selected_model_info.get_api_key()
         logger.info(f"Selected model: {selected_model_info}")
         
-        # Check if we need to create or use a specific project
-        project_id = None
-        user_id = None
-        
-        # Extract user ID for project creation
-        if hasattr(context, 'user_id') and context.user_id:
-            user_id = context.user_id
-        
-        # Check for existing project_id
-        if hasattr(context, 'context') and context.context and context.context.get('project_id'):
-            project_id = context.context.get('project_id')
-            logger.info(f"🎵 PROCESS_GENERATE - Using existing project: {project_id}")
-        # Check if we should auto-create a project
-        elif hasattr(context, 'context') and context.context and context.context.get('auto_create_project') and user_id:
-            logger.info(f"🎵 PROCESS_GENERATE - Auto-creating project for user: {user_id}")
-            project_id = await _create_project_for_generation(context, session, user_id)
-            if project_id:
-                logger.info(f"🎵 PROCESS_GENERATE - Created project: {project_id}")
-            else:
-                logger.warning("🎵 PROCESS_GENERATE - Failed to create project")
-        else:
-            logger.info(f"🎵 PROCESS_GENERATE - No project creation requested, context: {getattr(context, 'context', 'None')}")
-        
-        # Create a wrapped queue that also saves tracks to project
-        if project_id:
-            logger.info(f"🎵 PROCESS_GENERATE - Creating ProjectSavingSSEQueue wrapper for project {project_id}")
-            wrapped_queue = ProjectSavingSSEQueue(sse_queue, session, project_id)
-        else:
-            logger.info("🎵 PROCESS_GENERATE - No project_id available, using regular SSE queue")
-            wrapped_queue = sse_queue
+        # TODO: Project auto-creation and saving will be implemented separately
+        # For now, use regular SSE queue to keep this merge focused on UI changes
+        wrapped_queue = sse_queue
         
         response = await music_agent.run(
             request_id=request_id,
