@@ -92,10 +92,8 @@ async def create_assistant_request(
 ):
     # Debug logging at the start
     logger.info(
-        f"🎤 ASSISTANT API - Received request: mode={request.mode}, user_id={user.get('id') if user else 'None'}"
+        f"CREATE REQUEST - Received request: mode={request.mode}, user_id={user.get('id') if user else 'None'}"
     )
-    logger.info(f"🎤 ASSISTANT API - Context: {request.context}")
-    logger.info(f"🎤 ASSISTANT API - Prompt: {request.prompt[:100]}...")
     """
     Create a new assistant request and return a request ID for streaming.
     
