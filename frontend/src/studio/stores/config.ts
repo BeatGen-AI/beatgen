@@ -18,9 +18,9 @@ export const TRACK_CONFIG: Record<TrackType, {
     initTrack: (id: string, file?: File) => Record<string, any>;
     initEngine: (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => Promise<any>;
 }> = {
-  audio: {
+  AUDIO: {
     getDefaultName: (count: number, instrumentName?: string) => instrumentName || `Audio Track ${count}`,
-    initTrack: (id: string, file?: File) => ({ type: 'audio' as const, audioFile: file }),
+    initTrack: (id: string, file?: File) => ({ type: 'AUDIO' as const, audioFile: file }),
     initEngine: async (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => {
       const file = options && (options as AudioTrackOptions).audioFile;
       if (!file) return Promise.resolve();
@@ -59,26 +59,26 @@ export const TRACK_CONFIG: Record<TrackType, {
       }
     },
   },
-  midi: {
+  MIDI: {
     getDefaultName: (count: number, instrumentName?: string) => instrumentName || `MIDI Track ${count}`,
-    initTrack: (id: string) => ({ type: 'midi' as const }),
+    initTrack: (id: string) => ({ type: 'MIDI' as const }),
     initEngine: async (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => {
       const instrumentId = options && (options as MidiTrackOptions).instrumentId;
       return instrumentId ? store.connectTrackToSoundfont(trackId, instrumentId) : Promise.resolve();
     },
   },
-  drum: {
+  DRUM: {
     getDefaultName: (count: number, instrumentName?: string) => instrumentName || `Drum Sequencer ${count}`,
     initTrack: (id: string) => ({ 
-      type: 'drum' as const, 
+      type: 'DRUM' as const, 
       drumPattern: Array(4).fill(null).map(() => Array(64).fill(false)) 
     }),
     initEngine: async (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => Promise.resolve(),
   },
-  sampler: {
+  SAMPLER: {
     getDefaultName: (count: number, instrumentName?: string) => instrumentName || `Sampler ${count}`,
     initTrack: (id: string, file?: File) => ({ 
-      type: 'sampler' as const, 
+      type: 'SAMPLER' as const, 
       baseMidiNote: DEFAULT_SAMPLER_CONFIG.baseMidiNote,
       grainSize: DEFAULT_SAMPLER_CONFIG.grainSize,
       overlap: DEFAULT_SAMPLER_CONFIG.overlap

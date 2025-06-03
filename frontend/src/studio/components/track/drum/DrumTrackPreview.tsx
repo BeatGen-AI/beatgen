@@ -36,7 +36,7 @@ export const DrumTrackPreview: React.FC<TrackPreviewProps> = (props) => {
   const midiMeasureWidth = useGridStore(state => state.midiMeasurePixelWidth);
   const trackColor = providedTrackColor || getTrackColor(trackIndex);
   
-  if (track.type !== 'drum') {
+  if (track.type !== 'DRUM') {
     console.error('DrumTrackPreview received non-drum track:', track);
     return null;
   }
@@ -47,7 +47,7 @@ export const DrumTrackPreview: React.FC<TrackPreviewProps> = (props) => {
     if (!Array.isArray(tracks)) return [];
     return tracks
       .filter((t): t is CombinedTrack & { track: SamplerTrackRead } => 
-          t.type === 'sampler' && 
+          t.type === 'SAMPLER' && 
           typeof t.track === 'object' && 
           t.track !== null && 
           'drum_track_id' in t.track && 

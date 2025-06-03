@@ -66,7 +66,7 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
   // Refactored Helper using Immer
   const updateDrumTrackSamplers = (drumTrackId: string, operation: 'add' | 'remove', samplerIds: string[]): void => {
     set(produce((draft: RootState) => {
-        const drumTrackIndex = draft.tracks.findIndex(t => t.id === drumTrackId && t.type === 'drum');
+        const drumTrackIndex = draft.tracks.findIndex(t => t.id === drumTrackId && t.type === 'DRUM');
         if (drumTrackIndex === -1) {
           console.error(`Drum track ${drumTrackId} not found for sampler update.`);
           return; // Exit draft modification
@@ -161,7 +161,7 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
 
     const addEmptyLogic = async (): Promise<string | null> => {
       // Determine default name
-      const samplerCount = tracks.filter(t => t.type === 'sampler').length;
+      const samplerCount = tracks.filter(t => t.type === 'SAMPLER').length;
       const defaultName = newSamplerName || `Sampler ${samplerCount + 1}`;
       
       // 1. Create an empty sampler track (handles history registration)
@@ -209,7 +209,7 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
         const track = findTrackById(trackId);
         
         // Validate track exists and is a sampler
-        if (!track || track.type !== 'sampler') {
+        if (!track || track.type !== 'SAMPLER') {
           throw new Error(`Track ${trackId} is not a valid sampler track`);
         }
         

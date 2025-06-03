@@ -96,6 +96,19 @@ apiClient.interceptors.response.use(
       console.error('Permission denied:', error.response.data);
     }
     
+    // Handle conflict errors (409) - preserve status for retry logic
+    if (error.response?.status === 409) {
+      console.warn('Conflict detected:', error.response.data);
+      const conflictError = new Error(
+        error.response.data.detail || 
+        error.response.data.message || 
+        'Conflict detected - resource may have been modified'
+      );
+      conflictError.status = 409;
+      conflictError.response = error.response;
+      return Promise.reject(conflictError);
+    }
+    
     // Handle other errors with response data
     if (error.response?.data) {
       // If the backend provides an error message, use it
@@ -104,6 +117,8 @@ apiClient.interceptors.response.use(
         error.response.data.message || 
         `API Error (${error.response.status})`
       );
+      backendError.status = error.response.status;
+      backendError.response = error.response;
       return Promise.reject(backendError);
     }
     

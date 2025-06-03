@@ -43,14 +43,14 @@ const DrumMachineWindows: React.FC = () => {
     return (
         <>
             {openTrackIds.map(trackId => {
-                const parentDrumTrack = tracks.find(t => t.id === trackId && t.type === 'drum');
+                const parentDrumTrack = tracks.find(t => t.id === trackId && t.type === 'DRUM');
                 const parentDrumTrackName = parentDrumTrack?.name;
 
                 // Derive associated sampler tracks with safer type check
                 const associatedSamplerTracks = tracks
                     .filter((t): t is CombinedTrack & { track: SamplerTrackRead } => {
                         return (
-                            t.type === 'sampler' && 
+                            t.type === 'SAMPLER' && 
                             // Explicitly check if track is an object before accessing properties
                             typeof t.track === 'object' && 
                             t.track !== null && 

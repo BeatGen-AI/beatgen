@@ -8,7 +8,7 @@
 /**
  * Enum for track types
  */
-export type TrackType = "midi" | "audio" | "sampler" | "drum";
+export type TrackType = "MIDI" | "AUDIO" | "SAMPLER" | "DRUM";
 
 /**
  * API response model for audio track data
@@ -43,6 +43,7 @@ export interface CombinedTrack {
   duration_ticks?: number | null;
   track_number?: number | null;
   track: AudioTrackRead | MidiTrackRead | SamplerTrackRead | DrumTrackRead;
+  dirty?: boolean; // Client-side only: true if track has unsaved changes
 }
 /**
  * API response model for MIDI track data

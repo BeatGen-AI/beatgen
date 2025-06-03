@@ -578,9 +578,9 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
           position: 'absolute',
           right: 10,
           top: 5,
-          bgcolor: track.type === 'audio' ? '#4caf50' : 
-                  track.type === 'midi' ? '#2196f3' : 
-                  track.type === 'drum' ? '#ff9800' : '#9c27b0',
+          bgcolor: track.type === 'AUDIO' ? '#4caf50' : 
+                  track.type === 'MIDI' ? '#2196f3' : 
+                  track.type === 'DRUM' ? '#ff9800' : '#9c27b0',
           color: 'white',
           fontSize: '10px',
           fontWeight: 'bold',

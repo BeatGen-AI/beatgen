@@ -34,13 +34,13 @@ export const TrackFactory: React.FC<TrackPreviewProps> = (props) => {
   }
   
   switch(trackType) {
-    case 'audio':
+    case 'AUDIO':
       return <AudioTrackPreview {...props} trackColor={trackColor} onResizeEnd={onResizeEnd} />;
-    case 'midi':
+    case 'MIDI':
       return <MidiTrackPreview {...props} trackColor={trackColor} onResizeEnd={onResizeEnd} />;
-    case 'sampler':
+    case 'SAMPLER':
       return <MidiTrackPreview {...props} trackColor={trackColor} onResizeEnd={onResizeEnd} />;
-    case 'drum':
+    case 'DRUM':
       return <DrumTrackPreview {...props} trackColor={trackColor} onResizeEnd={onResizeEnd} />;
     default:
       console.error(`Unknown track type: ${trackType}`);
