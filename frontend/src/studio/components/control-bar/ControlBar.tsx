@@ -95,28 +95,36 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 
     return (
         <Box 
-            ref={ref}
             sx={{
-            display: 'grid',
-            gridTemplateColumns: '1fr auto 1fr',
-            alignItems: 'center',
-            width: '100%',
-            gap: 2,
-            p: 1,
-            borderBottom: `1px solid ${theme.palette.divider}`,
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            zIndex: 1300,
-            bgcolor: 'background.paper',
-            color: 'text.primary'
-        }}>
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 1300,
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(18, 18, 18, 0.8)' : 'rgba(240, 240, 240, 0.1)',
+                borderBottom: `1px solid ${theme.palette.divider}`,
+                overflowX: 'auto',
+                overflowY: 'hidden'
+            }}
+        >
+            <Box 
+                ref={ref}
+                sx={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr',
+                alignItems: 'center',
+                width: '100%',
+                minWidth: 'fit-content',
+                gap: 2,
+                p: 1,
+                color: 'text.primary'
+            }}>
             {/* Left section */}
             <Box sx={{ 
-                justifySelf: 'start',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 2,
+                justifySelf: 'start',
             }}>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <Tooltip title="Go back to Projects" arrow>
@@ -228,7 +236,11 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
             </Box>
 
             {/* Center section - Project Title */}
-            <Box>
+            <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'center',
+                justifySelf: 'center',
+            }}>
                 <TextField
                     variant="standard"
                     value={projectTitle}
@@ -237,6 +249,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     inputProps={{ style: { textAlign: 'center' } }} 
                     sx={{
                         width: '100%',
+                        maxWidth: 300,
                         '& .MuiInputBase-input': { 
                            color: theme.palette.text.primary
                         }
@@ -247,7 +260,6 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
             {/* Right section */}
             <Box sx={{
                 justifySelf: 'end',
-                paddingRight: 2,
             }}>
                 <Box sx={{
                     display: 'flex',
@@ -343,6 +355,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         <IconSettings />
                     </IconButton>
                 </Box>
+            </Box>
             </Box>
         </Box>
     );
