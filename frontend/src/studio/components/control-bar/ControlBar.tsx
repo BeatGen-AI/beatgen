@@ -6,6 +6,7 @@ import TimeSignatureDisplay from './TimeSignatureDisplay';
 import { TimeDisplay, TimeDisplayHandle } from './TimeDisplay';
 import KeySelector from './KeySelector';
 import { SaveProjectButton } from './SaveProjectButton';
+import { SaveStatusIndicator } from '../ui/SaveStatusIndicator';
 import { useStudioStore } from '../../stores/studioStore';
 import { IconPlayerPlayFilled, IconPlayerSkipBackFilled, IconPlayerPauseFilled, IconArrowForwardUp, IconArrowBackUp, IconZoomIn, IconZoomOut, IconInputAi, IconChevronsRight, IconArrowLeft } from '@tabler/icons-react';
 import { IconSettings } from '@tabler/icons-react';
@@ -23,6 +24,10 @@ interface StudioControlBarProps {
     isChatOpen: boolean;
     existingProjectId: string | null;
     tracks: any[]; // You might want to properly type this based on your track type
+    
+    // Auto-save status
+    autoSaveStatus?: 'idle' | 'saving' | 'saved' | 'error';
+    autoSaveMessage?: string;
 
     // Handlers
     onUndo: () => void;
@@ -37,6 +42,7 @@ interface StudioControlBarProps {
     onZoomOut: () => void;
     onChatToggle: () => void;
     onSettingsToggle: () => void;
+    onAutoSaveRetry?: () => void;
 }
 
 // Wrap with forwardRef and memo
@@ -54,6 +60,8 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     isChatOpen,
     existingProjectId,
     tracks,
+    autoSaveStatus,
+    autoSaveMessage,
     onUndo,
     onRedo,
     onBpmChange,
@@ -66,6 +74,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     onZoomOut,
     onChatToggle,
     onSettingsToggle,
+    onAutoSaveRetry,
 }, ref) => {
     const theme = useTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
@@ -289,7 +298,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         ref={timeDisplayRef}
                         initialTime={currentTime}
                     />
-                    {<SaveProjectButton
+                    <SaveProjectButton
                         projectTitle={projectTitle}
                         bpm={bpm}
                         timeSignature={timeSignature}
@@ -299,7 +308,12 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         onSaved={(project) => {
                             console.log('Project saved:', project);
                         }}
-                    />}
+                    />
+                    <SaveStatusIndicator
+                        status={autoSaveStatus || 'idle'}
+                        message={autoSaveMessage}
+                        onRetryClick={onAutoSaveRetry}
+                    />
                     <IconButton
                         size="small"
                         color="inherit"

@@ -16,6 +16,7 @@ import PianoRollWindows from './components/piano-roll-new/PianoRollWindows';
 // Import custom hooks
 import { useStudioDBSession } from './hooks/useStudioDBSession';
 import { useHistorySync } from './hooks/useHistorySync';
+import { useAutoSave } from './hooks/useAutoSave';
 
 import StudioControlBar from './components/control-bar/ControlBar';
 import { DEFAULT_MEASURE_WIDTH, useGridStore } from './core/state/gridStore';
@@ -68,6 +69,8 @@ function Studio({ projectId }: StudioProps) {
     measureCount,
     isInitialized,
     addMenuAnchor,
+    autoSaveStatus,
+    autoSaveMessage,
     
     // Actions
     initializeAudio,
@@ -80,6 +83,7 @@ function Studio({ projectId }: StudioProps) {
     setMeasureCount,
     undo,
     redo,
+    setAutoSaveStatus,
     handleTrackVolumeChange,
     handleTrackPanChange,
     handleTrackMuteToggle,
@@ -121,6 +125,31 @@ function Studio({ projectId }: StudioProps) {
   const handleSettingsToggle = () => {
     setIsSettingsModalOpen(prev => !prev);
   };
+
+  // Initialize auto-save
+  const autoSave = useAutoSave({
+    projectId: existingProjectId || undefined,
+    onStatusChange: (status, message) => {
+      setAutoSaveStatus(status, message);
+    },
+    onSaveSuccess: (project) => {
+      console.log('Auto-save success:', project);
+      // Update project ID if this was a new project
+      if (!existingProjectId && project.id) {
+        setExistingProjectId(project.id);
+      }
+    },
+    onSaveError: (error, willRetry) => {
+      console.error('Auto-save error:', error, 'willRetry:', willRetry);
+    },
+    onProjectIdUpdate: (projectId) => {
+      console.log('Studio: Updating project ID from auto-save:', projectId);
+      setExistingProjectId(projectId);
+      // Update URL to include the new project ID
+      const newUrl = `/studio?projectId=${projectId}`;
+      window.history.replaceState({}, '', newUrl);
+    }
+  });
 
   // Effect to measure control bar height
   useLayoutEffect(() => {
@@ -308,6 +337,8 @@ function Studio({ projectId }: StudioProps) {
           isChatOpen={isChatOpen}
           existingProjectId={existingProjectId}
           tracks={tracks}
+          autoSaveStatus={autoSaveStatus}
+          autoSaveMessage={autoSaveMessage}
           onUndo={undo}
           onRedo={redo}
           onBpmChange={handleBpmChange}
@@ -320,6 +351,7 @@ function Studio({ projectId }: StudioProps) {
           onZoomOut={handleZoomOut}
           onChatToggle={handleChatToggle}
           onSettingsToggle={handleSettingsToggle}
+          onAutoSaveRetry={() => autoSave.forceSave()}
         />
 
         {/* Main Content Area */}

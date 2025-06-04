@@ -257,11 +257,14 @@ export interface RootState {
   measureCount: number;
   addMenuAnchor: HTMLElement | null;
   openDrumMachines: Record<string, boolean>;
+  autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
+  autoSaveMessage?: string;
   setZoomLevel: (zoomLevel: number) => void;
   setMeasureCount: (measureCount: number) => void;
   setAddMenuAnchor: (el: HTMLElement | null) => void;
   openDrumMachine: (drumTrackId: string) => void;
   closeDrumMachine: (trackId: string) => void;
+  setAutoSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', message?: string) => void;
 
   // Utility / Generic Updater (Keep internal helpers exposed)
   updateState: <K extends keyof RootState>(key: K, value: RootState[K] | ((prev: RootState[K]) => RootState[K])) => void;

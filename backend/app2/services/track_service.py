@@ -546,7 +546,13 @@ class TrackService:
                 updated_track = await self.audio_repository.update(track_id, track_data)
                 track_read = AudioTrackRead.model_validate(updated_track)
             elif track_type == TrackType.MIDI:
-                updated_track = await self.midi_repository.update(track_id, track_data)
+                # Remove any stale 'notes' field if it exists, only use midi_notes_json
+                midi_data = track_data.copy()
+                if 'notes' in midi_data:
+                    logger.info("Removing stale 'notes' field, using only 'midi_notes_json'")
+                    midi_data.pop('notes')
+                
+                updated_track = await self.midi_repository.update(track_id, midi_data)
                 track_read = MidiTrackRead.model_validate(updated_track)
             elif track_type == TrackType.SAMPLER:
                 updated_track = await self.sampler_repository.update(
