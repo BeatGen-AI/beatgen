@@ -178,9 +178,12 @@ export class AutoSaveService {
         if (track.type === 'MIDI' || track.type === 'SAMPLER') {
           const midiNotes = this.callbacks.getTrackNotes(track.id) || [];
           
-          // Add MIDI notes JSON to the track data
+          // Add MIDI notes JSON to the track data (create new object to avoid mutation)
           if (trackWithoutDirty.track) {
-            (trackWithoutDirty.track as any).midi_notes_json = { notes: midiNotes };
+            trackWithoutDirty.track = {
+              ...trackWithoutDirty.track,
+              midi_notes_json: { notes: midiNotes }
+            };
           }
         }
         
