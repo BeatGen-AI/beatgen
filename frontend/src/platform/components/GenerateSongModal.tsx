@@ -104,9 +104,9 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
         onComplete: (response) => {
           console.log('Assistant generation complete:', response);
           setGeneratedData({
-            response: response.response || 'Song generated successfully!',
-            tracks: response.tracks || [],
-            actions: response.actions || [],
+            response: response.message || 'Song generated successfully!',
+            project_id: response.project_id, // Include project_id from backend
+            tracks: [], // Will be populated when project is loaded in studio
             tempo: response.tempo || 120,
             key: response.key || 'C major',
             duration: '2:30'
@@ -309,7 +309,7 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
               <Typography variant="h6" sx={{ mb: 1 }}>Generated Song Details:</Typography>
               <Typography variant="body2">Tempo: {generatedData.tempo} BPM</Typography>
               <Typography variant="body2">Key: {generatedData.key}</Typography>
-              <Typography variant="body2">Tracks: {generatedData.tracks.join(', ')}</Typography>
+              <Typography variant="body2">Tracks: Generated and saved to project</Typography>
               <Typography variant="body2">Duration: {generatedData.duration}</Typography>
             </Box>
 

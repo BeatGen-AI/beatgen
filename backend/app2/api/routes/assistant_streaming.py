@@ -56,12 +56,229 @@ sse_manager = SSEManager(heartbeat_interval=20)
 load_dotenv()
 
 
-# TODO: ProjectSavingSSEQueue will be implemented in a separate PR
-# This code is commented out to keep this merge focused on UI changes only
-
-# class ProjectSavingSSEQueue:
-#     """Wrapper around SSEQueueManager that also saves tracks to a specific project"""
-#     [Implementation temporarily removed - will be added back when project saving is fixed]
+class ProjectSavingSSEQueue:
+    """Wrapper around SSEQueueManager that also saves tracks to a specific project"""
+    
+    def __init__(self, base_queue: SSEQueueManager, project_id: str, user_id: str, session: Session):
+        """
+        Initialize the project-saving queue wrapper
+        
+        Args:
+            base_queue: The underlying SSE queue to wrap
+            project_id: The project ID to save tracks to
+            user_id: The user ID for authorization
+            session: Database session for saving tracks
+        """
+        self.base_queue = base_queue
+        self.project_id = project_id
+        self.user_id = user_id
+        self.session = session
+        self._project_service = None
+        self._updated_name = False  # Track if we've updated the project name
+    
+    @property
+    def project_service(self):
+        """Lazy initialization of project service"""
+        if self._project_service is None:
+            from app2.services.project_service import ProjectService
+            from app2.repositories.project_repository import ProjectRepository
+            from app2.repositories.project_track_repository import ProjectTrackRepository
+            from app2.services.track_service import TrackService
+            from app2.repositories.audio_track_repository import AudioTrackRepository
+            from app2.repositories.midi_track_repository import MidiTrackRepository
+            from app2.repositories.drum_track_repository import DrumTrackRepository
+            from app2.repositories.sampler_track_repository import SamplerTrackRepository
+            
+            # Initialize repositories
+            project_repo = ProjectRepository(self.session)
+            project_track_repo = ProjectTrackRepository(self.session)
+            audio_track_repo = AudioTrackRepository(self.session)
+            midi_track_repo = MidiTrackRepository(self.session)
+            drum_track_repo = DrumTrackRepository(self.session)
+            sampler_track_repo = SamplerTrackRepository(self.session)
+            
+            # Initialize track service
+            track_service = TrackService(
+                audio_track_repo, midi_track_repo, drum_track_repo, sampler_track_repo
+            )
+            
+            # Initialize project service
+            self._project_service = ProjectService(
+                project_repo, project_track_repo, track_service
+            )
+        
+        return self._project_service
+    
+    async def action(self, action_data):
+        """
+        Send action and save both track data and project parameters
+        """
+        # Send the action via the base queue first
+        await self.base_queue.action(action_data)
+        
+        # Check if this is an action that should update the project
+        if hasattr(action_data, 'action_type'):
+            action_type = action_data.action_type
+            
+            if action_type in ['add_track', 'add_drum_track', 'add_sampler_track']:
+                try:
+                    await self._save_track_from_action(action_data)
+                except Exception as e:
+                    logger.error(f"Failed to save track from action: {e}")
+                    # Don't fail the generation, just log the error
+            
+            elif action_type in ['change_bpm', 'change_key', 'change_time_signature']:
+                try:
+                    await self._update_project_from_action(action_data)
+                except Exception as e:
+                    logger.error(f"Failed to update project from action: {e}")
+                    # Don't fail the generation, just log the error
+    
+    async def _save_track_from_action(self, action_data):
+        """Save a track to the project from an assistant action"""
+        if not hasattr(action_data, 'data') or not hasattr(action_data.data, 'track_data'):
+            logger.warning("Action data missing track_data, skipping save")
+            return
+        
+        track_data = action_data.data.track_data
+        if not track_data:
+            logger.warning("Track data is None, skipping save")
+            return
+        
+        # Convert track data to the format expected by project service
+        track_dict = {
+            'id': str(track_data.id),
+            'name': track_data.name,
+            'type': action_data.data.type.value,  # Convert enum to string
+        }
+        
+        # Add track-specific data
+        if hasattr(track_data, 'midi_notes_json'):
+            track_dict['midi_notes_json'] = track_data.midi_notes_json
+        if hasattr(track_data, 'instrument_id'):
+            track_dict['instrument_id'] = track_data.instrument_id
+        if hasattr(track_data, 'bpm'):
+            track_dict['bpm'] = track_data.bpm
+        if hasattr(track_data, 'sampler_tracks'):
+            track_dict['sampler_tracks'] = track_data.sampler_tracks
+        
+        # Add default project track settings
+        track_dict.update({
+            'volume': 1.0,
+            'pan': 0.0,
+            'mute': False,
+            'x_position': 0,
+            'y_position': 0,
+            'track_number': 0,
+        })
+        
+        logger.info(f"Saving track to project {self.project_id}: {track_dict['name']}")
+        
+        # Save the track to the project
+        import uuid
+        await self.project_service.add_track(
+            project_id=uuid.UUID(self.project_id),
+            user_id=uuid.UUID(self.user_id),
+            track_data=track_dict
+        )
+        
+        logger.info(f"Successfully saved track {track_dict['name']} to project {self.project_id}")
+    
+    async def _update_project_from_action(self, action_data):
+        """Update project parameters from an assistant action"""
+        try:
+            import uuid
+            from app2.models.project import ProjectUpdate
+            
+            project_updates = {}
+            
+            if action_data.action_type == 'change_bpm':
+                project_updates['bpm'] = action_data.data.value
+                logger.info(f"Updating project {self.project_id} BPM to {action_data.data.value}")
+                
+            elif action_data.action_type == 'change_key':
+                project_updates['key_signature'] = action_data.data.value
+                logger.info(f"Updating project {self.project_id} key to {action_data.data.value}")
+                
+            elif action_data.action_type == 'change_time_signature':
+                project_updates['time_signature_numerator'] = action_data.data.numerator
+                project_updates['time_signature_denominator'] = action_data.data.denominator
+                logger.info(f"Updating project {self.project_id} time signature to {action_data.data.numerator}/{action_data.data.denominator}")
+            
+            if project_updates:
+                # Update the project using the project service
+                await self.project_service.update_project(
+                    project_id=uuid.UUID(self.project_id),
+                    user_id=uuid.UUID(self.user_id),
+                    updates=project_updates
+                )
+                
+                logger.info(f"Successfully updated project {self.project_id} parameters")
+                
+        except Exception as e:
+            logger.error(f"Failed to update project parameters: {e}")
+            raise
+    
+    async def add_chunk(self, chunk: str):
+        """
+        Send chunk and potentially extract song title to update project name
+        """
+        # Send the chunk via the base queue first
+        await self.base_queue.add_chunk(chunk)
+        
+        # Try to extract song title from the streaming text to update project name
+        if not self._updated_name:
+            await self._try_update_project_name_from_chunk(chunk)
+    
+    async def _try_update_project_name_from_chunk(self, chunk: str):
+        """Try to extract song title from streaming text and update project name"""
+        try:
+            import re
+            
+            # Look for patterns like "Title: Song Name" or "Song Title: Song Name" in the chunk
+            title_patterns = [
+                r'title[:\s]+["\']?([^"\'\n]+)["\']?',
+                r'song title[:\s]+["\']?([^"\'\n]+)["\']?',
+                r'name[:\s]+["\']?([^"\'\n]+)["\']?',
+            ]
+            
+            chunk_lower = chunk.lower()
+            for pattern in title_patterns:
+                match = re.search(pattern, chunk_lower, re.IGNORECASE)
+                if match:
+                    title = match.group(1).strip()
+                    # Basic validation - reasonable length and not generic text
+                    if 3 <= len(title) <= 50 and not any(word in title.lower() for word in ['untitled', 'generated', 'song', 'track']):
+                        await self._update_project_name(title)
+                        self._updated_name = True
+                        break
+                        
+        except Exception as e:
+            logger.debug(f"Failed to extract title from chunk: {e}")
+            # Don't fail generation for this
+    
+    async def _update_project_name(self, title: str):
+        """Update the project name with the determined song title"""
+        try:
+            import uuid
+            
+            project_updates = {'name': title}
+            
+            await self.project_service.update_project(
+                project_id=uuid.UUID(self.project_id),
+                user_id=uuid.UUID(self.user_id),
+                updates=project_updates
+            )
+            
+            logger.info(f"Updated project {self.project_id} name to: {title}")
+            
+        except Exception as e:
+            logger.error(f"Failed to update project name: {e}")
+            # Don't fail generation for this
+    
+    # Delegate all other methods to the base queue
+    def __getattr__(self, name):
+        return getattr(self.base_queue, name)
 
 # Request schema for unified assistant endpoint
 class AssistantRequestModel(AssistantRequest):
@@ -346,9 +563,78 @@ async def delayed_request_cleanup(request_id: str, delay_seconds: int = 10):
     request_manager.remove_request(request_id)
 
 
-# TODO: Project auto-creation will be implemented in a separate PR
-# async def _create_project_for_generation(context, session: Session, user_id: str) -> Optional[str]:
-#     [Implementation temporarily removed - will be added back when project saving is fixed]
+async def _create_project_for_generation(context, session: Session, user_id: str) -> Optional[str]:
+    """
+    Create a project automatically for generation when auto_create_project is enabled
+    
+    Args:
+        context: The request context containing prompt and settings
+        session: Database session
+        user_id: User ID for project ownership
+        
+    Returns:
+        The created project ID as string, or None if creation failed
+    """
+    try:
+        from app2.services.project_service import ProjectService
+        from app2.repositories.project_repository import ProjectRepository
+        from app2.repositories.project_track_repository import ProjectTrackRepository
+        from app2.services.track_service import TrackService
+        from app2.repositories.audio_track_repository import AudioTrackRepository
+        from app2.repositories.midi_track_repository import MidiTrackRepository
+        from app2.repositories.drum_track_repository import DrumTrackRepository
+        from app2.repositories.sampler_track_repository import SamplerTrackRepository
+        from app2.models.project import ProjectCreate
+        import uuid
+        from datetime import datetime
+        
+        # Initialize repositories and services
+        project_repo = ProjectRepository(session)
+        project_track_repo = ProjectTrackRepository(session)
+        audio_track_repo = AudioTrackRepository(session)
+        midi_track_repo = MidiTrackRepository(session)
+        drum_track_repo = DrumTrackRepository(session)
+        sampler_track_repo = SamplerTrackRepository(session)
+        
+        track_service = TrackService(
+            audio_track_repo, midi_track_repo, drum_track_repo, sampler_track_repo
+        )
+        
+        project_service = ProjectService(
+            project_repo, project_track_repo, track_service
+        )
+        
+        # Create project with basic settings that will be updated during generation
+        project_name = f"Generated Song - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        # Start with reasonable defaults - these will be updated as the AI determines parameters
+        default_bpm = 120
+        default_key = "C major"
+        
+        project_data = ProjectCreate(
+            name=project_name,
+            bpm=default_bpm,
+            time_signature_numerator=4,
+            time_signature_denominator=4,
+            key_signature=default_key
+        )
+        
+        logger.info(f"Creating auto-project for user {user_id}: {project_name}")
+        
+        # Create the project
+        created_project = await project_service.create_project(
+            uuid.UUID(user_id), project_data
+        )
+        
+        project_id = str(created_project.id)
+        logger.info(f"Successfully created auto-project: {project_id}")
+        
+        return project_id
+        
+    except Exception as e:
+        logger.error(f"Failed to create auto-project for user {user_id}: {e}")
+        logger.error(f"Auto-project creation traceback: {traceback.format_exc()}")
+        return None
 
 
 async def process_generate_request(
@@ -364,9 +650,25 @@ async def process_generate_request(
         selected_model_info.api_key = selected_model_info.get_api_key()
         logger.info(f"Selected model: {selected_model_info}")
         
-        # TODO: Project auto-creation and saving will be implemented separately
-        # For now, use regular SSE queue to keep this merge focused on UI changes
+        # Check if auto project creation is enabled
+        auto_create_project = context.context and context.context.get('auto_create_project', False)
+        project_id = None
         wrapped_queue = sse_queue
+        
+        if auto_create_project:
+            logger.info("Auto-creation enabled, creating project for generation")
+            # Get user ID from context (set by the request manager)
+            user_id = context.user_id
+            if user_id:
+                project_id = await _create_project_for_generation(context, session, user_id)
+                if project_id:
+                    logger.info(f"Created auto-project: {project_id}")
+                    # Wrap the queue to save tracks automatically
+                    wrapped_queue = ProjectSavingSSEQueue(sse_queue, project_id, user_id, session)
+                else:
+                    logger.warning("Failed to create auto-project, using regular queue")
+            else:
+                logger.warning("No user_id available for auto-project creation")
         
         response = await music_agent.run(
             request_id=request_id,
@@ -404,7 +706,14 @@ async def process_generate_request(
         # The event name "final_composition" is arbitrary, adjust as needed for frontend.
         
         # Now signal that the entire process is complete
-        await sse_queue.complete({})
+        complete_data = {}
+        if project_id:
+            complete_data['project_id'] = project_id
+            complete_data['message'] = f'Song generated and saved to project {project_id}'
+        else:
+            complete_data['message'] = 'Song generated successfully'
+            
+        await sse_queue.complete(complete_data)
         logger.info(f"Generate request completed successfully: {request_id}")
 
     except Exception as gen_error:
