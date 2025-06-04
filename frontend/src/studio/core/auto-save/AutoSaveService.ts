@@ -180,10 +180,7 @@ export class AutoSaveService {
           
           // Add MIDI notes JSON to the track data
           if (trackWithoutDirty.track) {
-            trackWithoutDirty.track = {
-              ...trackWithoutDirty.track,
-              midi_notes_json: { notes: midiNotes }
-            };
+            (trackWithoutDirty.track as any).midi_notes_json = { notes: midiNotes };
           }
         }
         
