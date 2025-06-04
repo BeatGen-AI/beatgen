@@ -281,8 +281,14 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       break;
                   case 'MIDI':
                       nestedTrackData = { ...nestedTrackData, ...(apiTrackData as MidiTrackRead) };
-                      // Keep midi_notes_json as-is, don't convert to legacy notes field
-                      console.log(`Loaded MIDI track ${apiTrack.id} with midi_notes_json`);
+                      try {
+                          const midiNotesJson = (apiTrackData as MidiTrackRead).midi_notes_json as any;
+                          nestedTrackData.notes = convertJsonToNotes(midiNotesJson, apiTrack.id); 
+                          console.log(`Parsed ${nestedTrackData.notes?.length} MIDI notes for track ${apiTrack.id}`);
+                      } catch (e) {
+                          console.error(`Failed to parse midiNotesJson for MIDI track ${apiTrack.id}:`, e);
+                          nestedTrackData.notes = []; 
+                      }
                       break;
                   case 'DRUM':
                        nestedTrackData = { ...nestedTrackData, ...(apiTrackData as DrumTrackRead) };
@@ -296,8 +302,14 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       nestedTrackData.baseMidiNote = (apiTrackData as any).base_midi_note ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote;
                       nestedTrackData.grainSize = (apiTrackData as any).grain_size ?? DEFAULT_SAMPLER_CONFIG.grainSize;
                       nestedTrackData.overlap = (apiTrackData as any).overlap ?? DEFAULT_SAMPLER_CONFIG.overlap;
-                      // Keep midi_notes_json as-is, don't convert to legacy notes field
-                      console.log(`Loaded sampler track ${apiTrack.id} with midi_notes_json`);
+                      try {
+                        const midiNotesJson = (apiTrackData as SamplerTrackRead).midi_notes_json as any;
+                        nestedTrackData.notes = convertJsonToNotes(midiNotesJson, apiTrack.id); 
+                        console.log(`Parsed ${nestedTrackData.notes?.length} MIDI notes for sampler track ${apiTrack.id}`);
+                      } catch (e) {
+                        console.error(`Failed to parse midiNotesJson for sampler track ${apiTrack.id}:`, e);
+                        nestedTrackData.notes = []; 
+                      }
                      break;
               }
           }

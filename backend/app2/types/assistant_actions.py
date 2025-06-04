@@ -9,9 +9,10 @@ from app2.models.project_track import ProjectTrack
 
 
 class TrackType(str, Enum):
-    AUDIO = "audio"
-    MIDI = "midi"
-    DRUM = "drum"
+    AUDIO = "AUDIO"
+    MIDI = "MIDI"
+    DRUM = "DRUM"
+    SAMPLER = "SAMPLER"
 
 
 class KeySignature(str, Enum):
