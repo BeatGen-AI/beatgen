@@ -6,7 +6,7 @@
  */
 
 import { CombinedTrack, Project } from '../../../platform/types/project';
-import { saveProjectWithSounds } from '../../../platform/api/projects';
+import { saveProjectWithSounds, createProject, updateProject } from '../../../platform/api/projects';
 
 export type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -32,6 +32,8 @@ export interface AutoSaveCallbacks {
     userId: string;
   };
   markTracksAsClean: (trackIds: string[]) => void;
+  updateProjectId: (projectId: string) => void; // Add callback to update project ID
+  getTrackNotes: (trackId: string) => any[] | null; // Get current notes for a track
 }
 
 export class AutoSaveService {
@@ -168,20 +170,68 @@ export class AutoSaveService {
         user_id: projectState.userId
       };
 
-      // Prepare tracks (remove dirty field for backend)
+      // Prepare tracks with MIDI notes (similar to SaveProjectButton logic)
       const preparedTracks = dirtyTracks.map(track => {
         const { dirty, ...trackWithoutDirty } = track;
+        
+        // For MIDI and sampler tracks, add current notes from the manager
+        if (track.type === 'MIDI' || track.type === 'SAMPLER') {
+          const midiNotes = this.callbacks.getTrackNotes(track.id) || [];
+          console.log(`AutoSaveService: Track ${track.id} before notes update:`, {
+            hasTrack: !!trackWithoutDirty.track,
+            existingMidiJson: trackWithoutDirty.track?.midi_notes_json?.notes?.length || 0,
+            currentNotes: midiNotes.length
+          });
+          
+          // Add MIDI notes JSON to the track data
+          if (trackWithoutDirty.track) {
+            trackWithoutDirty.track = {
+              ...trackWithoutDirty.track,
+              midi_notes_json: { notes: midiNotes }
+            };
+            
+            console.log(`AutoSaveService: Track ${track.id} after notes update:`, {
+              midiJsonNotes: trackWithoutDirty.track.midi_notes_json?.notes?.length || 0,
+              currentNotes: midiNotes.length
+            });
+          }
+        }
+        
         return trackWithoutDirty;
       });
 
       console.log(`AutoSaveService: Saving ${preparedTracks.length} dirty tracks`);
 
-      // Perform the save
-      const savedProject = await saveProjectWithSounds(
-        projectState.projectId,
-        projectData,
-        preparedTracks
-      );
+      let savedProject: Project;
+
+      if (projectState.projectId) {
+        // Update existing project - ALWAYS use saveProjectWithSounds to match manual save behavior
+        console.log('AutoSaveService: Updating existing project:', projectState.projectId);
+        console.log('AutoSaveService: Using saveProjectWithSounds (same as manual save)');
+        savedProject = await saveProjectWithSounds(
+          projectState.projectId,
+          projectData,
+          preparedTracks
+        );
+      } else {
+        // Create new project
+        console.log('AutoSaveService: Creating new project...');
+        const newProject = await createProject(projectData);
+        
+        if (preparedTracks.length > 0) {
+          // If we have tracks, use saveProjectWithSounds
+          savedProject = await saveProjectWithSounds(
+            newProject.id,
+            projectData,
+            preparedTracks
+          );
+        } else {
+          savedProject = newProject;
+        }
+        
+        // Update the project ID for future saves
+        this.callbacks.updateProjectId(savedProject.id);
+      }
 
       // Mark tracks as clean
       const savedTrackIds = preparedTracks.map(track => track.id);

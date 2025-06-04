@@ -546,7 +546,30 @@ class TrackService:
                 updated_track = await self.audio_repository.update(track_id, track_data)
                 track_read = AudioTrackRead.model_validate(updated_track)
             elif track_type == TrackType.MIDI:
-                updated_track = await self.midi_repository.update(track_id, track_data)
+                # Remove any stale 'notes' field if it exists, only use midi_notes_json
+                midi_data = track_data.copy()
+                if 'notes' in midi_data:
+                    logger.info("Removing stale 'notes' field, using only 'midi_notes_json'")
+                    midi_data.pop('notes')
+                
+                # Debug MIDI notes data
+                if 'midi_notes_json' in midi_data:
+                    notes_data = midi_data['midi_notes_json']
+                    if isinstance(notes_data, dict) and 'notes' in notes_data:
+                        logger.info(f"MIDI track update - sending {len(notes_data['notes'])} notes to repository")
+                        logger.info(f"MIDI notes preview: {notes_data['notes'][:2]}...")  # Log first 2 notes
+                    else:
+                        logger.warning(f"MIDI notes_json format unexpected: {type(notes_data)}")
+                
+                updated_track = await self.midi_repository.update(track_id, midi_data)
+                
+                # Debug what was actually saved
+                if hasattr(updated_track, 'midi_notes_json') and updated_track.midi_notes_json:
+                    saved_notes = updated_track.midi_notes_json.get('notes', [])
+                    logger.info(f"MIDI track update - repository saved {len(saved_notes)} notes")
+                    if len(saved_notes) < len(notes_data.get('notes', [])):
+                        logger.error(f"NOTE COUNT MISMATCH! Sent: {len(notes_data.get('notes', []))}, Saved: {len(saved_notes)}")
+                
                 track_read = MidiTrackRead.model_validate(updated_track)
             elif track_type == TrackType.SAMPLER:
                 updated_track = await self.sampler_repository.update(

@@ -22,6 +22,7 @@ export interface UseAutoSaveOptions {
   onSaveSuccess?: (project: Project) => void;
   onSaveError?: (error: any, willRetry: boolean) => void;
   onStatusChange?: (status: AutoSaveStatus, message?: string) => void;
+  onProjectIdUpdate?: (projectId: string) => void; // Callback when project ID is set
 }
 
 export interface UseAutoSaveReturn {
@@ -55,9 +56,17 @@ export const useAutoSave = (options: UseAutoSaveOptions = {}): UseAutoSaveReturn
     }
   }, [options.config]);
 
+  // Keep track of the current project ID
+  const projectIdRef = useRef(options.projectId || '');
+  
+  // Update project ID ref when options change
+  useEffect(() => {
+    projectIdRef.current = options.projectId || '';
+  }, [options.projectId]);
+
   // Callback to get current project state
   const getCurrentProjectState = useCallback(() => {
-    const state = studioStore.getState();
+    const state = useStudioStore.getState();
     
     return {
       projectTitle: state.projectTitle || 'Untitled Project',
@@ -65,17 +74,18 @@ export const useAutoSave = (options: UseAutoSaveOptions = {}): UseAutoSaveReturn
       timeSignature: state.timeSignature,
       keySignature: state.keySignature,
       tracks: state.tracks,
-      projectId: options.projectId || '', // Use projectId from options
+      projectId: projectIdRef.current, // Use ref to get current project ID
       userId: user?.id || ''
     };
-  }, [studioStore, user, options.projectId]);
+  }, [user]);
 
   // Callback to mark tracks as clean after save
   const markTracksAsClean = useCallback((trackIds: string[]) => {
+    const { updateTrackState } = useStudioStore.getState();
     trackIds.forEach(trackId => {
-      studioStore.updateTrackState(trackId, { dirty: false });
+      updateTrackState(trackId, { dirty: false });
     });
-  }, [studioStore]);
+  }, []);
 
   // Status change handler
   const handleStatusChange = useCallback((status: AutoSaveStatus, message?: string) => {
@@ -113,12 +123,22 @@ export const useAutoSave = (options: UseAutoSaveOptions = {}): UseAutoSaveReturn
       return;
     }
 
+    console.log('AutoSave: Initializing service...');
     const service = new AutoSaveService(configRef.current, {
       getCurrentProjectState,
       markTracksAsClean,
       onStatusChange: handleStatusChange,
       onSaveSuccess: handleSaveSuccess,
-      onSaveError: handleSaveError
+      onSaveError: handleSaveError,
+      updateProjectId: (projectId: string) => {
+        console.log('AutoSave: Project ID updated to:', projectId);
+        projectIdRef.current = projectId; // Update the ref immediately
+        options.onProjectIdUpdate?.(projectId);
+      },
+      getTrackNotes: (trackId: string) => {
+        const { getTrackNotes } = useStudioStore.getState();
+        return getTrackNotes(trackId);
+      }
     });
 
     serviceRef.current = service;
@@ -128,44 +148,49 @@ export const useAutoSave = (options: UseAutoSaveOptions = {}): UseAutoSaveReturn
     }
 
     return () => {
+      console.log('AutoSave: Cleaning up service...');
       service.stop();
       serviceRef.current = null;
     };
   }, [
-    user,
-    getCurrentProjectState,
-    markTracksAsClean,
-    handleStatusChange,
-    handleSaveSuccess,
-    handleSaveError
+    user?.id // Only depend on user ID, not the entire user object
+    // Remove function dependencies to prevent restarts
   ]);
 
   // Subscribe to tracks changes to trigger auto-save
   useEffect(() => {
-    if (!serviceRef.current || !user) return;
+    if (!user) return;
 
-    const unsubscribe = studioStore.subscribe(
-      (state) => state.tracks,
-      (tracks, prevTracks) => {
-        // Check if any tracks became dirty
-        const hasDirtyTracks = tracks.some(track => track.dirty === true);
-        const hadDirtyTracks = prevTracks.some(track => track.dirty === true);
+    console.log('AutoSave: Setting up subscription...');
+    let lastTriggerTime = 0;
+    const triggerThreshold = 1000; // Don't trigger more than once per second
+
+    const unsubscribe = useStudioStore.subscribe(
+      (state) => {
+        // Only proceed if service is available
+        if (!serviceRef.current) return;
         
-        // Trigger auto-save if we now have dirty tracks or tracks changed
-        const tracksChanged = tracks.length !== prevTracks.length ||
-          tracks.some((track, index) => {
-            const prevTrack = prevTracks[index];
-            return !prevTrack || track.dirty !== prevTrack.dirty;
-          });
+        const currentTracks = state.tracks;
+        const hasDirtyTracks = currentTracks.some(track => track.dirty === true);
         
-        if ((hasDirtyTracks && !hadDirtyTracks) || (tracksChanged && hasDirtyTracks)) {
-          serviceRef.current?.onTracksChanged();
+        // If we have dirty tracks and enough time has passed, trigger auto-save
+        if (hasDirtyTracks) {
+          const now = Date.now();
+          if (now - lastTriggerTime > triggerThreshold) {
+            console.log('AutoSave: Triggering onTracksChanged for dirty tracks!');
+            serviceRef.current?.onTracksChanged();
+            lastTriggerTime = now;
+          }
         }
       }
     );
 
-    return unsubscribe;
-  }, [user, studioStore]);
+    console.log('AutoSave: Subscription set up successfully');
+    return () => {
+      console.log('AutoSave: Cleaning up subscription');
+      unsubscribe();
+    };
+  }, [user?.id]); // Only depend on user ID
 
   // Force save function
   const forceSave = useCallback(async () => {

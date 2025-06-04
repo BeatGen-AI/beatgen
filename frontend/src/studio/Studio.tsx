@@ -141,6 +141,13 @@ function Studio({ projectId }: StudioProps) {
     },
     onSaveError: (error, willRetry) => {
       console.error('Auto-save error:', error, 'willRetry:', willRetry);
+    },
+    onProjectIdUpdate: (projectId) => {
+      console.log('Studio: Updating project ID from auto-save:', projectId);
+      setExistingProjectId(projectId);
+      // Update URL to include the new project ID
+      const newUrl = `/studio?projectId=${projectId}`;
+      window.history.replaceState({}, '', newUrl);
     }
   });
 

@@ -166,15 +166,45 @@ class BaseRepository(Generic[T]):
             # First get the existing record
             model_instance = await self.find_by_id(id)
 
-            # Update fields
+            # Debug MIDI notes specifically
+            if self.model_class.__name__ == 'MidiTrack' and 'midi_notes_json' in data:
+                notes_data = data['midi_notes_json']
+                if isinstance(notes_data, dict) and 'notes' in notes_data:
+                    self.logger.info(f"BaseRepository: About to update MIDI track with {len(notes_data['notes'])} notes")
+                    self.logger.info(f"BaseRepository: Notes data preview: {notes_data['notes'][:2]}...")
+
+            # Filter out relationship fields to prevent SQLAlchemy errors
+            # These should not be updated directly with dictionary values
+            filtered_data = {}
             for key, value in data.items():
                 if hasattr(model_instance, key):
+                    # Check if this is a SQLAlchemy relationship field
+                    attr = getattr(self.model_class, key, None)
+                    if hasattr(attr, 'property') and hasattr(attr.property, 'mapper'):
+                        # This is a relationship field - log and skip it
+                        self.logger.warning(f"Skipping relationship field '{key}' in update - relationships should be updated via foreign keys")
+                        continue
+                    filtered_data[key] = value
+
+            # Update fields with filtered data
+            for key, value in filtered_data.items():
+                if hasattr(model_instance, key):
+                    old_value = getattr(model_instance, key)
                     setattr(model_instance, key, value)
+                    # Debug MIDI notes field specifically
+                    if key == 'midi_notes_json' and self.model_class.__name__ == 'MidiTrack':
+                        if isinstance(value, dict) and 'notes' in value:
+                            self.logger.info(f"BaseRepository: Set midi_notes_json with {len(value['notes'])} notes")
 
             # Commit changes
             self.session.add(model_instance)
             self.session.commit()
             self.session.refresh(model_instance)
+
+            # Debug what was actually saved for MIDI tracks
+            if self.model_class.__name__ == 'MidiTrack' and hasattr(model_instance, 'midi_notes_json'):
+                saved_notes = model_instance.midi_notes_json.get('notes', []) if model_instance.midi_notes_json else []
+                self.logger.info(f"BaseRepository: After commit/refresh, MIDI track has {len(saved_notes)} notes saved")
 
             self.logger.info(f"Updated {self.model_class.__name__} with ID {id}")
             return model_instance

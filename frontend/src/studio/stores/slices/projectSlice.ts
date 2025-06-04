@@ -281,19 +281,8 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       break;
                   case 'MIDI':
                       nestedTrackData = { ...nestedTrackData, ...(apiTrackData as MidiTrackRead) };
-                      if ((apiTrackData as MidiTrackRead).midi_notes_json) {
-                          try {
-                              // Cast to unknown then to string
-                              const jsonString = (apiTrackData as MidiTrackRead).midi_notes_json as any;
-                              nestedTrackData.notes = convertJsonToNotes(jsonString, apiTrack.id); 
-                              console.log(`Parsed ${nestedTrackData.notes?.length} MIDI notes for track ${apiTrack.id}`);
-                          } catch (e) {
-                              console.error(`Failed to parse midiNotesJson for MIDI track ${apiTrack.id}:`, e);
-                              nestedTrackData.notes = []; 
-                          }
-                      } else {
-                          nestedTrackData.notes = []; 
-                      }
+                      // Keep midi_notes_json as-is, don't convert to legacy notes field
+                      console.log(`Loaded MIDI track ${apiTrack.id} with midi_notes_json`);
                       break;
                   case 'DRUM':
                        nestedTrackData = { ...nestedTrackData, ...(apiTrackData as DrumTrackRead) };
@@ -307,20 +296,8 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       nestedTrackData.baseMidiNote = (apiTrackData as any).base_midi_note ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote;
                       nestedTrackData.grainSize = (apiTrackData as any).grain_size ?? DEFAULT_SAMPLER_CONFIG.grainSize;
                       nestedTrackData.overlap = (apiTrackData as any).overlap ?? DEFAULT_SAMPLER_CONFIG.overlap;
-                      if (samplerTrackData.midi_notes_json) {
-                           console.log(`Processing midiNotesJson for sampler track ${apiTrack.id}`);
-                           try {
-                              // Cast to unknown then to string
-                              const jsonString = (apiTrackData as SamplerTrackRead).midi_notes_json as any;
-                              nestedTrackData.notes = convertJsonToNotes(jsonString, apiTrack.id); 
-                              console.log(`Parsed ${nestedTrackData.notes?.length} MIDI notes for sampler track ${apiTrack.id}`);
-                          } catch (e) {
-                              console.error(`Failed to parse midiNotesJson for sampler track ${apiTrack.id}:`, e);
-                              nestedTrackData.notes = []; 
-                          }
-                      } else {
-                           nestedTrackData.notes = []; 
-                      }
+                      // Keep midi_notes_json as-is, don't convert to legacy notes field
+                      console.log(`Loaded sampler track ${apiTrack.id} with midi_notes_json`);
                      break;
               }
           }
@@ -384,10 +361,16 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       await store.connectTrackToSoundfont(track.id, instrumentId);
                       console.log(`Connected MIDI track ${track.id} to soundfont ${instrumentId}`);
                   } else { console.warn(`MIDI track ${track.id} missing instrumentId`); }
-                  // Use already parsed notes from processTrack
-                  const notesToLoad = (track.track as any).notes || []; // Access dynamically added notes
-                  console.log(`Loading ${notesToLoad.length} notes for MIDI track ${track.id}`);
-                  midiManager.updateTrack(track.id, notesToLoad);
+                  // Load notes from midi_notes_json if available
+                  const midiNotesJson = (track.track as any).midi_notes_json;
+                  if (midiNotesJson && midiNotesJson.notes) {
+                      const notesToLoad = convertJsonToNotes(midiNotesJson, track.id);
+                      console.log(`Loading ${notesToLoad.length} notes for MIDI track ${track.id}`);
+                      midiManager.updateTrack(track.id, notesToLoad);
+                  } else {
+                      console.log(`No MIDI notes to load for track ${track.id}`);
+                      midiManager.updateTrack(track.id, []);
+                  }
               }
               
               // --- Audio Connection --- 

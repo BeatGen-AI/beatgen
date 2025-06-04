@@ -83,9 +83,13 @@ export abstract class NoteAction extends BaseAction {
      * Helper method to mark a track as dirty when notes are modified
      */
     protected markTrackAsDirty(): void {
+        console.log('markTrackAsDirty called for track:', this.trackId);
         const { updateTrackState } = this.get();
         if (updateTrackState) {
+            console.log('Calling updateTrackState with dirty: true');
             updateTrackState(this.trackId, { dirty: true });
+        } else {
+            console.warn('updateTrackState not available');
         }
     }
     
