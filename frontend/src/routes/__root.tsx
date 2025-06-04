@@ -52,7 +52,7 @@ export const Route = createRootRoute({
 function RootLayout() {
   const { loading } = useAuth();
   const router = useRouter();
-  const { mode } = useAppTheme();
+  const { mode, studioMode } = useAppTheme();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
   // Simple studio route detection using string matching on location.href
@@ -99,7 +99,10 @@ function RootLayout() {
   // Define themes inline or import them if preferred
   const lightTheme = { background: '#ffffff', text: '#000000' }; // Simplified for example
   const darkTheme = { background: '#000000', text: '#ffffff' };
-  const currentThemePalette = mode === 'light' ? lightTheme : darkTheme;
+  
+  // Use studioMode when on studio routes, otherwise use regular mode
+  const effectiveMode = isStudioRoute ? studioMode : mode;
+  const currentThemePalette = effectiveMode === 'light' ? lightTheme : darkTheme;
   
   if (loading) {
     return (
