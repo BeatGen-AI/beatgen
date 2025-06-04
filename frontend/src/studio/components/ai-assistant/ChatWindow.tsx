@@ -566,15 +566,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                 console.log('🟢 Constructed CombinedTrack:', combinedMidiTrack);
                 loadTrack(combinedMidiTrack); // Pass the correctly structured object
                 break;
-              case 'sampler':
+              case 'SAMPLER':
                 actionTrackData = actionData.track_data as SamplerTrackRead;
-                actionTrackData.type = 'sampler';
+                actionTrackData.type = 'SAMPLER';
                 console.log('🟢 Sampler actionTrackData:', actionTrackData);
                 loadTrack(actionTrackData);
                 break;
-              case 'drum':
+              case 'DRUM':
                 actionTrackData = actionData.track_data as DrumTrackRead;
-                actionTrackData.type = 'drum';
+                actionTrackData.type = 'DRUM';
                 console.log('🟢 Drum actionTrackData:', actionTrackData);
                 loadTrack(actionTrackData);
                 break;

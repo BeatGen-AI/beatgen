@@ -171,7 +171,7 @@ class SSEQueueManager:
         await self.queue.put(
             ("action", {"type": action.action_type, "data": action.data.model_dump()})
         )
-        logger.info(f"Sent action event: {action}")
+        #logger.info(f"Sent action event: {action}")
 
     async def complete(self, data: Dict[str, Any]):
         """
