@@ -177,11 +177,6 @@ export class AutoSaveService {
         // For MIDI and sampler tracks, add current notes from the manager
         if (track.type === 'MIDI' || track.type === 'SAMPLER') {
           const midiNotes = this.callbacks.getTrackNotes(track.id) || [];
-          console.log(`AutoSaveService: Track ${track.id} before notes update:`, {
-            hasTrack: !!trackWithoutDirty.track,
-            existingMidiJson: trackWithoutDirty.track?.midi_notes_json?.notes?.length || 0,
-            currentNotes: midiNotes.length
-          });
           
           // Add MIDI notes JSON to the track data
           if (trackWithoutDirty.track) {
@@ -189,11 +184,6 @@ export class AutoSaveService {
               ...trackWithoutDirty.track,
               midi_notes_json: { notes: midiNotes }
             };
-            
-            console.log(`AutoSaveService: Track ${track.id} after notes update:`, {
-              midiJsonNotes: trackWithoutDirty.track.midi_notes_json?.notes?.length || 0,
-              currentNotes: midiNotes.length
-            });
           }
         }
         
@@ -205,9 +195,7 @@ export class AutoSaveService {
       let savedProject: Project;
 
       if (projectState.projectId) {
-        // Update existing project - ALWAYS use saveProjectWithSounds to match manual save behavior
-        console.log('AutoSaveService: Updating existing project:', projectState.projectId);
-        console.log('AutoSaveService: Using saveProjectWithSounds (same as manual save)');
+        // Update existing project - use saveProjectWithSounds to match manual save behavior
         savedProject = await saveProjectWithSounds(
           projectState.projectId,
           projectData,
@@ -215,7 +203,6 @@ export class AutoSaveService {
         );
       } else {
         // Create new project
-        console.log('AutoSaveService: Creating new project...');
         const newProject = await createProject(projectData);
         
         if (preparedTracks.length > 0) {
@@ -244,8 +231,6 @@ export class AutoSaveService {
       
       this.setStatus('saved', `Saved ${preparedTracks.length} tracks`);
       this.callbacks.onSaveSuccess(savedProject);
-      
-      console.log('AutoSaveService: Save completed successfully');
 
     } catch (error: any) {
       console.error('AutoSaveService: Save failed', error);
