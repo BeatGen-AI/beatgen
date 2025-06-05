@@ -152,7 +152,7 @@ function RootLayout() {
       
       <main
         className={cn(
-          "overflow-x-hidden transition-all duration-300",
+          "overflow-x-hidden",
           // Desktop margins for sidebar
           shouldShowSidebar 
             ? (sidebarExpanded ? 'md:ml-64' : 'md:ml-16')
