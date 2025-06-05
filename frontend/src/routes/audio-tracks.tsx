@@ -1,10 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
 import React from 'react'
-import Sidebar from '../platform/components/Sidebar'
 import SoundLibrary from '../platform/components/SoundLibrary'
 import { requireAuth } from '../platform/auth/auth-utils'
 import { Container } from '@mui/material'
-import { logoColors } from '../platform/components/Sidebar'
+
+const logoColors = [
+  '#e539a9', // Bright Pink
+  '#c63ba6', // Magenta
+  '#a93fbf', // Dark Violet
+  '#8247d8', // Purple
+  '#6050e0', // Indigo
+  '#4160e2', // Blue
+];
 
 export const Route = createFileRoute('/audio-tracks')({
   component: AudioTracksPage,
@@ -16,13 +23,8 @@ function AudioTracksPage() {
   const audioTracksColor = logoColors[2]
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <Sidebar />
-      
-      {/* Main content */}
-      <div className="flex-1 overflow-auto p-8">
-        <Container maxWidth="lg" sx={{ pt: 0, mt: 0 }}>
+    <div className="p-8">
+      <Container maxWidth="lg" sx={{ pt: 0, mt: 0 }}>
           <h1 
             className="text-3xl font-bold mb-6"
             style={{ 
@@ -39,8 +41,7 @@ function AudioTracksPage() {
           <div className="bg-card rounded-lg p-4 shadow-md">
             <SoundLibrary sectionColor={audioTracksColor} />
           </div>
-        </Container>
-      </div>
+      </Container>
     </div>
   )
 }

@@ -17,8 +17,6 @@ import {
   deleteProject, 
 } from '../api/projects';
 import { Project } from '../types/project';
-import Sidebar from '../components/Sidebar';
-import { useSidebar } from "@/components/ui/sidebar";
 import ProjectsDisplay from '../components/ProjectsDisplay';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Page } from '../types/pagination';
@@ -30,7 +28,6 @@ const PROJECTS_PER_PAGE_API = 20;
 
 export default function Projects() {
   const navigate = useNavigate();
-  const { open: sidebarActualOpen } = useSidebar();
   const queryClient = useQueryClient();
 
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
@@ -137,14 +134,7 @@ export default function Projects() {
   };
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <Sidebar />
-      <main
-        style={{
-          flexGrow: 1,
-          padding: '2rem',
-        }}
-      >
+    <div className="p-8">
         <Container maxWidth="lg" sx={{ pt: 0, mt: 0 }}>
           {projectsError && !projectsData && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -168,8 +158,7 @@ export default function Projects() {
             snackbarSeverity={snackbar.severity}
             onCloseSnackbar={handleCloseSnackbar} 
             sectionColor={''}          />
-        </Container>
-      </main>
-    </Box>
+      </Container>
+    </div>
   );
 }

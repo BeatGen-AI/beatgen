@@ -15,7 +15,14 @@ import {
 import { Project } from '../types/project';
 import { Button } from "../../components/ui/button";
 import ProjectCard from './DisplayCards/ProjectCard';
-import { logoColors } from './Sidebar';
+const logoColors = [
+  '#e539a9', // Bright Pink
+  '#c63ba6', // Magenta
+  '#a93fbf', // Dark Violet
+  '#8247d8', // Purple
+  '#6050e0', // Indigo
+  '#4160e2', // Blue
+];
 
 interface ProjectsDisplayProps {
   allFetchedProjects: Project[];

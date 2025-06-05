@@ -4,8 +4,8 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../platform/auth/auth-context'
 import { handleOAuthCallback } from '../platform/api/auth'
 import { useAppTheme } from '../platform/theme/ThemeContext'
-import Sidebar from '../platform/components/Sidebar'
-import { SidebarProvider, SidebarInset } from '../components/ui/sidebar'
+import SimpleSidebar from '../platform/components/SimpleSidebar'
+import MobileMenuButton from '../platform/components/MobileMenuButton'
 import { cn } from '../lib/utils'
 
 // Root Layout Component - this wraps all routes
@@ -53,7 +53,8 @@ function RootLayout() {
   const { loading } = useAuth();
   const router = useRouter();
   const { mode, studioMode } = useAppTheme();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Simple studio route detection using string matching on location.href
   // This is more reliable than router state during transitions
@@ -121,39 +122,42 @@ function RootLayout() {
   
   // Determine if the sidebar should be shown based on the route
   // For example, hide sidebar on /studio, /login, /register, /etc.
-  const noSidebarRoutes = ['/studio', '/login', '/register', '/']; // Added landing page '/'
+  const noSidebarRoutes = ['/studio', '/login', '/register'];
   const shouldShowSidebar = !noSidebarRoutes.some(route => currentUrl.endsWith(route) || currentUrl.includes(route + '/') || currentUrl.includes(route + '?'));
 
   // No navbar in the root layout - each route will add its own navbar if needed
-  // The main div now becomes a flex container to hold Sidebar and SidebarInset
   return (
-    <SidebarProvider 
-      open={isSidebarOpen}
-      onOpenChange={setIsSidebarOpen} 
-      defaultOpen={true} // Default open state
+    <div 
+      id="root-layout" 
+      className="min-h-screen"
+      style={{ 
+        background: currentThemePalette.background, 
+        color: currentThemePalette.text
+      }}
     >
-      <div 
-        id="root-layout" 
-        style={{ 
-          background: currentThemePalette.background, 
-          color: currentThemePalette.text, 
-          minHeight: '100vh',
-          display: 'flex', // Added display flex
-          width: '100%' // Ensure full width within its parent flex container
-        }}
+      {shouldShowSidebar && (
+        <>
+          <SimpleSidebar 
+            isExpanded={sidebarExpanded}
+            onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+            isMobileOpen={mobileMenuOpen}
+            onMobileToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
+          />
+          <MobileMenuButton onClick={() => setMobileMenuOpen(true)} />
+        </>
+      )}
+      
+      <main
+        className={cn(
+          "overflow-x-hidden transition-all duration-300",
+          shouldShowSidebar 
+            ? (sidebarExpanded ? 'md:ml-64' : 'md:ml-16')
+            : ''
+        )}
+        style={{ minWidth: 0 }}
       >
-        {shouldShowSidebar && <Sidebar />} 
-        <SidebarInset> {/* Wrap Outlet with SidebarInset */}
-          <main
-            className={cn(
-              "flex-grow overflow-y-auto w-full" // Ensure it's always full width
-            )}
-            // style={{ flexGrow: 1, overflowY: 'auto' }} // Replaced by className
-          >
-            <Outlet />
-          </main>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+        <Outlet />
+      </main>
+    </div>
   );
 }
