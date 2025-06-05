@@ -104,7 +104,7 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
       {/* Waveform Preview */}
       <div className="px-6 pb-3">
         <div
-          className="h-[60px] bg-white rounded overflow-hidden relative"
+          className="h-[60px] bg-card rounded overflow-hidden relative"
         >
           <WaveformDisplay
             waveformData={track.waveform_data}
@@ -120,7 +120,7 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
         <Box
           sx={{
             height: 60,
-            bgcolor: 'white',
+            bgcolor: 'transparent',
             borderRadius: 1,
             overflow: 'hidden',
             position: 'relative'

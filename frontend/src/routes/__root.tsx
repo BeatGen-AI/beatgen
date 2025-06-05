@@ -161,7 +161,7 @@ function RootLayout() {
             ? (sidebarExpanded ? 'md:ml-64' : 'md:ml-16')
             : '',
           // Mobile margins for top and bottom nav
-          shouldShowSidebar ? 'pt-14 pb-16 md:pt-0 md:pb-0' : ''
+          shouldShowSidebar ? 'pt-12 pb-12 md:pt-0 md:pb-0' : ''
         )}
         style={{ minWidth: 0 }}
       >
