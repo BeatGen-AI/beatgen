@@ -354,40 +354,7 @@ class AuthService:
             )
             logger.info("Code exchanged successfully.")
 
-            # Clean up the PKCE verifier cookie
-            if response: # Ensure response object is available for cookie deletion
-                logger.info(f"[PROD DIAGNOSTIC] Attempting to delete cookie with SameSite=None, Secure=True. APP_ENV is: {settings.app.APP_ENV}")
-                
-                # Determine secure flag for deletion consistent with how it might have been set
-                delete_secure_flag = True # Default for SameSite=None
-                current_samesite_for_delete = "none"
-
-                if settings.app.APP_ENV == "dev" and not settings.app.BASE_URL.startswith("https://"):
-                    # This was the problematic override attempt for setting. For deletion, match potential reality.
-                    # However, if we forced Secure=True for SameSite=None during set, we should match that.
-                    # Let's assume if samesite was "none", secure was True if not explicitly overridden for dev http
-                    pass # Keep delete_secure_flag as True if samesite is "none" unless specific dev http override was guaranteed
-
-                is_production_like_for_delete = settings.app.APP_ENV != "dev"
-                if current_samesite_for_delete == "none" and not delete_secure_flag and is_production_like_for_delete:
-                    delete_secure_flag = True
-
-
-                # Use same domain setting as when cookie was set
-                cookie_domain = None
-                if settings.app.APP_ENV == "prod":
-                    cookie_domain = ".beatgen.com"
-
-                response.delete_cookie(
-                    key="google_pkce_verifier",
-                    path="/",  # Match the path used when setting the cookie
-                    secure=delete_secure_flag,
-                    samesite=current_samesite_for_delete,
-                    domain=cookie_domain
-                )
-                logger.info(f"PKCE verifier cookie (SameSite={current_samesite_for_delete}, Domain=[HOST ONLY] attempt) deleted. Secure: {delete_secure_flag}")
-            else:
-                logger.warning("Response object not available to delete PKCE verifier cookie.")
+            # No cookie cleanup needed - Supabase handles PKCE internally
 
 
             if not auth_response.user: # type: ignore
