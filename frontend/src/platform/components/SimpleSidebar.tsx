@@ -22,6 +22,12 @@ import {
   DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
 import { Button } from "../../components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../../components/ui/tooltip";
 import { useAuth } from '../auth/auth-context';
 
 export const logoColors = [
@@ -58,13 +64,14 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
   ];
 
   return (
-    <div 
-      className={`
-        hidden md:flex fixed left-0 top-0 h-screen bg-white border-r border-gray-200 z-50 transition-all duration-300 ease-in-out
-        ${isExpanded ? 'w-64' : 'w-16'}
-        flex-col
-      `}
-    >
+    <TooltipProvider>
+      <div 
+        className={`
+          hidden md:flex fixed left-0 top-0 h-screen bg-white border-r border-gray-200 z-50 transition-all duration-300 ease-in-out
+          ${isExpanded ? 'w-64' : 'w-16'}
+          flex-col
+        `}
+      >
         {/* Header */}
         <div className={`flex items-center p-4 border-b border-gray-200 ${isExpanded ? 'justify-between' : 'justify-center'}`}>
           {isExpanded ? (
@@ -75,25 +82,37 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
                   BeatGen
                 </span>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onToggle}
-                title="Collapse sidebar"
-              >
-                <IconLayoutSidebarLeftCollapse className="w-4 h-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onToggle}
+                  >
+                    <IconLayoutSidebarLeftCollapse className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Collapse Sidebar</p>
+                </TooltipContent>
+              </Tooltip>
             </>
           ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggle}
-              className="p-1"
-              title="Expand sidebar"
-            >
-              <IconLayoutSidebarLeftExpand className="w-5 h-5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onToggle}
+                  className="p-1"
+                >
+                  <IconLayoutSidebarLeftExpand className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Expand Sidebar</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
 
@@ -197,7 +216,8 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
             {isExpanded && <span>Logout</span>}
           </Button>
         </div>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 };
 
