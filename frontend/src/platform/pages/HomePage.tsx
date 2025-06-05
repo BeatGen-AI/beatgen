@@ -297,34 +297,69 @@ export default function HomePage() {
           )}
 
           <Paper elevation={2} sx={{ p: 3, mt: 0, borderRadius: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography 
-                variant="h5" 
-                component="h2" 
-                sx={{ fontWeight: 'medium' }}
-                style={{ 
-                  color: logoColors[1], // Projects
-                }}
-              >
-                Projects
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2"
-                  onClick={() => setShowGenerateSongModal(true)}
+            <Box sx={{ mb: 2 }}>
+              {/* Desktop layout - side by side */}
+              <Box sx={{ display: { xs: 'none', md: 'flex' }, justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography 
+                  variant="h5" 
+                  component="h2" 
+                  sx={{ fontWeight: 'medium' }}
+                  style={{ 
+                    color: logoColors[1], // Projects
+                  }}
                 >
-                  <MusicNoteIcon fontSize="small" />
-                  Generate Song
-                </Button>
-                <Button
-                  variant="default"
-                  className="flex items-center gap-2"
-                  onClick={handleCreateProject}
+                  Projects
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    onClick={() => setShowGenerateSongModal(true)}
+                  >
+                    <MusicNoteIcon fontSize="small" />
+                    Generate Song
+                  </Button>
+                  <Button
+                    variant="default"
+                    className="flex items-center gap-2"
+                    onClick={handleCreateProject}
+                  >
+                    <AddIcon fontSize="small" />
+                    New Project
+                  </Button>
+                </Box>
+              </Box>
+
+              {/* Mobile layout - stacked */}
+              <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', gap: 2 }}>
+                <Typography 
+                  variant="h5" 
+                  component="h2" 
+                  sx={{ fontWeight: 'medium' }}
+                  style={{ 
+                    color: logoColors[1], // Projects
+                  }}
                 >
-                  <AddIcon fontSize="small" />
-                  New Project
-                </Button>
+                  Projects
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2 justify-center"
+                    onClick={() => setShowGenerateSongModal(true)}
+                  >
+                    <MusicNoteIcon fontSize="small" />
+                    Generate Song
+                  </Button>
+                  <Button
+                    variant="default"
+                    className="flex items-center gap-2 justify-center"
+                    onClick={handleCreateProject}
+                  >
+                    <AddIcon fontSize="small" />
+                    New Project
+                  </Button>
+                </Box>
               </Box>
             </Box>
             <ProjectsDisplay
