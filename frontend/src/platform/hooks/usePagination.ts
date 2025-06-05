@@ -77,7 +77,14 @@ export function usePagination<T>(
   const totalItems = pageData?.total_items ?? 0;
   const totalPages = pageData?.total_pages ?? 0;
 
-  // Reset state when query key changes or when we get the first page
+  // Reset state when query key changes (e.g., different component using same hook)
+  useEffect(() => {
+    setCurrentPage(1);
+    setAllFetchedItems([]);
+    setDisplayedCount(initialDisplayCount);
+  }, [queryKey.join(','), initialDisplayCount]);
+
+  // Accumulate items when new pages are fetched
   useEffect(() => {
     if (pageData?.items) {
       if (currentPage === 1) {
@@ -89,14 +96,7 @@ export function usePagination<T>(
         setAllFetchedItems(prev => [...prev, ...pageData.items]);
       }
     }
-  }, [pageData?.items, currentPage, initialDisplayCount]);
-
-  // Reset state when query key changes (e.g., different component using same hook)
-  useEffect(() => {
-    setCurrentPage(1);
-    setAllFetchedItems([]);
-    setDisplayedCount(initialDisplayCount);
-  }, [queryKey.join(','), initialDisplayCount]);
+  }, [pageData?.items, currentPage, initialDisplayCount, queryKey.join(',')]);
 
   // Show more function
   const showMore = () => {
