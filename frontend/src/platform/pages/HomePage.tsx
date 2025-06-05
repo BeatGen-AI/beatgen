@@ -37,8 +37,6 @@ import {
 } from '../api/projects';
 import { Project } from '../types/project';
 import { IconTrashFilled } from '@tabler/icons-react';
-import Sidebar from '../components/Sidebar';
-import { useSidebar } from "@/components/ui/sidebar";
 import { Button } from "../../components/ui/button"
 import ProjectsDisplay from '../components/ProjectsDisplay';
 import AudioTracksDisplay from '../components/AudioTracksDisplay';
@@ -47,7 +45,15 @@ import SamplerLibrary from '../components/SamplerLibrary';
 import DrumLibrary from '../components/DrumLibrary';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Page } from '../types/pagination';
-import { logoColors } from '../components/Sidebar';
+// We'll define logoColors here since we're not importing from SimpleSidebar anymore
+const logoColors = [
+  '#e539a9', // Bright Pink
+  '#c63ba6', // Magenta
+  '#a93fbf', // Dark Violet
+  '#8247d8', // Purple
+  '#6050e0', // Indigo
+  '#4160e2', // Blue
+];
 import GenerateSongModal from '../components/GenerateSongModal';
 import { createProject } from '../api/projects';
 import { ProjectCreate } from '../types/project';
@@ -65,7 +71,6 @@ const PROJECTS_PER_PAGE_API = 20; // How many to fetch from API at a time
 export default function HomePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { open: sidebarActualOpen } = useSidebar();
   const queryClient = useQueryClient();
   const userIsAuthenticated = isAuthenticated();
 
@@ -281,16 +286,8 @@ export default function HomePage() {
   }
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <Sidebar />
-      <main
-        style={{
-          flexGrow: 1,
-          padding: '2rem', // p-8 is 2rem if 1 unit = 0.25rem
-          // marginLeft and transition removed - Sidebar component should manage its own width
-          // and the main content will flow accordingly in the flex layout.
-        }}
-      >
+    <div className="p-4 md:p-8">
+      {/* Main Content */}
         <Container maxWidth="lg" className="projects-container" sx={{ pt: 0, mt:0 }}>
 
           {projectsError && (
@@ -300,34 +297,69 @@ export default function HomePage() {
           )}
 
           <Paper elevation={2} sx={{ p: 3, mt: 0, borderRadius: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography 
-                variant="h5" 
-                component="h2" 
-                sx={{ fontWeight: 'medium' }}
-                style={{ 
-                  color: logoColors[1], // Projects
-                }}
-              >
-                Projects
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2"
-                  onClick={() => setShowGenerateSongModal(true)}
+            <Box sx={{ mb: 2 }}>
+              {/* Desktop layout - side by side */}
+              <Box sx={{ display: { xs: 'none', md: 'flex' }, justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography 
+                  variant="h5" 
+                  component="h2" 
+                  sx={{ fontWeight: 'medium' }}
+                  style={{ 
+                    color: logoColors[1], // Projects
+                  }}
                 >
-                  <MusicNoteIcon fontSize="small" />
-                  Generate Song
-                </Button>
-                <Button
-                  variant="default"
-                  className="flex items-center gap-2"
-                  onClick={handleCreateProject}
+                  Projects
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    onClick={() => setShowGenerateSongModal(true)}
+                  >
+                    <MusicNoteIcon fontSize="small" />
+                    Generate Song
+                  </Button>
+                  <Button
+                    variant="default"
+                    className="flex items-center gap-2"
+                    onClick={handleCreateProject}
+                  >
+                    <AddIcon fontSize="small" />
+                    New Project
+                  </Button>
+                </Box>
+              </Box>
+
+              {/* Mobile layout - stacked */}
+              <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', gap: 2 }}>
+                <Typography 
+                  variant="h5" 
+                  component="h2" 
+                  sx={{ fontWeight: 'medium' }}
+                  style={{ 
+                    color: logoColors[1], // Projects
+                  }}
                 >
-                  <AddIcon fontSize="small" />
-                  New Project
-                </Button>
+                  Projects
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2 justify-center"
+                    onClick={() => setShowGenerateSongModal(true)}
+                  >
+                    <MusicNoteIcon fontSize="small" />
+                    Generate Song
+                  </Button>
+                  <Button
+                    variant="default"
+                    className="flex items-center gap-2 justify-center"
+                    onClick={handleCreateProject}
+                  >
+                    <AddIcon fontSize="small" />
+                    New Project
+                  </Button>
+                </Box>
               </Box>
             </Box>
             <ProjectsDisplay
@@ -425,8 +457,7 @@ export default function HomePage() {
               {snackbar.message}
             </Alert>
           </Snackbar>
-        </Container>
-      </main>
+      </Container>
 
       {/* Generate Song Modal */}
       <GenerateSongModal
@@ -434,6 +465,6 @@ export default function HomePage() {
         onClose={() => setShowGenerateSongModal(false)}
         onSaveAsProject={handleSaveGeneratedSong}
       />
-    </Box>
+    </div>
   );
 }
