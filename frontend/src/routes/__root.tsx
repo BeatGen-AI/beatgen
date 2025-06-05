@@ -1,11 +1,12 @@
-import { createRootRoute, Outlet, useRouter } from '@tanstack/react-router'
+import { createRootRoute, Outlet, useRouter, useLocation } from '@tanstack/react-router'
 import React, { useEffect, useState } from 'react'
 // import Navbar from '../platform/components/Navbar'
 import { useAuth } from '../platform/auth/auth-context'
 import { handleOAuthCallback } from '../platform/api/auth'
 import { useAppTheme } from '../platform/theme/ThemeContext'
 import SimpleSidebar from '../platform/components/SimpleSidebar'
-import MobileMenuButton from '../platform/components/MobileMenuButton'
+import MobileTopNav from '../platform/components/MobileTopNav'
+import MobileBottomNav from '../platform/components/MobileBottomNav'
 import { cn } from '../lib/utils'
 
 // Root Layout Component - this wraps all routes
@@ -52,14 +53,12 @@ export const Route = createRootRoute({
 function RootLayout() {
   const { loading } = useAuth();
   const router = useRouter();
+  const location = useLocation();
   const { mode, studioMode } = useAppTheme();
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  // Simple studio route detection using string matching on location.href
-  // This is more reliable than router state during transitions
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const isStudioRoute = currentUrl.includes('/studio');
+  // Simple studio route detection using router location
+  const isStudioRoute = location.pathname === '/studio';
   
   // Handle OAuth callbacks
   useEffect(() => {
@@ -121,9 +120,9 @@ function RootLayout() {
   }
   
   // Determine if the sidebar should be shown based on the route
-  // For example, hide sidebar on /studio, /login, /register, /etc.
+  // Hide navigation on studio, login, register routes
   const noSidebarRoutes = ['/studio', '/login', '/register'];
-  const shouldShowSidebar = !noSidebarRoutes.some(route => currentUrl.endsWith(route) || currentUrl.includes(route + '/') || currentUrl.includes(route + '?'));
+  const shouldShowSidebar = !noSidebarRoutes.includes(location.pathname);
 
   // No navbar in the root layout - each route will add its own navbar if needed
   return (
@@ -135,24 +134,31 @@ function RootLayout() {
         color: currentThemePalette.text
       }}
     >
+      {/* Desktop Sidebar */}
+      {shouldShowSidebar && (
+        <SimpleSidebar 
+          isExpanded={sidebarExpanded}
+          onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+        />
+      )}
+      
+      {/* Mobile Navigation */}
       {shouldShowSidebar && (
         <>
-          <SimpleSidebar 
-            isExpanded={sidebarExpanded}
-            onToggle={() => setSidebarExpanded(!sidebarExpanded)}
-            isMobileOpen={mobileMenuOpen}
-            onMobileToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
-          />
-          <MobileMenuButton onClick={() => setMobileMenuOpen(true)} />
+          <MobileTopNav />
+          <MobileBottomNav />
         </>
       )}
       
       <main
         className={cn(
           "overflow-x-hidden transition-all duration-300",
+          // Desktop margins for sidebar
           shouldShowSidebar 
             ? (sidebarExpanded ? 'md:ml-64' : 'md:ml-16')
-            : ''
+            : '',
+          // Mobile margins for top and bottom nav
+          shouldShowSidebar ? 'pt-14 pb-16 md:pt-0 md:pb-0' : ''
         )}
         style={{ minWidth: 0 }}
       >

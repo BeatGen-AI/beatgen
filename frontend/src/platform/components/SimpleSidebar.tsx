@@ -39,15 +39,11 @@ const beatGenTitleColor = logoColors[3]; // Purple for BeatGen title
 interface SimpleSidebarProps {
   isExpanded: boolean;
   onToggle: () => void;
-  isMobileOpen: boolean;
-  onMobileToggle: () => void;
 }
 
 const SimpleSidebar: React.FC<SimpleSidebarProps> = ({ 
   isExpanded, 
-  onToggle, 
-  isMobileOpen, 
-  onMobileToggle 
+  onToggle
 }) => {
   const navigate = useNavigate();
   const { signOut, profile, user } = useAuth();
@@ -62,25 +58,13 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
   ];
 
   return (
-    <>
-      {/* Mobile Overlay */}
-      {isMobileOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
-          onClick={onMobileToggle}
-        />
-      )}
-      
-      {/* Sidebar */}
-      <div 
-        className={`
-          fixed left-0 top-0 h-screen bg-white border-r border-gray-200 z-50 transition-all duration-300 ease-in-out
-          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:translate-x-0
-          ${isExpanded ? 'w-64' : 'w-16'}
-          flex flex-col
-        `}
-      >
+    <div 
+      className={`
+        hidden md:flex fixed left-0 top-0 h-screen bg-white border-r border-gray-200 z-50 transition-all duration-300 ease-in-out
+        ${isExpanded ? 'w-64' : 'w-16'}
+        flex-col
+      `}
+    >
         {/* Header */}
         <div className={`flex items-center p-4 border-b border-gray-200 ${isExpanded ? 'justify-between' : 'justify-center'}`}>
           {isExpanded ? (
@@ -95,38 +79,19 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onToggle}
-                className="hidden md:flex"
               >
                 <IconMenu2 className="w-4 h-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onMobileToggle}
-                className="md:hidden"
-              >
-                <IconX className="w-4 h-4" />
-              </Button>
             </>
           ) : (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onToggle}
-                className="hidden md:flex p-1"
-              >
-                <IconMenu2 className="w-5 h-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onMobileToggle}
-                className="md:hidden p-1"
-              >
-                <IconX className="w-4 h-4" />
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggle}
+              className="p-1"
+            >
+              <IconMenu2 className="w-5 h-5" />
+            </Button>
           )}
         </div>
 
@@ -199,10 +164,6 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
                 title={isExpanded ? undefined : item.text}
                 onClick={() => {
                   navigate({ to: item.path });
-                  // Close mobile sidebar after navigation
-                  if (window.innerWidth < 768) {
-                    onMobileToggle();
-                  }
                 }}
               >
                 {React.cloneElement(item.icon, {
@@ -234,8 +195,7 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
             {isExpanded && <span>Logout</span>}
           </Button>
         </div>
-      </div>
-    </>
+    </div>
   );
 };
 
