@@ -245,14 +245,28 @@ export default function HomePage() {
   // Helper function to convert SSE action to studio track format
   const convertActionToStudioTrack = (trackAction: any) => {
     try {
-      const trackData = trackAction.data?.track_data || trackAction.track_data;
-      if (!trackData) return null;
+      console.log('Converting track action:', trackAction);
+      const trackData = trackAction.data?.track_data;
+      console.log('Extracted track data:', trackData);
+      
+      if (!trackData) {
+        console.error('No track_data found in action');
+        return null;
+      }
+
+      // Determine track type from action
+      let trackType = 'MIDI';
+      if (trackAction.type === 'add_drum_track') {
+        trackType = 'DRUM';
+      } else if (trackAction.type === 'add_sampler_track') {
+        trackType = 'SAMPLER';
+      }
 
       // Create combined track in studio format
       const combinedTrack = {
         id: trackData.id || crypto.randomUUID(),
         name: trackData.name || 'Generated Track',
-        type: trackAction.type === 'add_drum_track' ? 'DRUM' : 'MIDI',
+        type: trackType,
         track: trackData,
         // Mark as dirty so auto-save will save it
         dirty: true,
@@ -264,6 +278,7 @@ export default function HomePage() {
         mute: false
       };
 
+      console.log('Created combined track:', combinedTrack);
       return combinedTrack;
     } catch (error) {
       console.error('Failed to convert track action:', error);
