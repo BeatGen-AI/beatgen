@@ -92,7 +92,7 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
                     <IconLayoutSidebarLeftCollapse className="w-4 h-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent side="right">
                   <p>Collapse Sidebar</p>
                 </TooltipContent>
               </Tooltip>
@@ -109,7 +109,7 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
                   <IconLayoutSidebarLeftExpand className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>
+              <TooltipContent side="right">
                 <p>Expand Sidebar</p>
               </TooltipContent>
             </Tooltip>
@@ -177,44 +177,80 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
 
           {/* Navigation Menu */}
           <nav className="space-y-1">
-            {menuItems.map((item, index) => (
-              <Button
-                key={item.text}
-                variant="ghost"
-                className={`w-full ${isExpanded ? 'justify-start p-2' : 'justify-center p-2'}`}
-                title={isExpanded ? undefined : item.text}
-                onClick={() => {
-                  navigate({ to: item.path });
-                }}
-              >
-                {React.cloneElement(item.icon, {
-                  className: `w-5 h-5 ${isExpanded ? 'mr-3' : ''}`,
-                  style: { color: logoColors[index % logoColors.length] }
-                })}
-                {isExpanded && (
-                  <span style={{ color: logoColors[index % logoColors.length] }}>
-                    {item.text}
-                  </span>
-                )}
-              </Button>
-            ))}
+            {menuItems.map((item, index) => {
+              const menuButton = (
+                <Button
+                  key={item.text}
+                  variant="ghost"
+                  className={`w-full ${isExpanded ? 'justify-start p-2' : 'justify-center p-2'}`}
+                  onClick={() => {
+                    navigate({ to: item.path });
+                  }}
+                >
+                  {React.cloneElement(item.icon, {
+                    className: `w-5 h-5 ${isExpanded ? 'mr-3' : ''}`,
+                    style: { color: logoColors[index % logoColors.length] }
+                  })}
+                  {isExpanded && (
+                    <span style={{ color: logoColors[index % logoColors.length] }}>
+                      {item.text}
+                    </span>
+                  )}
+                </Button>
+              );
+
+              // Wrap with tooltip only when collapsed
+              if (!isExpanded) {
+                return (
+                  <Tooltip key={item.text}>
+                    <TooltipTrigger asChild>
+                      {menuButton}
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <p>{item.text}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
+
+              return menuButton;
+            })}
           </nav>
         </div>
 
         {/* Footer */}
         <div className={`border-t border-gray-200 ${isExpanded ? 'p-4' : 'p-2'}`}>
-          <Button
-            variant="ghost"
-            className={`w-full ${isExpanded ? 'justify-start p-2' : 'justify-center p-2'}`}
-            title={isExpanded ? undefined : 'Logout'}
-            onClick={async () => {
-              await signOut();
-              navigate({ to: '/login', replace: true });
-            }}
-          >
-            <IconLogout className={`w-5 h-5 ${isExpanded ? 'mr-3' : ''}`} />
-            {isExpanded && <span>Logout</span>}
-          </Button>
+          {!isExpanded ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-center p-2"
+                  onClick={async () => {
+                    await signOut();
+                    navigate({ to: '/login', replace: true });
+                  }}
+                >
+                  <IconLogout className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Logout</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button
+              variant="ghost"
+              className="w-full justify-start p-2"
+              onClick={async () => {
+                await signOut();
+                navigate({ to: '/login', replace: true });
+              }}
+            >
+              <IconLogout className="w-5 h-5 mr-3" />
+              <span>Logout</span>
+            </Button>
+          )}
         </div>
       </div>
     </TooltipProvider>
