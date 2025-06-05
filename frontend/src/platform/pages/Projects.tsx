@@ -134,7 +134,7 @@ export default function Projects() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
         <Container maxWidth="lg" sx={{ pt: 0, mt: 0 }}>
           {projectsError && !projectsData && (
             <Alert severity="error" sx={{ mb: 2 }}>

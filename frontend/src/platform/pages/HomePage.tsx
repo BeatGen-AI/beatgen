@@ -286,7 +286,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       {/* Main Content */}
         <Container maxWidth="lg" className="projects-container" sx={{ pt: 0, mt:0 }}>
 
