@@ -61,7 +61,7 @@ const MobileBottomNav: React.FC = () => {
   };
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-40">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-700 z-40">
       <div className="flex items-center justify-around h-full px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -89,7 +89,7 @@ const MobileBottomNav: React.FC = () => {
               variant="ghost"
               onClick={() => navigate({ to: item.path })}
               className={`flex flex-col items-center justify-center p-1 h-full min-w-0 flex-1 ${
-                active ? 'bg-gray-100 dark:bg-gray-800' : ''
+                active ? 'bg-gray-100 dark:bg-neutral-800' : ''
               }`}
             >
               <Icon 
