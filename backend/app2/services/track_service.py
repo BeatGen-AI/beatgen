@@ -136,6 +136,38 @@ class TrackService:
             logger.error(traceback.format_exc())
             raise ServiceException(f"Failed to get user tracks: {str(e)}")
 
+    async def get_user_audio_tracks_paginated(
+        self, user_id: uuid.UUID, page_params: PageParams
+    ) -> Page[AudioTrackRead]:
+        """Get paginated Audio tracks for a specific user."""
+        logger.info(
+            f"Getting paginated Audio tracks for user ID: {user_id} "
+            f"with params: page={page_params.page}, size={page_params.size}"
+        )
+        try:
+            skip = (page_params.page - 1) * page_params.size
+            limit = page_params.size
+
+            audio_tracks_orm, total_items_count = (
+                await self.audio_repository.get_by_user_id_paginated(
+                    user_id, skip=skip, limit=limit
+                )
+            )
+
+            audio_tracks_read = [
+                AudioTrackRead.model_validate(track) for track in audio_tracks_orm
+            ]
+
+            return Page.create(
+                items=audio_tracks_read,
+                total_items=total_items_count,
+                params=page_params,
+            )
+        except Exception as e:
+            logger.error(f"Error getting paginated Audio tracks: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise ServiceException(f"Failed to get paginated Audio tracks: {str(e)}")
+
     async def get_user_midi_tracks_paginated(
         self, user_id: uuid.UUID, page_params: PageParams
     ) -> Page[MidiTrackRead]:

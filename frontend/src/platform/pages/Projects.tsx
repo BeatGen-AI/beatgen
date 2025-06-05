@@ -21,10 +21,11 @@ import ProjectsDisplay from '../components/ProjectsDisplay';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Page } from '../types/pagination';
 
-// Constants for pagination and display
-const INITIAL_DISPLAY_COUNT = 12;
-const DISPLAY_INCREMENT = 6;
-const PROJECTS_PER_PAGE_API = 20;
+// Import shared pagination constants
+import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
+
+// Use standardized constants
+const { INITIAL_DISPLAY_COUNT, DISPLAY_INCREMENT, API_PAGE_SIZE: PROJECTS_PER_PAGE_API } = TRACK_PAGINATION_CONFIG.PROJECTS;
 
 export default function Projects() {
   const navigate = useNavigate();

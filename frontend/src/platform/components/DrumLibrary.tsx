@@ -1,42 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Grid, 
-  CircularProgress,
-  Alert,
-} from '@mui/material';
+import React, { useState } from 'react';
 import { Drum } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+// Shared components and hooks
+import { PaginatedGrid } from './shared/PaginatedGrid';
+import { useDrumTracksPagination } from '../hooks/usePagination';
+import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/pagination';
+
+// API and types
 import { getDrumTracks, deleteDrumTrack } from '../api/sounds';
 import { DrumTrackRead } from '../types/track_models/drum_track';
 import DrumTrackCard from './DisplayCards/DrumTrackCard';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Page } from '../types/pagination'; // Import Page type
 
 interface DrumLibraryProps {
   onReload?: () => void;
   sectionColor: string;
 }
 
-const ITEMS_PER_PAGE = 10; // Default for drum tracks API
-
 export default function DrumLibrary({ onReload, sectionColor }: DrumLibraryProps) {
   const queryClient = useQueryClient();
-  const [currentPageApi, setCurrentPageApi] = useState<number>(1); // For pagination
-  const [playingId, setPlayingId] = useState<string | null>(null);
   
-  const { 
-    data: drumTracksPage,
-    isLoading,
-    error: fetchError,
-    isFetching
-  } = useQuery<Page<DrumTrackRead>, Error, Page<DrumTrackRead>, [string, number, number]>({
-    queryKey: ['drumTracks', currentPageApi, ITEMS_PER_PAGE],
-    queryFn: () => getDrumTracks(currentPageApi, ITEMS_PER_PAGE),
-    placeholderData: (previousData) => previousData,
-  });
+  // Drum playback state
+  const [playingId, setPlayingId] = useState<string | null>(null);
 
-  const drumTracks = drumTracksPage?.items ?? [];
+  // Pagination using shared hook
+  const pagination = useDrumTracksPagination(
+    (page, size) => getDrumTracks(page, size),
+    configToOptions(TRACK_PAGINATION_CONFIG.DRUM_TRACKS)
+  );
   
   const handlePlayTrack = (track: DrumTrackRead) => {
     // If we're already playing this track, pause it
@@ -58,17 +49,16 @@ export default function DrumLibrary({ onReload, sectionColor }: DrumLibraryProps
     }, 5000);
   };
   
-  const { mutate: performDeleteDrumTrack, isPending: isDeletingTrack } = useMutation<void, Error, string>({
+  const { mutate: performDeleteDrumTrack } = useMutation<void, Error, string>({
     mutationFn: deleteDrumTrack,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['drumTracks', currentPageApi, ITEMS_PER_PAGE] });
+      queryClient.invalidateQueries({ queryKey: ['drumTracks'] });
       if (onReload) {
         onReload();
       }
     },
     onError: (err: Error) => {
       console.error(`Failed to delete drum track: ${err.message}`);
-      // setError(`Failed to delete drum track: ${(err as Error).message}`); // Handled by queryError
     },
   });
 
@@ -84,62 +74,41 @@ export default function DrumLibrary({ onReload, sectionColor }: DrumLibraryProps
     // For now, just log - this would open the drum editor in the future
     console.log('Edit drum track:', id);
   };
-  
-  if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-  
-  if (fetchError) {
-    return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {fetchError.message}
-      </Alert>
-    );
-  }
-  
-  if (drumTracks.length === 0 && !isFetching) {
-    return (
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center',
-        justifyContent: 'center',
-        py: 4,
-        height: '100%'
-      }}>
-        <Box sx={{ fontSize: 60, color: '#666', mb: 2 }}>
-          <Drum size={60} />
-        </Box>
-        <Typography variant="h6" gutterBottom sx={{ color: '#ccc' }}>
-          No drum tracks in your library
-        </Typography>
-        <Typography variant="body2" color="text.secondary" align="center">
-          Create drum tracks in the studio to see them here
-        </Typography>
-      </Box>
-    );
-  }
-  
+
+  // Render item function for the grid
+  const renderDrumTrackCard = (track: DrumTrackRead) => (
+    <DrumTrackCard
+      track={track}
+      playingId={playingId}
+      handlePlayTrack={handlePlayTrack}
+      handleDeleteTrack={handleDeleteTrack}
+      handleEditTrack={handleEditTrack}
+      sectionColor={sectionColor}
+    />
+  );
+
+  // Custom empty state with the correct icon
+  const emptyState = {
+    icon: <Drum size={60} />,
+    title: "No drum tracks in your library",
+    description: "Create drum tracks in the studio to see them here"
+  };
+
   return (
-    <Box sx={{ mt: 2 }}>
-      <Grid container spacing={2}>
-        {drumTracks.map((track) => (
-          <Grid item xs={12} sm={6} md={4} key={track.id}>
-            <DrumTrackCard
-              track={track}
-              playingId={playingId}
-              handlePlayTrack={handlePlayTrack}
-              handleDeleteTrack={handleDeleteTrack}
-              handleEditTrack={handleEditTrack}
-              sectionColor={sectionColor}
-            />
-          </Grid>
-        ))}
-      </Grid>
-    </Box>
+    <PaginatedGrid<DrumTrackRead>
+      items={pagination.allFetchedItems}
+      displayedCount={pagination.displayedCount}
+      totalItems={pagination.totalItems}
+      loading={pagination.isLoading}
+      loadingMore={pagination.isFetching}
+      error={pagination.error}
+      onShowMore={pagination.showMore}
+      canShowMore={pagination.canShowMore}
+      renderItem={renderDrumTrackCard}
+      getItemKey={(track) => track.id}
+      emptyState={emptyState}
+      gridProps={{ xs: 12, sm: 6, md: 4 }}
+      sectionColor={sectionColor}
+    />
   );
 }
