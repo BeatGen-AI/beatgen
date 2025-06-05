@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 // Shared components and hooks
 import { PaginatedGrid } from './shared/PaginatedGrid';
 import { useSamplerTracksPagination } from '../hooks/usePagination';
-import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
+import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/pagination';
 
 // API and types
 import { getSamplerTracks, deleteSamplerTrack } from '../api/sounds';
@@ -29,7 +29,7 @@ export default function SamplerLibrary({ onReload, sectionColor }: SamplerLibrar
   // Pagination using shared hook
   const pagination = useSamplerTracksPagination(
     (page, size) => getSamplerTracks(page, size),
-    TRACK_PAGINATION_CONFIG.SAMPLER_TRACKS
+    configToOptions(TRACK_PAGINATION_CONFIG.SAMPLER_TRACKS)
   );
   
   useEffect(() => {

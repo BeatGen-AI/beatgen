@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 // Shared components and hooks
 import { PaginatedGrid } from './shared/PaginatedGrid';
 import { useMidiTracksPagination } from '../hooks/usePagination';
-import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
+import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/pagination';
 
 // API and types
 import { getMidiTracks, deleteMidiTrack } from '../api/sounds';
@@ -29,7 +29,7 @@ export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps
   // Pagination using shared hook
   const pagination = useMidiTracksPagination(
     (page, size) => getMidiTracks(page, size),
-    TRACK_PAGINATION_CONFIG.MIDI_TRACKS
+    configToOptions(TRACK_PAGINATION_CONFIG.MIDI_TRACKS)
   );
   
   // Set up timeupdate listener for tracking playback progress

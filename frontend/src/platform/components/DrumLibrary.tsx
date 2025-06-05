@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 // Shared components and hooks
 import { PaginatedGrid } from './shared/PaginatedGrid';
 import { useDrumTracksPagination } from '../hooks/usePagination';
-import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
+import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/pagination';
 
 // API and types
 import { getDrumTracks, deleteDrumTrack } from '../api/sounds';
@@ -26,7 +26,7 @@ export default function DrumLibrary({ onReload, sectionColor }: DrumLibraryProps
   // Pagination using shared hook
   const pagination = useDrumTracksPagination(
     (page, size) => getDrumTracks(page, size),
-    TRACK_PAGINATION_CONFIG.DRUM_TRACKS
+    configToOptions(TRACK_PAGINATION_CONFIG.DRUM_TRACKS)
   );
   
   const handlePlayTrack = (track: DrumTrackRead) => {

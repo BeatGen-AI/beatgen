@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 // Shared components and hooks
 import { PaginatedGrid } from './shared/PaginatedGrid';
 import { useAudioTracksPagination } from '../hooks/usePagination';
-import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
+import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/pagination';
 
 // API and types
 import { getSoundsPaginated, deleteSound } from '../api/sounds';
@@ -29,7 +29,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
   // Pagination using shared hook
   const pagination = useAudioTracksPagination(
     (page, size) => getSoundsPaginated(page, size),
-    TRACK_PAGINATION_CONFIG.AUDIO_TRACKS
+    configToOptions(TRACK_PAGINATION_CONFIG.AUDIO_TRACKS)
   );
 
   // Audio element event handlers

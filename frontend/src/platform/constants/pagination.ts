@@ -71,13 +71,28 @@ export const TRACK_PAGINATION_CONFIG = {
 /**
  * Type definitions for pagination configuration
  */
-export type PaginationConfig = typeof TRACK_PAGINATION_CONFIG.PROJECTS;
+export type PaginationConfig = {
+  readonly INITIAL_DISPLAY_COUNT: number;
+  readonly DISPLAY_INCREMENT: number;
+  readonly API_PAGE_SIZE: number;
+};
 
 /**
  * Helper function to get pagination config for a specific track type
  */
 export function getPaginationConfig(trackType: keyof typeof TRACK_PAGINATION_CONFIG): PaginationConfig {
   return TRACK_PAGINATION_CONFIG[trackType];
+}
+
+/**
+ * Convert pagination config to options format for hooks
+ */
+export function configToOptions(config: PaginationConfig) {
+  return {
+    initialDisplayCount: config.INITIAL_DISPLAY_COUNT,
+    displayIncrement: config.DISPLAY_INCREMENT,
+    apiPageSize: config.API_PAGE_SIZE,
+  };
 }
 
 /**
