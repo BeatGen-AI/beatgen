@@ -10,8 +10,8 @@ import {
   IconUserCircle,
   IconSettings,
   IconLogout,
-  IconMenu2,
-  IconX,
+  IconLayoutSidebarLeftCollapse,
+  IconLayoutSidebarLeftExpand,
 } from '@tabler/icons-react';
 import {
   DropdownMenu,
@@ -79,8 +79,9 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onToggle}
+                title="Collapse sidebar"
               >
-                <IconMenu2 className="w-4 h-4" />
+                <IconLayoutSidebarLeftCollapse className="w-4 h-4" />
               </Button>
             </>
           ) : (
@@ -89,8 +90,9 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
               size="sm"
               onClick={onToggle}
               className="p-1"
+              title="Expand sidebar"
             >
-              <IconMenu2 className="w-5 h-5" />
+              <IconLayoutSidebarLeftExpand className="w-5 h-5" />
             </Button>
           )}
         </div>
