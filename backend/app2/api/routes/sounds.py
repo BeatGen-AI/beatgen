@@ -216,22 +216,24 @@ async def get_drum_tracks(
         )
 
 
-@router.get("/audio", response_model=List[AudioTrackRead])
+@router.get("/audio", response_model=Page[AudioTrackRead])
 async def get_audio_tracks(
     current_user: Dict[str, Any] = Depends(get_current_user),
     track_service: TrackService = Depends(get_track_service),
-) -> List[AudioTrackRead]:
+    page_params: PageParams = Depends(),
+) -> Page[AudioTrackRead]:
     """
-    Get all audio tracks for the current user
+    Get all audio tracks for the current user, with pagination.
     """
     user_id = uuid.UUID(current_user["id"])
-    logger.info(f"Getting audio tracks for user: {user_id}")
+    logger.info(
+        f"Getting audio tracks for user: {user_id} "
+        f"with params: page={page_params.page}, size={page_params.size}"
+    )
     try:
-        # Get all tracks for the user
-        all_tracks = await track_service.get_user_tracks(user_id, TrackType.AUDIO)
-
-        # Return just the audio tracks
-        return all_tracks[TrackType.AUDIO.value]
+        return await track_service.get_user_audio_tracks_paginated(
+            user_id, page_params
+        )
     except Exception as e:
         logger.error(f"Error getting audio tracks: {str(e)}")
         raise HTTPException(

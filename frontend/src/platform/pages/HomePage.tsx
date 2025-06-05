@@ -59,11 +59,13 @@ import { createProject } from '../api/projects';
 import { ProjectCreate } from '../types/project';
 import { isAuthenticated } from '../auth/auth-utils';
 
-// Constants for pagination and display
-const INITIAL_DISPLAY_COUNT = 6;
-const DISPLAY_INCREMENT = 6; // How many more to show on each click (relevant later)
-const FETCH_THRESHOLD = 10; // When to fetch more from API (relevant later)
-const PROJECTS_PER_PAGE_API = 20; // How many to fetch from API at a time
+// Import shared pagination constants
+import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
+
+// Use standardized constants for projects (homepage shows fewer initially)
+const INITIAL_DISPLAY_COUNT = 6; // Homepage specific - show fewer initially
+const { DISPLAY_INCREMENT, API_PAGE_SIZE: PROJECTS_PER_PAGE_API } = TRACK_PAGINATION_CONFIG.PROJECTS;
+const FETCH_THRESHOLD = 10; // When to fetch more from API
 
 // const drawerWidth = 240; // No longer needed
 // const collapsedDrawerWidth = 60; // No longer needed
