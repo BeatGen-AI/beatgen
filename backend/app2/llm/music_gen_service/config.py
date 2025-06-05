@@ -29,8 +29,8 @@ class AppConfig(BaseModel):
             app_env = data.get('APP_ENV', os.getenv("APP_ENV", "dev"))
 
             if app_env == "prod":
-                data.setdefault('BASE_URL', os.getenv("PROD_BASE_URL", "https://beatgen-api.onrender.com"))
-                data.setdefault('FRONTEND_BASE_URL', os.getenv("PROD_FRONTEND_BASE_URL", "https://beatgen.vercel.app"))
+                data.setdefault('BASE_URL', os.getenv("PROD_BASE_URL", "https://api.beatgen.com"))
+                data.setdefault('FRONTEND_BASE_URL', os.getenv("PROD_FRONTEND_BASE_URL", "https://app.beatgen.com"))
             else:  # Default to dev/local
                 data.setdefault('BASE_URL', os.getenv("LOCAL_BASE_URL", "http://localhost:8000"))
                 data.setdefault('FRONTEND_BASE_URL', os.getenv("LOCAL_FRONTEND_BASE_URL", "http://localhost:5173"))
@@ -59,7 +59,7 @@ class CORSConfig(BaseModel):
     ORIGINS: List[str] = [
         "http://localhost:5173", # For local development (Vite dev server)
         "https://localhost:5173", # If using HTTPS locally
-        "https://beatgen.vercel.app", # Production frontend
+        "https://app.beatgen.com", # Production frontend
     ]
     ALLOW_CREDENTIALS: bool = True
     ALLOW_METHODS: List[str] = ["*"] # Consider restricting this in the future
