@@ -9,7 +9,6 @@ from app2.core.exceptions import UnauthorizedException, ServiceException
 from app2.infrastructure.database.supabase_client import supabase
 from app2.repositories.user_repository import UserRepository
 from app2.core.config import settings
-from gotrue.helpers import generate_pkce_verifier, generate_pkce_challenge
 
 logger = get_service_logger("auth")
 
