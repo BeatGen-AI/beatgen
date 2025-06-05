@@ -67,13 +67,13 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
     <TooltipProvider>
       <div 
         className={`
-          hidden md:flex fixed left-0 top-0 h-screen bg-white border-r border-gray-200 z-50 transition-all duration-300 ease-in-out
+          hidden md:flex fixed left-0 top-0 h-screen bg-white dark:bg-neutral-900 border-r border-gray-200 dark:border-neutral-700 z-50 transition-all duration-300 ease-in-out
           ${isExpanded ? 'w-64' : 'w-16'}
           flex-col
         `}
       >
         {/* Header */}
-        <div className={`flex items-center p-4 border-b border-gray-200 ${isExpanded ? 'justify-between' : 'justify-center'}`}>
+        <div className={`flex items-center p-4 border-b border-gray-200 dark:border-neutral-700 ${isExpanded ? 'justify-between' : 'justify-center'}`}>
           {isExpanded ? (
             <>
               <div className="flex items-center">
@@ -219,7 +219,7 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
         </div>
 
         {/* Footer */}
-        <div className={`border-t border-gray-200 ${isExpanded ? 'p-4' : 'p-2'}`}>
+        <div className={`border-t border-gray-200 dark:border-neutral-700 ${isExpanded ? 'p-4' : 'p-2'}`}>
           {!isExpanded ? (
             <Tooltip>
               <TooltipTrigger asChild>
