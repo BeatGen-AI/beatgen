@@ -9,7 +9,6 @@ from app2.core.exceptions import UnauthorizedException, ServiceException
 from app2.infrastructure.database.supabase_client import supabase
 from app2.repositories.user_repository import UserRepository
 from app2.core.config import settings
-from gotrue.helpers import generate_pkce_verifier, generate_pkce_challenge
 
 logger = get_service_logger("auth")
 
@@ -283,10 +282,8 @@ class AuthService:
                 f"[Service] Using callback URL: {backend_callback_url} (from settings.app.BASE_URL: {settings.app.BASE_URL})"
             )
 
-            # Generate PKCE verifier and challenge
-            pkce_verifier = generate_pkce_verifier()
-            pkce_challenge = generate_pkce_challenge(pkce_verifier)
-            logger.info(f"Generated PKCE verifier: {pkce_verifier[:10]}... and challenge: {pkce_challenge[:10]}...")
+            # Let Supabase handle PKCE entirely - no custom implementation needed
+            logger.info("Using Supabase's built-in PKCE handling")
 
             # Use Supabase client to get the OAuth URL.
             auth_response = supabase.client.auth.sign_in_with_oauth(
@@ -295,8 +292,6 @@ class AuthService:
                     "options": {
                         "redirect_to": backend_callback_url,
                         "scopes": "openid email profile",  # Request standard scopes
-                        "code_challenge": pkce_challenge, # Pass the generated challenge
-                        "code_challenge_method": "S256"   # Specify the method
                     },
                 }
             )
@@ -307,41 +302,7 @@ class AuthService:
                     "Failed to generate Google OAuth URL from Supabase."
                 )
 
-            # Store the generated PKCE verifier in an HttpOnly cookie
-            logger.info(f"[PROD DIAGNOSTIC] Attempting to set cookie with SameSite=None, Secure=True. APP_ENV is: {settings.app.APP_ENV}")
-            effective_secure_flag = True # For SameSite=None, Secure must be True
-            if settings.app.APP_ENV == "dev" and not settings.app.BASE_URL.startswith("https://"):
-                # Allow http for local dev if BASE_URL is http, even if trying SameSite=None (though None usually implies https)
-                # However, for this diagnostic, we are focusing on prod, so Secure=True is the goal with SameSite=None.
-                # If testing SameSite=None locally with http, this would need adjustment.
-                # For prod (non-dev), secure will be True.
-                effective_secure_flag = False # This line is problematic for prod diagnostic; should be True for SameSite=None
-                logger.warning("[PROD DIAGNOSTIC] Overriding Secure to False for dev HTTP with SameSite=None, this is unusual for SameSite=None.")
-
-            # Ensure secure is True if samesite is "none" for production
-            current_samesite_setting = "none"
-            is_production_like = settings.app.APP_ENV != "dev" # Assuming 'dev' is the only non-prod
-
-            if current_samesite_setting == "none" and not effective_secure_flag and is_production_like:
-                 logger.warning(f"[PROD DIAGNOSTIC] Forcing Secure=True for SameSite=None in prod-like env ({settings.app.APP_ENV})")
-                 effective_secure_flag = True
-
-            # Set cookie domain for cross-subdomain sharing in production
-            cookie_domain = None
-            if settings.app.APP_ENV == "prod":
-                cookie_domain = ".beatgen.com"  # Allows sharing between api.beatgen.com and app.beatgen.com
-
-            response.set_cookie(
-                key="google_pkce_verifier",
-                value=pkce_verifier,
-                httponly=True,
-                samesite=current_samesite_setting,
-                max_age=300,
-                secure=effective_secure_flag,
-                path="/",  # Changed from "/auth" to "/" for broader accessibility
-                domain=cookie_domain
-            )
-            logger.info(f"PKCE verifier stored in cookie. Verifier: {pkce_verifier[:10]}..., SameSite: {current_samesite_setting}, Secure: {effective_secure_flag}, Domain: [HOST ONLY]")
+            # No need to store PKCE verifier - Supabase handles this internally
 
             generated_url = auth_response.url
             logger.info(f"Generated OAuth URL: {generated_url[:30]}...")
@@ -369,79 +330,19 @@ class AuthService:
         Raises:
             ServiceException: If the authentication fails
         """
-        logger.info(f"[START] Received Google OAuth callback with code: {code[:10]}...")
-        logger.info(f"[PROD DEBUG] Handling Google Callback. Code: {code[:10]}...")
-        logger.info(f"[PROD DEBUG] Request cookies: {dict(request.cookies)}") # Log all received cookies
-        logger.info(f"[PROD DEBUG] Request headers: {dict(request.headers)}")
-        logger.info(f"[PROD DEBUG] APP_ENV: {settings.app.APP_ENV}")
-
-        retrieved_pkce_verifier = request.cookies.get("google_pkce_verifier")
-        logger.info(f"[PROD DEBUG] Retrieved PKCE verifier from cookie: {retrieved_pkce_verifier}")
-        
-        # if not retrieved_pkce_verifier:
-        #     logger.error("[Service] PKCE verifier cookie 'google_pkce_verifier' not found in callback.")
-        #     raise ServiceException("PKCE_REDIRECT::PKCE verifier cookie 'google_pkce_verifier' not found in callback.")
+        logger.info(f"Handling Google OAuth callback with code: {code[:10]}...")
 
         try:
             logger.info("Handling Google OAuth callback (PKCE handled by library)")
 
-            # Retrieve the PKCE verifier from the cookie
-            retrieved_pkce_verifier = request.cookies.get("google_pkce_verifier")
-            if not retrieved_pkce_verifier:
-                logger.error("[Service] PKCE verifier cookie 'google_pkce_verifier' not found in callback.")
-                logger.warning("[TEMP FIX] Attempting OAuth without PKCE verification for debugging")
-                # TEMPORARY: Try without PKCE to see if OAuth works otherwise
-                retrieved_pkce_verifier = "dummy_pkce_for_testing"
-                
-                # TODO: Remove this temporary fix and solve the cookie issue
-                # error_desc = urllib.parse.quote("OAuth session integrity check failed. Please try logging in again.")
-                # error_redirect_url = f"{settings.app.FRONTEND_BASE_URL}?error=pkce_verifier_missing&error_description={error_desc}"
-                # logger.info(f"Redirecting to frontend with PKCE error: {error_redirect_url}")
-                # raise ServiceException(f"PKCE_REDIRECT::{error_redirect_url}") 
-
-            logger.info(f"PKCE verifier retrieved from cookie: {retrieved_pkce_verifier[:10]}...")
-
-            # Exchange the code for a Supabase session using PKCE
-            logger.info("Exchanging code for session with PKCE verifier...")
+            # Use Supabase's built-in session exchange (no custom PKCE needed)
+            logger.info("Exchanging code for session using Supabase's built-in flow...")
             auth_response = supabase.client.auth.exchange_code_for_session( # type: ignore
-                {"auth_code": code, "pkce_verifier": retrieved_pkce_verifier}
+                {"auth_code": code}
             )
             logger.info("Code exchanged successfully.")
 
-            # Clean up the PKCE verifier cookie
-            if response: # Ensure response object is available for cookie deletion
-                logger.info(f"[PROD DIAGNOSTIC] Attempting to delete cookie with SameSite=None, Secure=True. APP_ENV is: {settings.app.APP_ENV}")
-                
-                # Determine secure flag for deletion consistent with how it might have been set
-                delete_secure_flag = True # Default for SameSite=None
-                current_samesite_for_delete = "none"
-
-                if settings.app.APP_ENV == "dev" and not settings.app.BASE_URL.startswith("https://"):
-                    # This was the problematic override attempt for setting. For deletion, match potential reality.
-                    # However, if we forced Secure=True for SameSite=None during set, we should match that.
-                    # Let's assume if samesite was "none", secure was True if not explicitly overridden for dev http
-                    pass # Keep delete_secure_flag as True if samesite is "none" unless specific dev http override was guaranteed
-
-                is_production_like_for_delete = settings.app.APP_ENV != "dev"
-                if current_samesite_for_delete == "none" and not delete_secure_flag and is_production_like_for_delete:
-                    delete_secure_flag = True
-
-
-                # Use same domain setting as when cookie was set
-                cookie_domain = None
-                if settings.app.APP_ENV == "prod":
-                    cookie_domain = ".beatgen.com"
-
-                response.delete_cookie(
-                    key="google_pkce_verifier",
-                    path="/",  # Match the path used when setting the cookie
-                    secure=delete_secure_flag,
-                    samesite=current_samesite_for_delete,
-                    domain=cookie_domain
-                )
-                logger.info(f"PKCE verifier cookie (SameSite={current_samesite_for_delete}, Domain=[HOST ONLY] attempt) deleted. Secure: {delete_secure_flag}")
-            else:
-                logger.warning("Response object not available to delete PKCE verifier cookie.")
+            # No cookie cleanup needed - Supabase handles PKCE internally
 
 
             if not auth_response.user: # type: ignore
