@@ -75,12 +75,16 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
     setError(null);
     setGeneratedData(null);
 
+    // Collect data locally during generation (not in state)
+    const collectedTracks: any[] = [];
+    const projectParams: any = {};
+
     // Extract genre and mood from prompt or use selected chips
     const promptLower = prompt.toLowerCase();
     const detectedGenre = GENRE_SUGGESTIONS.find(g => promptLower.includes(g.toLowerCase()));
     const detectedMood = MOOD_SUGGESTIONS.find(m => promptLower.includes(m.toLowerCase()));
 
-    // Use assistant API directly with auto project creation
+    // Use assistant API directly
     const assistantCallbacks: StreamCallbacks = {
         onConnected: () => {
           console.log('Connected to assistant');
@@ -100,15 +104,39 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
         },
         onAction: (action) => {
           console.log('Assistant action received:', action);
+          console.log('Action type:', action.type);
+          console.log('Action data:', action.data);
+          
+          // Collect track actions in local variable
+          if (action.type === 'add_track' || action.type === 'add_drum_track' || action.type === 'add_sampler_track') {
+            console.log('COLLECTING TRACK ACTION:', action.type);
+            collectedTracks.push(action);
+            console.log('Local collectedTracks length:', collectedTracks.length);
+          } else {
+            console.log('NOT COLLECTING - unrecognized action type:', action.type);
+          }
+          
+          // Collect project parameter changes in local variable
+          if (action.type === 'change_bpm') {
+            projectParams.bpm = (action as any).data?.value || (action as any).value;
+          } else if (action.type === 'change_key') {
+            projectParams.key_signature = (action as any).data?.value || (action as any).value;
+          } else if (action.type === 'change_time_signature') {
+            projectParams.time_signature_numerator = (action as any).data?.numerator || (action as any).numerator;
+            projectParams.time_signature_denominator = (action as any).data?.denominator || (action as any).denominator;
+          }
         },
         onComplete: (response) => {
           console.log('Assistant generation complete:', response);
+          console.log('Collected tracks (local):', collectedTracks);
+          console.log('Collected project params (local):', projectParams);
+          
           setGeneratedData({
             response: response.message || 'Song generated successfully!',
-            project_id: response.project_id, // Include project_id from backend
-            tracks: [], // Will be populated when project is loaded in studio
-            tempo: response.tempo || 120,
-            key: response.key || 'C major',
+            tracks: collectedTracks,
+            projectParams: projectParams,
+            tempo: projectParams.bpm || 120,
+            key: projectParams.key_signature || 'C major',
             duration: '2:30'
           });
           setIsGenerating(false);
@@ -133,8 +161,7 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
           mode: 'generate',
           model: 'Claude 4 Sonnet',
           context: {
-            source: 'homepage_generation',
-            auto_create_project: userIsAuthenticated // Create project automatically if authenticated
+            source: 'homepage_generation'
           }
         }, assistantCallbacks);
         
@@ -309,7 +336,7 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
               <Typography variant="h6" sx={{ mb: 1 }}>Generated Song Details:</Typography>
               <Typography variant="body2">Tempo: {generatedData.tempo} BPM</Typography>
               <Typography variant="body2">Key: {generatedData.key}</Typography>
-              <Typography variant="body2">Tracks: Generated and saved to project</Typography>
+              <Typography variant="body2">Tracks: {generatedData.tracks?.length || 0} generated</Typography>
               <Typography variant="body2">Duration: {generatedData.duration}</Typography>
             </Box>
 

@@ -49,9 +49,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Page } from '../types/pagination';
 import { logoColors } from '../components/Sidebar';
 import GenerateSongModal from '../components/GenerateSongModal';
-import { createProject } from '../api/projects';
-import { ProjectCreate } from '../types/project';
 import { isAuthenticated } from '../auth/auth-utils';
+import { useAutoSave } from '../../studio/hooks/useAutoSave';
+import { useStudioStore } from '../../studio/stores/studioStore';
 
 // Constants for pagination and display
 const INITIAL_DISPLAY_COUNT = 6;
@@ -175,6 +175,22 @@ export default function HomePage() {
     });
   };
 
+  // Initialize auto-save for generated projects
+  const autoSave = useAutoSave({
+    onSaveSuccess: (project) => {
+      console.log('Generated song saved as project:', project.id);
+      showSnackbar('Song saved as project! Opening in studio...', 'success');
+      navigate({ 
+        to: '/studio',
+        search: { projectId: project.id } as any
+      });
+    },
+    onSaveError: (error) => {
+      console.error('Failed to save generated song:', error);
+      showSnackbar('Failed to save song as project. Please try again.', 'error');
+    }
+  });
+
   const handleSaveGeneratedSong = async (generatedData: any) => {
     // Check if user is authenticated
     if (!userIsAuthenticated) {
@@ -188,40 +204,70 @@ export default function HomePage() {
     try {
       console.log('Saving generated song as project:', generatedData);
       
-      // Check if project was already created by homepage API
-      if (generatedData.project_id) {
-        // Project already exists, just navigate to it
-        showSnackbar('Opening your generated song in studio...', 'success');
-        navigate({ 
-          to: '/studio',
-          search: { projectId: generatedData.project_id } as any
-        });
-        return;
+      // Get studio store state and functions
+      const studioState = useStudioStore.getState();
+      
+      // Set project details from generated data
+      studioState.handleProjectParamChange('projectTitle', `Generated Song - ${new Date().toLocaleString()}`);
+      studioState.handleProjectParamChange('bpm', generatedData.tempo || 120);
+      studioState.handleProjectParamChange('timeSignature', [
+        generatedData.projectParams?.time_signature_numerator || 4,
+        generatedData.projectParams?.time_signature_denominator || 4
+      ] as [number, number]);
+      studioState.handleProjectParamChange('keySignature', generatedData.key || 'C major');
+
+      // Convert and add generated tracks to studio store
+      if (generatedData.tracks && generatedData.tracks.length > 0) {
+        const convertedTracks = [];
+        for (const trackAction of generatedData.tracks) {
+          // Convert SSE action to studio track format
+          const combinedTrack = convertActionToStudioTrack(trackAction);
+          if (combinedTrack) {
+            convertedTracks.push(combinedTrack);
+          }
+        }
+        
+        // Set the tracks in the store (this marks them as dirty)
+        if (convertedTracks.length > 0) {
+          studioState.setTracks(convertedTracks);
+        }
       }
       
-      // Fallback: Create project manually (for assistant API results)
-      const projectData: ProjectCreate = {
-        name: generatedData.project_name || `Generated Song - ${new Date().toLocaleString()}`,
-        bpm: generatedData.tempo || 120,
-        time_signature_numerator: 4,
-        time_signature_denominator: 4,
-        key_signature: generatedData.key || generatedData.key_signature || 'C major',
-      };
-      
-      // Create the project
-      const newProject = await createProject(projectData);
-      
-      showSnackbar('Song saved as project! Opening in studio...', 'success');
-      
-      // Navigate to studio with the new project
-      navigate({ 
-        to: '/studio',
-        search: { projectId: newProject.id } as any
-      });
+      // Force save using auto-save (creates project and saves tracks)
+      await autoSave.forceSave();
       
     } catch (error) {
       console.error('Failed to save generated song as project:', error);
       showSnackbar('Failed to save song as project. Please try again.', 'error');
+    }
+  };
+
+  // Helper function to convert SSE action to studio track format
+  const convertActionToStudioTrack = (trackAction: any) => {
+    try {
+      const trackData = trackAction.data?.track_data || trackAction.track_data;
+      if (!trackData) return null;
+
+      // Create combined track in studio format
+      const combinedTrack = {
+        id: trackData.id || crypto.randomUUID(),
+        name: trackData.name || 'Generated Track',
+        type: trackAction.type === 'add_drum_track' ? 'DRUM' : 'MIDI',
+        track: trackData,
+        // Mark as dirty so auto-save will save it
+        dirty: true,
+        // Default positioning
+        x_position: 0,
+        y_position: 0,
+        volume: 1.0,
+        pan: 0.0,
+        mute: false
+      };
+
+      return combinedTrack;
+    } catch (error) {
+      console.error('Failed to convert track action:', error);
+      return null;
     }
   };
 
