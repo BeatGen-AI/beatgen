@@ -283,10 +283,8 @@ class AuthService:
                 f"[Service] Using callback URL: {backend_callback_url} (from settings.app.BASE_URL: {settings.app.BASE_URL})"
             )
 
-            # Generate PKCE verifier and challenge
-            pkce_verifier = generate_pkce_verifier()
-            pkce_challenge = generate_pkce_challenge(pkce_verifier)
-            logger.info(f"Generated PKCE verifier: {pkce_verifier[:10]}... and challenge: {pkce_challenge[:10]}...")
+            # Let Supabase handle PKCE entirely - no custom implementation needed
+            logger.info("Using Supabase's built-in PKCE handling")
 
             # Use Supabase client to get the OAuth URL.
             auth_response = supabase.client.auth.sign_in_with_oauth(
@@ -295,8 +293,6 @@ class AuthService:
                     "options": {
                         "redirect_to": backend_callback_url,
                         "scopes": "openid email profile",  # Request standard scopes
-                        "code_challenge": pkce_challenge, # Pass the generated challenge
-                        "code_challenge_method": "S256"   # Specify the method
                     },
                 }
             )
@@ -307,41 +303,7 @@ class AuthService:
                     "Failed to generate Google OAuth URL from Supabase."
                 )
 
-            # Store the generated PKCE verifier in an HttpOnly cookie
-            logger.info(f"[PROD DIAGNOSTIC] Attempting to set cookie with SameSite=None, Secure=True. APP_ENV is: {settings.app.APP_ENV}")
-            effective_secure_flag = True # For SameSite=None, Secure must be True
-            if settings.app.APP_ENV == "dev" and not settings.app.BASE_URL.startswith("https://"):
-                # Allow http for local dev if BASE_URL is http, even if trying SameSite=None (though None usually implies https)
-                # However, for this diagnostic, we are focusing on prod, so Secure=True is the goal with SameSite=None.
-                # If testing SameSite=None locally with http, this would need adjustment.
-                # For prod (non-dev), secure will be True.
-                effective_secure_flag = False # This line is problematic for prod diagnostic; should be True for SameSite=None
-                logger.warning("[PROD DIAGNOSTIC] Overriding Secure to False for dev HTTP with SameSite=None, this is unusual for SameSite=None.")
-
-            # Ensure secure is True if samesite is "none" for production
-            current_samesite_setting = "none"
-            is_production_like = settings.app.APP_ENV != "dev" # Assuming 'dev' is the only non-prod
-
-            if current_samesite_setting == "none" and not effective_secure_flag and is_production_like:
-                 logger.warning(f"[PROD DIAGNOSTIC] Forcing Secure=True for SameSite=None in prod-like env ({settings.app.APP_ENV})")
-                 effective_secure_flag = True
-
-            # Set cookie domain for cross-subdomain sharing in production
-            cookie_domain = None
-            if settings.app.APP_ENV == "prod":
-                cookie_domain = ".beatgen.com"  # Allows sharing between api.beatgen.com and app.beatgen.com
-
-            response.set_cookie(
-                key="google_pkce_verifier",
-                value=pkce_verifier,
-                httponly=True,
-                samesite=current_samesite_setting,
-                max_age=300,
-                secure=effective_secure_flag,
-                path="/",  # Changed from "/auth" to "/" for broader accessibility
-                domain=cookie_domain
-            )
-            logger.info(f"PKCE verifier stored in cookie. Verifier: {pkce_verifier[:10]}..., SameSite: {current_samesite_setting}, Secure: {effective_secure_flag}, Domain: [HOST ONLY]")
+            # No need to store PKCE verifier - Supabase handles this internally
 
             generated_url = auth_response.url
             logger.info(f"Generated OAuth URL: {generated_url[:30]}...")
