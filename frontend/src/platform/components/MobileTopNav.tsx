@@ -39,7 +39,7 @@ const MobileTopNav: React.FC = () => {
   ];
 
   return (
-    <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4">
+    <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 z-40 flex items-center justify-between px-4">
       {/* Left side - Menu dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
