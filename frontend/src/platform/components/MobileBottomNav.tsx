@@ -61,7 +61,7 @@ const MobileBottomNav: React.FC = () => {
   };
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-700 z-40">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 h-12 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-t border-gray-200 dark:border-neutral-700 z-40">
       <div className="flex items-center justify-around h-full px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -69,17 +69,27 @@ const MobileBottomNav: React.FC = () => {
           
           if (item.isCreateButton) {
             return (
-              <Button
-                key={item.text}
-                onClick={() => navigate({ to: item.path })}
-                className="flex flex-col items-center justify-center w-12 h-12 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 shadow-lg"
-                style={{ minWidth: '48px' }}
-              >
-                <Icon 
-                  className="w-6 h-6"
-                  style={{ color: item.color }}
-                />
-              </Button>
+              <div key={item.text} className="flex flex-col items-center justify-center h-full relative">
+                <Button
+                  onClick={() => navigate({ to: item.path })}
+                  className="flex flex-col items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 shadow-lg"
+                  style={{ minWidth: '64px' }}
+                >
+                  <Icon 
+                    className="w-8 h-8 mb-1"
+                    style={{ color: item.color }}
+                  />
+                  <span 
+                    className="text-xs font-normal leading-none"
+                    style={{ 
+                      color: item.color,
+                      fontSize: '8px'
+                    }}
+                  >
+                    {item.text}
+                  </span>
+                </Button>
+              </div>
             );
           }
 
@@ -88,19 +98,19 @@ const MobileBottomNav: React.FC = () => {
               key={item.text}
               variant="ghost"
               onClick={() => navigate({ to: item.path })}
-              className={`flex flex-col items-center justify-center p-1 h-full min-w-0 flex-1 ${
+              className={`flex flex-col items-center justify-center p-0 h-full min-w-0 flex-1 gap-0 ${
                 active ? 'bg-gray-100 dark:bg-neutral-800' : ''
               }`}
             >
               <Icon 
-                className={`w-5 h-5 ${active ? 'mb-1' : 'mb-0.5'}`}
+                className="w-5 h-5"
                 style={{ color: active ? item.color : '#6B7280' }}
               />
               <span 
-                className={`text-xs ${active ? 'font-medium' : 'font-normal'}`}
+                className={`text-xs ${active ? 'font-medium' : 'font-normal'} leading-none`}
                 style={{ 
                   color: active ? item.color : '#6B7280',
-                  fontSize: '10px'
+                  fontSize: '9px'
                 }}
               >
                 {item.text}

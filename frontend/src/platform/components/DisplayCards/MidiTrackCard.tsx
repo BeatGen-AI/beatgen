@@ -89,7 +89,7 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
         <Box
           sx={{
             height: 60,
-            bgcolor: 'white',
+            bgcolor: 'transparent',
             borderRadius: 1,
             overflow: 'hidden',
             position: 'relative'
