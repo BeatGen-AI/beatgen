@@ -157,6 +157,7 @@ async def login_google(
     Get Google OAuth URL for the frontend to redirect to
     """
     logger.info(f"[API] Received GET /auth/login/google from {request.client.host}")
+    logger.info(f"[DIAGNOSTIC] APP_ENV={settings.app.APP_ENV}, BASE_URL={settings.app.BASE_URL}, FRONTEND_BASE_URL={settings.app.FRONTEND_BASE_URL}")
     logger.info("Starting Google OAuth flow")
     try:
         redirect_url = await auth_service.get_google_auth_url(response)
