@@ -51,7 +51,7 @@ export const Route = createRootRoute({
 
 // Root Layout Component implementation
 function RootLayout() {
-  const { loading } = useAuth();
+  const { loading, user } = useAuth();
   const router = useRouter();
   const location = useLocation();
   const { mode, studioMode } = useAppTheme();
@@ -119,10 +119,11 @@ function RootLayout() {
     );
   }
   
-  // Determine if the sidebar should be shown based on the route
-  // Hide navigation on studio, login, register routes
+  // Determine if the sidebar should be shown based on the route and authentication
+  // Hide navigation on studio, login, register routes and when user is not authenticated
   const noSidebarRoutes = ['/studio', '/login', '/register'];
-  const shouldShowSidebar = !noSidebarRoutes.includes(location.pathname);
+  const isPublicRoute = location.pathname === '/' || noSidebarRoutes.includes(location.pathname);
+  const shouldShowSidebar = !isPublicRoute && !loading && user;
 
   // No navbar in the root layout - each route will add its own navbar if needed
   return (
@@ -153,6 +154,8 @@ function RootLayout() {
       <main
         className={cn(
           "overflow-x-hidden",
+          // Only apply transitions when not in studio
+          !isStudioRoute && "transition-all duration-300",
           // Desktop margins for sidebar
           shouldShowSidebar 
             ? (sidebarExpanded ? 'md:ml-64' : 'md:ml-16')
