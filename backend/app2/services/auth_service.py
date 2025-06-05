@@ -326,6 +326,10 @@ class AuthService:
                  logger.warning(f"[PROD DIAGNOSTIC] Forcing Secure=True for SameSite=None in prod-like env ({settings.app.APP_ENV})")
                  effective_secure_flag = True
 
+            # Set cookie domain for cross-subdomain sharing in production
+            cookie_domain = None
+            if settings.app.APP_ENV == "prod":
+                cookie_domain = ".beatgen.com"  # Allows sharing between api.beatgen.com and app.beatgen.com
 
             response.set_cookie(
                 key="google_pkce_verifier",
@@ -334,7 +338,8 @@ class AuthService:
                 samesite=current_samesite_setting,
                 max_age=300,
                 secure=effective_secure_flag,
-                path="/auth"
+                path="/",  # Changed from "/auth" to "/" for broader accessibility
+                domain=cookie_domain
             )
             logger.info(f"PKCE verifier stored in cookie. Verifier: {pkce_verifier[:10]}..., SameSite: {current_samesite_setting}, Secure: {effective_secure_flag}, Domain: [HOST ONLY]")
 
@@ -418,11 +423,17 @@ class AuthService:
                     delete_secure_flag = True
 
 
+                # Use same domain setting as when cookie was set
+                cookie_domain = None
+                if settings.app.APP_ENV == "prod":
+                    cookie_domain = ".beatgen.com"
+
                 response.delete_cookie(
                     key="google_pkce_verifier",
-                    path="/auth",
+                    path="/",  # Match the path used when setting the cookie
                     secure=delete_secure_flag,
-                    samesite=current_samesite_for_delete
+                    samesite=current_samesite_for_delete,
+                    domain=cookie_domain
                 )
                 logger.info(f"PKCE verifier cookie (SameSite={current_samesite_for_delete}, Domain=[HOST ONLY] attempt) deleted. Secure: {delete_secure_flag}")
             else:
