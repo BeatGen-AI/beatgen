@@ -77,7 +77,7 @@ export function usePagination<T>(
   const totalItems = pageData?.total_items ?? 0;
   const totalPages = pageData?.total_pages ?? 0;
 
-  // Accumulate items when new pages are fetched
+  // Reset state when query key changes or when we get the first page
   useEffect(() => {
     if (pageData?.items) {
       if (currentPage === 1) {
@@ -91,6 +91,13 @@ export function usePagination<T>(
     }
   }, [pageData?.items, currentPage, initialDisplayCount]);
 
+  // Reset state when query key changes (e.g., different component using same hook)
+  useEffect(() => {
+    setCurrentPage(1);
+    setAllFetchedItems([]);
+    setDisplayedCount(initialDisplayCount);
+  }, [queryKey.join(','), initialDisplayCount]);
+
   // Show more function
   const showMore = () => {
     const newDisplayedCount = Math.min(
@@ -103,6 +110,7 @@ export function usePagination<T>(
     const shouldFetchMore = (
       newDisplayedCount >= allFetchedItems.length - fetchThreshold &&
       allFetchedItems.length < totalItems &&
+      !isLoading &&
       !isFetching &&
       currentPage < totalPages
     );
@@ -169,10 +177,7 @@ export function useSamplerTracksPagination(
   fetchFn: (page: number, size: number) => Promise<Page<any>>,
   options?: PaginationOptions
 ) {
-  return usePagination(['samplerTracks'], fetchFn, {
-    ...options,
-    apiPageSize: 10, // Smaller page size for performance
-  });
+  return usePagination(['samplerTracks'], fetchFn, options);
 }
 
 // Drum tracks pagination hook
@@ -180,10 +185,7 @@ export function useDrumTracksPagination(
   fetchFn: (page: number, size: number) => Promise<Page<any>>,
   options?: PaginationOptions
 ) {
-  return usePagination(['drumTracks'], fetchFn, {
-    ...options,
-    apiPageSize: 10, // Smaller page size for performance
-  });
+  return usePagination(['drumTracks'], fetchFn, options);
 }
 
 export default usePagination;
