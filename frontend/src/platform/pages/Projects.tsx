@@ -33,6 +33,7 @@ export default function Projects() {
 
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
   const [currentPageApi, setCurrentPageApi] = useState<number>(1);
+  const [allFetchedProjects, setAllFetchedProjects] = useState<Project[]>([]);
 
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -55,19 +56,22 @@ export default function Projects() {
     placeholderData: (previousData) => previousData,
   });
 
-  const allFetchedProjects = projectsData?.items ?? [];
   const totalProjectsOnServer = projectsData?.total_items ?? 0;
   const totalPagesApi = projectsData?.total_pages ?? 0;
 
+  // Accumulate projects when new pages are fetched
   useEffect(() => {
     if (projectsData?.items) {
       if (currentPageApi === 1) {
+        // First page - replace all items
+        setAllFetchedProjects(projectsData.items);
         setDisplayedProjectsCount(Math.min(INITIAL_DISPLAY_COUNT, projectsData.items.length));
       } else {
-        setDisplayedProjectsCount(prevCount => Math.min(prevCount, allFetchedProjects.length));
+        // Additional pages - append to existing items
+        setAllFetchedProjects(prev => [...prev, ...projectsData.items]);
       }
     }
-  }, [projectsData?.items, currentPageApi, allFetchedProjects.length]);
+  }, [projectsData?.items, currentPageApi]);
 
   const handleShowMore = () => {
     const newDisplayedCount = Math.min(

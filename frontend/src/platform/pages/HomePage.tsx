@@ -78,6 +78,7 @@ export default function HomePage() {
 
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
   const [currentPageApi, setCurrentPageApi] = useState<number>(1);
+  const [allFetchedProjects, setAllFetchedProjects] = useState<Project[]>([]);
 
   const [showSoundUploader, setShowSoundUploader] = useState(false);
   const [showGenerateSongModal, setShowGenerateSongModal] = useState(false);
@@ -102,15 +103,22 @@ export default function HomePage() {
     placeholderData: (previousData) => previousData,
   });
   
-  const allFetchedProjects = projectsData?.items ?? [];
   const totalProjectsOnServer = projectsData?.total_items ?? 0;
+  const totalPagesApi = projectsData?.total_pages ?? 0;
 
+  // Accumulate projects when new pages are fetched
   useEffect(() => {
     if (projectsData?.items) {
-      const initialDisplay = Math.min(INITIAL_DISPLAY_COUNT, projectsData.items.length);
-      setDisplayedProjectsCount(initialDisplay);
+      if (currentPageApi === 1) {
+        // First page - replace all items
+        setAllFetchedProjects(projectsData.items);
+        setDisplayedProjectsCount(Math.min(INITIAL_DISPLAY_COUNT, projectsData.items.length));
+      } else {
+        // Additional pages - append to existing items
+        setAllFetchedProjects(prev => [...prev, ...projectsData.items]);
+      }
     }
-  }, [projectsData?.items]);
+  }, [projectsData?.items, currentPageApi]);
 
   const fetchSounds = () => {
     console.log('Refreshing sounds library');
@@ -123,10 +131,9 @@ export default function HomePage() {
     );
     setDisplayedProjectsCount(newDisplayedCount);
 
-    const hasMoreOnServer = allFetchedProjects.length < totalProjectsOnServer;
-    if (newDisplayedCount >= allFetchedProjects.length && hasMoreOnServer && !isFetchingProjects) {
-      if (projectsData && currentPageApi < projectsData.total_pages ) {
-         setCurrentPageApi(prev => prev + 1);
+    if (newDisplayedCount >= allFetchedProjects.length && allFetchedProjects.length < totalProjectsOnServer && !isFetchingProjects) {
+      if (currentPageApi < totalPagesApi) {
+        setCurrentPageApi(prev => prev + 1);
       }
     }
   };
