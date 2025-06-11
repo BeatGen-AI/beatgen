@@ -10,6 +10,8 @@ import { SaveStatusIndicator } from '../ui/SaveStatusIndicator';
 import { useStudioStore } from '../../stores/studioStore';
 import { IconPlayerPlayFilled, IconPlayerSkipBackFilled, IconPlayerPauseFilled, IconArrowForwardUp, IconArrowBackUp, IconZoomIn, IconZoomOut, IconInputAi, IconChevronsRight, IconArrowLeft } from '@tabler/icons-react';
 import { IconSettings } from '@tabler/icons-react';
+import { CropFree as SelectIcon, Edit as PenIcon, Highlight as HighlighterIcon, Delete as EraserIcon, GridOn as GridIcon } from '@mui/icons-material';
+import { Tool } from '../../shared/interactions';
 
 interface StudioControlBarProps {
     canUndo: boolean;
@@ -28,6 +30,11 @@ interface StudioControlBarProps {
     // Auto-save status
     autoSaveStatus?: 'idle' | 'saving' | 'saved' | 'error';
     autoSaveMessage?: string;
+    
+    // Tool system props
+    selectedTool?: Tool;
+    snapToGrid?: boolean;
+    showToolbar?: boolean;
 
     // Handlers
     onUndo: () => void;
@@ -43,6 +50,8 @@ interface StudioControlBarProps {
     onChatToggle: () => void;
     onSettingsToggle: () => void;
     onAutoSaveRetry?: () => void;
+    onToolChange?: (tool: Tool) => void;
+    onToggleSnapToGrid?: () => void;
 }
 
 // Wrap with forwardRef and memo
@@ -62,6 +71,9 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     tracks,
     autoSaveStatus,
     autoSaveMessage,
+    selectedTool = 'select',
+    snapToGrid = true,
+    showToolbar = true,
     onUndo,
     onRedo,
     onBpmChange,
@@ -75,6 +87,8 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     onChatToggle,
     onSettingsToggle,
     onAutoSaveRetry,
+    onToolChange,
+    onToggleSnapToGrid,
 }, ref) => {
     const theme = useTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
@@ -178,6 +192,92 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         <IconArrowForwardUp />
                     </IconButton>
                 </Box>
+
+                {/* Tool Icons */}
+                {showToolbar && (
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <IconButton
+                            size="small"
+                            color="inherit"
+                            onClick={() => onToolChange?.('select')}
+                            sx={{
+                                borderRadius: '8px',
+                                backgroundColor: selectedTool === 'select' ? theme.palette.action.selected : 'transparent',
+                                '&:hover': {
+                                    backgroundColor: theme.palette.action.hover,
+                                },
+                            }}
+                            title="Select Tool"
+                            disableRipple
+                        >
+                            <SelectIcon />
+                        </IconButton>
+                        <IconButton
+                            size="small"
+                            color="inherit"
+                            onClick={() => onToolChange?.('pen')}
+                            sx={{
+                                borderRadius: '8px',
+                                backgroundColor: selectedTool === 'pen' ? theme.palette.action.selected : 'transparent',
+                                '&:hover': {
+                                    backgroundColor: theme.palette.action.hover,
+                                },
+                            }}
+                            title="Pen Tool"
+                            disableRipple
+                        >
+                            <PenIcon />
+                        </IconButton>
+                        <IconButton
+                            size="small"
+                            color="inherit"
+                            onClick={() => onToolChange?.('highlighter')}
+                            sx={{
+                                borderRadius: '8px',
+                                backgroundColor: selectedTool === 'highlighter' ? theme.palette.action.selected : 'transparent',
+                                '&:hover': {
+                                    backgroundColor: theme.palette.action.hover,
+                                },
+                            }}
+                            title="Highlighter Tool"
+                            disableRipple
+                        >
+                            <HighlighterIcon />
+                        </IconButton>
+                        <IconButton
+                            size="small"
+                            color="inherit"
+                            onClick={() => onToolChange?.('eraser')}
+                            sx={{
+                                borderRadius: '8px',
+                                backgroundColor: selectedTool === 'eraser' ? theme.palette.action.selected : 'transparent',
+                                '&:hover': {
+                                    backgroundColor: theme.palette.action.hover,
+                                },
+                            }}
+                            title="Eraser Tool"
+                            disableRipple
+                        >
+                            <EraserIcon />
+                        </IconButton>
+                        <IconButton
+                            size="small"
+                            color="inherit"
+                            onClick={() => onToggleSnapToGrid?.()}
+                            sx={{
+                                borderRadius: '8px',
+                                backgroundColor: snapToGrid ? theme.palette.action.selected : 'transparent',
+                                '&:hover': {
+                                    backgroundColor: theme.palette.action.hover,
+                                },
+                            }}
+                            title="Toggle Grid Snap"
+                            disableRipple
+                        >
+                            <GridIcon />
+                        </IconButton>
+                    </Box>
+                )}
 
                 <Box sx={{
                     display: 'flex',

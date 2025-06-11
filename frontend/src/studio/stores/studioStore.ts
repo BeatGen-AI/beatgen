@@ -13,6 +13,7 @@ import { createUISlice, UISlice } from './slices/uiSlice';
 import { createMidiSlice, MidiSlice } from './slices/midiSlice';
 import { createSamplerSlice, SamplerSlice } from './slices/samplerSlice';
 import { createDrumSlice, DrumSlice } from './slices/drumSlice';
+import { createToolSlice, ToolSlice } from './slices/toolSlice';
 import { devtools } from 'zustand/middleware';
 
 // Combine all slice interfaces into the RootState for type checking
@@ -121,6 +122,7 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
     ...createMidiSlice(set, get),
     ...createSamplerSlice(set, get),
     ...createDrumSlice(set, get),
+    ...createToolSlice(set, get),
   };
 
   return {
