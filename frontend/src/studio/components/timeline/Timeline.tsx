@@ -1,7 +1,7 @@
 import React, { forwardRef, useRef, useImperativeHandle, useState } from 'react';
 import { Box, useTheme } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { GRID_CONSTANTS, calculatePositionTime } from '../../constants/gridConstants';
+import { GRID_CONSTANTS, calculatePositionTime, ticksToPixels, calculateTrackWidth } from '../../constants/gridConstants';
 import Track from '../track/Track';
 import PlaybackCursor, { PlaybackCursorRef } from './PlaybackCursor';
 import { CombinedTrack } from 'src/platform/types/project';
@@ -81,6 +81,9 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   // Refs for the cursor and container
   const cursorRef = useRef<PlaybackCursorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Track if we just completed a selection
+  const [justCompletedSelection, setJustCompletedSelection] = useState(false);
 
   // Initialize interaction manager for track selection
   const interaction = useInteractionManager({
@@ -199,36 +202,58 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
           ...sx
         }}
         onMouseDown={(e) => {
+          console.log('Timeline onMouseDown');
           const rect = e.currentTarget.getBoundingClientRect();
           const position = {
             x: e.clientX - rect.left,
             y: e.clientY - rect.top
           };
-
-          // Check if clicking on a track with proper width calculation
-          const clickedTrack = tracks.find(track => {
-            // Calculate actual track width (same logic as in onMouseUp)
-            const startTicks = track.trim_start_ticks || 0;
-            const endTicks = track.trim_end_ticks || track.duration_ticks || 0;
-            const visibleDurationTicks = Math.max(0, endTicks - startTicks);
-            const TICKS_PER_BEAT = 960;
-            const PIXELS_PER_BEAT = GRID_CONSTANTS.measureWidth / (timeSignature[0] || 4);
-            const trackWidth = (visibleDurationTicks / TICKS_PER_BEAT) * PIXELS_PER_BEAT;
-            const actualTrackWidth = Math.max(50, trackWidth);
-
-            return position.x >= track.x_position &&
-                   position.x <= track.x_position + actualTrackWidth &&
-                   position.y >= track.y_position &&
-                   position.y <= track.y_position + GRID_CONSTANTS.trackHeight;
+          
+          console.log('Timeline container bounds:', {
+            containerRect: rect,
+            clientX: e.clientX,
+            clientY: e.clientY,
+            calculatedPosition: position
           });
 
+          // Check if clicking on a track with proper width calculation
+          const clickedTrack = tracks.find((track, index) => {
+            // Calculate actual track width using proper function
+            const actualTrackWidth = calculateTrackWidth(
+              (track.duration_ticks || 0) / 960, // Convert ticks to seconds (assuming standard 960 ticks/beat at 120 BPM)
+              bpm,
+              timeSignature,
+              {
+                trimStartTicks: track.trim_start_ticks,
+                trimEndTicks: track.trim_end_ticks,
+                originalDurationTicks: track.duration_ticks
+              }
+            );
+            
+            // Calculate actual visual position in timeline
+            const visualY = GRID_CONSTANTS.headerHeight + (index * GRID_CONSTANTS.trackHeight);
+            // Convert track x_position from ticks to pixels using proper conversion function
+            const visualX = ticksToPixels(track.x_position, bpm, timeSignature);
+
+            return position.x >= visualX &&
+                   position.x <= visualX + actualTrackWidth &&
+                   position.y >= visualY &&
+                   position.y <= visualY + GRID_CONSTANTS.trackHeight;
+          });
+
+          console.log('Timeline onMouseDown - position:', position);
+          console.log('Timeline onMouseDown - clickedTrack:', clickedTrack?.id);
+          console.log('Timeline onMouseDown - selectedTool:', selectedTool);
+
           if (clickedTrack) {
+            console.log('Timeline onMouseDown - calling handleItemClick');
             interaction.handleItemClick(clickedTrack.id, {
               shiftKey: e.shiftKey,
               ctrlKey: e.ctrlKey,
               metaKey: e.metaKey
             });
           } else {
+            console.log('Timeline onMouseDown - calling handleBackgroundMouseDown');
             interaction.handleBackgroundMouseDown(position, {
               shiftKey: e.shiftKey
             });
@@ -242,35 +267,71 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
           };
 
           if (interaction.isSelecting) {
+            console.log('Timeline onMouseMove - updating selection');
             interaction.updateSelection(position);
           }
         }}
         onMouseUp={(e) => {
+          console.log('Timeline onMouseUp - isSelecting:', interaction.isSelecting);
           if (interaction.isSelecting) {
-            const selectableItems = tracks.map(track => {
-              // Calculate track width (similar to how it's done in Track component)
-              const startTicks = track.trim_start_ticks || 0;
-              const endTicks = track.trim_end_ticks || track.duration_ticks || 0;
-              const visibleDurationTicks = Math.max(0, endTicks - startTicks);
-              // Convert ticks to pixels for width calculation
-              const TICKS_PER_BEAT = 960; // Standard MIDI ticks per beat
-              const PIXELS_PER_BEAT = GRID_CONSTANTS.measureWidth / (timeSignature[0] || 4);
-              const trackWidth = (visibleDurationTicks / TICKS_PER_BEAT) * PIXELS_PER_BEAT;
+            console.log('Timeline onMouseUp - processing selection');
+            
+            // Get Timeline container bounds for coordinate conversion
+            const timelineRect = e.currentTarget.getBoundingClientRect();
+            
+            // Get actual DOM positions of tracks
+            const selectableItems = tracks.map((track, index) => {
+              // Find the actual visual track element (with class "track" and proper dimensions)
+              const trackElement = document.querySelector(`[data-track-id="${track.id}"].track`);
+              if (!trackElement) {
+                console.warn(`Track element not found for ID: ${track.id}`);
+                return null;
+              }
+              
+              // Get actual rendered position
+              const trackRect = trackElement.getBoundingClientRect();
+              
+              // Convert to Timeline container coordinate system
+              const trackX = trackRect.left - timelineRect.left;
+              const trackY = trackRect.top - timelineRect.top;
+              
+              console.log('Track DOM position:', {
+                trackId: track.id,
+                trackRect: {
+                  left: trackRect.left,
+                  top: trackRect.top,
+                  width: trackRect.width,
+                  height: trackRect.height
+                },
+                timelineRect: {
+                  left: timelineRect.left,
+                  top: timelineRect.top
+                },
+                relativeToTimeline: {
+                  x: trackX,
+                  y: trackY,
+                  width: trackRect.width,
+                  height: trackRect.height
+                }
+              });
               
               return {
                 id: track.id,
                 type: 'track' as const,
-                x: track.x_position,
-                y: track.y_position,
-                width: Math.max(50, trackWidth), // Minimum width of 50px
-                height: GRID_CONSTANTS.trackHeight
+                x: trackX,
+                y: trackY,
+                width: trackRect.width,
+                height: trackRect.height
               };
-            });
+            }).filter(Boolean); // Remove null entries
             
-            console.log('Timeline selection - Rect:', interaction.selectionState.selectionRect);
-            console.log('Timeline selection - Items:', selectableItems);
-            
+            console.log('Timeline onMouseUp - calling endSelection with', selectableItems.length, 'items');
             interaction.endSelection(selectableItems, e.shiftKey);
+            
+            // Set flag to prevent click handler from firing
+            setJustCompletedSelection(true);
+            // Reset the flag after a short delay
+            setTimeout(() => setJustCompletedSelection(false), 10);
           }
         }}
       >
@@ -315,6 +376,7 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
             selectedTool={interaction.toolState.selectedTool}
             selectedTrackIds={selectedTrackIds}
             interaction={interaction}
+            justCompletedSelection={justCompletedSelection}
           />
         ) : (
           <EmptyTimelineDropZone onTimeChange={onTimeChange} bpm={bpm} timeSignature={timeSignature} />
@@ -541,6 +603,7 @@ interface TimelineContentProps extends TimelineRulerProps {
   selectedTool: Tool;
   selectedTrackIds: string[];
   interaction: any; // Type from useInteractionManager
+  justCompletedSelection: boolean;
 }
 
 function TimelineContent({
@@ -556,12 +619,19 @@ function TimelineContent({
   totalWidth,
   selectedTool,
   selectedTrackIds,
-  interaction
+  interaction,
+  justCompletedSelection
 }: TimelineContentProps) {
   // const theme = useTheme(); // No longer need theme for grid colors
   
   // Handler for timeline content clicks to set playback position
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Don't handle clicks if we just completed a rectangle selection
+    if (justCompletedSelection) {
+      console.log('Click ignored - just completed rectangle selection');
+      return;
+    }
+    
     // Only handle direct clicks on the background, not on tracks
     if ((e.target as HTMLElement).closest('.track')) {
       console.log('Click on track - ignoring for timeline click');

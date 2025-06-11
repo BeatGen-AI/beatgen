@@ -71,6 +71,7 @@ function Studio({ projectId }: StudioProps) {
     addMenuAnchor,
     autoSaveStatus,
     autoSaveMessage,
+    selectedTrackIds,
     
     // Tool state
     selectedTool,
@@ -90,6 +91,7 @@ function Studio({ projectId }: StudioProps) {
     undo,
     redo,
     setAutoSaveStatus,
+    setSelectedTrackIds,
     handleTrackVolumeChange,
     handleTrackPanChange,
     handleTrackMuteToggle,
@@ -547,6 +549,11 @@ function Studio({ projectId }: StudioProps) {
             gridLineStyle={{
               borderRight: `${GRID_CONSTANTS.borderWidth} solid ${GRID_CONSTANTS.borderColor}`
             }}
+            selectedTrackIds={selectedTrackIds}
+            onTrackSelect={setSelectedTrackIds}
+            onTrackDelete={handleTrackDelete}
+            selectedTool={selectedTool}
+            onToolChange={setSelectedTool}
             ref={scrollRef}
           />
           
