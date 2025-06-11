@@ -12,6 +12,7 @@ export interface TrackInstanceSlice {
   createTrackInstance: (trackId: string, position: { x: number; y: number }) => Promise<string | null>;
   removeTrackInstance: (instanceId: string) => Promise<void>;
   updateInstancePosition: (instanceId: string, newPosition: { x: number; y: number }) => void;
+  updateInstanceTrim: (instanceId: string, trimStartTicks?: number, trimEndTicks?: number, width?: number) => void;
   getInstancesByTrack: (trackId: string) => TrackInstance[];
   getAllInstances: () => TrackInstance[];
   getTrackInstancesSize: () => number;
@@ -175,6 +176,28 @@ export const createTrackInstanceSlice: StoreSliceCreator<TrackInstanceSlice> = (
     }));
   };
   
+  const updateInstanceTrim = (instanceId: string, trimStartTicks?: number, trimEndTicks?: number, width?: number): void => {
+    console.log(`TrackInstanceSlice: Updating trim for visual instance ${instanceId}`, { trimStartTicks, trimEndTicks, width });
+    
+    // Update instance-specific trim values without affecting the original track
+    set(produce((draft: RootState) => {
+      if (draft.trackInstances?.has(instanceId)) {
+        const instance = draft.trackInstances.get(instanceId);
+        if (instance) {
+          if (trimStartTicks !== undefined) {
+            instance.trimStartTicks = trimStartTicks;
+          }
+          if (trimEndTicks !== undefined) {
+            instance.trimEndTicks = trimEndTicks;
+          }
+          if (width !== undefined) {
+            instance.width = width;
+          }
+        }
+      }
+    }));
+  };
+  
   const getInstancesByTrack = (trackId: string): TrackInstance[] => {
     const state = rootGet();
     if (!state.trackInstances) return [];
@@ -206,6 +229,7 @@ export const createTrackInstanceSlice: StoreSliceCreator<TrackInstanceSlice> = (
     createTrackInstance,
     removeTrackInstance,
     updateInstancePosition,
+    updateInstanceTrim,
     getInstancesByTrack,
     getAllInstances,
     getTrackInstancesSize,

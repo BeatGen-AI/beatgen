@@ -34,6 +34,7 @@ function TrackInstance(props: TrackInstanceProps) {
   const bpm = useStudioStore(state => state.bpm);
   const timeSignature = useStudioStore(state => state.timeSignature);
   const updateInstancePosition = useStudioStore(state => state.updateInstancePosition);
+  const updateInstanceTrim = useStudioStore(state => state.updateInstanceTrim);
   const removeTrackInstance = useStudioStore(state => state.removeTrackInstance);
   const isPlaying = useStudioStore(state => state.isPlaying);
   const currentTime = useStudioStore(state => state.currentTime);
@@ -45,29 +46,39 @@ function TrackInstance(props: TrackInstanceProps) {
   // Get measure width for calculations
   const audioMeasureWidth = useGridStore(state => state.audioMeasurePixelWidth);
   
-  // Calculate width based on the track duration and type
+  // Calculate width based on the track duration and type, with instance-specific overrides
   const trackWidth = useMemo(() => {
       const minimumWidth = 200; // Minimum 200px width
+      
+      // If instance has a specific width, use it
+      if (instance.width && instance.width > 0) {
+        console.log(`TrackInstance: Using instance-specific width for ${instance.instanceId}:`, instance.width);
+        return Math.max(minimumWidth, instance.width);
+      }
       
       if (!track?.duration_ticks) {
           console.log(`TrackInstance: No duration_ticks for track ${track?.id}, using minimum width`);
           return minimumWidth; 
       }
       
-      // Calculate width based on track type (same logic as the respective TrackPreview components)
+      // Calculate width based on track type, considering instance-specific trim values
       let calculatedWidth: number;
       
+      // Use instance-specific trim values if available, otherwise fall back to track values
+      const instanceStartTicks = instance.trimStartTicks ?? track.trim_start_ticks ?? 0;
+      const instanceEndTicks = instance.trimEndTicks ?? track.trim_end_ticks ?? track.duration_ticks;
+      
       if (track.type === 'AUDIO') {
+        // For audio tracks, calculate based on the trimmed duration
+        const visibleDurationTicks = Math.max(0, instanceEndTicks - instanceStartTicks);
         calculatedWidth = calculateAudioTrackWidth(
-          track.duration_ticks,
+          visibleDurationTicks,
           bpm ?? 120,
           audioMeasureWidth
         );
       } else {
         // For MIDI, SAMPLER, DRUM tracks, use the existing calculation
-        const startTicks = track.trim_start_ticks || 0;
-        const endTicks = track.trim_end_ticks || track.duration_ticks;
-        const visibleDurationTicks = Math.max(0, endTicks - startTicks);
+        const visibleDurationTicks = Math.max(0, instanceEndTicks - instanceStartTicks);
         calculatedWidth = ticksToPixels(visibleDurationTicks, bpm ?? 120, timeSignature ?? [4, 4]);
       }
       
@@ -76,12 +87,14 @@ function TrackInstance(props: TrackInstanceProps) {
       console.log(`TrackInstance: Width calculation for ${track.id}:`, {
           type: track.type,
           duration_ticks: track.duration_ticks,
+          instanceStartTicks,
+          instanceEndTicks,
           calculatedWidth,
           finalWidth
       });
       
       return finalWidth;
-  }, [track, bpm, timeSignature, audioMeasureWidth]);
+  }, [track, instance.width, instance.trimStartTicks, instance.trimEndTicks, bpm, timeSignature, audioMeasureWidth]);
   
   // Track selection state (based on track ID, not instance ID)
   const isSelected = useStudioStore(state => state.isTrackSelected(track.id));
@@ -155,19 +168,56 @@ function TrackInstance(props: TrackInstanceProps) {
   const handleResizeEnd = useCallback((trackId: string, trimDeltaPixels: number, resizeDirection: 'left' | 'right') => {
     console.log(`TrackInstance: Resize end for instance ${instance.instanceId}`, trimDeltaPixels, resizeDirection);
     
-    // For track instances, we simply use the same resize logic as regular tracks
-    // by calling the store's handleTrackResizeEnd function
-    const handleTrackResizeEndAction = useStudioStore.getState().handleTrackResizeEnd;
+    // For track instances, we update instance-specific trim values instead of the original track
+    // This allows each instance to have independent trimming
+    const deltaTicks = pixelsToTicks(trimDeltaPixels, bpm ?? 120, timeSignature ?? [4, 4]);
     
-    if (handleTrackResizeEndAction) {
-      // Use the same resize logic as regular tracks
-      handleTrackResizeEndAction(track.id, trimDeltaPixels, resizeDirection);
-    } else {
-      console.error("handleTrackResizeEnd action not found in store!");
+    // Get current trim values (instance-specific or fall back to track values)
+    const currentStartTicks = instance.trimStartTicks ?? track.trim_start_ticks ?? 0;
+    const currentEndTicks = instance.trimEndTicks ?? track.trim_end_ticks ?? track.duration_ticks ?? 0;
+    
+    let newStartTicks = currentStartTicks;
+    let newEndTicks = currentEndTicks;
+    let newWidth = trackWidth;
+    
+    if (resizeDirection === 'left') {
+      // Left resize: adjust start trim and position
+      newStartTicks = Math.max(0, Math.min(currentStartTicks + deltaTicks, currentEndTicks));
+      newWidth = trackWidth - trimDeltaPixels;
+      
+      // Also update instance position to move right by the delta amount
+      const currentPixelX = instance.position.x;
+      const newPixelX = currentPixelX + trimDeltaPixels;
+      const newPosition = {
+        x: Math.max(0, newPixelX),
+        y: instance.position.y
+      };
+      updateInstancePosition(instance.instanceId, newPosition);
+    } else if (resizeDirection === 'right') {
+      // Right resize: adjust end trim
+      newEndTicks = Math.max(currentStartTicks, currentEndTicks + deltaTicks);
+      newWidth = trackWidth + trimDeltaPixels;
     }
-  }, [track.id]);
+    
+    // Ensure minimum width
+    const minWidth = 50;
+    newWidth = Math.max(minWidth, newWidth);
+    
+    // Update instance-specific trim values
+    updateInstanceTrim(instance.instanceId, newStartTicks, newEndTicks, newWidth);
+    
+    console.log(`TrackInstance: Updated instance trim values:`, {
+      instanceId: instance.instanceId,
+      oldStart: currentStartTicks,
+      oldEnd: currentEndTicks,
+      newStart: newStartTicks,
+      newEnd: newEndTicks,
+      newWidth,
+      direction: resizeDirection
+    });
+  }, [instance.instanceId, instance.position, instance.trimStartTicks, instance.trimEndTicks, track, trackWidth, updateInstancePosition, updateInstanceTrim, bpm, timeSignature]);
 
-  // Create a track object with instance-specific position
+  // Create a track object with instance-specific position and trim values
   // Convert track instance pixel positions to ticks to match BaseTrackPreview expectations
   const trackWithInstancePosition = useMemo(() => {
     const ticksX = pixelsToTicks(instance.position.x, bpm ?? 120, timeSignature ?? [4, 4]);
@@ -176,9 +226,12 @@ function TrackInstance(props: TrackInstanceProps) {
       ...track,
       x_position: ticksX, // Convert pixels to ticks
       y_position: instance.position.y, // Y stays in pixels
+      // Use instance-specific trim values if available, otherwise fall back to track values
+      trim_start_ticks: instance.trimStartTicks ?? track.trim_start_ticks,
+      trim_end_ticks: instance.trimEndTicks ?? track.trim_end_ticks,
       index
     };
-  }, [track, instance.position, index, bpm, timeSignature]);
+  }, [track, instance.position, instance.trimStartTicks, instance.trimEndTicks, index, bpm, timeSignature]);
   
   // Calculate full content width for proper content rendering
   const fullContentWidth = useMemo(() => {

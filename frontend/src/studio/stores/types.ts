@@ -171,9 +171,13 @@ export interface TrackInstance {
   trackId: string;
   trackType: 'audio' | 'midi' | 'sampler' | 'drum';
   position: {
-    x: number; // Position in ticks
+    x: number; // Position in pixels (for storage)
     y: number; // Track lane (pixel position)
   };
+  // Instance-specific trim values (independent of the original track)
+  trimStartTicks?: number; // Instance-specific start trim in ticks
+  trimEndTicks?: number;   // Instance-specific end trim in ticks
+  width?: number;          // Instance-specific visual width in pixels
   // Note: Volume, pan, mute etc. are shared from the main track
 }
 
@@ -314,6 +318,7 @@ export interface RootState {
   createTrackInstance: (trackId: string, position: { x: number; y: number }) => Promise<string | null>;
   removeTrackInstance: (instanceId: string) => Promise<void>;
   updateInstancePosition: (instanceId: string, newPosition: { x: number; y: number }) => void;
+  updateInstanceTrim: (instanceId: string, trimStartTicks?: number, trimEndTicks?: number, width?: number) => void;
   getInstancesByTrack: (trackId: string) => TrackInstance[];
   getAllInstances: () => TrackInstance[];
   getTrackInstancesSize: () => number;
