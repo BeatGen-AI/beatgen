@@ -3,10 +3,16 @@ import { Box } from '@mui/material';
 import { Position } from './types';
 import { useStudioStore } from '../../stores/studioStore';
 import { usePianoRollStore } from '../../stores/usePianoRollStore';
+import BaseTrackPreview from './base/BaseTrackPreview';
 import TrackFactory from './TrackFactory';
 import { GRID_CONSTANTS, calculateTrackWidth, pixelsToTicks, ticksToPixels, getTrackColor } from '../../constants/gridConstants';
 import { CombinedTrack } from 'src/platform/types/project';
 import { TrackInstance as TrackInstanceType } from '../../stores/types';
+import { calculateAudioTrackWidth } from '../../utils/trackWidthCalculators';
+import { useGridStore } from '../../core/state/gridStore';
+import WaveformDisplay from './WaveformDisplay';
+import MidiNotesPreview from '../piano-roll/components/MidiNotesPreview';
+import DrumGridPreview from './drum/DrumGridPreview';
 
 /**
  * TrackInstance component renders a single instance of a track at a specific position.
@@ -24,7 +30,7 @@ function TrackInstance(props: TrackInstanceProps) {
   const { instance, track, index, gridLineStyle } = props;
   
   // Store state and actions
-  const store = useStudioStore(state => state.store);
+  const studioState = useStudioStore(state => state.store);
   const bpm = useStudioStore(state => state.bpm);
   const timeSignature = useStudioStore(state => state.timeSignature);
   const updateInstancePosition = useStudioStore(state => state.updateInstancePosition);
@@ -36,9 +42,11 @@ function TrackInstance(props: TrackInstanceProps) {
   
   const { openPianoRoll } = usePianoRollStore();
 
-  // Calculate width based on the track duration
+  // Get measure width for calculations
+  const audioMeasureWidth = useGridStore(state => state.audioMeasurePixelWidth);
+  
+  // Calculate width based on the track duration and type
   const trackWidth = useMemo(() => {
-      // Ensure minimum width for visibility
       const minimumWidth = 200; // Minimum 200px width
       
       if (!track?.duration_ticks) {
@@ -46,23 +54,34 @@ function TrackInstance(props: TrackInstanceProps) {
           return minimumWidth; 
       }
       
-      const startTicks = track.trim_start_ticks || 0;
-      const endTicks = track.trim_end_ticks || track.duration_ticks;
-      const visibleDurationTicks = Math.max(0, endTicks - startTicks);
-      const calculatedWidth = ticksToPixels(visibleDurationTicks, bpm ?? 120, timeSignature ?? [4, 4]);
+      // Calculate width based on track type (same logic as the respective TrackPreview components)
+      let calculatedWidth: number;
       
-      // Ensure calculated width is at least minimum
+      if (track.type === 'AUDIO') {
+        calculatedWidth = calculateAudioTrackWidth(
+          track.duration_ticks,
+          bpm ?? 120,
+          audioMeasureWidth
+        );
+      } else {
+        // For MIDI, SAMPLER, DRUM tracks, use the existing calculation
+        const startTicks = track.trim_start_ticks || 0;
+        const endTicks = track.trim_end_ticks || track.duration_ticks;
+        const visibleDurationTicks = Math.max(0, endTicks - startTicks);
+        calculatedWidth = ticksToPixels(visibleDurationTicks, bpm ?? 120, timeSignature ?? [4, 4]);
+      }
+      
       const finalWidth = Math.max(minimumWidth, calculatedWidth);
       
       console.log(`TrackInstance: Width calculation for ${track.id}:`, {
+          type: track.type,
           duration_ticks: track.duration_ticks,
-          visibleDurationTicks,
           calculatedWidth,
           finalWidth
       });
       
       return finalWidth;
-  }, [track, bpm, timeSignature]);
+  }, [track, bpm, timeSignature, audioMeasureWidth]);
   
   // Track selection state (based on track ID, not instance ID)
   const isSelected = useStudioStore(state => state.isTrackSelected(track.id));
@@ -122,7 +141,6 @@ function TrackInstance(props: TrackInstanceProps) {
     
     // Update instance position
     if (isDragEnd) {
-      // CRITICAL FIX: Convert ticks back to pixels for storage in track instances
       // BaseTrackPreview sends position in ticks, but track instances store in pixels
       const pixelsX = ticksToPixels(newPosition.x, bpm ?? 120, timeSignature ?? [4, 4]);
       const pixelPosition = {
@@ -134,63 +152,114 @@ function TrackInstance(props: TrackInstanceProps) {
     }
   }, [instance.instanceId, updateInstancePosition, bpm, timeSignature]);
 
-  const handleResizeEnd = useCallback((deltaPixels: number, resizeDirection: 'left' | 'right') => {
-    console.log(`TrackInstance: Resize end for instance ${instance.instanceId}`, deltaPixels, resizeDirection);
+  const handleResizeEnd = useCallback((trackId: string, trimDeltaPixels: number, resizeDirection: 'left' | 'right') => {
+    console.log(`TrackInstance: Resize end for instance ${instance.instanceId}`, trimDeltaPixels, resizeDirection);
     // TODO: Implement instance-specific resize if needed
     // For now, resizing affects the entire track, not individual instances
   }, [instance.instanceId]);
 
-  const handleResizeEndForFactory = useCallback((trackId: string, trimDeltaPixels: number, resizeDirection: "left" | "right") => {
-    handleResizeEnd(trimDeltaPixels, resizeDirection);
-  }, [handleResizeEnd]);
-
   // Create a track object with instance-specific position
-  // CRITICAL FIX: Convert track instance pixel positions to ticks to match regular tracks
-  // Track instances store positions in pixels but BaseTrackPreview expects ticks for x_position
+  // Convert track instance pixel positions to ticks to match BaseTrackPreview expectations
   const trackWithInstancePosition = useMemo(() => {
-    // Convert instance pixel position to ticks for consistency with regular tracks
     const ticksX = pixelsToTicks(instance.position.x, bpm ?? 120, timeSignature ?? [4, 4]);
     
     return {
       ...track,
-      x_position: ticksX, // Convert pixels to ticks to match BaseTrackPreview expectation
+      x_position: ticksX, // Convert pixels to ticks
       y_position: instance.position.y, // Y stays in pixels
       index
     };
   }, [track, instance.position, index, bpm, timeSignature]);
-
+  
+  // Calculate full content width for proper content rendering
+  const fullContentWidth = useMemo(() => {
+    if (track.type === 'AUDIO') {
+      return calculateAudioTrackWidth(
+        track.duration_ticks || 8,
+        bpm ?? 120,
+        audioMeasureWidth
+      );
+    } else {
+      // For MIDI, SAMPLER, DRUM tracks
+      return ticksToPixels(track.duration_ticks || 3840, bpm ?? 120, timeSignature ?? [4, 4]);
+    }
+  }, [track, bpm, timeSignature, audioMeasureWidth]);
+  
+  // Get track color and notes for rendering
   const trackColor = getTrackColor(index);
+  
+  // Get notes for MIDI/SAMPLER tracks
+  const midiManager = studioState?.getMidiManager();
+  const trackNotes = midiManager?.getTrackNotes(track.id) || [];
+  
+  // Render track-specific content (same logic as respective TrackPreview components)
+  const renderTrackContent = useCallback(() => {
+    switch (track.type) {
+      case 'AUDIO':
+        return (
+          <WaveformDisplay 
+            audioFile={undefined} // TODO: Fix this
+            trackColor={trackColor}
+            duration={track.duration_ticks || 0}
+            width={fullContentWidth}
+          />
+        );
+      case 'MIDI':
+      case 'SAMPLER':
+        return (
+          <MidiNotesPreview 
+            width={fullContentWidth}
+            height={GRID_CONSTANTS.trackHeight - 6}
+            noteColor={'white'}
+            notes={trackNotes}
+          />
+        );
+      case 'DRUM':
+        return (
+          <DrumGridPreview 
+            pattern={[]} // TODO: Get drum pattern
+            width={fullContentWidth}
+            height={GRID_CONSTANTS.trackHeight - 6}
+            trackColor={trackColor}
+          />
+        );
+      default:
+        return null;
+    }
+  }, [track.type, trackColor, fullContentWidth, track.duration_ticks, trackNotes]);
 
   return (
     <Box 
       onClick={handleTrackClick}
       onContextMenu={handleContextMenu}
       sx={{ 
-        // CRITICAL FIX: Let BaseTrackPreview handle all positioning
-        // Remove absolute positioning since BaseTrackPreview will set it
-        cursor: 'pointer',
-        outline: isSelected ? '2px solid #2196f3' : 'none',
-        outlineOffset: '-2px',
-        borderRadius: '6px',
-        zIndex: 10, // Ensure instances are above background elements
+        position: 'relative', // Wrapper for click handling
       }}
       data-track-instance-id={instance.instanceId}
       data-track-id={track.id}
       data-track-type={track.type}
       data-selected={isSelected}
     >
-      <TrackFactory
+      <BaseTrackPreview
         track={trackWithInstancePosition}
         isPlaying={isPlaying}
         currentTime={currentTime}
         measureCount={measureCount}
-        gridLineStyle={gridLineStyle}
+        gridLineStyle={gridLineStyle || { borderRight: '1px solid #333' }}
         onPositionChange={handlePositionChange}
-        onResizeEnd={handleResizeEndForFactory}
-        bpm={bpm}
-        timeSignature={timeSignature}
+        onResizeEnd={handleResizeEnd}
+        bpm={bpm ?? 120}
+        timeSignature={timeSignature ?? [4, 4]}
         trackIndex={index}
+        trackColor={trackColor}
+        trackStyleOverrides={{
+          outline: isSelected ? '2px solid #2196f3' : 'none',
+          outlineOffset: '-2px',
+          zIndex: 10, // Ensure instances are above background elements
+        }}
+        renderTrackContent={renderTrackContent}
         trackWidth={trackWidth}
+        contentWidth={fullContentWidth}
       />
     </Box>
   );
