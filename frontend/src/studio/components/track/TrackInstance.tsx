@@ -154,9 +154,18 @@ function TrackInstance(props: TrackInstanceProps) {
 
   const handleResizeEnd = useCallback((trackId: string, trimDeltaPixels: number, resizeDirection: 'left' | 'right') => {
     console.log(`TrackInstance: Resize end for instance ${instance.instanceId}`, trimDeltaPixels, resizeDirection);
-    // TODO: Implement instance-specific resize if needed
-    // For now, resizing affects the entire track, not individual instances
-  }, [instance.instanceId]);
+    
+    // For track instances, we simply use the same resize logic as regular tracks
+    // by calling the store's handleTrackResizeEnd function
+    const handleTrackResizeEndAction = useStudioStore.getState().handleTrackResizeEnd;
+    
+    if (handleTrackResizeEndAction) {
+      // Use the same resize logic as regular tracks
+      handleTrackResizeEndAction(track.id, trimDeltaPixels, resizeDirection);
+    } else {
+      console.error("handleTrackResizeEnd action not found in store!");
+    }
+  }, [track.id]);
 
   // Create a track object with instance-specific position
   // Convert track instance pixel positions to ticks to match BaseTrackPreview expectations
