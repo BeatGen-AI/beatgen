@@ -126,6 +126,7 @@ export const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
           width: '100%', 
           height: '100%',
           display: 'block',
+          pointerEvents: 'none', // Ensure canvas doesn't intercept clicks
         }} 
       />
     </Box>

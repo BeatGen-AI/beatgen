@@ -11,6 +11,10 @@ from app2.infrastructure.database.sqlmodel_client import create_db_and_tables
 from app2.api.routes import assistant_streaming
 from app2.api.routes import drum_samples
 
+# Import test auth routes for non-production environments
+if settings.app.APP_ENV != "prod":
+    from app2.api.routes import test_auth
+
 # Configure logging
 logger = get_logger("beatgen.main")
 
@@ -109,6 +113,15 @@ app.include_router(
     prefix="/assistant",
     tags=["assistant"],
 )
+
+# Include test auth routes in non-production environments
+if settings.app.APP_ENV != "prod":
+    app.include_router(
+        test_auth.router,
+        prefix="/test-auth",
+        tags=["test-auth"],
+    )
+    logger.info("Test auth endpoints enabled for non-production environment")
 
 
 # Root endpoint

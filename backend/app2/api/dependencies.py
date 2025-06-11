@@ -23,6 +23,7 @@ from app2.services.user_service import UserService
 from app2.services.project_service import ProjectService
 from app2.services.track_service import TrackService
 from app2.services.file_service import FileService
+from app2.services.track_instance_service import TrackInstanceService
 from app2.repositories.drum_sample_public_repository import DrumSamplePublicRepository
 from app2.services.drum_sample_service import DrumSampleService
 
@@ -146,6 +147,15 @@ def get_drum_sample_service(
 ) -> DrumSampleService:
     """Get the drum sample service instance"""
     return DrumSampleService(drum_sample_repository)
+
+
+def get_track_instance_service(
+    project_track_repository: Annotated[
+        ProjectTrackRepository, Depends(get_project_track_repository)
+    ],
+) -> TrackInstanceService:
+    """Get the track instance service instance"""
+    return TrackInstanceService(project_track_repository)
 
 
 # Auth dependency

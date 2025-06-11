@@ -69,7 +69,7 @@ export const useAutoSave = (options: UseAutoSaveOptions = {}): UseAutoSaveReturn
     const state = useStudioStore.getState();
     
     return {
-      projectTitle: state.projectTitle || 'Untitled Project',
+      projectTitle: state.projectTitle,
       bpm: state.bpm,
       timeSignature: state.timeSignature,
       keySignature: state.keySignature,

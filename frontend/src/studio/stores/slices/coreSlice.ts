@@ -43,6 +43,26 @@ export const createCoreSlice: StoreSliceCreator<CoreSlice> = (set, get) => {
         console.log('Creating a new project in coreSlice');
         const project = store.projectManager.createProject(projectTitle);
         console.log('Project created:', project);
+        
+        // Update project state in Zustand store for new projects
+        const { _updateState } = rootGet();
+        if (_updateState && project) {
+          // Create a basic ProjectWithTracks object for new projects
+          const newProjectData = {
+            id: project.id,
+            name: project.name || projectTitle,
+            bpm: project.bpm || 120,
+            time_signature_numerator: 4,
+            time_signature_denominator: 4,
+            key_signature: 'C major',
+            tracks: [],
+            user_id: project.user_id || '',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          _updateState('project', newProjectData);
+          console.log('📂 NEW PROJECT - Project set in state:', newProjectData);
+        }
       }
       
       await store.initializeAudio();

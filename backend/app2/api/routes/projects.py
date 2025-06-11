@@ -5,9 +5,11 @@ from uuid import UUID
 from app2.api.dependencies import (
     get_current_user,
     get_project_service,
+    get_track_instance_service,
 )
 from app2.services.project_service import ProjectService
-from app2.core.exceptions import NotFoundException, ForbiddenException
+from app2.services.track_instance_service import TrackInstanceService
+from app2.core.exceptions import NotFoundException, ForbiddenException, ValidationException
 from app2.core.logging import get_api_logger
 from app2.models.project import (
     ProjectRead,
@@ -15,6 +17,15 @@ from app2.models.project import (
 )
 from app2.types.track_types import TrackType
 from app2.dto.projects_dto import Page, PageParams
+from app2.dto.track_instances_dto import (
+    TrackInstanceCreate,
+    TrackInstanceUpdate,
+    TrackInstanceRead,
+    CopyTrackInstancesRequest,
+    PasteTrackInstancesRequest,
+    DuplicateTrackInstancesRequest,
+    TrackInstanceOperationResponse
+)
 
 router = APIRouter()
 logger = get_api_logger("projects")
@@ -286,4 +297,242 @@ async def remove_track(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to remove track: {str(e)}",
+        )
+
+
+# ========== TRACK INSTANCE ENDPOINTS ==========
+
+@router.post("/{project_id}/tracks/{track_id}/instances", response_model=TrackInstanceRead, status_code=status.HTTP_201_CREATED)
+async def add_track_instance(
+    project_id: UUID,
+    track_id: UUID,
+    instance_data: TrackInstanceCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    track_instance_service: TrackInstanceService = Depends(get_track_instance_service),
+) -> TrackInstanceRead:
+    """
+    Add a new instance of an existing track
+    """
+    logger.info(f"Adding instance to track {track_id} in project {project_id}")
+    try:
+        return await track_instance_service.add_instance(
+            project_id, track_id, instance_data, UUID(current_user["id"])
+        )
+    except NotFoundException as e:
+        logger.error(f"Not found: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationException as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error adding track instance: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add track instance: {str(e)}",
+        )
+
+
+@router.patch("/{project_id}/tracks/{track_id}/instances/{instance_id}", response_model=TrackInstanceRead)
+async def update_track_instance(
+    project_id: UUID,
+    track_id: UUID,
+    instance_id: int,
+    updates: TrackInstanceUpdate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    track_instance_service: TrackInstanceService = Depends(get_track_instance_service),
+) -> TrackInstanceRead:
+    """
+    Update a specific track instance
+    """
+    logger.info(f"Updating instance {instance_id} of track {track_id}")
+    try:
+        return await track_instance_service.update_instance(
+            project_id, track_id, instance_id, updates, UUID(current_user["id"])
+        )
+    except NotFoundException as e:
+        logger.error(f"Not found: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationException as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating track instance: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update track instance: {str(e)}",
+        )
+
+
+@router.delete("/{project_id}/tracks/{track_id}/instances/{instance_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_track_instance(
+    project_id: UUID,
+    track_id: UUID,
+    instance_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    track_instance_service: TrackInstanceService = Depends(get_track_instance_service),
+) -> None:
+    """
+    Remove a specific track instance
+    """
+    logger.info(f"Removing instance {instance_id} of track {track_id}")
+    try:
+        success = await track_instance_service.remove_instance(
+            project_id, track_id, instance_id, UUID(current_user["id"])
+        )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Track instance not found"
+            )
+    except NotFoundException as e:
+        logger.error(f"Not found: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationException as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error removing track instance: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove track instance: {str(e)}",
+        )
+
+
+@router.get("/{project_id}/tracks/{track_id}/instances", response_model=List[TrackInstanceRead])
+async def get_track_instances(
+    project_id: UUID,
+    track_id: UUID,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    track_instance_service: TrackInstanceService = Depends(get_track_instance_service),
+) -> List[TrackInstanceRead]:
+    """
+    Get all instances for a track
+    """
+    logger.info(f"Getting instances for track {track_id}")
+    try:
+        return await track_instance_service.get_instances(
+            project_id, track_id, UUID(current_user["id"])
+        )
+    except NotFoundException as e:
+        logger.error(f"Not found: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error getting track instances: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get track instances: {str(e)}",
+        )
+
+
+@router.post("/{project_id}/tracks/copy-instances", response_model=Dict[str, Any])
+async def copy_track_instances(
+    project_id: UUID,
+    request: CopyTrackInstancesRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    track_instance_service: TrackInstanceService = Depends(get_track_instance_service),
+) -> Dict[str, Any]:
+    """
+    Copy track instances for clipboard
+    """
+    logger.info(f"Copying {len(request.instance_ids)} instances from track {request.track_id}")
+    try:
+        return await track_instance_service.copy_instances(
+            project_id, request, UUID(current_user["id"])
+        )
+    except NotFoundException as e:
+        logger.error(f"Not found: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationException as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error copying track instances: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to copy track instances: {str(e)}",
+        )
+
+
+@router.post("/{project_id}/tracks/paste-instances", response_model=List[TrackInstanceRead])
+async def paste_track_instances(
+    project_id: UUID,
+    request: PasteTrackInstancesRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    track_instance_service: TrackInstanceService = Depends(get_track_instance_service),
+) -> List[TrackInstanceRead]:
+    """
+    Paste track instances from clipboard
+    """
+    logger.info(f"Pasting instances to project {project_id}")
+    try:
+        return await track_instance_service.paste_instances(
+            project_id, request, UUID(current_user["id"])
+        )
+    except NotFoundException as e:
+        logger.error(f"Not found: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationException as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error pasting track instances: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to paste track instances: {str(e)}",
+        )
+
+
+@router.post("/{project_id}/tracks/{track_id}/duplicate-instances", response_model=List[TrackInstanceRead])
+async def duplicate_track_instances(
+    project_id: UUID,
+    track_id: UUID,
+    request: DuplicateTrackInstancesRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    track_instance_service: TrackInstanceService = Depends(get_track_instance_service),
+) -> List[TrackInstanceRead]:
+    """
+    Duplicate track instances within the same project
+    """
+    logger.info(f"Duplicating {len(request.instance_ids)} instances in track {track_id}")
+    try:
+        return await track_instance_service.duplicate_instances(
+            project_id, track_id, request, UUID(current_user["id"])
+        )
+    except NotFoundException as e:
+        logger.error(f"Not found: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationException as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error duplicating track instances: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to duplicate track instances: {str(e)}",
+        )
+
+
+@router.patch("/{project_id}/tracks/instances/batch", response_model=List[TrackInstanceRead])
+async def batch_update_track_instances(
+    project_id: UUID,
+    updates: List[Dict[str, Any]],
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    track_instance_service: TrackInstanceService = Depends(get_track_instance_service),
+) -> List[TrackInstanceRead]:
+    """
+    Batch update multiple track instances
+    """
+    logger.info(f"Batch updating {len(updates)} track instances")
+    try:
+        return await track_instance_service.batch_update_instances(
+            project_id, updates, UUID(current_user["id"])
+        )
+    except ValidationException as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in batch update: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to batch update track instances: {str(e)}",
         )

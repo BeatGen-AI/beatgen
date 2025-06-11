@@ -1,4 +1,4 @@
-import React, { forwardRef, memo, useRef } from 'react';
+import React, { forwardRef, memo, useRef, useState } from 'react';
 import { Box, IconButton, Typography, TextField, Tooltip, useTheme } from '@mui/material';
 // Import components
 import BPMControl from './BPMControl';
@@ -7,6 +7,7 @@ import { TimeDisplay, TimeDisplayHandle } from './TimeDisplay';
 import KeySelector from './KeySelector';
 import { SaveProjectButton } from './SaveProjectButton';
 import { SaveStatusIndicator } from '../ui/SaveStatusIndicator';
+import { ToolSelection, GridSnapControls, ZoomControls, ToolType } from '../shared';
 import { useStudioStore } from '../../stores/studioStore';
 import { IconPlayerPlayFilled, IconPlayerSkipBackFilled, IconPlayerPauseFilled, IconArrowForwardUp, IconArrowBackUp, IconZoomIn, IconZoomOut, IconInputAi, IconChevronsRight, IconArrowLeft } from '@tabler/icons-react';
 import { IconSettings } from '@tabler/icons-react';
@@ -78,6 +79,14 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 }, ref) => {
     const theme = useTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
+    
+    // Timeline tools state from store
+    const selectedTool = useStudioStore(state => state.selectedTool);
+    const gridSnapEnabled = useStudioStore(state => state.gridSnapEnabled);
+    const selectedSnapSize = useStudioStore(state => state.selectedSnapSize);
+    const setSelectedTool = useStudioStore(state => state.setSelectedTool);
+    const setGridSnapEnabled = useStudioStore(state => state.setGridSnapEnabled);
+    const setSelectedSnapSize = useStudioStore(state => state.setSelectedSnapSize);
 
     const handlePlayPause = () => {
         if (isPlaying) {
@@ -232,6 +241,30 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     >
                         <IconPlayerSkipBackFilled />
                     </IconButton>
+                </Box>
+
+                {/* Timeline Tools Section */}
+                <Box sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0,
+                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                    borderRadius: 1,
+                    px: 1,
+                    py: 0.5,
+                    height: '32px'
+                }}>
+                    <ToolSelection 
+                        selectedTool={selectedTool}
+                        onToolSelect={setSelectedTool}
+                    />
+                    
+                    <GridSnapControls 
+                        enabled={gridSnapEnabled}
+                        selectedSnapSize={selectedSnapSize}
+                        onToggle={() => setGridSnapEnabled(!gridSnapEnabled)}
+                        onSnapSizeChange={setSelectedSnapSize}
+                    />
                 </Box>
             </Box>
 

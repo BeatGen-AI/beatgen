@@ -2,6 +2,10 @@ import { create, StoreApi } from 'zustand';
 import { Store } from '../core/state/store';
 import { RootState, TrackOperation, CombinedTrack } from './types';
 import { immer } from 'zustand/middleware/immer';
+import { enableMapSet } from 'immer';
+
+// Enable MapSet support for Immer
+enableMapSet();
 
 // Import all slice creators
 import { createCoreSlice, CoreSlice } from './slices/coreSlice';
@@ -13,6 +17,7 @@ import { createUISlice, UISlice } from './slices/uiSlice';
 import { createMidiSlice, MidiSlice } from './slices/midiSlice';
 import { createSamplerSlice, SamplerSlice } from './slices/samplerSlice';
 import { createDrumSlice, DrumSlice } from './slices/drumSlice';
+import { createTrackInstanceSlice, TrackInstanceSlice } from './slices/trackInstanceSlice';
 import { devtools } from 'zustand/middleware';
 
 // Combine all slice interfaces into the RootState for type checking
@@ -121,6 +126,7 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
     ...createMidiSlice(set, get),
     ...createSamplerSlice(set, get),
     ...createDrumSlice(set, get),
+    ...createTrackInstanceSlice(set, get),
   };
 
   return {
@@ -141,7 +147,9 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
     // Initialize the store instance
     store: new Store(), 
     // isInitialized might be part of CoreSlice now?
-    isInitialized: false, 
+    isInitialized: false,
+    // Initialize project as null
+    project: null, 
   };
 }));
 
@@ -152,9 +160,10 @@ const initialState = useStudioStore.getState();
 if (initialState._updateHistoryState) {
     initialState._updateHistoryState();
 }
-// Optionally initialize the core store instance here if needed sooner
-// const coreStore = useStudioStore.getState().store;
-// if (coreStore && !useStudioStore.getState().isInitialized) {
-//   // Might need to trigger initializeAudio manually or ensure Store constructor handles it
-//   console.log("Performing post-creation store setup...");
-// } 
+
+// Expose store to window for debugging
+if (typeof window !== 'undefined') {
+  (window as any).useStudioStore = useStudioStore;
+  (window as any).studioStore = useStudioStore.getState();
+  console.log('🔍 Store exposed to window for debugging');
+} 

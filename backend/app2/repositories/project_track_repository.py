@@ -15,6 +15,12 @@ from app2.core.exceptions import DatabaseException, NotFoundException
 from app2.core.logging import get_repository_logger
 from app2.models.project_track import ProjectTrack
 from app2.types.track_types import TrackType
+from app2.dto.track_instances_dto import (
+    TrackInstanceCreate, 
+    TrackInstanceUpdate, 
+    TrackInstanceRead,
+    PositionMetadata
+)
 
 
 class ProjectTrackRepository:
@@ -415,11 +421,11 @@ class ProjectTrackRepository:
                 INSERT INTO project_tracks 
                 (created_at, updated_at, project_id, track_id, track_type, name, volume, pan, mute, 
                  x_position, y_position, trim_start_ticks, trim_end_ticks, 
-                 duration_ticks, track_number)
+                 duration_ticks, track_number, position_metadata)
                 VALUES 
                 (:created_at, :updated_at, :project_id, :track_id, :track_type, :name, :volume, :pan, :mute,
                  :x_position, :y_position, :trim_start_ticks, :trim_end_ticks,
-                 :duration_ticks, :track_number)
+                 :duration_ticks, :track_number, :position_metadata)
                 ON CONFLICT (project_id, track_id) 
                 DO UPDATE SET
                     updated_at = EXCLUDED.updated_at,
@@ -433,13 +439,22 @@ class ProjectTrackRepository:
                     trim_start_ticks = EXCLUDED.trim_start_ticks,
                     trim_end_ticks = EXCLUDED.trim_end_ticks,
                     duration_ticks = EXCLUDED.duration_ticks,
-                    track_number = EXCLUDED.track_number
+                    track_number = EXCLUDED.track_number,
+                    position_metadata = EXCLUDED.position_metadata
                 RETURNING *
             """)
             
             # Prepare data with defaults for missing fields
             from datetime import datetime
             current_time = datetime.utcnow()
+            
+            # Handle position_metadata - ensure it's JSON
+            import json
+            position_metadata = project_track_data.get("position_metadata", {"instances": [], "next_instance_id": 0})
+            if isinstance(position_metadata, dict):
+                position_metadata_json = json.dumps(position_metadata)
+            else:
+                position_metadata_json = position_metadata
             
             upsert_data = {
                 "created_at": current_time,
@@ -457,6 +472,7 @@ class ProjectTrackRepository:
                 "trim_end_ticks": project_track_data.get("trim_end_ticks", 0),
                 "duration_ticks": project_track_data.get("duration_ticks", 0),
                 "track_number": project_track_data.get("track_number", 0),
+                "position_metadata": position_metadata_json,
             }
             
             result = self.session.execute(query, upsert_data)
@@ -607,3 +623,378 @@ class ProjectTrackRepository:
             self.logger.error(f"Error getting tracks with settings: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to get tracks with settings: {str(e)}")
+
+    # ========== TRACK INSTANCE METHODS ==========
+
+    async def add_track_instance(
+        self, 
+        project_id: uuid.UUID, 
+        track_id: uuid.UUID, 
+        instance_data: TrackInstanceCreate
+    ) -> TrackInstanceRead:
+        """
+        Add a new instance to an existing track
+        
+        Args:
+            project_id: The ID of the project
+            track_id: The ID of the track
+            instance_data: The instance data to add
+            
+        Returns:
+            The created track instance
+            
+        Raises:
+            NotFoundException: If the project-track association is not found
+            DatabaseException: If there's a database error
+        """
+        self.logger.info(f"Adding instance to track {track_id} in project {project_id}")
+        try:
+            # Get current project-track
+            statement = select(ProjectTrack).where(
+                ProjectTrack.project_id == project_id,
+                ProjectTrack.track_id == track_id
+            )
+            project_track = self.session.exec(statement).first()
+            
+            if not project_track:
+                raise NotFoundException(
+                    "ProjectTrack",
+                    f"project_id={project_id}, track_id={track_id}"
+                )
+            
+            # Get current position metadata or create default
+            current_metadata = project_track.position_metadata or {
+                "instances": [],
+                "next_instance_id": 0
+            }
+            
+            # Create new instance
+            new_instance_id = current_metadata["next_instance_id"]
+            new_instance_dict = {
+                "id": new_instance_id,
+                **instance_data.model_dump(),
+                "created_at": datetime.utcnow()
+            }
+            
+            # Add to instances list
+            current_metadata["instances"].append(new_instance_dict)
+            current_metadata["next_instance_id"] = new_instance_id + 1
+            
+            # Update database
+            project_track.position_metadata = current_metadata
+            project_track.updated_at = datetime.utcnow()
+            
+            self.session.add(project_track)
+            self.session.commit()
+            self.session.refresh(project_track)
+            
+            # Return the created instance
+            created_instance = TrackInstanceRead(**new_instance_dict)
+            self.logger.info(f"Added instance {new_instance_id} to track {track_id}")
+            return created_instance
+            
+        except Exception as e:
+            self.session.rollback()
+            if isinstance(e, NotFoundException):
+                raise
+            self.logger.error(f"Error adding track instance: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise DatabaseException(f"Failed to add track instance: {str(e)}")
+
+    async def update_track_instance(
+        self,
+        project_id: uuid.UUID,
+        track_id: uuid.UUID,
+        instance_id: int,
+        updates: TrackInstanceUpdate
+    ) -> TrackInstanceRead:
+        """
+        Update a specific track instance
+        
+        Args:
+            project_id: The ID of the project
+            track_id: The ID of the track
+            instance_id: The ID of the instance to update
+            updates: The updates to apply
+            
+        Returns:
+            The updated track instance
+            
+        Raises:
+            NotFoundException: If the project-track or instance is not found
+            DatabaseException: If there's a database error
+        """
+        self.logger.info(f"Updating instance {instance_id} of track {track_id} in project {project_id}")
+        try:
+            # Get current project-track
+            statement = select(ProjectTrack).where(
+                ProjectTrack.project_id == project_id,
+                ProjectTrack.track_id == track_id
+            )
+            project_track = self.session.exec(statement).first()
+            
+            if not project_track:
+                raise NotFoundException(
+                    "ProjectTrack",
+                    f"project_id={project_id}, track_id={track_id}"
+                )
+            
+            # Get current position metadata
+            current_metadata = project_track.position_metadata or {
+                "instances": [],
+                "next_instance_id": 0
+            }
+            
+            # Find the instance to update
+            instance_index = None
+            for i, instance in enumerate(current_metadata["instances"]):
+                if instance["id"] == instance_id:
+                    instance_index = i
+                    break
+            
+            if instance_index is None:
+                raise NotFoundException(
+                    "TrackInstance",
+                    f"instance_id={instance_id} in track_id={track_id}"
+                )
+            
+            # Apply updates
+            instance_dict = current_metadata["instances"][instance_index]
+            update_data = updates.model_dump(exclude_unset=True)
+            
+            for field, value in update_data.items():
+                instance_dict[field] = value
+            
+            # Update metadata
+            current_metadata["instances"][instance_index] = instance_dict
+            project_track.position_metadata = current_metadata
+            project_track.updated_at = datetime.utcnow()
+            
+            self.session.add(project_track)
+            self.session.commit()
+            
+            # Return updated instance
+            updated_instance = TrackInstanceRead(**instance_dict)
+            self.logger.info(f"Updated instance {instance_id} of track {track_id}")
+            return updated_instance
+            
+        except Exception as e:
+            self.session.rollback()
+            if isinstance(e, NotFoundException):
+                raise
+            self.logger.error(f"Error updating track instance: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise DatabaseException(f"Failed to update track instance: {str(e)}")
+
+    async def remove_track_instance(
+        self,
+        project_id: uuid.UUID,
+        track_id: uuid.UUID,
+        instance_id: int
+    ) -> bool:
+        """
+        Remove a specific track instance
+        
+        Args:
+            project_id: The ID of the project
+            track_id: The ID of the track
+            instance_id: The ID of the instance to remove
+            
+        Returns:
+            True if successful, False if instance not found
+            
+        Raises:
+            NotFoundException: If the project-track is not found
+            DatabaseException: If there's a database error
+        """
+        self.logger.info(f"Removing instance {instance_id} of track {track_id} in project {project_id}")
+        try:
+            # Get current project-track
+            statement = select(ProjectTrack).where(
+                ProjectTrack.project_id == project_id,
+                ProjectTrack.track_id == track_id
+            )
+            project_track = self.session.exec(statement).first()
+            
+            if not project_track:
+                raise NotFoundException(
+                    "ProjectTrack",
+                    f"project_id={project_id}, track_id={track_id}"
+                )
+            
+            # Get current position metadata
+            current_metadata = project_track.position_metadata or {
+                "instances": [],
+                "next_instance_id": 0
+            }
+            
+            # Remove the instance
+            original_count = len(current_metadata["instances"])
+            current_metadata["instances"] = [
+                inst for inst in current_metadata["instances"] 
+                if inst["id"] != instance_id
+            ]
+            
+            if len(current_metadata["instances"]) == original_count:
+                # Instance not found
+                self.logger.info(f"Instance {instance_id} not found in track {track_id}")
+                return False
+            
+            # Update metadata
+            project_track.position_metadata = current_metadata
+            project_track.updated_at = datetime.utcnow()
+            
+            self.session.add(project_track)
+            self.session.commit()
+            
+            self.logger.info(f"Removed instance {instance_id} from track {track_id}")
+            return True
+            
+        except Exception as e:
+            self.session.rollback()
+            if isinstance(e, NotFoundException):
+                raise
+            self.logger.error(f"Error removing track instance: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise DatabaseException(f"Failed to remove track instance: {str(e)}")
+
+    async def get_track_instances(
+        self,
+        project_id: uuid.UUID,
+        track_id: uuid.UUID
+    ) -> List[TrackInstanceRead]:
+        """
+        Get all instances for a track
+        
+        Args:
+            project_id: The ID of the project
+            track_id: The ID of the track
+            
+        Returns:
+            List of track instances
+            
+        Raises:
+            NotFoundException: If the project-track is not found
+            DatabaseException: If there's a database error
+        """
+        self.logger.info(f"Getting instances for track {track_id} in project {project_id}")
+        try:
+            # Get current project-track
+            statement = select(ProjectTrack).where(
+                ProjectTrack.project_id == project_id,
+                ProjectTrack.track_id == track_id
+            )
+            project_track = self.session.exec(statement).first()
+            
+            if not project_track:
+                raise NotFoundException(
+                    "ProjectTrack",
+                    f"project_id={project_id}, track_id={track_id}"
+                )
+            
+            # Get instances from metadata
+            current_metadata = project_track.position_metadata or {
+                "instances": [],
+                "next_instance_id": 0
+            }
+            
+            instances = [
+                TrackInstanceRead(**instance_dict)
+                for instance_dict in current_metadata["instances"]
+            ]
+            
+            self.logger.info(f"Found {len(instances)} instances for track {track_id}")
+            return instances
+            
+        except Exception as e:
+            if isinstance(e, NotFoundException):
+                raise
+            self.logger.error(f"Error getting track instances: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise DatabaseException(f"Failed to get track instances: {str(e)}")
+
+    async def batch_update_instances(
+        self,
+        project_id: uuid.UUID,
+        updates: List[Dict[str, Any]]
+    ) -> List[TrackInstanceRead]:
+        """
+        Batch update multiple track instances
+        
+        Args:
+            project_id: The ID of the project
+            updates: List of update dictionaries with format:
+                     [{"track_id": UUID, "instance_id": int, "updates": TrackInstanceUpdate}]
+        
+        Returns:
+            List of updated track instances
+            
+        Raises:
+            DatabaseException: If there's a database error
+        """
+        self.logger.info(f"Batch updating {len(updates)} track instances in project {project_id}")
+        try:
+            updated_instances = []
+            
+            # Group updates by track_id for efficiency
+            updates_by_track = {}
+            for update in updates:
+                track_id = update["track_id"]
+                if track_id not in updates_by_track:
+                    updates_by_track[track_id] = []
+                updates_by_track[track_id].append(update)
+            
+            # Process each track
+            for track_id, track_updates in updates_by_track.items():
+                # Get project-track
+                statement = select(ProjectTrack).where(
+                    ProjectTrack.project_id == project_id,
+                    ProjectTrack.track_id == track_id
+                )
+                project_track = self.session.exec(statement).first()
+                
+                if not project_track:
+                    self.logger.warning(f"Project-track not found: {project_id}, {track_id}")
+                    continue
+                
+                # Get current metadata
+                current_metadata = project_track.position_metadata or {
+                    "instances": [],
+                    "next_instance_id": 0
+                }
+                
+                # Apply all updates for this track
+                for update in track_updates:
+                    instance_id = update["instance_id"]
+                    instance_updates = update["updates"]
+                    
+                    # Find instance
+                    for instance_dict in current_metadata["instances"]:
+                        if instance_dict["id"] == instance_id:
+                            # Apply updates
+                            if isinstance(instance_updates, TrackInstanceUpdate):
+                                update_data = instance_updates.model_dump(exclude_unset=True)
+                            else:
+                                update_data = instance_updates
+                            
+                            for field, value in update_data.items():
+                                instance_dict[field] = value
+                            
+                            updated_instances.append(TrackInstanceRead(**instance_dict))
+                            break
+                
+                # Update metadata
+                project_track.position_metadata = current_metadata
+                project_track.updated_at = datetime.utcnow()
+                self.session.add(project_track)
+            
+            self.session.commit()
+            
+            self.logger.info(f"Batch updated {len(updated_instances)} track instances")
+            return updated_instances
+            
+        except Exception as e:
+            self.session.rollback()
+            self.logger.error(f"Error in batch update: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise DatabaseException(f"Failed to batch update track instances: {str(e)}")

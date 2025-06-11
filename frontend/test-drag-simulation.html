@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Drag Simulation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-track {
+            position: absolute;
+            width: 200px;
+            height: 80px;
+            background: linear-gradient(180deg, #E91E6380 0%, #E91E63 100%);
+            border-radius: 6px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        .test-track.dragging {
+            cursor: grabbing;
+            z-index: 1001;
+        }
+        .timeline {
+            position: relative;
+            width: 1200px;
+            height: 400px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            margin-top: 50px;
+        }
+        .info {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Drag Simulation Test</h1>
+    <p>This simulates the exact drag behavior from BaseTrackPreview.tsx</p>
+    
+    <div class="info" id="info">
+        <h3>Track Position</h3>
+        <div id="position-info">Ready to test...</div>
+    </div>
+
+    <div class="timeline" id="timeline">
+        <div class="test-track" id="track">Test Track</div>
+    </div>
+
+    <script>
+        // Exact conversion functions from the app
+        const MEASURE_WIDTH = 200; // From gridStore DEFAULT_MEASURE_WIDTH
+        const BPM = 120;
+        const TIME_SIGNATURE = [4, 4];
+
+        function ticksToPixelsFixed(ticks, bpm, timeSignature, measureWidth) {
+            const beatsPerMeasure = timeSignature[0];
+            const ticksPerBeat = 960; // Standard MIDI ticks
+            const beats = ticks / ticksPerBeat;
+            const beatWidth = measureWidth / beatsPerMeasure;
+            return beats * beatWidth;
+        }
+
+        function pixelsToTicksFixed(pixels, bpm, timeSignature, measureWidth) {
+            const beatsPerMeasure = timeSignature[0];
+            const ticksPerBeat = 960;
+            const beatWidth = measureWidth / beatsPerMeasure;
+            const beats = pixels / beatWidth;
+            return Math.round(beats * ticksPerBeat);
+        }
+
+        // Track state
+        let track = {
+            x_position: 0, // In ticks
+            y_position: 100 // In pixels
+        };
+
+        // Drag state
+        let isDragging = false;
+        let startDragMousePosition = { x: 0, y: 0 };
+        let startDragTrackPosition = { x: 0, y: 0 };
+        let lastMovedPosition = { x: 0, y: 0 };
+        let dragMeasureWidth = MEASURE_WIDTH;
+
+        const trackElement = document.getElementById('track');
+        const infoElement = document.getElementById('position-info');
+
+        function updateDisplay() {
+            const pixelX = ticksToPixelsFixed(track.x_position, BPM, TIME_SIGNATURE, MEASURE_WIDTH);
+            trackElement.style.left = `${pixelX}px`;
+            trackElement.style.top = `${track.y_position}px`;
+            
+            infoElement.innerHTML = `
+                <strong>Storage (ticks):</strong> x=${track.x_position}, y=${track.y_position}<br>
+                <strong>Display (pixels):</strong> x=${pixelX.toFixed(1)}, y=${track.y_position}<br>
+                <strong>Measure Width:</strong> ${MEASURE_WIDTH}px<br>
+                <strong>Conversion Ratio:</strong> ${(960 / (MEASURE_WIDTH / 4)).toFixed(2)} ticks/pixel
+            `;
+        }
+
+        function handleMouseDown(e) {
+            if (isDragging) return;
+            
+            isDragging = true;
+            trackElement.classList.add('dragging');
+            
+            // Capture measure width at drag start
+            dragMeasureWidth = MEASURE_WIDTH;
+            
+            // Store initial mouse position
+            startDragMousePosition = {
+                x: e.clientX,
+                y: e.clientY
+            };
+            
+            // Convert track position to pixels and store
+            const positionXPixels = ticksToPixelsFixed(track.x_position, BPM, TIME_SIGNATURE, dragMeasureWidth);
+            startDragTrackPosition = {
+                x: positionXPixels,
+                y: track.y_position
+            };
+            
+            // Store in pixels for consistency
+            lastMovedPosition = { x: positionXPixels, y: track.y_position };
+            
+            console.log('Drag start:', {
+                trackTicks: track.x_position,
+                trackPixels: positionXPixels,
+                mousePos: startDragMousePosition
+            });
+        }
+
+        function handleMouseMove(e) {
+            if (!isDragging) return;
+            
+            // Calculate deltas
+            const deltaX = e.clientX - startDragMousePosition.x;
+            const deltaY = e.clientY - startDragMousePosition.y;
+            
+            // Apply deltas to pixel positions
+            const newX = startDragTrackPosition.x + deltaX;
+            const newY = startDragTrackPosition.y + deltaY;
+            
+            // Apply snapping (simplified)
+            const trackHeight = 80;
+            const snappedX = Math.max(0, newX);
+            const snappedY = Math.max(0, Math.round(newY / trackHeight) * trackHeight);
+            
+            // Store in pixels during drag
+            lastMovedPosition = { x: snappedX, y: snappedY };
+            
+            // Update visual position
+            trackElement.style.left = `${snappedX}px`;
+            trackElement.style.top = `${snappedY}px`;
+            
+            // Update info display
+            infoElement.innerHTML = `
+                <strong>DRAGGING</strong><br>
+                <strong>Mouse Delta:</strong> x=${deltaX}, y=${deltaY}<br>
+                <strong>Track Pixel Pos:</strong> x=${snappedX.toFixed(1)}, y=${snappedY}<br>
+                <strong>Expected Movement:</strong> 1:1 with mouse
+            `;
+        }
+
+        function handleMouseUp(e) {
+            if (!isDragging) return;
+            
+            isDragging = false;
+            trackElement.classList.remove('dragging');
+            
+            // Convert final pixel position back to ticks for storage
+            const finalTickPosition = {
+                x: pixelsToTicksFixed(lastMovedPosition.x, BPM, TIME_SIGNATURE, dragMeasureWidth),
+                y: lastMovedPosition.y
+            };
+            
+            // Update track state
+            track.x_position = finalTickPosition.x;
+            track.y_position = finalTickPosition.y;
+            
+            console.log('Drag end:', {
+                finalPixels: lastMovedPosition,
+                finalTicks: finalTickPosition,
+                measureWidth: dragMeasureWidth
+            });
+            
+            // Update display
+            updateDisplay();
+        }
+
+        // Event listeners
+        trackElement.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        // Initial display
+        updateDisplay();
+
+        // Test button
+        const testButton = document.createElement('button');
+        testButton.textContent = 'Test 50px Right + 100px Down Movement';
+        testButton.style.position = 'fixed';
+        testButton.style.bottom = '20px';
+        testButton.style.left = '20px';
+        testButton.style.padding = '10px';
+        testButton.style.fontSize = '14px';
+        testButton.addEventListener('click', () => {
+            // Simulate exact drag movement
+            const rect = trackElement.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            // Simulate mousedown
+            handleMouseDown({ clientX: centerX, clientY: centerY });
+            
+            // Simulate mousemove 50px right, 100px down
+            setTimeout(() => {
+                handleMouseMove({ clientX: centerX + 50, clientY: centerY + 100 });
+                
+                // Simulate mouseup
+                setTimeout(() => {
+                    handleMouseUp({ clientX: centerX + 50, clientY: centerY + 100 });
+                    
+                    // Check result
+                    setTimeout(() => {
+                        const finalPixelX = ticksToPixelsFixed(track.x_position, BPM, TIME_SIGNATURE, MEASURE_WIDTH);
+                        const actualMovementX = finalPixelX - 0; // Started at 0
+                        const actualMovementY = track.y_position - 100; // Started at 100
+                        
+                        alert(`Movement Test Result:
+Expected: 50px right, 100px down
+Actual: ${actualMovementX.toFixed(1)}px right, ${actualMovementY}px down
+Success: ${Math.abs(actualMovementX - 50) < 1 && Math.abs(actualMovementY - 100) < 1}`);
+                    }, 100);
+                }, 100);
+            }, 100);
+        });
+        document.body.appendChild(testButton);
+    </script>
+</body>
+</html>

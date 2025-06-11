@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real Drag Test with Current Code</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #1a1a1a; 
+            color: white;
+        }
+        .timeline {
+            position: relative;
+            width: 1200px;
+            height: 400px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            margin: 20px 0;
+            overflow: auto;
+        }
+        .track {
+            position: absolute;
+            width: 200px;
+            height: 80px;
+            background: linear-gradient(180deg, #E91E6380 0%, #E91E63 100%);
+            border-radius: 6px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            border: 2px solid transparent;
+        }
+        .track.dragging {
+            cursor: grabbing;
+            z-index: 1001;
+            border-color: #2196f3;
+        }
+        .info {
+            background: #333;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-family: monospace;
+        }
+        .grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real Drag Test - Current Implementation</h1>
+    <p>This uses the EXACT same coordinate conversion and drag logic as the real app</p>
+    
+    <div class="info" id="info">
+        <div>Drag the track and observe movement accuracy</div>
+        <div id="position-display">Ready...</div>
+    </div>
+
+    <div class="timeline" id="timeline">
+        <canvas class="grid" id="grid"></canvas>
+        <div class="track" id="track">Test Track</div>
+    </div>
+
+    <button onclick="runTest()">Test 50px Right + 100px Down</button>
+    <button onclick="resetTrack()">Reset Position</button>
+
+    <script>
+        // EXACT same constants and functions from the real app
+        const DEFAULT_MEASURE_WIDTH = 200;
+        const TRACK_HEIGHT = 80;
+        const BPM = 120;
+        const TIME_SIGNATURE = [4, 4];
+
+        // From gridConstants.ts - EXACT same functions
+        const MUSIC_CONSTANTS = { pulsesPerQuarterNote: 960 };
+
+        function ticksToPixelsFixed(ticks, bpm, timeSignature, measureWidth) {
+            const beatsPerMeasure = timeSignature[0];
+            const ticksPerBeat = 960;
+            const beats = ticks / ticksPerBeat;
+            const beatWidth = measureWidth / beatsPerMeasure;
+            return beats * beatWidth;
+        }
+
+        function pixelsToTicksFixed(pixels, bpm, timeSignature, measureWidth) {
+            const beatsPerMeasure = timeSignature[0];
+            const ticksPerBeat = 960;
+            const beatWidth = measureWidth / beatsPerMeasure;
+            const beats = pixels / beatWidth;
+            return Math.round(beats * ticksPerBeat);
+        }
+
+        // Track state (mimics the real track object)
+        let track = {
+            x_position: 0, // In ticks (like real app)
+            y_position: 100, // In pixels (like real app)
+            id: 'test-track'
+        };
+
+        // Drag state (EXACT same as BaseTrackPreview.tsx)
+        let isDragging = false;
+        let startDragMousePosition = { x: 0, y: 0 };
+        let startDragTrackPosition = { x: 0, y: 0 };
+        let lastMovedPosition = { x: 0, y: 0 };
+        let dragMeasureWidth = DEFAULT_MEASURE_WIDTH;
+
+        const trackElement = document.getElementById('track');
+        const timelineElement = document.getElementById('timeline');
+        const infoElement = document.getElementById('position-display');
+
+        function updateDisplay() {
+            // EXACT same logic as BaseTrackPreview initial style
+            const initialPixelX = ticksToPixelsFixed(track.x_position, BPM, TIME_SIGNATURE, DEFAULT_MEASURE_WIDTH);
+            
+            trackElement.style.left = `${initialPixelX}px`;
+            trackElement.style.top = `${track.y_position}px`;
+            
+            infoElement.innerHTML = `
+                <strong>Track Position:</strong><br>
+                Storage: x=${track.x_position} ticks, y=${track.y_position}px<br>
+                Display: x=${initialPixelX.toFixed(1)}px, y=${track.y_position}px<br>
+                Measure Width: ${DEFAULT_MEASURE_WIDTH}px<br>
+                Conversion: ${(960 / (DEFAULT_MEASURE_WIDTH / 4)).toFixed(2)} ticks/pixel
+            `;
+        }
+
+        // EXACT same mouse handlers as BaseTrackPreview.tsx
+        function handleMouseDown(e) {
+            if (isDragging) return;
+            
+            console.log('🖱️ DRAG START');
+            
+            isDragging = true;
+            trackElement.classList.add('dragging');
+            
+            // EXACT same logic as BaseTrackPreview
+            const container = timelineElement;
+            
+            // Capture measure width at drag start
+            dragMeasureWidth = DEFAULT_MEASURE_WIDTH;
+            
+            // Store initial mouse position
+            startDragMousePosition = {
+                x: e.clientX + (container.scrollLeft || 0),
+                y: e.clientY + (container.scrollTop || 0)
+            };
+            
+            // Convert track position to pixels and store
+            const positionXPixels = ticksToPixelsFixed(track.x_position, BPM, TIME_SIGNATURE, dragMeasureWidth);
+            startDragTrackPosition = {
+                x: positionXPixels,
+                y: track.y_position
+            };
+            
+            // Store in pixels for consistency
+            lastMovedPosition = { x: positionXPixels, y: track.y_position };
+            
+            console.log('Drag start state:', {
+                trackTicks: track.x_position,
+                trackPixels: positionXPixels,
+                mousePos: startDragMousePosition,
+                dragMeasureWidth
+            });
+        }
+
+        function handleMouseMove(e) {
+            if (!isDragging) return;
+            
+            const container = timelineElement;
+            
+            // Calculate mouse position with scroll offset
+            const currentMouseX = e.clientX + container.scrollLeft;
+            const currentMouseY = e.clientY + container.scrollTop;
+
+            // Calculate position delta
+            const deltaX = currentMouseX - startDragMousePosition.x;
+            const deltaY = currentMouseY - startDragMousePosition.y;
+            const newX = startDragTrackPosition.x + deltaX;
+            const newY = startDragTrackPosition.y + deltaY;
+
+            // NO SNAPPING for testing (as per latest fix)
+            const snappedX = newX;
+            const snappedY = newY;
+            
+            // Keep everything in pixels during drag
+            const newPosition = {
+                x: Math.max(0, snappedX),
+                y: Math.max(0, snappedY)
+            };
+
+            // Update visual position
+            trackElement.style.left = `${snappedX}px`;
+            trackElement.style.top = `${snappedY}px`;
+            
+            // Store position for final update
+            lastMovedPosition = newPosition;
+            
+            // Update info display
+            infoElement.innerHTML = `
+                <strong>DRAGGING</strong><br>
+                Mouse Delta: x=${deltaX.toFixed(1)}, y=${deltaY.toFixed(1)}<br>
+                Track Pixel Pos: x=${snappedX.toFixed(1)}, y=${snappedY.toFixed(1)}<br>
+                Expected: 1:1 movement with mouse
+            `;
+        }
+
+        function handleMouseUp(e) {
+            if (!isDragging) return;
+            
+            console.log('🖱️ DRAG END');
+            
+            isDragging = false;
+            trackElement.classList.remove('dragging');
+            
+            // EXACT same logic as BaseTrackPreview mouseUp
+            const finalPixelPosition = lastMovedPosition;
+            
+            // Convert final pixel position to ticks for storage
+            const finalTickPosition = {
+                x: pixelsToTicksFixed(finalPixelPosition.x, BPM, TIME_SIGNATURE, dragMeasureWidth),
+                y: finalPixelPosition.y
+            };
+            
+            // Update track state
+            const oldPosition = { ...track };
+            track.x_position = finalTickPosition.x;
+            track.y_position = finalTickPosition.y;
+            
+            console.log('Drag end result:', {
+                oldPosition,
+                finalPixels: finalPixelPosition,
+                finalTicks: finalTickPosition,
+                actualMovement: {
+                    x: finalPixelPosition.x - startDragTrackPosition.x,
+                    y: finalPixelPosition.y - startDragTrackPosition.y
+                }
+            });
+            
+            // Update display
+            updateDisplay();
+        }
+
+        // Event listeners
+        trackElement.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        function runTest() {
+            console.log('🧪 RUNNING AUTOMATED TEST');
+            
+            const rect = trackElement.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const initialPixelX = ticksToPixelsFixed(track.x_position, BPM, TIME_SIGNATURE, DEFAULT_MEASURE_WIDTH);
+            const initialY = track.y_position;
+            
+            // Simulate drag
+            handleMouseDown({ 
+                clientX: centerX, 
+                clientY: centerY,
+                target: trackElement
+            });
+            
+            setTimeout(() => {
+                handleMouseMove({ 
+                    clientX: centerX + 50, 
+                    clientY: centerY + 100
+                });
+                
+                setTimeout(() => {
+                    handleMouseUp({});
+                    
+                    setTimeout(() => {
+                        const finalPixelX = ticksToPixelsFixed(track.x_position, BPM, TIME_SIGNATURE, DEFAULT_MEASURE_WIDTH);
+                        const finalY = track.y_position;
+                        
+                        const actualMovementX = finalPixelX - initialPixelX;
+                        const actualMovementY = finalY - initialY;
+                        
+                        const result = `
+TEST RESULT:
+Expected: 50px right, 100px down
+Actual: ${actualMovementX.toFixed(1)}px right, ${actualMovementY.toFixed(1)}px down
+Success: ${Math.abs(actualMovementX - 50) < 1 && Math.abs(actualMovementY - 100) < 1}
+X Error: ${Math.abs(actualMovementX - 50).toFixed(1)}px
+Y Error: ${Math.abs(actualMovementY - 100).toFixed(1)}px
+                        `;
+                        
+                        alert(result);
+                        console.log(result);
+                    }, 100);
+                }, 100);
+            }, 100);
+        }
+
+        function resetTrack() {
+            track.x_position = 0;
+            track.y_position = 100;
+            updateDisplay();
+        }
+
+        // Draw grid
+        function drawGrid() {
+            const canvas = document.getElementById('grid');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = 1200;
+            canvas.height = 400;
+            
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            
+            // Draw vertical lines (measures)
+            for (let i = 0; i <= 1200; i += DEFAULT_MEASURE_WIDTH) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, 400);
+                ctx.stroke();
+            }
+            
+            // Draw horizontal lines (tracks)
+            for (let i = 0; i <= 400; i += TRACK_HEIGHT) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(1200, i);
+                ctx.stroke();
+            }
+        }
+
+        // Initialize
+        updateDisplay();
+        drawGrid();
+    </script>
+</body>
+</html>

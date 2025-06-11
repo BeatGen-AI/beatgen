@@ -67,15 +67,60 @@ function Track(props: TrackProps) {
       return ticksToPixels(visibleDurationTicks, bpm ?? 120, timeSignature ?? [4, 4]);
   }, [fullTrack, bpm, timeSignature]);
   
+  // Track selection state
+  const isSelected = useStudioStore(state => state.isTrackSelected(id));
+  const selectTrack = useStudioStore(state => state.selectTrack);
+  const clearSelection = useStudioStore(state => state.clearSelection);
+  const openContextMenu = useStudioStore(state => state.openContextMenu);
+
   // Callbacks use memoized fullTrack or selected actions
   const handleTrackClick = useCallback((e: React.MouseEvent) => {
+    console.log('🖱️ TRACK CLICK - Track clicked:', id);
+    console.log('🖱️ - fullTrack exists:', !!fullTrack);
+    console.log('🖱️ - ctrlKey:', e.ctrlKey);
+    console.log('🖱️ - metaKey:', e.metaKey);
+    console.log('🖱️ - shiftKey:', e.shiftKey);
+    console.log('🖱️ - current isSelected:', isSelected);
+    
     if (!fullTrack) return;
-    if (fullTrack.type === 'DRUM') {
-      openDrumMachine(id); 
-    } else if (fullTrack.type === 'MIDI' || fullTrack.type === 'SAMPLER') {
-      openPianoRoll(id); 
+    
+    // Handle selection
+    if (e.ctrlKey || e.metaKey) {
+      // Add to selection
+      console.log('🖱️ - Action: Add to selection');
+      selectTrack(id, true);
+    } else if (e.shiftKey) {
+      // TODO: Implement range selection
+      console.log('🖱️ - Action: Range selection (not implemented)');
+      selectTrack(id, false);
+    } else {
+      // Single selection
+      console.log('🖱️ - Action: Single selection');
+      selectTrack(id, false);
     }
-  }, [fullTrack, id, openDrumMachine, openPianoRoll]);
+    
+    // Open appropriate editor for single tracks (not when multi-selecting)
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      if (fullTrack.type === 'DRUM') {
+        openDrumMachine(id); 
+      } else if (fullTrack.type === 'MIDI' || fullTrack.type === 'SAMPLER') {
+        openPianoRoll(id); 
+      }
+    }
+  }, [fullTrack, id, openDrumMachine, openPianoRoll, selectTrack]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Select track if not already selected
+    if (!isSelected) {
+      selectTrack(id, false);
+    }
+    
+    // Open context menu at mouse position
+    openContextMenu(e.clientX, e.clientY, id);
+  }, [id, isSelected, selectTrack, openContextMenu]);
 
   const handlePositionChangeForFactory = useCallback((trackId: string, newPosition: Position, isDragEnd: boolean) => {
       handleTrackPositionChange(trackId, newPosition, isDragEnd);
@@ -105,10 +150,18 @@ function Track(props: TrackProps) {
 
   return (
     <Box 
-      onClick={handleTrackClick} 
-      sx={{ position: 'relative', cursor: 'pointer' }}
+      onClick={handleTrackClick}
+      onContextMenu={handleContextMenu}
+      sx={{ 
+        position: 'relative', 
+        cursor: 'pointer',
+        outline: isSelected ? '2px solid #2196f3' : 'none',
+        outlineOffset: '-2px',
+        borderRadius: '6px'
+      }}
       data-track-id={id}
-      data-track-type={fullTrack.type} 
+      data-track-type={fullTrack.type}
+      data-selected={isSelected}
     >
       <TrackFactory
         track={fullTrack}

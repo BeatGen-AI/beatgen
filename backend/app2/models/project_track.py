@@ -2,7 +2,7 @@
 Link table model for the many-to-many relationship between Projects and Track types
 """
 
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Dict
 import uuid
 from sqlmodel import Field, Relationship
 from sqlalchemy import Column, Enum as SAEnum
@@ -106,3 +106,9 @@ class ProjectTrackUpdate(all_optional(ProjectTrackRead, "ProjectTrackUpdate")):
     track_id: uuid.UUID
     project_id: uuid.UUID
     track_type: TrackType
+
+
+class ProjectTrackWithInstances(ProjectTrackRead):
+    """Enhanced model that includes position metadata for instances"""
+    
+    position_metadata: Optional[Dict] = None

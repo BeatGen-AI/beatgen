@@ -14,6 +14,8 @@ import {
   getSnapSizeInPixels 
 } from './gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
+// Import extracted selection utilities
+import { useMultiSelection, GridSnapConfig, SelectableItem } from '../../core/selection';
 
 // Define a constant grid size to use throughout the component
 const GRID_SIZE = 48; // pixels
@@ -22,11 +24,16 @@ const TICKS_PER_BEAT = PULSES_PER_QUARTER_NOTE * 4; // Standard MIDI ticks per b
 const PIXELS_PER_TICK = GRID_SIZE / PULSES_PER_QUARTER_NOTE; // Pixels per tick at 1.0 zoom
 
 // Define our note state interface (normalized values independent of zoom)
-export interface NoteState {
+export interface NoteState extends SelectableItem {
   id: number;
   length: number;  // Length in ticks (1/960th of a beat)
   row: number;     // Row index (0-131 for our 132 keys)
   column: number;  // Column position in ticks (1/960th of a beat)
+  // Required by SelectableItem (will be calculated from row/column/length)
+  x: number;       // Display position in pixels
+  y: number;       // Display position in pixels
+  width: number;   // Display width in pixels
+  height?: number; // Display height in pixels
 }
 
 // Custom scrollbar styles
@@ -1165,17 +1172,116 @@ export const PianoRoll: FC<PianoRollProps> = ({
   // Tool selection state
   const [selectedTool, setSelectedTool] = useState<'select' | 'pen' | 'highlighter' | 'eraser'>('pen'); // Default to pen
   
-  // Selection rectangle state
-  const [selectionRect, setSelectionRect] = useState<{startX: number, startY: number, width: number, height: number} | null>(null);
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
+  // Piano roll dimensions
+  const totalKeys = 132;
+  const keyHeight = 25;
   
-  // Initialize directly from the prop
-  const [normalizedNotes, setNormalizedNotes] = useState<NoteState[]>(initialNotes);
+  // Initialize directly from the prop - convert to include display coordinates
+  const [normalizedNotes, setNormalizedNotes] = useState<NoteState[]>(
+    initialNotes.map(note => ({
+      ...note,
+      x: note.column * PIXELS_PER_TICK * zoomLevel,
+      y: (totalKeys - 1 - note.row) * keyHeight,
+      width: note.length * PIXELS_PER_TICK * zoomLevel,
+      height: keyHeight
+    }))
+  );
+  
+  // Calculate effective grid size based on zoom level
+  const effectiveGridSize = GRID_SIZE * zoomLevel;
+  
+  // Setup selection manager with extracted utilities
+  const selectionManager = useMultiSelection<NoteState>({
+    getAllItems: () => {
+      // Convert normalizedNotes to have display coordinates for selection utilities
+      return normalizedNotes.map(noteState => ({
+        ...noteState,
+        x: noteState.column * PIXELS_PER_TICK * zoomLevel, // Convert ticks to pixels
+        y: (totalKeys - 1 - noteState.row) * keyHeight, // Convert row to pixels (inverted)
+        width: noteState.length * PIXELS_PER_TICK * zoomLevel, // Convert ticks to pixels
+        height: keyHeight
+      }));
+    },
+    updateItems: (updates) => {
+      // Convert pixel updates back to tick coordinates and update normalizedNotes
+      const updatedNotes = normalizedNotes.map(note => {
+        const update = updates.get(note.id);
+        if (update) {
+          const newNote = { ...note };
+          if (update.x !== undefined) {
+            newNote.column = Math.round(update.x / (PIXELS_PER_TICK * zoomLevel));
+          }
+          if (update.y !== undefined) {
+            newNote.row = totalKeys - 1 - Math.floor(update.y / keyHeight);
+          }
+          if (update.width !== undefined) {
+            newNote.length = Math.round(update.width / (PIXELS_PER_TICK * zoomLevel));
+          }
+          return newNote;
+        }
+        return note;
+      });
+      setNormalizedNotes(updatedNotes);
+      updateParentNotes(updatedNotes);
+    },
+    createItem: (noteData, position) => {
+      // Create new note at the specified position
+      const columnInTicks = Math.round(position.x / (PIXELS_PER_TICK * zoomLevel));
+      const rowIndex = totalKeys - 1 - Math.floor(position.y / keyHeight);
+      
+      const currentId = nextNoteId;
+      setNextNoteId(currentId + 1);
+      
+      const newNote: NoteState = {
+        id: currentId,
+        column: columnInTicks,
+        row: rowIndex,
+        length: noteData.length || lastNoteWidth, // Use existing length or default
+        x: position.x, // These will be calculated by getAllItems
+        y: position.y,
+        width: (noteData.length || lastNoteWidth) * PIXELS_PER_TICK * zoomLevel,
+        height: keyHeight
+      };
+      
+      const updatedNotes = [...normalizedNotes, newNote];
+      setNormalizedNotes(updatedNotes);
+      updateParentNotes(updatedNotes);
+      
+      return currentId;
+    },
+    deleteItem: (noteId) => {
+      const updatedNotes = normalizedNotes.filter(note => note.id !== noteId);
+      setNormalizedNotes(updatedNotes);
+      updateParentNotes(updatedNotes);
+    },
+    gridSnap: gridSnapEnabled ? {
+      enabled: true,
+      sizeX: getSnapSizeInPixels(gridSnapSize, effectiveGridSize),
+      sizeY: keyHeight,
+      minWidth: PIXELS_PER_TICK * zoomLevel // Minimum one tick width
+    } : undefined
+  });
+
+  // Extract the selection state for compatibility with existing code
+  const selectedNoteIds = selectionManager.selectedIds as number[];
+  const setSelectedNoteIds = (ids: number[]) => {
+    // Clear current selection and select the new ids
+    selectionManager.clearSelection();
+    ids.forEach(id => selectionManager.toggleSelection(id, true));
+  };
+  const selectionRect = selectionManager.selectionRect;
+  const isSelecting = selectionManager.isSelecting;
   
   // Effect to synchronize internal state when initialNotes prop changes from parent
   useEffect(() => {
-    setNormalizedNotes(initialNotes);
+    const convertedNotes = initialNotes.map(note => ({
+      ...note,
+      x: note.column * PIXELS_PER_TICK * zoomLevel,
+      y: (totalKeys - 1 - note.row) * keyHeight,
+      width: note.length * PIXELS_PER_TICK * zoomLevel,
+      height: keyHeight
+    }));
+    setNormalizedNotes(convertedNotes);
     // Update nextNoteId as well if external notes change
     if (initialNotes.length > 0) {
       const maxId = Math.max(...initialNotes.map(note => note.id), 0); // Added default 0 for empty array case
@@ -1183,13 +1289,13 @@ export const PianoRoll: FC<PianoRollProps> = ({
     } else {
       setNextNoteId(1); // Reset if notes are cleared externally
     }
-  }, [initialNotes]); // Depend ONLY on the initialNotes prop
+  }, [initialNotes, zoomLevel, keyHeight, totalKeys]); // Include dependencies for coordinate conversion
   
   // Handle tool selection with note deselection
   const handleToolSelect = (tool: 'select' | 'pen' | 'highlighter' | 'eraser') => {
     // If switching away from select tool, clear the selection
     if (selectedTool === 'select' && tool !== 'select') {
-      setSelectedNoteIds([]);
+      selectionManager.clearSelection();
     }
     setSelectedTool(tool);
   };
@@ -1203,9 +1309,6 @@ export const PianoRoll: FC<PianoRollProps> = ({
   const handleZoomOut = () => {
     setZoomLevel(prev => Math.max(MIN_ZOOM, prev - ZOOM_STEP));
   };
-  
-  // Calculate effective grid size based on zoom level
-  const effectiveGridSize = GRID_SIZE * zoomLevel;
   
   // Get snap option display name - MOVED TO gridConstants.ts
   /*
@@ -1291,8 +1394,6 @@ export const PianoRoll: FC<PianoRollProps> = ({
   const vScrollbarTrackRef = useRef<HTMLDivElement>(null);
 
   // Calculate total content height based on number of keys
-  const totalKeys = 132;
-  const keyHeight = 25;
   const contentHeight = totalKeys * keyHeight;
   const measureSize = 4 * effectiveGridSize; // Size of measure lines in pixels (every 4 grid cells)
   
@@ -1639,6 +1740,11 @@ export const PianoRoll: FC<PianoRollProps> = ({
       // The row is now inverted - convert from pixel position to note index
       row: totalKeys - 1 - Math.floor(note.top / keyHeight),
       column: Math.round(note.start / (PIXELS_PER_TICK * zoomLevel)),
+      // Required by SelectableItem interface - add display coordinates
+      x: note.start,
+      y: note.top,
+      width: note.width,
+      height: keyHeight
     }));
   };
 
@@ -1752,17 +1858,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
 
       if (selectedTool === 'select') {
         // Start selection rectangle
-        setSelectionRect({
-          startX: x,
-          startY: y,
-          width: 0,
-          height: 0
-        });
-        setIsSelecting(true);
-        // Clear selected notes when starting a new selection unless shift key is pressed
-        if (!e.evt.shiftKey) {
-          setSelectedNoteIds([]);
-        }
+        selectionManager.startSelectionRect(x, y, !e.evt.shiftKey);
       } else if (selectedTool === 'pen' || selectedTool === 'highlighter') {
         // Get current snap size in pixels (already accounts for zoom)
         const actualGridSize = getSnapSizeInPixels(gridSnapSize, effectiveGridSize);
@@ -1879,11 +1975,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
     
     if (isSelecting && selectionRect) {
       // Update selection rectangle dimensions
-      setSelectionRect({
-        ...selectionRect,
-        width: x - selectionRect.startX,
-        height: y - selectionRect.startY
-      });
+      selectionManager.updateSelectionRectangle(x, y);
     }
     
     // Track hover position for note preview when using the pen tool or highlighter tool
@@ -1975,13 +2067,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
     
     // Only allow selection when in select mode
     if (selectedTool === 'select') {
-      setSelectedNoteIds(prevSelected => {
-        if (prevSelected.includes(noteId)) {
-          return prevSelected.filter(id => id !== noteId);
-        } else {
-          return [...prevSelected, noteId];
-        }
-      });
+      selectionManager.toggleSelection(noteId, true);
     }
   };
 
@@ -2096,44 +2182,8 @@ export const PianoRoll: FC<PianoRollProps> = ({
   // Modify mouse up to reset highlighting state
   const handleStageMouseUp = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (isSelecting && selectionRect) {
-      // Finalize selection
-      setIsSelecting(false);
-      
-      // Ensure width and height are positive for calculations
-      const x = selectionRect.width < 0 ? selectionRect.startX + selectionRect.width : selectionRect.startX;
-      const y = selectionRect.height < 0 ? selectionRect.startY + selectionRect.height : selectionRect.startY;
-      const width = Math.abs(selectionRect.width);
-      const height = Math.abs(selectionRect.height);
-      
-      // Find notes that start within the selection rectangle
-      const selectedIds = visualNotes
-        .filter(note => 
-          note.start >= x && 
-          note.start <= x + width && 
-          note.top >= y && 
-          note.top <= y + height
-        )
-        .map(note => note.id);
-      
-      // Update selected notes
-      if (e.evt.shiftKey) {
-        // Add to existing selection with shift key
-        setSelectedNoteIds(prevSelected => {
-          const mergedSelection = [...prevSelected];
-          selectedIds.forEach(id => {
-            if (!prevSelected.includes(id)) {
-              mergedSelection.push(id);
-            }
-          });
-          return mergedSelection;
-        });
-      } else {
-        // Replace selection
-        setSelectedNoteIds(selectedIds);
-      }
-      
-      // Clear selection rectangle
-      setSelectionRect(null);
+      // Finalize selection using the selection manager
+      selectionManager.endSelectionRect(e.evt.shiftKey);
     }
   };
 
@@ -2469,8 +2519,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
     
     // Clear selection rectangle if we're in the middle of selecting
     if (isSelecting) {
-      setIsSelecting(false);
-      setSelectionRect(null);
+      selectionManager.clearSelection();
     }
   };
 

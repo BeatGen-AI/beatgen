@@ -1,12 +1,15 @@
 import React, { forwardRef, useRef, useImperativeHandle } from 'react';
 import { Box, useTheme } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { GRID_CONSTANTS, calculatePositionTime } from '../../constants/gridConstants';
+import { GRID_CONSTANTS, calculatePositionTime, pixelsToTicks } from '../../constants/gridConstants';
 import Track from '../track/Track';
+import TrackInstance from '../track/TrackInstance';
+import TrackSelectionLayer from './TrackSelectionLayer';
 import PlaybackCursor, { PlaybackCursorRef } from './PlaybackCursor';
 import { CombinedTrack } from 'src/platform/types/project';
 import { Position } from '../track/types';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useStudioStore } from '../../stores/studioStore';
 import { cn } from '@/lib/utils';
 
 export interface TimelineProps {
@@ -381,45 +384,99 @@ function TimelineContent({
   onTimeChange,
   totalWidth
 }: TimelineContentProps) {
-  // const theme = useTheme(); // No longer need theme for grid colors
+  // Get track instances from store
+  const getAllInstances = useStudioStore(state => state.getAllInstances);
+  const getInstancesByTrack = useStudioStore(state => state.getInstancesByTrack);
   
-  // Handler for timeline content clicks to set playback position
-  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  // Get select-to-paste functionality from store
+  const selectedTrackForPasting = useStudioStore(state => state.selectedTrackForPasting);
+  const pasteSelectedTrackAtPosition = useStudioStore(state => state.pasteSelectedTrackAtPosition);
+  
+  // Handler for timeline content clicks to set playback position and paste tracks
+  const handleTimelineClick = async (e: React.MouseEvent<HTMLDivElement>) => {
     // Only handle direct clicks on the background, not on tracks
-    if ((e.target as HTMLElement).closest('.track')) {
-      console.log('Click on track - ignoring for timeline click');
+    if ((e.target as HTMLElement).closest('.track') || (e.target as HTMLElement).closest('[data-track-instance-id]')) {
+      console.log('Click on track or track instance - ignoring for timeline click');
       return;
     }
     
     // Get click position relative to the content area
     const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
+    const scrollLeft = e.currentTarget.scrollLeft || 0;
+    const scrollTop = e.currentTarget.scrollTop || 0;
+    
+    // Calculate click position including scroll offsets
+    const clickX = e.clientX - rect.left + scrollLeft;
+    const clickY = e.clientY - rect.top + scrollTop;
     
     // Adjust for zoom level
     const adjustedX = clickX / zoomLevel;
     
-    // Convert pixel position to time in seconds
-    const newTime = calculatePositionTime(adjustedX, bpm, timeSignature);
-    
-    console.log('Timeline content clicked!', {
+    console.log('Timeline clicked!', {
       clickX,
+      clickY,
       adjustedX,
-      newTime,
       zoomLevel,
-      bpm,
-      timeSignature,
+      selectedTrackForPasting,
       target: e.target,
       currentTarget: e.currentTarget
     });
     
-    // Call the callback with the new time
-    onTimeChange(newTime);
+    // Check if we have a track selected for pasting
+    if (selectedTrackForPasting) {
+      // CRITICAL FIX: Snap Y coordinate to track lanes starting from the top
+      // Track lanes should start at Y=0 and increment by trackHeight
+      const trackLaneIndex = Math.floor(clickY / GRID_CONSTANTS.trackHeight);
+      const trackLaneY = trackLaneIndex * GRID_CONSTANTS.trackHeight;
+      
+      // Snap X coordinate to musical grid (16th note resolution for precise timing)
+      const gridSize = GRID_CONSTANTS.measureWidth / 16; // 16th note grid
+      const snappedX = Math.round(adjustedX / gridSize) * gridSize;
+      
+      console.log('📋 TIMELINE PASTE - Pasting selected track at position:', { 
+        rawClick: { x: clickX, y: clickY },
+        adjusted: { x: adjustedX, y: clickY },
+        trackLaneIndex,
+        snapped: { x: snappedX, y: trackLaneY },
+        trackHeight: GRID_CONSTANTS.trackHeight,
+        measureWidth: GRID_CONSTANTS.measureWidth,
+        gridSize,
+        scrollLeft,
+        scrollTop,
+        zoomLevel
+      });
+      
+      // Paste the selected track at the snapped position
+      await pasteSelectedTrackAtPosition(snappedX, trackLaneY);
+      
+      console.log('📋 TIMELINE PASTE - Track pasted successfully');
+    } else {
+      // No track selected for pasting, handle normal timeline click (seek)
+      
+      // Convert pixel position to time in seconds
+      const newTime = calculatePositionTime(adjustedX, bpm, timeSignature);
+      
+      console.log('⏱️ TIMELINE SEEK - Setting playback time to:', newTime);
+      
+      // Call the callback with the new time
+      onTimeChange(newTime);
+    }
   };
   
   // Define fixed gray colors for grid lines
   const fixedMeasureColor = 'rgba(128, 128, 128, 0.8)'; // Medium Gray, strong alpha
   const fixedBeatColor = 'rgba(128, 128, 128, 0.5)';    // Medium Gray, medium alpha
   const fixedSubdivisionColor = 'rgba(128, 128, 128, 0.25)'; // Medium Gray, low alpha
+
+  // Get all track instances
+  const allInstances = getAllInstances();
+  
+  // Create a map of track ID to track data for easy lookup
+  const trackMap = new Map(tracks.map(track => [track.id, track]));
+  
+  console.log('🎵 TIMELINE RENDER - Track instances:', allInstances.length);
+  console.log('🎵 - Available tracks:', tracks.length);
+  console.log('🎵 - Track instances:', allInstances.map(i => ({ instanceId: i.instanceId, trackId: i.trackId, position: i.position })));
 
   return (
     <Box 
@@ -434,7 +491,6 @@ function TimelineContent({
       style={{
         width: totalWidth ? `${totalWidth}px` : '100%',
       }}
-      onClick={handleTimelineClick}
     >
       {/* Pass fixed gray colors to GridOverlay */}
       <GridOverlay 
@@ -445,14 +501,37 @@ function TimelineContent({
         subdivisionColor={fixedSubdivisionColor}
       />
 
-      {tracks.map((track, index) => (
-        <Track 
-          key={track.id}
-          id={track.id}
-          index={index}
-          // gridLineStyle={gridLineStyle} // Removed, GridOverlay handles this
-        />
-      ))}
+      {/* Render original tracks as default instances (for tracks without additional instances) */}
+      {tracks.map((track, index) => {
+        const instances = getInstancesByTrack(track.id);
+        
+        // If track has no instances, render the original track
+        if (instances.length === 0) {
+          return (
+            <Track 
+              key={track.id}
+              id={track.id}
+              index={index}
+            />
+          );
+        }
+        
+        // If track has instances, don't render the original track
+        return null;
+      })}
+
+      {/* Render track instances with selection capabilities */}
+      <TrackSelectionLayer
+        tracks={tracks}
+        allInstances={allInstances}
+        trackMap={trackMap}
+        measureCount={measureCount}
+        zoomLevel={zoomLevel}
+        bpm={bpm}
+        timeSignature={timeSignature}
+        totalWidth={totalWidth}
+        onTimelineClick={handleTimelineClick}
+      />
     </Box>
   );
 }
@@ -610,7 +689,7 @@ function GridOverlay({
         bottom: 0,
         width: '100%', // Fill the full width of the parent container
         pointerEvents: 'none', // Important: this makes the grid not catch any mouse events
-        zIndex: 1000
+        zIndex: 1 // Grid should be below track instances
       }}
     >
       <canvas
@@ -621,7 +700,8 @@ function GridOverlay({
           left: 0,
           width: '100%',
           height: '100%',
-          display: 'block'
+          display: 'block',
+          pointerEvents: 'none' // Ensure canvas doesn't intercept clicks
         }}
       />
     </Box>
