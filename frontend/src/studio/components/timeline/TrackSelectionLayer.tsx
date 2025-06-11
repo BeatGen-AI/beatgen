@@ -62,24 +62,7 @@ export default function TrackSelectionLayer({
   // Timeline tools state from store
   const selectedTool = useStudioStore(state => state.selectedTool);
   const isSelectionMode = selectedTool === 'select';
-
-  // Track mouse position for paste operations
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const scrollLeft = e.currentTarget.scrollLeft || 0;
-    const scrollTop = e.currentTarget.scrollTop || 0;
-    
-    setMousePosition({
-      x: e.clientX - rect.left + scrollLeft,
-      y: e.clientY - rect.top + scrollTop
-    });
-
-    // Continue with selection rectangle if active
-    if (selectionManager.isSelecting) {
-      selectionManager.updateSelectionRectangle(mousePosition.x, mousePosition.y);
-    }
-  }, [mousePosition]);
-
+  
   // Calculate grid configuration for snapping
   const gridConfig = useMemo((): GridSnapConfig => ({
     enabled: true,
@@ -191,6 +174,55 @@ export default function TrackSelectionLayer({
       minWidth: gridConfig.minWidth
     }
   });
+
+  // Track mouse position for paste operations (after selectionManager is initialized)
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scrollLeft = e.currentTarget.scrollLeft || 0;
+    const scrollTop = e.currentTarget.scrollTop || 0;
+    
+    const newMousePosition = {
+      x: e.clientX - rect.left + scrollLeft,
+      y: e.clientY - rect.top + scrollTop
+    };
+    
+    setMousePosition(newMousePosition);
+
+    // Continue with selection rectangle if active - use direct state access like piano roll
+    if (selectionManager.isSelecting) {
+      selectionManager.updateSelectionRectangle(newMousePosition.x, newMousePosition.y);
+    }
+  }, [selectionManager]);
+
+  // Debug: log tool changes and selection state (after selectionManager is initialized)
+  useEffect(() => {
+    console.log('🔧 Selected tool changed to:', selectedTool, 'isSelectionMode:', isSelectionMode);
+    console.log('🔧 Tool debug info:', {
+      selectedTool,
+      isSelectionMode,
+      timestamp: new Date().toISOString()
+    });
+  }, [selectedTool, isSelectionMode]);
+
+  useEffect(() => {
+    console.log('🔧 Selection state changed:', {
+      isSelecting: selectionManager.isSelecting,
+      hasRect: !!selectionManager.selectionRect,
+      rect: selectionManager.selectionRect,
+      timestamp: new Date().toISOString()
+    });
+  }, [selectionManager.isSelecting, selectionManager.selectionRect]);
+
+  // Debug: Log selection manager initialization
+  useEffect(() => {
+    console.log('🔧 SELECTION MANAGER INITIALIZED:', {
+      hasSelectionManager: !!selectionManager,
+      startSelectionRect: typeof selectionManager.startSelectionRect,
+      updateSelectionRectangle: typeof selectionManager.updateSelectionRectangle,
+      endSelectionRect: typeof selectionManager.endSelectionRect,
+      timestamp: new Date().toISOString()
+    });
+  }, [selectionManager]);
 
   // Enhanced keyboard shortcuts with full DAW functionality
   useEffect(() => {
@@ -396,6 +428,27 @@ export default function TrackSelectionLayer({
 
   // Enhanced mouse event handlers with group drag support
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    console.log('🖱️ MOUSE DOWN EVENT:', { 
+      tool: selectedTool, 
+      target: e.target, 
+      currentTarget: e.currentTarget,
+      button: e.button,
+      isSelectionMode,
+      elementClassName: (e.target as HTMLElement).className,
+      elementTagName: (e.target as HTMLElement).tagName,
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log('🖱️ MOUSE DOWN DETAILS:', {
+      selectedTool,
+      isSelectionMode,
+      containerRef: !!containerRef.current,
+      allInstancesCount: allInstances.length,
+      trackMapSize: trackMap.size,
+      selectionManagerInitialized: !!selectionManager,
+      timestamp: new Date().toISOString()
+    });
+    
     // Update mouse position for all operations
     const rect = e.currentTarget.getBoundingClientRect();
     const scrollLeft = e.currentTarget.scrollLeft || 0;
@@ -403,6 +456,8 @@ export default function TrackSelectionLayer({
     
     const currentX = e.clientX - rect.left + scrollLeft;
     const currentY = e.clientY - rect.top + scrollTop;
+    
+    console.log('🖱️ Mouse position:', { currentX, currentY, scrollLeft, scrollTop });
     
     setMousePosition({ x: currentX, y: currentY });
 
@@ -475,8 +530,32 @@ export default function TrackSelectionLayer({
       case 'select':
         // Always start selection rectangle for select tool
         e.stopPropagation();
+        console.log('🖱️ ATTEMPTING SELECTION RECTANGLE START:', { 
+          x: currentX, 
+          y: currentY, 
+          clearExisting: !e.shiftKey,
+          selectedTool,
+          isSelectionMode,
+          timestamp: new Date().toISOString()
+        });
+        
+        console.log('🖱️ SELECTION MANAGER STATE BEFORE START:', {
+          isSelecting: selectionManager.isSelecting,
+          hasRect: !!selectionManager.selectionRect,
+          rect: selectionManager.selectionRect,
+          startSelectionRectFunction: typeof selectionManager.startSelectionRect,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Call startSelectionRect
         selectionManager.startSelectionRect(currentX, currentY, !e.shiftKey);
-        console.log('🖱️ Started selection rectangle at:', { x: currentX, y: currentY, clearExisting: !e.shiftKey });
+        
+        console.log('🖱️ SELECTION MANAGER STATE AFTER START:', {
+          isSelecting: selectionManager.isSelecting,
+          hasRect: !!selectionManager.selectionRect,
+          rect: selectionManager.selectionRect,
+          timestamp: new Date().toISOString()
+        });
         break;
         
       case 'highlighter':
@@ -520,10 +599,30 @@ export default function TrackSelectionLayer({
       return;
     }
 
-    // Handle selection rectangle
-    if (selectionManager.isSelecting) {
+    // Handle selection rectangle - match piano roll pattern with direct state access
+    if (selectionManager.isSelecting && selectionManager.selectionRect) {
+      console.log('🔄 UPDATING SELECTION RECTANGLE:', { 
+        x: currentX, 
+        y: currentY,
+        isSelecting: selectionManager.isSelecting,
+        hasRect: !!selectionManager.selectionRect,
+        currentRect: selectionManager.selectionRect,
+        timestamp: new Date().toISOString()
+      });
       selectionManager.updateSelectionRectangle(currentX, currentY);
-      console.log('🔄 Updating selection rectangle to:', { x: currentX, y: currentY });
+      console.log('🔄 SELECTION RECTANGLE AFTER UPDATE:', {
+        rect: selectionManager.selectionRect,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      // Debug why selection rectangle isn't updating
+      if (selectionManager.isSelecting && !selectionManager.selectionRect) {
+        console.log('🔄 SELECTION ISSUE: isSelecting=true but no selectionRect:', {
+          isSelecting: selectionManager.isSelecting,
+          hasRect: !!selectionManager.selectionRect,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
   }, [selectionManager, mousePosition]);
 
@@ -535,8 +634,8 @@ export default function TrackSelectionLayer({
       return;
     }
 
-    // End selection rectangle
-    if (selectionManager.isSelecting) {
+    // End selection rectangle - match piano roll pattern with direct state access
+    if (selectionManager.isSelecting && selectionManager.selectionRect) {
       console.log('🔚 Ending selection rectangle, additive:', e.shiftKey);
       selectionManager.endSelectionRect(e.shiftKey);
       console.log('🎯 Selected items count:', selectionManager.getSelectionCount());
@@ -559,20 +658,25 @@ export default function TrackSelectionLayer({
     }
   };
 
-  // Render selection rectangle if active
-  const renderSelectionRectangle = () => {
-    if (!selectionManager.selectionRect || !selectionManager.isSelecting) return null;
+  // Get selection rectangle state directly like piano roll
+  const selectionRect = selectionManager.selectionRect;
+  const isSelecting = selectionManager.isSelecting;
 
-    const rect = selectionManager.selectionRect;
-    const x = rect.width < 0 ? rect.startX + rect.width : rect.startX;
-    const y = rect.height < 0 ? rect.startY + rect.height : rect.startY;
-    const width = Math.abs(rect.width);
-    const height = Math.abs(rect.height);
+  // Render selection rectangle if active - match piano roll pattern
+  const renderSelectionRectangle = () => {
+    if (!selectionRect || !isSelecting) return null;
+
+    const x = selectionRect.width < 0 ? selectionRect.startX + selectionRect.width : selectionRect.startX;
+    const y = selectionRect.height < 0 ? selectionRect.startY + selectionRect.height : selectionRect.startY;
+    const width = Math.abs(selectionRect.width);
+    const height = Math.abs(selectionRect.height);
 
     console.log('🔳 SELECTION RECTANGLE:', { 
       x, y, width, height, 
-      startX: rect.startX, startY: rect.startY, 
-      rawWidth: rect.width, rawHeight: rect.height 
+      startX: selectionRect.startX, startY: selectionRect.startY, 
+      rawWidth: selectionRect.width, rawHeight: selectionRect.height,
+      isSelecting,
+      selectedTool
     });
 
     return (
@@ -706,7 +810,8 @@ export default function TrackSelectionLayer({
               transform: isSelected && isGroupDragging ? 'scale(1.02)' : 'scale(1)',
               opacity: isSelected && isGroupDragging ? 0.9 : 1,
               zIndex: isSelected ? 10 : 1,
-              cursor: isSelected ? 'grab' : isSelectionMode ? 'pointer' : 'default',
+              cursor: isSelected ? 'grab' : selectedTool === 'select' ? 'pointer' : 'default',
+              pointerEvents: selectedTool === 'select' ? 'auto' : 'auto', // Allow mouse events to pass through for selection
               '&:hover': isSelectionMode && !isGroupDragging ? {
                 outline: '2px dashed #2196f3',
                 backgroundColor: 'rgba(33, 150, 243, 0.05)'
@@ -744,13 +849,49 @@ export default function TrackSelectionLayer({
                 boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
               } : {}
             }}
-            onClick={(e) => {
-              if (isSelectionMode || e.shiftKey || e.ctrlKey || e.metaKey) {
-                e.stopPropagation();
-                selectionManager.toggleSelection(instance.instanceId, e.shiftKey || e.ctrlKey || e.metaKey);
-              }
+            style={{
+              pointerEvents: selectedTool === 'select' ? 'none' : 'auto', // Allow background selection to work
             }}
           >
+            {/* Transparent selection overlay when select tool is active */}
+            {selectedTool === 'select' && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 15,
+                  pointerEvents: 'auto',
+                  cursor: 'pointer',
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  console.log('🎯 Clicked on track instance:', instance.instanceId);
+                  
+                  if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                    // Add/remove from selection
+                    selectionManager.toggleSelection(instance.instanceId, true);
+                  } else {
+                    // Replace selection
+                    if (!selectionManager.isSelected(instance.instanceId)) {
+                      selectionManager.clearSelection();
+                      selectionManager.toggleSelection(instance.instanceId, false);
+                    }
+                  }
+
+                  // Start group drag if multiple items are selected
+                  if (selectionManager.hasSelection()) {
+                    const success = selectionManager.beginGroupDrag(instance.instanceId);
+                    if (success) {
+                      console.log(`Started group drag with ${selectionManager.getSelectionCount()} track instance(s)`);
+                    }
+                  }
+                }}
+              />
+            )}
+            
             <TrackInstance
               instance={instance}
               track={track}
@@ -760,8 +901,8 @@ export default function TrackSelectionLayer({
         );
       })}
 
-      {/* Selection rectangle overlay */}
-      {renderSelectionRectangle()}
+      {/* Selection rectangle overlay - match piano roll conditional rendering */}
+      {selectedTool === 'select' && renderSelectionRectangle()}
     </Box>
   );
 }

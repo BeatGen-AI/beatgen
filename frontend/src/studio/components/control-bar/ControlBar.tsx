@@ -262,7 +262,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     <GridSnapControls 
                         enabled={gridSnapEnabled}
                         selectedSnapSize={selectedSnapSize}
-                        onToggle={() => setGridSnapEnabled(prev => !prev)}
+                        onToggle={() => setGridSnapEnabled(!gridSnapEnabled)}
                         onSnapSizeChange={setSelectedSnapSize}
                     />
                 </Box>
@@ -299,18 +299,20 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     alignItems: 'center',
                     gap: 1
                 }}>
-                    <ZoomControls 
-                        zoomLevel={zoomLevel}
-                        onZoomIn={onZoomIn}
-                        onZoomOut={onZoomOut}
-                        minZoom={0.25}
-                        maxZoom={4.0}
-                        showPercentage={false}
-                        style={{
-                            marginRight: '8px',
-                            width: 'auto'
+                    <IconButton
+                        size="small"
+                        color="inherit"
+                        onClick={onZoomIn}
+                        sx={{
+                            borderRadius: '8px',
+                            '&:hover': {
+                                backgroundColor: theme.palette.action.hover,
+                            },
                         }}
-                    />
+                        disableRipple
+                    >
+                        <IconZoomIn />
+                    </IconButton>
                     <Box sx={{ 
                         color: "text.primary",
                         fontWeight: "bold", 
@@ -319,11 +321,24 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         textAlign: "center", 
                         border: `1px solid ${theme.palette.divider}`,
                         padding: "4px 4px", 
-                        borderRadius: "6px",
-                        marginRight: '8px'
+                        borderRadius: "6px" 
                     }}>
                         {zoomLevel.toFixed(1)}x
                     </Box>
+                    <IconButton
+                        size="small"
+                        color="inherit"
+                        onClick={onZoomOut}
+                        sx={{
+                            borderRadius: '8px',
+                            '&:hover': {
+                                backgroundColor: theme.palette.action.hover,
+                            },
+                        }}
+                        disableRipple
+                    >
+                        <IconZoomOut />
+                    </IconButton>
                     <TimeDisplay
                         ref={timeDisplayRef}
                         initialTime={currentTime}

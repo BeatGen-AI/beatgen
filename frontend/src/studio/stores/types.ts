@@ -276,12 +276,23 @@ export interface RootState {
   openDrumMachines: Record<string, boolean>;
   autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   autoSaveMessage?: string;
+  
+  // Timeline tool state
+  selectedTool: any; // ToolType - using any for now to avoid import issues
+  gridSnapEnabled: boolean;
+  selectedSnapSize: number;
+  
   setZoomLevel: (zoomLevel: number) => void;
   setMeasureCount: (measureCount: number) => void;
   setAddMenuAnchor: (el: HTMLElement | null) => void;
   openDrumMachine: (drumTrackId: string) => void;
   closeDrumMachine: (trackId: string) => void;
   setAutoSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', message?: string) => void;
+  
+  // Timeline tool actions
+  setSelectedTool: (tool: any) => void; // ToolType
+  setGridSnapEnabled: (enabled: boolean) => void;
+  setSelectedSnapSize: (size: number) => void;
 
   // Track selection and copy/paste state (UI Slice)
   selectedTracks: Set<string>;

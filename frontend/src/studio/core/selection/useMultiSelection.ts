@@ -109,11 +109,17 @@ export function useMultiSelection<T extends SelectableItem>(config: UseMultiSele
   }, [updateSelection]);
   
   const updateSelectionRectangle = useCallback((currentX: number, currentY: number) => {
-    if (!selectionRect || !isSelecting) return;
-    
-    const updatedRect = updateSelectionRect(selectionRect, currentX, currentY);
-    setSelectionRect(updatedRect);
-  }, [selectionRect, isSelecting]);
+    setSelectionRect(prevRect => {
+      // Use functional update to avoid stale closure issues
+      if (!prevRect) return null;
+      
+      // Also check isSelecting state directly
+      const currentState = { isSelecting };
+      if (!currentState.isSelecting) return prevRect;
+      
+      return updateSelectionRect(prevRect, currentX, currentY);
+    });
+  }, [isSelecting]);
   
   const endSelectionRect = useCallback((additive: boolean = false) => {
     if (!selectionRect || !isSelecting) return;
