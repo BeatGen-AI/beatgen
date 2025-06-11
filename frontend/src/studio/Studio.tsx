@@ -72,6 +72,12 @@ function Studio({ projectId }: StudioProps) {
     autoSaveStatus,
     autoSaveMessage,
     
+    // Tool state
+    selectedTool,
+    snapToGrid,
+    setSelectedTool,
+    toggleSnapToGrid,
+    
     // Actions
     initializeAudio,
     loadProject,
@@ -352,6 +358,11 @@ function Studio({ projectId }: StudioProps) {
           onChatToggle={handleChatToggle}
           onSettingsToggle={handleSettingsToggle}
           onAutoSaveRetry={() => autoSave.forceSave()}
+          selectedTool={selectedTool}
+          snapToGrid={snapToGrid}
+          showToolbar={true}
+          onToolChange={setSelectedTool}
+          onToggleSnapToGrid={toggleSnapToGrid}
         />
 
         {/* Main Content Area */}

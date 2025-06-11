@@ -205,13 +205,22 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
             y: e.clientY - rect.top
           };
 
-          // Check if clicking on a track
-          const clickedTrack = tracks.find(track =>
-            position.x >= track.x_position &&
-            position.x <= track.x_position + 200 && // Approximate track width
-            position.y >= track.y_position &&
-            position.y <= track.y_position + GRID_CONSTANTS.trackHeight
-          );
+          // Check if clicking on a track with proper width calculation
+          const clickedTrack = tracks.find(track => {
+            // Calculate actual track width (same logic as in onMouseUp)
+            const startTicks = track.trim_start_ticks || 0;
+            const endTicks = track.trim_end_ticks || track.duration_ticks || 0;
+            const visibleDurationTicks = Math.max(0, endTicks - startTicks);
+            const TICKS_PER_BEAT = 960;
+            const PIXELS_PER_BEAT = GRID_CONSTANTS.measureWidth / (timeSignature[0] || 4);
+            const trackWidth = (visibleDurationTicks / TICKS_PER_BEAT) * PIXELS_PER_BEAT;
+            const actualTrackWidth = Math.max(50, trackWidth);
+
+            return position.x >= track.x_position &&
+                   position.x <= track.x_position + actualTrackWidth &&
+                   position.y >= track.y_position &&
+                   position.y <= track.y_position + GRID_CONSTANTS.trackHeight;
+          });
 
           if (clickedTrack) {
             interaction.handleItemClick(clickedTrack.id, {
@@ -238,12 +247,29 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         }}
         onMouseUp={(e) => {
           if (interaction.isSelecting) {
-            const selectableItems = tracks.map(track => ({
-              id: track.id,
-              type: 'track' as const,
-              x_position: track.x_position,
-              y_position: track.y_position
-            }));
+            const selectableItems = tracks.map(track => {
+              // Calculate track width (similar to how it's done in Track component)
+              const startTicks = track.trim_start_ticks || 0;
+              const endTicks = track.trim_end_ticks || track.duration_ticks || 0;
+              const visibleDurationTicks = Math.max(0, endTicks - startTicks);
+              // Convert ticks to pixels for width calculation
+              const TICKS_PER_BEAT = 960; // Standard MIDI ticks per beat
+              const PIXELS_PER_BEAT = GRID_CONSTANTS.measureWidth / (timeSignature[0] || 4);
+              const trackWidth = (visibleDurationTicks / TICKS_PER_BEAT) * PIXELS_PER_BEAT;
+              
+              return {
+                id: track.id,
+                type: 'track' as const,
+                x: track.x_position,
+                y: track.y_position,
+                width: Math.max(50, trackWidth), // Minimum width of 50px
+                height: GRID_CONSTANTS.trackHeight
+              };
+            });
+            
+            console.log('Timeline selection - Rect:', interaction.selectionState.selectionRect);
+            console.log('Timeline selection - Items:', selectableItems);
+            
             interaction.endSelection(selectableItems, e.shiftKey);
           }
         }}
