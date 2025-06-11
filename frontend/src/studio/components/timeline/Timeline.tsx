@@ -1,4 +1,4 @@
-import React, { forwardRef, useRef, useImperativeHandle } from 'react';
+import React, { forwardRef, useRef, useImperativeHandle, useState } from 'react';
 import { Box, useTheme } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { GRID_CONSTANTS, calculatePositionTime } from '../../constants/gridConstants';
@@ -8,6 +8,7 @@ import { CombinedTrack } from 'src/platform/types/project';
 import { Position } from '../track/types';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import { cn } from '@/lib/utils';
+import { useInteractionManager, SelectionOverlay, InteractionToolbar, Tool } from '../../shared/interactions';
 
 export interface TimelineProps {
   tracks: CombinedTrack[];
@@ -23,6 +24,15 @@ export interface TimelineProps {
     borderRight: string;
   };
   sx?: SxProps<Theme>;
+  
+  // Shared interaction system props
+  selectedTool?: Tool;
+  onToolChange?: (tool: Tool) => void;
+  showToolbar?: boolean;
+  onTrackSelect?: (trackIds: string[]) => void;
+  onTrackDelete?: (trackId: string) => void;
+  onTrackDuplicate?: (trackId: string) => void;
+  selectedTrackIds?: string[];
 }
 
 // Define imperative handle interface
@@ -55,7 +65,14 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   gridLineStyle = {
     borderRight: `${GRID_CONSTANTS.borderWidth} solid ${GRID_CONSTANTS.borderColor}`
   },
-  sx
+  sx,
+  selectedTool = 'select',
+  onToolChange,
+  showToolbar = false,
+  onTrackSelect,
+  onTrackDelete,
+  onTrackDuplicate,
+  selectedTrackIds = []
 }, ref) => {
   const theme = useTheme();
   // Calculate the total width needed for the entire timeline
@@ -64,6 +81,56 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   // Refs for the cursor and container
   const cursorRef = useRef<PlaybackCursorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Initialize interaction manager for track selection
+  const interaction = useInteractionManager({
+    initialTool: selectedTool,
+    snapToGrid: true,
+    gridSize: GRID_CONSTANTS.measureWidth / 16, // 16th note grid
+    onSelectionChange: (selectedIds) => {
+      onTrackSelect?.(selectedIds);
+    },
+    onDragStart: (itemId, selectedIds) => {
+      console.log('Track drag started:', itemId, selectedIds);
+    },
+    onDragMove: (itemId, delta) => {
+      // Handle track position updates during drag
+      const track = tracks.find(t => t.id === itemId);
+      if (track) {
+        onTrackPositionChange?.(itemId, {
+          x: Math.max(0, track.x_position + delta.x),
+          y: Math.max(0, track.y_position + delta.y)
+        }, false);
+      }
+    },
+    onDragEnd: (itemId, selectedIds) => {
+      console.log('Track drag ended:', itemId, selectedIds);
+      // Final position update
+      const track = tracks.find(t => t.id === itemId);
+      if (track) {
+        onTrackPositionChange?.(itemId, {
+          x: track.x_position,
+          y: track.y_position
+        }, true);
+      }
+    },
+    onItemClick: (itemId, tool) => {
+      switch (tool) {
+        case 'eraser':
+          onTrackDelete?.(itemId);
+          break;
+        case 'pen':
+          onTrackDuplicate?.(itemId);
+          break;
+        default:
+          break;
+      }
+    },
+    onItemDoubleClick: (itemId) => {
+      console.log('Track double-clicked:', itemId);
+      // Could open track editor or piano roll
+    }
+  });
   
   // Use theme color for border if gridLineStyle is default
   const defaultGridLineStyle = {
@@ -97,58 +164,136 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   });
   
   return (
-    <Box 
-      ref={containerRef}
-      className="timeline-container"
-      sx={{ 
-        flex: 1, 
-        position: 'relative', 
-        overflow: 'auto',
-        willChange: 'transform',
-        bgcolor: 'background.default',
-        '& > *': {
-          backfaceVisibility: 'hidden',
-          perspective: 1000,
-        },
-        ...sx
-      }}
-    >
-      {/* Playback Cursor with ref for imperative control */}
-      <PlaybackCursor 
-        ref={cursorRef}
-        currentTime={currentTime} 
-        isPlaying={isPlaying} 
-        bpm={bpm} 
-        timeSignature={timeSignature} 
-      />
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Shared Interaction Toolbar */}
+      {showToolbar && (
+        <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <InteractionToolbar
+            selectedTool={interaction.toolState.selectedTool}
+            onToolChange={(tool) => {
+              interaction.setTool(tool);
+              onToolChange?.(tool);
+            }}
+            snapToGrid={interaction.toolState.snapToGrid}
+            onToggleSnapToGrid={interaction.toggleSnapToGrid}
+            showGridToggle={true}
+            orientation="horizontal"
+            size="small"
+          />
+        </Box>
+      )}
 
-      {/* Time Markers */}
-      <TimelineRuler 
-        measureCount={measureCount} 
-        zoomLevel={zoomLevel} 
-        bpm={bpm}
-        timeSignature={timeSignature}
-        onTimeChange={onTimeChange}
-        totalWidth={totalTimelineWidth}
-      />
+      <Box 
+        ref={containerRef}
+        className="timeline-container"
+        sx={{ 
+          flex: 1, 
+          position: 'relative', 
+          overflow: 'auto',
+          willChange: 'transform',
+          bgcolor: 'background.default',
+          '& > *': {
+            backfaceVisibility: 'hidden',
+            perspective: 1000,
+          },
+          ...sx
+        }}
+        onMouseDown={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const position = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+          };
 
-      {/* Tracks or Drop Zone */}
-      {tracks.length > -1 ? (
-        <TimelineContent
-          tracks={tracks}
-          measureCount={measureCount}
-          zoomLevel={zoomLevel}
-          currentTime={currentTime}
-          isPlaying={isPlaying}
+          // Check if clicking on a track
+          const clickedTrack = tracks.find(track =>
+            position.x >= track.x_position &&
+            position.x <= track.x_position + 200 && // Approximate track width
+            position.y >= track.y_position &&
+            position.y <= track.y_position + GRID_CONSTANTS.trackHeight
+          );
+
+          if (clickedTrack) {
+            interaction.handleItemClick(clickedTrack.id, {
+              shiftKey: e.shiftKey,
+              ctrlKey: e.ctrlKey,
+              metaKey: e.metaKey
+            });
+          } else {
+            interaction.handleBackgroundMouseDown(position, {
+              shiftKey: e.shiftKey
+            });
+          }
+        }}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const position = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+          };
+
+          if (interaction.isSelecting) {
+            interaction.updateSelection(position);
+          }
+        }}
+        onMouseUp={(e) => {
+          if (interaction.isSelecting) {
+            const selectableItems = tracks.map(track => ({
+              id: track.id,
+              type: 'track' as const,
+              x_position: track.x_position,
+              y_position: track.y_position
+            }));
+            interaction.endSelection(selectableItems, e.shiftKey);
+          }
+        }}
+      >
+        {/* Selection Overlay */}
+        <SelectionOverlay
+          selectionRect={interaction.selectionState.selectionRect}
+          isActive={interaction.isSelecting}
+        />
+
+        {/* Playback Cursor with ref for imperative control */}
+        <PlaybackCursor 
+          ref={cursorRef}
+          currentTime={currentTime} 
+          isPlaying={isPlaying} 
+          bpm={bpm} 
+          timeSignature={timeSignature} 
+        />
+
+        {/* Time Markers */}
+        <TimelineRuler 
+          measureCount={measureCount} 
+          zoomLevel={zoomLevel} 
           bpm={bpm}
           timeSignature={timeSignature}
-          onTrackPositionChange={onTrackPositionChange}
           onTimeChange={onTimeChange}
           totalWidth={totalTimelineWidth}
         />
-      ) : (
-        <EmptyTimelineDropZone onTimeChange={onTimeChange} bpm={bpm} timeSignature={timeSignature} />
-      )}
+
+        {/* Tracks or Drop Zone */}
+        {tracks.length > -1 ? (
+          <TimelineContent
+            tracks={tracks}
+            measureCount={measureCount}
+            zoomLevel={zoomLevel}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            bpm={bpm}
+            timeSignature={timeSignature}
+            onTrackPositionChange={onTrackPositionChange}
+            onTimeChange={onTimeChange}
+            totalWidth={totalTimelineWidth}
+            selectedTool={interaction.toolState.selectedTool}
+            selectedTrackIds={selectedTrackIds}
+            interaction={interaction}
+          />
+        ) : (
+          <EmptyTimelineDropZone onTimeChange={onTimeChange} bpm={bpm} timeSignature={timeSignature} />
+        )}
+      </Box>
     </Box>
   );
 });
@@ -367,6 +512,9 @@ interface TimelineContentProps extends TimelineRulerProps {
   onTrackPositionChange: (trackId: string, newPosition: Position, isDragEnd: boolean) => void;
   onTimeChange: (newTime: number) => void;
   totalWidth?: number;
+  selectedTool: Tool;
+  selectedTrackIds: string[];
+  interaction: any; // Type from useInteractionManager
 }
 
 function TimelineContent({
@@ -379,7 +527,10 @@ function TimelineContent({
   timeSignature,
   onTrackPositionChange,
   onTimeChange,
-  totalWidth
+  totalWidth,
+  selectedTool,
+  selectedTrackIds,
+  interaction
 }: TimelineContentProps) {
   // const theme = useTheme(); // No longer need theme for grid colors
   
@@ -450,6 +601,16 @@ function TimelineContent({
           key={track.id}
           id={track.id}
           index={index}
+          isSelected={selectedTrackIds.includes(track.id)}
+          selectedTool={selectedTool}
+          isGroupDrag={interaction.isDragging && selectedTrackIds.includes(track.id)}
+          isPrimaryDrag={interaction.dragState.draggedItemId === track.id}
+          onTrackClick={(trackId, event) => {
+            interaction.handleItemClick(trackId, event);
+          }}
+          onTrackDoubleClick={(trackId) => {
+            interaction.handleItemDoubleClick(trackId);
+          }}
           // gridLineStyle={gridLineStyle} // Removed, GridOverlay handles this
         />
       ))}
