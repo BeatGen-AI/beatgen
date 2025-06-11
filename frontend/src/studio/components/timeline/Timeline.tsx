@@ -4,6 +4,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { GRID_CONSTANTS, calculatePositionTime, pixelsToTicks } from '../../constants/gridConstants';
 import Track from '../track/Track';
 import TrackInstance from '../track/TrackInstance';
+import TrackSelectionLayer from './TrackSelectionLayer';
 import PlaybackCursor, { PlaybackCursorRef } from './PlaybackCursor';
 import { CombinedTrack } from 'src/platform/types/project';
 import { Position } from '../track/types';
@@ -490,7 +491,6 @@ function TimelineContent({
       style={{
         width: totalWidth ? `${totalWidth}px` : '100%',
       }}
-      onClick={handleTimelineClick}
     >
       {/* Pass fixed gray colors to GridOverlay */}
       <GridOverlay 
@@ -520,23 +520,18 @@ function TimelineContent({
         return null;
       })}
 
-      {/* Render track instances */}
-      {allInstances.map((instance, instanceIndex) => {
-        const track = trackMap.get(instance.trackId);
-        if (!track) {
-          console.warn(`Track ${instance.trackId} not found for instance ${instance.instanceId}`);
-          return null;
-        }
-        
-        return (
-          <TrackInstance
-            key={instance.instanceId}
-            instance={instance}
-            track={track}
-            index={instanceIndex}
-          />
-        );
-      })}
+      {/* Render track instances with selection capabilities */}
+      <TrackSelectionLayer
+        tracks={tracks}
+        allInstances={allInstances}
+        trackMap={trackMap}
+        measureCount={measureCount}
+        zoomLevel={zoomLevel}
+        bpm={bpm}
+        timeSignature={timeSignature}
+        totalWidth={totalWidth}
+        onTimelineClick={handleTimelineClick}
+      />
     </Box>
   );
 }
