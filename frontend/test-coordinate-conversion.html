@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coordinate Conversion Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+    </style>
+</head>
+<body>
+    <h1>Coordinate Conversion Test</h1>
+    <div id="results"></div>
+
+    <script>
+        // Same conversion functions as in the app
+        const GRID_CONSTANTS = {
+            measureWidth: 800,
+            trackHeight: 80
+        };
+
+        function ticksToPixels(ticks, bpm, timeSignature) {
+            const beatsPerMeasure = timeSignature[0];
+            const ticksPerBeat = 960; // Standard MIDI ticks
+            const ticksPerMeasure = ticksPerBeat * beatsPerMeasure;
+            return (ticks / ticksPerMeasure) * GRID_CONSTANTS.measureWidth;
+        }
+
+        function pixelsToTicks(pixels, bpm, timeSignature) {
+            const beatsPerMeasure = timeSignature[0];
+            const ticksPerBeat = 960;
+            const ticksPerMeasure = ticksPerBeat * beatsPerMeasure;
+            return (pixels / GRID_CONSTANTS.measureWidth) * ticksPerMeasure;
+        }
+
+        function runTests() {
+            const resultsDiv = document.getElementById('results');
+            const bpm = 120;
+            const timeSignature = [4, 4];
+
+            // Test cases
+            const testCases = [
+                { description: "Zero position", pixels: 0, expectedTicks: 0 },
+                { description: "50 pixels movement", pixels: 50, expectedTicks: 240 },
+                { description: "100 pixels movement", pixels: 100, expectedTicks: 480 },
+                { description: "200 pixels (1 beat)", pixels: 200, expectedTicks: 960 },
+                { description: "800 pixels (1 measure)", pixels: 800, expectedTicks: 3840 }
+            ];
+
+            testCases.forEach(testCase => {
+                const convertedTicks = pixelsToTicks(testCase.pixels, bpm, timeSignature);
+                const backToPixels = ticksToPixels(convertedTicks, bpm, timeSignature);
+                
+                const roundTripError = Math.abs(backToPixels - testCase.pixels);
+                const ticksError = Math.abs(convertedTicks - testCase.expectedTicks);
+                
+                const isSuccessful = roundTripError < 0.1 && ticksError < 1;
+                
+                const resultDiv = document.createElement('div');
+                resultDiv.className = `test-result ${isSuccessful ? 'success' : 'error'}`;
+                resultDiv.innerHTML = `
+                    <strong>${testCase.description}</strong><br>
+                    Input: ${testCase.pixels} pixels<br>
+                    Converted to: ${convertedTicks.toFixed(2)} ticks (expected: ${testCase.expectedTicks})<br>
+                    Back to pixels: ${backToPixels.toFixed(2)} pixels<br>
+                    Round trip error: ${roundTripError.toFixed(3)} pixels<br>
+                    Ticks error: ${ticksError.toFixed(3)} ticks<br>
+                    Conversion ratio: ${(convertedTicks / testCase.pixels).toFixed(3)} ticks/pixel
+                `;
+                resultsDiv.appendChild(resultDiv);
+            });
+
+            // Test drag simulation
+            const dragTestDiv = document.createElement('div');
+            dragTestDiv.className = 'test-result';
+            dragTestDiv.innerHTML = `
+                <strong>Drag Simulation Test</strong><br>
+                <em>Simulating 50px right drag + 100px down drag</em>
+            `;
+            resultsDiv.appendChild(dragTestDiv);
+
+            // Simulate the drag operation
+            const initialTrackPosition = { x: 0, y: 100 }; // 0 ticks, 100 pixels
+            const initialPixelX = ticksToPixels(initialTrackPosition.x, bpm, timeSignature);
+            
+            console.log('Initial track position:', initialTrackPosition);
+            console.log('Initial pixel X:', initialPixelX);
+            
+            // Simulate mouse drag 50px right
+            const mouseStartX = 400; // Arbitrary starting mouse position
+            const mouseStartY = 300;
+            const mouseEndX = mouseStartX + 50;
+            const mouseEndY = mouseStartY + 100;
+            
+            const deltaX = mouseEndX - mouseStartX;
+            const deltaY = mouseEndY - mouseStartY;
+            
+            // Apply drag (this is what happens in BaseTrackPreview)
+            const newPixelX = initialPixelX + deltaX;
+            const newPixelY = initialTrackPosition.y + deltaY;
+            
+            // Convert back to ticks for storage (this is what happens on mouse up)
+            const finalTicksX = pixelsToTicks(newPixelX, bpm, timeSignature);
+            
+            const dragResultDiv = document.createElement('div');
+            dragResultDiv.className = 'test-result';
+            dragResultDiv.innerHTML = `
+                <strong>Drag Result</strong><br>
+                Mouse movement: ${deltaX}px right, ${deltaY}px down<br>
+                Initial position: ${initialTrackPosition.x} ticks (${initialPixelX}px), ${initialTrackPosition.y}px<br>
+                After drag: ${finalTicksX.toFixed(2)} ticks (${newPixelX}px), ${newPixelY}px<br>
+                Actual movement: ${(newPixelX - initialPixelX).toFixed(2)}px right, ${(newPixelY - initialTrackPosition.y)}px down<br>
+                Movement accuracy: ${deltaX === (newPixelX - initialPixelX) ? 'PERFECT' : 'ERROR'}
+            `;
+            resultsDiv.appendChild(dragResultDiv);
+
+            // Summary
+            const summaryDiv = document.createElement('div');
+            summaryDiv.innerHTML = `
+                <h2>Summary</h2>
+                <p>Conversion ratio: 1 pixel = ${(480/100).toFixed(3)} ticks</p>
+                <p>This means each pixel movement = ${(480/100).toFixed(3)} ticks in storage</p>
+                <p>The coordinate system should preserve 1:1 pixel movement during dragging</p>
+            `;
+            resultsDiv.appendChild(summaryDiv);
+        }
+
+        // Run tests when page loads
+        window.onload = runTests;
+    </script>
+</body>
+</html>

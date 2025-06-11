@@ -77,6 +77,7 @@ export const MidiTrackPreview: React.FC<TrackPreviewProps> = (props) => {
           zIndex: 100,
           opacity: 0.3,
           backgroundColor: 'rgba(0, 100, 255, 0.1)',
+          pointerEvents: 'none', // Allow clicks to pass through to track instances
           '&:hover': {
             bgcolor: 'rgba(255,255,255,0.3)'
           }

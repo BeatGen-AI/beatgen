@@ -1,0 +1,4 @@
+- When running Playwright commands, add them to /tests to avoid repeatedly running the same commands
+- You can see test results in /frontend/test-results
+- Do not use fallbacks. fail loudly and clearly. Fail as early as possible.
+- the local dev server is on https://localhost:5173. NOT http

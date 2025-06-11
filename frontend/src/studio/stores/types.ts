@@ -165,6 +165,18 @@ export type SetFn = (partial: any | ((state: RootState) => any), replace?: boole
 export type GetFn = () => RootState;
 
 
+// Track instance types
+export interface TrackInstance {
+  instanceId: string;
+  trackId: string;
+  trackType: 'audio' | 'midi' | 'sampler' | 'drum';
+  position: {
+    x: number; // Position in ticks
+    y: number; // Track lane (pixel position)
+  };
+  // Note: Volume, pan, mute etc. are shared from the main track
+}
+
 // Define the overall structure of the combined Zustand store
 // This will aggregate all the individual slices
 export interface RootState {
@@ -176,6 +188,7 @@ export interface RootState {
   initializeAudio: () => Promise<void>;
 
   // Project Settings (Refactored)
+  project: ProjectWithTracks | null; // Add the full project object
   projectTitle: string; 
   bpm: number;
   timeSignature: [number, number];
@@ -265,6 +278,47 @@ export interface RootState {
   openDrumMachine: (drumTrackId: string) => void;
   closeDrumMachine: (trackId: string) => void;
   setAutoSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', message?: string) => void;
+
+  // Track selection and copy/paste state (UI Slice)
+  selectedTracks: Set<string>;
+  copiedTracks: string[];
+  contextMenuOpen: boolean;
+  contextMenuPosition: { x: number; y: number } | null;
+  contextMenuTrackId: string | null;
+  
+  // Track selection actions (UI Slice)
+  selectTrack: (trackId: string, addToSelection?: boolean) => void;
+  deselectTrack: (trackId: string) => void;
+  clearSelection: () => void;
+  selectAllTracks: () => void;
+  isTrackSelected: (trackId: string) => boolean;
+  
+  // Copy/paste actions (UI Slice)
+  copySelectedTracks: () => void;
+  pasteTracksAtPosition: (x: number, y: number) => Promise<void>;
+  canPaste: () => boolean;
+  
+  // Select-to-paste workflow (UI Slice)
+  selectedTrackForPasting: string | null;
+  selectTrackForPasting: (trackId: string) => void;
+  deselectTrackForPasting: () => void;
+  pasteSelectedTrackAtPosition: (x: number, y: number) => Promise<void>;
+  isTrackSelectedForPasting: (trackId: string) => boolean;
+  
+  // Context menu actions (UI Slice)
+  openContextMenu: (x: number, y: number, trackId?: string) => void;
+  closeContextMenu: () => void;
+
+  // Track Instances (New - for visual DAW-like instances)
+  trackInstances: Map<string, TrackInstance>;
+  createTrackInstance: (trackId: string, position: { x: number; y: number }) => Promise<string | null>;
+  removeTrackInstance: (instanceId: string) => Promise<void>;
+  updateInstancePosition: (instanceId: string, newPosition: { x: number; y: number }) => void;
+  getInstancesByTrack: (trackId: string) => TrackInstance[];
+  getAllInstances: () => TrackInstance[];
+  getTrackInstancesSize: () => number;
+  loadTrackContentForInstance: (track: CombinedTrack) => Promise<void>;
+  generateInstanceId: () => string;
 
   // Utility / Generic Updater (Keep internal helpers exposed)
   updateState: <K extends keyof RootState>(key: K, value: RootState[K] | ((prev: RootState[K]) => RootState[K])) => void;

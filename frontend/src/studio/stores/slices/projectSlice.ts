@@ -570,6 +570,12 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         
         // 6. Connect tracks to engines (will load audio from Dexie)
         await connectTracksToEngines(trackStates);
+        
+        // 7. Update project state in Zustand store
+        set(produce((draft: RootState) => {
+          draft.project = projectDataWithTracks;
+          console.log('📂 PROJECT LOADED - Project set in state:', draft.project);
+        }));
                 
         return projectDataWithTracks; 
     }

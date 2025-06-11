@@ -124,8 +124,7 @@ const PianoRollWindows: React.FC = memo(() => {
             style={{ /* Necessary wrapper styles */ 
                 position: 'fixed', 
                 zIndex: 9999, // Ensure it's on top
-                // Remove pointer-events: none if the wrapper shouldn't block interaction
-                // pointerEvents: 'none' 
+                pointerEvents: 'none', // Allow clicks to pass through to elements behind
                 // Position might be handled by PianoRoll component itself via initialX/Y
                 // top: 0, left: 0, width: '100%', height: '100%' // Example covering screen
             }} 

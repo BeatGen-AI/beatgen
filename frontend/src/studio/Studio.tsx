@@ -23,6 +23,7 @@ import { DEFAULT_MEASURE_WIDTH, useGridStore } from './core/state/gridStore';
 import ChatWindow from './components/ai-assistant/ChatWindow';
 import DrumMachineWindows from './components/drum-machine/DrumMachineWindows';
 import { StudioSettingsModal } from './components/modals/StudioSettingsModal';
+import TrackContextMenu from './components/ui/TrackContextMenu';
 import { useAppTheme } from '../platform/theme/ThemeContext';
 import { studioLightTheme, studioDarkTheme } from '../platform/theme/ThemeContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -72,6 +73,13 @@ function Studio({ projectId }: StudioProps) {
     autoSaveStatus,
     autoSaveMessage,
     
+    // Track selection and copy/paste state
+    selectedTracks,
+    copiedTracks,
+    contextMenuOpen,
+    contextMenuPosition,
+    contextMenuTrackId,
+    
     // Actions
     initializeAudio,
     loadProject,
@@ -102,6 +110,15 @@ function Studio({ projectId }: StudioProps) {
     removeSamplerTrack,
     selectDrumTrackById,
     selectSamplerTracksForDrumTrack,
+    
+    // Copy/paste actions
+    copySelectedTracks,
+    pasteTracksAtPosition,
+    canPaste,
+    selectAllTracks,
+    clearSelection,
+    closeContextMenu,
+    
     // Fetch MIDI actions
     addMidiNote,
     removeMidiNote,
@@ -192,6 +209,98 @@ function Studio({ projectId }: StudioProps) {
       delete (window as any).storeInstance;
     };
   }, [initializeAudio, existingProjectId, projectId, loadProject]);
+
+  // Keyboard shortcuts for copy/paste
+  useEffect(() => {
+    console.log('🎹 KEYBOARD HANDLER - useEffect running (optimized dependencies)');
+    console.log('🎹 - Dependencies:', {
+      selectedTracksSize: selectedTracks?.size,
+      tracksLength: tracks?.length,
+      copiedTracksLength: copiedTracks?.length
+    });
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if we're in an input field, text area, or content editable element
+      const target = e.target as HTMLElement;
+      const isEditing = target.tagName === 'INPUT' || 
+                       target.tagName === 'TEXTAREA' || 
+                       target.contentEditable === 'true';
+      
+      if (isEditing) return; // Don't intercept keyboard shortcuts while editing
+      
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+      
+      // Get current state from store to avoid stale closures
+      const currentState = useStudioStore.getState();
+      const currentSelectedTracks = currentState.selectedTracks;
+      const currentCopiedTracks = currentState.copiedTracks;
+      const currentTracks = currentState.tracks;
+      
+      if (ctrlOrCmd) {
+        switch (e.key.toLowerCase()) {
+          case 'c':
+            e.preventDefault();
+            console.log('⌨️ KEYBOARD - Ctrl+C pressed');
+            console.log('⌨️ - selectedTracks.size:', currentSelectedTracks.size);
+            console.log('⌨️ - selectedTracks:', Array.from(currentSelectedTracks));
+            if (currentSelectedTracks.size > 0) {
+              currentState.copySelectedTracks();
+              console.log(`⌨️ Copied ${currentSelectedTracks.size} track(s)`);
+            } else {
+              console.log('⌨️ No tracks selected for copy');
+            }
+            break;
+          case 'v':
+            e.preventDefault();
+            console.log('⌨️ KEYBOARD - Ctrl+V pressed');
+            console.log('⌨️ - canPaste():', currentState.canPaste());
+            console.log('⌨️ - copiedTracks:', currentCopiedTracks);
+            if (currentState.canPaste()) {
+              // Paste at center of viewport or a default position
+              currentState.pasteTracksAtPosition(200, 100);
+              console.log('⌨️ Pasted track instances');
+            } else {
+              console.log('⌨️ Cannot paste - no copied tracks');
+            }
+            break;
+          case 'a':
+            e.preventDefault();
+            console.log('⌨️ KEYBOARD - Ctrl+A pressed');
+            console.log('⌨️ - tracks.length:', currentTracks.length);
+            console.log('⌨️ - tracks:', currentTracks?.map(t => ({ id: t.id, name: t.name })));
+            currentState.selectAllTracks();
+            console.log(`⌨️ Selected all ${currentTracks.length} tracks`);
+            break;
+          case 'delete':
+          case 'backspace':
+            e.preventDefault();
+            if (currentSelectedTracks.size > 0) {
+              currentSelectedTracks.forEach(trackId => {
+                currentState.handleTrackDelete(trackId);
+              });
+              currentState.clearSelection();
+            }
+            break;
+        }
+      }
+      
+      // Escape key to clear selection and deselect track for pasting
+      if (e.key === 'Escape') {
+        currentState.clearSelection();
+        currentState.closeContextMenu();
+        currentState.deselectTrackForPasting();
+        console.log('⌨️ KEYBOARD - Escape pressed: cleared selections and deselected track for pasting');
+      }
+    };
+
+    console.log('🎹 KEYBOARD HANDLER - Adding event listener');
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      console.log('🎹 KEYBOARD HANDLER - Removing event listener (cleanup)');
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedTracks, tracks.length, copiedTracks]);
   
   // Handlers
   const handleBpmChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -564,6 +673,14 @@ function Studio({ projectId }: StudioProps) {
           onChange={handleFileSelected}
           accept="audio/*" 
           style={{ display: 'none' }}
+        />
+        
+        {/* Track Context Menu */}
+        <TrackContextMenu
+          open={contextMenuOpen}
+          anchorPosition={contextMenuPosition}
+          trackId={contextMenuTrackId}
+          onClose={closeContextMenu}
         />
       </Box>
     </MuiThemeProvider>

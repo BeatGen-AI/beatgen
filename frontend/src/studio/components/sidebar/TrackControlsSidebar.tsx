@@ -22,6 +22,7 @@ import { CombinedTrack, AudioTrackRead, SamplerTrackRead } from '../../../platfo
 import { getTrackColor, GRID_CONSTANTS } from '../../constants/gridConstants';
 import ControlKnob from './track-sidebar-controls/ControlKnob';
 import { alpha } from '@mui/material/styles';
+import { useStudioStore } from '../../stores/studioStore';
 
 // Interface for the component props
 interface TrackControlsSidebarProps {
@@ -127,6 +128,10 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   const [editedName, setEditedName] = useState(track.name);
   const nameInputRef = useRef<HTMLInputElement>(null);
   
+  // Get select-to-paste functionality from store
+  const { selectTrackForPasting, isTrackSelectedForPasting } = useStudioStore();
+  const isSelectedForPasting = isTrackSelectedForPasting(track.id);
+  
   // Local state for slider values during dragging
   const [localVolume, setLocalVolume] = useState(track.volume ?? 80);
   const [localPan, setLocalPan] = useState(track.pan ?? 0);
@@ -196,6 +201,24 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         onLoadAudioFile(track.id);
     }
   }
+  
+  // Handler for selecting track for pasting
+  const handleTrackClick = (e: React.MouseEvent) => {
+    // Only handle track selection if we're not clicking on interactive elements
+    const target = e.target as HTMLElement;
+    const isInteractiveElement = target.closest('button') || 
+                                target.closest('[role="slider"]') || 
+                                target.closest('input') ||
+                                target.closest('.MuiSelect-root') ||
+                                target.closest('.control-knob');
+    
+    if (!isInteractiveElement) {
+      e.preventDefault();
+      e.stopPropagation();
+      selectTrackForPasting(track.id);
+      console.log('🎯 Track clicked for pasting:', track.name, 'Selected:', !isSelectedForPasting);
+    }
+  };
   
   // Render type-specific controls based on track type
   const renderTypeSpecificControls = () => {
@@ -353,18 +376,29 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   };
   
   return (
-    <Box sx={{
-      p: 0.7,
-      mb: 0.3,
-      height: `${GRID_CONSTANTS.trackHeight - 2}px`,
-      boxSizing: 'border-box',
-      borderBottom: `1px solid ${theme.palette.divider}`,
-      borderLeft: `3px solid ${trackColor}`,
-      bgcolor: theme.palette.background.paper,
-      '&:hover': {
-        bgcolor: theme.palette.action.hover,
-      }
-    }}>
+    <Box 
+      onClick={handleTrackClick}
+      sx={{
+        p: 0.7,
+        mb: 0.3,
+        height: `${GRID_CONSTANTS.trackHeight - 2}px`,
+        boxSizing: 'border-box',
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        borderLeft: `3px solid ${trackColor}`,
+        bgcolor: isSelectedForPasting 
+          ? alpha(trackColor, 0.2) 
+          : theme.palette.background.paper,
+        cursor: 'pointer',
+        transition: 'background-color 0.2s ease',
+        border: isSelectedForPasting 
+          ? `2px solid ${trackColor}` 
+          : '2px solid transparent',
+        '&:hover': {
+          bgcolor: isSelectedForPasting 
+            ? alpha(trackColor, 0.3) 
+            : theme.palette.action.hover,
+        }
+      }}>
       {/* Track Name and Delete Button */}
       <Box sx={{ 
         display: 'flex', 
@@ -408,7 +442,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         mb: 0.5
       }}>
         {/* Volume Knob */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center' }} className="control-knob">
           <ControlKnob
             value={localVolume}
             min={0}
@@ -425,7 +459,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         </Box>
         
         {/* Pan Knob */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center' }} className="control-knob">
           <ControlKnob
             value={localPan}
             min={-100}
