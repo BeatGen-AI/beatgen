@@ -122,9 +122,17 @@ function TrackInstance(props: TrackInstanceProps) {
     
     // Update instance position
     if (isDragEnd) {
-      updateInstancePosition(instance.instanceId, newPosition);
+      // CRITICAL FIX: Convert ticks back to pixels for storage in track instances
+      // BaseTrackPreview sends position in ticks, but track instances store in pixels
+      const pixelsX = ticksToPixels(newPosition.x, bpm ?? 120, timeSignature ?? [4, 4]);
+      const pixelPosition = {
+        x: pixelsX,
+        y: newPosition.y // Y stays in pixels
+      };
+      
+      updateInstancePosition(instance.instanceId, pixelPosition);
     }
-  }, [instance.instanceId, updateInstancePosition]);
+  }, [instance.instanceId, updateInstancePosition, bpm, timeSignature]);
 
   const handleResizeEnd = useCallback((deltaPixels: number, resizeDirection: 'left' | 'right') => {
     console.log(`TrackInstance: Resize end for instance ${instance.instanceId}`, deltaPixels, resizeDirection);
@@ -137,14 +145,19 @@ function TrackInstance(props: TrackInstanceProps) {
   }, [handleResizeEnd]);
 
   // Create a track object with instance-specific position
-  // CRITICAL: Track instances store positions in PIXELS (from timeline clicks)
-  // This bypasses the normal tick-to-pixel conversion in BaseTrackPreview
-  const trackWithInstancePosition = useMemo(() => ({
-    ...track,
-    x_position: instance.position.x, // Already in pixels - no conversion needed
-    y_position: instance.position.y, // Already in pixels - no conversion needed
-    index
-  }), [track, instance.position, index]);
+  // CRITICAL FIX: Convert track instance pixel positions to ticks to match regular tracks
+  // Track instances store positions in pixels but BaseTrackPreview expects ticks for x_position
+  const trackWithInstancePosition = useMemo(() => {
+    // Convert instance pixel position to ticks for consistency with regular tracks
+    const ticksX = pixelsToTicks(instance.position.x, bpm ?? 120, timeSignature ?? [4, 4]);
+    
+    return {
+      ...track,
+      x_position: ticksX, // Convert pixels to ticks to match BaseTrackPreview expectation
+      y_position: instance.position.y, // Y stays in pixels
+      index
+    };
+  }, [track, instance.position, index, bpm, timeSignature]);
 
   const trackColor = getTrackColor(index);
 
@@ -153,20 +166,13 @@ function TrackInstance(props: TrackInstanceProps) {
       onClick={handleTrackClick}
       onContextMenu={handleContextMenu}
       sx={{ 
-        position: 'absolute',
-        // CRITICAL FIX: Track instances use direct pixel positioning (no conversion needed)
-        // They receive pixel coordinates directly from timeline clicks
-        left: `${instance.position.x}px`,
-        top: `${instance.position.y}px`,
+        // CRITICAL FIX: Let BaseTrackPreview handle all positioning
+        // Remove absolute positioning since BaseTrackPreview will set it
         cursor: 'pointer',
         outline: isSelected ? '2px solid #2196f3' : 'none',
         outlineOffset: '-2px',
         borderRadius: '6px',
         zIndex: 10, // Ensure instances are above background elements
-        minWidth: '200px', // Force minimum width at the container level
-        minHeight: '80px', // Force minimum height at the container level
-        width: `${trackWidth}px`, // Apply calculated width directly
-        height: `${GRID_CONSTANTS.trackHeight}px`, // Apply standard track height
       }}
       data-track-instance-id={instance.instanceId}
       data-track-id={track.id}

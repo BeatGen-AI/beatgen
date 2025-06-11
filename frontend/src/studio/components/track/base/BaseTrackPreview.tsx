@@ -61,23 +61,6 @@ export interface BaseTrackPreviewProps {
   onResizeEnd: (trackId: string, newTrimTicks: number, resizeDirection: 'left' | 'right') => void;
 }
 
-// Helper functions for consistent coordinate conversion during drag operations
-const ticksToPixelsFixed = (ticks: number, bpm: number, timeSignature: [number, number], measureWidth: number): number => {
-  const beatsPerMeasure = timeSignature[0];
-  const ticksPerBeat = 960; // Standard MIDI ticks
-  const beats = ticks / ticksPerBeat;
-  const beatWidth = measureWidth / beatsPerMeasure;
-  return beats * beatWidth;
-};
-
-const pixelsToTicksFixed = (pixels: number, bpm: number, timeSignature: [number, number], measureWidth: number): number => {
-  const beatsPerMeasure = timeSignature[0];
-  const ticksPerBeat = 960;
-  const beatWidth = measureWidth / beatsPerMeasure;
-  const beats = pixels / beatWidth;
-  return Math.round(beats * ticksPerBeat);
-};
-
 export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   track,
   isPlaying,
@@ -102,9 +85,6 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   const [startDragMousePosition, setStartDragMousePosition] = useState({ x: 0, y: 0 });
   const [startDragTrackPosition, setStartDragTrackPosition] = useState({ x: 0, y: 0 });
   const lastMovedPositionRef = useRef<Position>({ x: track.x_position, y: track.y_position });
-  
-  // CRITICAL FIX: Store measure width at drag start to ensure consistent conversions
-  const dragMeasureWidthRef = useRef<number>(GRID_CONSTANTS.measureWidth);
   
   // Track the content transform during left-side resize
   const [contentTransform, setContentTransform] = useState(0);
@@ -142,10 +122,6 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   const contentOffsetX = calculateContentOffset();
 
   // Create base style object for track
-  // CRITICAL: For regular tracks, x_position is in ticks and needs conversion to pixels
-  // For track instances, this gets bypassed by the useEffect sync
-  const initialPixelX = ticksToPixels(track.x_position, bpm, timeSignature);
-  
   const trackStyle = {
     display: 'flex',
     height: GRID_CONSTANTS.trackHeight,
@@ -153,7 +129,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     boxSizing: 'border-box',
     borderBottom: `1px solid ${GRID_CONSTANTS.borderColor}`,
     borderRadius: '6px',
-    left: `${initialPixelX}px`,
+    left: `${track.x_position}px`,
     top: `${track.y_position}px`,
     cursor: isDragging ? 'grabbing' : (isResizing ? 'ew-resize' : 'grab'),
     zIndex: isDragging || isResizing ? 1001 : 1000,
@@ -185,24 +161,20 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       
     if (!container) return;
     
-    // CRITICAL FIX: Capture measure width at drag start for consistent conversions
-    dragMeasureWidthRef.current = GRID_CONSTANTS.measureWidth;
-    
     // Store initial positions
     setStartDragMousePosition({
       x: e.clientX + (container.scrollLeft || 0),
       y: e.clientY + (container.scrollTop || 0)
     });
     
-    // CRITICAL FIX: Convert track position from ticks to pixels using captured measure width
-    const positionXPixels = ticksToPixelsFixed(track.x_position, bpm, timeSignature, dragMeasureWidthRef.current);
+    // Convert track position from ticks to pixels before storing
+    const positionXPixels = ticksToPixels(track.x_position, bpm, timeSignature);
     setStartDragTrackPosition({
       x: positionXPixels, // Store in pixels for consistent drag calculations
-      y: track.y_position // Already in pixels
+      y: track.y_position
     });
     
-    // CRITICAL FIX: Store initial position in pixels for consistency
-    lastMovedPositionRef.current = { x: positionXPixels, y: track.y_position };
+    lastMovedPositionRef.current = { x: track.x_position, y: track.y_position };
 
     // Setup initial style for dragging
     if (trackRef.current) {
@@ -305,30 +277,29 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
 
       // Calculate grid sizes for snapping
       const beatsPerMeasure = timeSignature[0];
-      // CRITICAL FIX: Use proper subdivision count (16th notes = 4 subdivisions per beat)
-      const subdivisionsPerBeat = 4; // 16th note resolution for smooth dragging
+      const subdivisionsPerBeat = timeSignature[1];
       const subdivisionsPerMeasure = beatsPerMeasure * subdivisionsPerBeat;
-      const subdivisionWidth = dragMeasureWidthRef.current / subdivisionsPerMeasure;
+      const subdivisionWidth = GRID_CONSTANTS.measureWidth / subdivisionsPerMeasure;
       
       // Apply snapping to pixels first (for visual positioning)
-      // TEMPORARY: Disable snapping to test if it's causing amplification
-      const snappedX = newX; // snapToGrid(newX, subdivisionWidth);
-      const snappedY = newY; // snapToGrid(newY, GRID_CONSTANTS.trackHeight);
+      const snappedX = snapToGrid(newX, subdivisionWidth);
+      const snappedY = snapToGrid(newY, GRID_CONSTANTS.trackHeight);
       
-      // CRITICAL FIX: Keep everything in pixels during dragging to avoid double conversion
-      // Only convert to ticks at the very end when updating the final position
+      // Create a position object with x in ticks for data storage
+      // For visual display, we still use pixels
+      const tickPositionX = pixelsToTicks(Math.max(0, snappedX), bpm, timeSignature);
       const newPosition = {
-        x: Math.max(0, snappedX), // Keep in pixels during drag
-        y: Math.max(0, snappedY)  // Keep in pixels during drag
+        x: tickPositionX, // Store in ticks
+        y: Math.max(0, snappedY)
       };
 
-      // Update visual position during drag (using pixels directly)
+      // Update visual position during drag (still using pixels for visual display)
       if (trackRef.current) {
-        trackRef.current.style.left = `${snappedX}px`;
-        trackRef.current.style.top = `${snappedY}px`;
+        trackRef.current.style.left = `${snappedX}px`; // Display in pixels
+        trackRef.current.style.top = `${newPosition.y}px`;
       }
       
-      // Store position for final update (still in pixels)
+      // Store position for final update
       lastMovedPositionRef.current = newPosition;
     } 
     // --- Resizing Logic ---
@@ -339,10 +310,9 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       
       // Calculate grid sizes for snapping
       const beatsPerMeasure = timeSignature[0];
-      // CRITICAL FIX: Use proper subdivision count (16th notes = 4 subdivisions per beat)
-      const subdivisionsPerBeat = 4; // 16th note resolution for smooth resizing
+      const subdivisionsPerBeat = timeSignature[1]; // Assuming beat unit maps directly
       const subdivisionsPerMeasure = beatsPerMeasure * subdivisionsPerBeat;
-      const subdivisionWidth = dragMeasureWidthRef.current / subdivisionsPerMeasure;
+      const subdivisionWidth = GRID_CONSTANTS.measureWidth / subdivisionsPerMeasure;
       const minPixelWidth = subdivisionWidth * MIN_TRACK_WIDTH_SNAP_UNITS;
 
       // Snap function specific for resizing (ensures minimum width)
@@ -419,23 +389,20 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   const handleMouseUp = useCallback(() => {
     // --- Drag End ---
     if (isDragging && trackRef.current) {
-      const finalPixelPosition = lastMovedPositionRef.current; // This is now in pixels
+      const finalPosition = lastMovedPositionRef.current;
       setIsDragging(false); // Reset state first
 
-      // CRITICAL FIX: Convert final pixel position to ticks for storage using captured measure width
-      const finalTickPosition = {
-        x: pixelsToTicksFixed(finalPixelPosition.x, bpm, timeSignature, dragMeasureWidthRef.current),
-        y: finalPixelPosition.y // Y stays in pixels (no conversion needed)
-      };
-
-      // Trigger position change with drag end flag (using tick position for storage)
-      onPositionChange(track.id, finalTickPosition, true);
+      // Trigger position change with drag end flag
+      onPositionChange(track.id, finalPosition, true);
       
       // Restore transitions after state change
       if (trackRef.current) {
-        // Use the pixel position directly for visual display (no double conversion)
-        trackRef.current.style.left = `${finalPixelPosition.x}px`;
-        trackRef.current.style.top = `${finalPixelPosition.y}px`;
+        // Convert tick position back to pixels for visual display
+        const pixelX = ticksToPixels(finalPosition.x, bpm, timeSignature);
+        
+        // Explicitly set final position/width before re-enabling transition
+        trackRef.current.style.left = `${pixelX}px`;
+        trackRef.current.style.top = `${finalPosition.y}px`;
         // Ensure width is reset if needed (although drag shouldn't change it)
         trackRef.current.style.width = `${trackWidth}px`;
         trackRef.current.style.transition = 'left 0.2s ease, top 0.2s ease, width 0.2s ease'; 
