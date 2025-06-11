@@ -119,7 +119,12 @@ export function useMultiSelection<T extends SelectableItem>(config: UseMultiSele
     if (!selectionRect || !isSelecting) return;
     
     const items = config.getAllItems();
+    console.log('🔍 Selection - Available items:', items.length, items.map(i => ({ id: i.id, x: i.x, y: i.y, width: i.width, height: i.height })));
+    console.log('🔍 Selection - Rectangle:', selectionRect);
+    
     const newSelection = selectItemsInRect(items, selectionRect, selectedIds, additive);
+    console.log('🔍 Selection - Items in rect:', newSelection);
+    
     updateSelection(newSelection);
     
     setSelectionRect(null);

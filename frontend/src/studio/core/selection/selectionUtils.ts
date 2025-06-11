@@ -52,18 +52,27 @@ export function getItemsInRect<T extends SelectableItem>(
   rect: SelectionRect
 ): T[] {
   // Normalize rectangle coordinates (handle negative width/height)
-  const x = rect.width < 0 ? rect.startX + rect.width : rect.startX;
-  const y = rect.height < 0 ? rect.startY + rect.height : rect.startY;
-  const width = Math.abs(rect.width);
-  const height = Math.abs(rect.height);
+  const rectX = rect.width < 0 ? rect.startX + rect.width : rect.startX;
+  const rectY = rect.height < 0 ? rect.startY + rect.height : rect.startY;
+  const rectWidth = Math.abs(rect.width);
+  const rectHeight = Math.abs(rect.height);
   
-  // Find items that start within the selection rectangle
-  return items.filter(item => 
-    item.x >= x && 
-    item.x <= x + width && 
-    item.y >= y && 
-    item.y <= y + height
-  );
+  // Find items that intersect with the selection rectangle
+  return items.filter(item => {
+    const itemHeight = item.height || 20; // Default height if not specified
+    
+    // Check for rectangle intersection (not just point-in-rectangle)
+    const itemRight = item.x + item.width;
+    const itemBottom = item.y + itemHeight;
+    const rectRight = rectX + rectWidth;
+    const rectBottom = rectY + rectHeight;
+    
+    // Two rectangles intersect if they overlap in both X and Y dimensions
+    const xOverlap = item.x < rectRight && itemRight > rectX;
+    const yOverlap = item.y < rectBottom && itemBottom > rectY;
+    
+    return xOverlap && yOverlap;
+  });
 }
 
 // === SELECTION MANAGEMENT ===

@@ -1,4 +1,4 @@
-import React, { forwardRef, memo, useRef } from 'react';
+import React, { forwardRef, memo, useRef, useState } from 'react';
 import { Box, IconButton, Typography, TextField, Tooltip, useTheme } from '@mui/material';
 // Import components
 import BPMControl from './BPMControl';
@@ -7,6 +7,7 @@ import { TimeDisplay, TimeDisplayHandle } from './TimeDisplay';
 import KeySelector from './KeySelector';
 import { SaveProjectButton } from './SaveProjectButton';
 import { SaveStatusIndicator } from '../ui/SaveStatusIndicator';
+import { ToolSelection, GridSnapControls, ZoomControls, ToolType } from '../shared';
 import { useStudioStore } from '../../stores/studioStore';
 import { IconPlayerPlayFilled, IconPlayerSkipBackFilled, IconPlayerPauseFilled, IconArrowForwardUp, IconArrowBackUp, IconZoomIn, IconZoomOut, IconInputAi, IconChevronsRight, IconArrowLeft } from '@tabler/icons-react';
 import { IconSettings } from '@tabler/icons-react';
@@ -78,6 +79,14 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 }, ref) => {
     const theme = useTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
+    
+    // Timeline tools state from store
+    const selectedTool = useStudioStore(state => state.selectedTool);
+    const gridSnapEnabled = useStudioStore(state => state.gridSnapEnabled);
+    const selectedSnapSize = useStudioStore(state => state.selectedSnapSize);
+    const setSelectedTool = useStudioStore(state => state.setSelectedTool);
+    const setGridSnapEnabled = useStudioStore(state => state.setGridSnapEnabled);
+    const setSelectedSnapSize = useStudioStore(state => state.setSelectedSnapSize);
 
     const handlePlayPause = () => {
         if (isPlaying) {
@@ -233,6 +242,30 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         <IconPlayerSkipBackFilled />
                     </IconButton>
                 </Box>
+
+                {/* Timeline Tools Section */}
+                <Box sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0,
+                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                    borderRadius: 1,
+                    px: 1,
+                    py: 0.5,
+                    height: '32px'
+                }}>
+                    <ToolSelection 
+                        selectedTool={selectedTool}
+                        onToolSelect={setSelectedTool}
+                    />
+                    
+                    <GridSnapControls 
+                        enabled={gridSnapEnabled}
+                        selectedSnapSize={selectedSnapSize}
+                        onToggle={() => setGridSnapEnabled(prev => !prev)}
+                        onSnapSizeChange={setSelectedSnapSize}
+                    />
+                </Box>
             </Box>
 
             {/* Center section - Project Title */}
@@ -266,20 +299,18 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     alignItems: 'center',
                     gap: 1
                 }}>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={onZoomIn}
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
+                    <ZoomControls 
+                        zoomLevel={zoomLevel}
+                        onZoomIn={onZoomIn}
+                        onZoomOut={onZoomOut}
+                        minZoom={0.25}
+                        maxZoom={4.0}
+                        showPercentage={false}
+                        style={{
+                            marginRight: '8px',
+                            width: 'auto'
                         }}
-                        disableRipple
-                    >
-                        <IconZoomIn />
-                    </IconButton>
+                    />
                     <Box sx={{ 
                         color: "text.primary",
                         fontWeight: "bold", 
@@ -288,24 +319,11 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         textAlign: "center", 
                         border: `1px solid ${theme.palette.divider}`,
                         padding: "4px 4px", 
-                        borderRadius: "6px" 
+                        borderRadius: "6px",
+                        marginRight: '8px'
                     }}>
                         {zoomLevel.toFixed(1)}x
                     </Box>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={onZoomOut}
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        <IconZoomOut />
-                    </IconButton>
                     <TimeDisplay
                         ref={timeDisplayRef}
                         initialTime={currentTime}

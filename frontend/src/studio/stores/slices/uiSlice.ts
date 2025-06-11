@@ -1,6 +1,7 @@
 import { RootState, SetFn, GetFn, StoreSliceCreator } from '../types';
 import { produce } from 'immer'; // Import produce
 import { apiClient } from '../../../platform/api/client';
+import { ToolType } from '../../components/shared';
 
 export type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -15,6 +16,11 @@ export interface UISlice {
   autoSaveStatus: AutoSaveStatus;
   autoSaveMessage?: string;
   
+  // Timeline tool state
+  selectedTool: ToolType;
+  gridSnapEnabled: boolean;
+  selectedSnapSize: number;
+  
   // Track selection and copy/paste state
   selectedTracks: Set<string>; // Set of selected track IDs
   copiedTracks: string[]; // Array of copied track IDs
@@ -27,6 +33,11 @@ export interface UISlice {
   setZoomLevel: (zoomLevel: number) => void;
   setMeasureCount: (measureCount: number) => void;
   setAddMenuAnchor: (el: HTMLElement | null) => void;
+  
+  // Timeline tool actions
+  setSelectedTool: (tool: ToolType) => void;
+  setGridSnapEnabled: (enabled: boolean) => void;
+  setSelectedSnapSize: (size: number) => void;
   openDrumMachine: (drumTrackId: string) => void;
   closeDrumMachine: (drumTrackId: string) => void;
   setAutoSaveStatus: (status: AutoSaveStatus, message?: string) => void;
@@ -66,6 +77,11 @@ export const createUISlice: StoreSliceCreator<UISlice> = (set, get) => {
     autoSaveStatus: 'idle' as AutoSaveStatus,
     autoSaveMessage: undefined,
     
+    // Timeline tool initial state
+    selectedTool: 'select' as ToolType,
+    gridSnapEnabled: true,
+    selectedSnapSize: 2, // Default to 1/16 note
+    
     // Track selection and copy/paste initial state
     selectedTracks: new Set<string>(),
     copiedTracks: [],
@@ -78,6 +94,11 @@ export const createUISlice: StoreSliceCreator<UISlice> = (set, get) => {
     setZoomLevel: (zoomLevel) => set(produce((draft: RootState) => { draft.zoomLevel = zoomLevel; })),
     setMeasureCount: (measureCount) => set(produce((draft: RootState) => { draft.measureCount = measureCount; })),
     setAddMenuAnchor: (el) => set(produce((draft: RootState) => { draft.addMenuAnchor = el; })),
+    
+    // Timeline tool actions
+    setSelectedTool: (tool) => set(produce((draft: RootState) => { draft.selectedTool = tool; })),
+    setGridSnapEnabled: (enabled) => set(produce((draft: RootState) => { draft.gridSnapEnabled = enabled; })),
+    setSelectedSnapSize: (size) => set(produce((draft: RootState) => { draft.selectedSnapSize = size; })),
     
     setAutoSaveStatus: (status, message) => set(produce((draft: RootState) => { 
       draft.autoSaveStatus = status; 

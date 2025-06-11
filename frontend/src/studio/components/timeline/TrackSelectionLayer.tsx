@@ -11,6 +11,7 @@ import { TrackInstance as TrackInstanceType } from '../../stores/types';
 import { CombinedTrack } from 'src/platform/types/project';
 import { GRID_CONSTANTS, pixelsToTicks, ticksToPixels } from '../../constants/gridConstants';
 import TrackInstance from '../track/TrackInstance';
+import { ToolType } from '../shared';
 
 interface TrackSelectionLayerProps {
   tracks: CombinedTrack[];
@@ -22,6 +23,8 @@ interface TrackSelectionLayerProps {
   timeSignature?: [number, number];
   totalWidth?: number;
   onTimelineClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  
+  // Keep interface simple - tools are managed in store
 }
 
 // Extend TrackInstance to match SelectableItem interface
@@ -48,7 +51,6 @@ export default function TrackSelectionLayer({
   onTimelineClick
 }: TrackSelectionLayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   // Store actions for track instance management
@@ -56,6 +58,10 @@ export default function TrackSelectionLayer({
   const updateInstanceTrim = useStudioStore(state => state.updateInstanceTrim);
   const createTrackInstance = useStudioStore(state => state.createTrackInstance);
   const removeTrackInstance = useStudioStore(state => state.removeTrackInstance);
+  
+  // Timeline tools state from store
+  const selectedTool = useStudioStore(state => state.selectedTool);
+  const isSelectionMode = selectedTool === 'select';
 
   // Track mouse position for paste operations
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -189,19 +195,7 @@ export default function TrackSelectionLayer({
   // Enhanced keyboard shortcuts with full DAW functionality
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Toggle selection mode with S key (only if not typing in inputs)
-      if (e.key === 's' || e.key === 'S') {
-        if (!e.ctrlKey && !e.metaKey && (e.target as HTMLElement).tagName !== 'INPUT') {
-          e.preventDefault();
-          setIsSelectionMode(prev => {
-            const newMode = !prev;
-            if (!newMode) {
-              selectionManager.clearSelection();
-            }
-            return newMode;
-          });
-        }
-      }
+      // Note: Selection mode is now controlled by the toolbar, not the S key
       
       // Global shortcuts (work when selection mode is active or items are selected)
       if (isSelectionMode || selectionManager.hasSelection()) {
@@ -268,7 +262,10 @@ export default function TrackSelectionLayer({
             e.preventDefault();
             const wasSelecting = selectionManager.hasSelection();
             selectionManager.clearSelection();
-            setIsSelectionMode(false);
+            // Clear selection and switch away from select tool if needed
+            if (selectedTool === 'select') {
+              // Could switch to a default tool, but for now just clear selection
+            }
             if (wasSelecting) {
               console.log('Cleared selection and exited selection mode');
             }
@@ -425,42 +422,85 @@ export default function TrackSelectionLayer({
     });
 
     if (clickedInstance) {
-      // Clicking on a track instance
-      if (isSelectionMode || e.shiftKey || e.ctrlKey || e.metaKey) {
-        e.stopPropagation();
-        
-        // Handle selection
-        if (e.shiftKey || e.ctrlKey || e.metaKey) {
-          // Add/remove from selection
-          selectionManager.toggleSelection(clickedInstance.instanceId, true);
-        } else {
-          // Replace selection
-          if (!selectionManager.isSelected(clickedInstance.instanceId)) {
-            selectionManager.clearSelection();
-            selectionManager.toggleSelection(clickedInstance.instanceId, false);
+      // Handle tool-specific actions on track instances
+      e.stopPropagation();
+      
+      switch (selectedTool) {
+        case 'select':
+          // Selection and drag behavior
+          if (e.shiftKey || e.ctrlKey || e.metaKey) {
+            // Add/remove from selection
+            selectionManager.toggleSelection(clickedInstance.instanceId, true);
+          } else {
+            // Replace selection
+            if (!selectionManager.isSelected(clickedInstance.instanceId)) {
+              selectionManager.clearSelection();
+              selectionManager.toggleSelection(clickedInstance.instanceId, false);
+            }
           }
-        }
 
-        // Start group drag if multiple items are selected
-        if (selectionManager.hasSelection()) {
-          const success = selectionManager.beginGroupDrag(clickedInstance.instanceId);
-          if (success) {
-            console.log(`Started group drag with ${selectionManager.getSelectionCount()} track instance(s)`);
+          // Start group drag if multiple items are selected
+          if (selectionManager.hasSelection()) {
+            const success = selectionManager.beginGroupDrag(clickedInstance.instanceId);
+            if (success) {
+              console.log(`Started group drag with ${selectionManager.getSelectionCount()} track instance(s)`);
+            }
           }
-        }
+          break;
+          
+        case 'eraser':
+          // Delete the clicked instance
+          removeTrackInstance(clickedInstance.instanceId);
+          console.log(`Erased track instance: ${clickedInstance.instanceId}`);
+          break;
+          
+        case 'highlighter':
+          // Add to selection without clearing existing selection
+          selectionManager.toggleSelection(clickedInstance.instanceId, true);
+          console.log(`Highlighted track instance: ${clickedInstance.instanceId}`);
+          break;
+          
+        case 'pen':
+          // Pen tool on existing instance could duplicate it or select it
+          selectionManager.clearSelection();
+          selectionManager.toggleSelection(clickedInstance.instanceId, false);
+          console.log(`Selected track instance with pen: ${clickedInstance.instanceId}`);
+          break;
       }
       return;
     }
 
-    // Not clicking on a track instance - handle selection rectangle
-    if (isSelectionMode || e.shiftKey || e.ctrlKey || e.metaKey) {
-      e.stopPropagation();
-      selectionManager.startSelectionRect(currentX, currentY, !e.shiftKey);
-    } else {
-      // Normal timeline click
-      onTimelineClick?.(e);
+    // Not clicking on a track instance - handle tool-specific empty area actions
+    switch (selectedTool) {
+      case 'select':
+        // Always start selection rectangle for select tool
+        e.stopPropagation();
+        selectionManager.startSelectionRect(currentX, currentY, !e.shiftKey);
+        console.log('🖱️ Started selection rectangle at:', { x: currentX, y: currentY, clearExisting: !e.shiftKey });
+        break;
+        
+      case 'highlighter':
+        // Start selection rectangle for highlighter tool (additive mode)
+        e.stopPropagation();
+        selectionManager.startSelectionRect(currentX, currentY, false); // Always additive for highlighter
+        console.log('🖍️ Started highlighter selection at:', { x: currentX, y: currentY });
+        break;
+        
+      case 'pen':
+        // For pen tool, trigger normal timeline click which might create a track instance
+        onTimelineClick?.(e);
+        break;
+        
+      case 'eraser':
+        // Eraser tool does nothing on empty areas
+        onTimelineClick?.(e);
+        break;
+        
+      default:
+        onTimelineClick?.(e);
+        break;
     }
-  }, [isSelectionMode, selectionManager, onTimelineClick, allInstances]);
+  }, [selectedTool, selectionManager, onTimelineClick, allInstances, removeTrackInstance]);
 
   const handleMouseMoveInternal = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -483,6 +523,7 @@ export default function TrackSelectionLayer({
     // Handle selection rectangle
     if (selectionManager.isSelecting) {
       selectionManager.updateSelectionRectangle(currentX, currentY);
+      console.log('🔄 Updating selection rectangle to:', { x: currentX, y: currentY });
     }
   }, [selectionManager, mousePosition]);
 
@@ -496,9 +537,27 @@ export default function TrackSelectionLayer({
 
     // End selection rectangle
     if (selectionManager.isSelecting) {
+      console.log('🔚 Ending selection rectangle, additive:', e.shiftKey);
       selectionManager.endSelectionRect(e.shiftKey);
+      console.log('🎯 Selected items count:', selectionManager.getSelectionCount());
     }
   }, [selectionManager]);
+
+  // Helper function to get tool-specific cursor
+  const getToolCursor = (tool: ToolType): string => {
+    switch (tool) {
+      case 'select':
+        return 'crosshair';
+      case 'pen':
+        return `url('/icons/pen.svg') 0 16, auto`;
+      case 'highlighter':
+        return `url('/icons/highlighter.svg') 0 16, auto`;
+      case 'eraser':
+        return `url('/icons/eraser.svg') 0 16, auto`;
+      default:
+        return 'pointer';
+    }
+  };
 
   // Render selection rectangle if active
   const renderSelectionRectangle = () => {
@@ -510,18 +569,25 @@ export default function TrackSelectionLayer({
     const width = Math.abs(rect.width);
     const height = Math.abs(rect.height);
 
+    console.log('🔳 SELECTION RECTANGLE:', { 
+      x, y, width, height, 
+      startX: rect.startX, startY: rect.startY, 
+      rawWidth: rect.width, rawHeight: rect.height 
+    });
+
     return (
       <Box
         sx={{
           position: 'absolute',
           left: x,
           top: y,
-          width,
-          height,
-          border: '1px dashed #2196f3',
-          backgroundColor: 'rgba(33, 150, 243, 0.1)',
+          width: Math.max(width, 1), // Ensure minimum 1px visibility
+          height: Math.max(height, 1), // Ensure minimum 1px visibility
+          border: '2px solid #2196f3',
+          backgroundColor: 'rgba(33, 150, 243, 0.15)',
           pointerEvents: 'none',
-          zIndex: 1000
+          zIndex: 1000,
+          boxShadow: '0 0 8px rgba(33, 150, 243, 0.3)'
         }}
       />
     );
@@ -535,7 +601,7 @@ export default function TrackSelectionLayer({
         width: totalWidth ? `${totalWidth}px` : '100%',
         minHeight: '100%',
         cursor: selectionManager.groupDragState.isActive ? 'grabbing' : 
-                isSelectionMode ? 'crosshair' : 'pointer',
+                getToolCursor(selectedTool),
         userSelect: 'none' // Prevent text selection during drag operations
       }}
       onMouseDown={handleMouseDown}
@@ -567,7 +633,7 @@ export default function TrackSelectionLayer({
               textAlign: 'center'
             }}
           >
-            Selection Mode (Press S to toggle)
+            Selection Mode
           </Box>
           
           {selectionManager.hasSelection() && (
