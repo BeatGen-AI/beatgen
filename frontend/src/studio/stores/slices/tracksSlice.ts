@@ -68,6 +68,12 @@ export interface TracksSlice {
     drumTrackId: string,
     sampleData: { id: string; display_name: string; storage_key: string; /* other needed fields? */ }
   ) => Promise<CombinedTrack | null>;
+
+  // Group operations for copy/paste functionality
+  duplicateTrack: (trackId: string, newPosition?: Position) => Promise<CombinedTrack | null>;
+  duplicateMultipleTracks: (trackIds: string[], offsetX?: number) => Promise<CombinedTrack[]>;
+  deleteMultipleTracks: (trackIds: string[]) => Promise<void>;
+  resizeMultipleTracks: (trackIds: string[], widthDelta: number, anchor: 'left' | 'right') => Promise<void>;
 }
 
 // Remove local type alias if it causes confusion
@@ -943,6 +949,165 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     return _withErrorHandling(addSamplerLogic, 'addSamplerTrackToDrumTrack')();
   };
 
+  // Group operations for copy/paste functionality
+  const duplicateTrack = async (trackId: string, newPosition?: Position): Promise<CombinedTrack | null> => {
+    const { tracks, _withErrorHandling } = rootGet();
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available");
+      return null;
+    }
+
+    const duplicateLogic = async (): Promise<CombinedTrack | null> => {
+      const originalTrack = tracks.find(t => t.id === trackId);
+      if (!originalTrack) {
+        console.error(`Track with id ${trackId} not found for duplication`);
+        return null;
+      }
+
+      // Calculate new position - offset to the right if not specified
+      const offsetX = newPosition?.x ?? (originalTrack.x_position + ticksToPixels(originalTrack.duration_ticks, 1) + 48); // 48px gap
+      const offsetY = newPosition?.y ?? (originalTrack.y_position + GRID_CONSTANTS.trackHeight);
+
+      // Create options from the original track
+      const options: TrackOptions = {
+        volume: originalTrack.volume,
+        pan: originalTrack.pan,
+        muted: originalTrack.mute,
+        soloed: false, // Don't duplicate solo state
+        position: { x: offsetX, y: offsetY },
+        duration: originalTrack.duration_ticks,
+        trim_start_ticks: originalTrack.trim_start_ticks,
+        trim_end_ticks: originalTrack.trim_end_ticks,
+      };
+
+      // Add type-specific options
+      if (originalTrack.type === 'MIDI' && originalTrack.track) {
+        const midiTrack = originalTrack.track as MidiTrackRead;
+        options.instrumentId = midiTrack.instrument_id;
+        options.instrumentName = midiTrack.instrument_name;
+        options.instrumentStorageKey = midiTrack.instrument_storage_key;
+      } else if (originalTrack.type === 'AUDIO' && originalTrack.track) {
+        const audioTrack = originalTrack.track as AudioTrackRead;
+        if (audioTrack.audio_file) {
+          // For audio tracks, we'll need to handle file duplication
+          // For now, use the same file reference
+          (options as AudioTrackOptions).audioFileId = audioTrack.audio_file.id;
+        }
+      } else if (originalTrack.type === 'SAMPLER' && originalTrack.track) {
+        const samplerTrack = originalTrack.track as SamplerTrackRead;
+        if (samplerTrack.sample_file) {
+          (options as SamplerTrackOptions).sampleFileId = samplerTrack.sample_file.id;
+        }
+      }
+
+      // Create the duplicate track
+      const duplicatedTrack = await createTrackAndRegisterWithHistory(
+        originalTrack.type,
+        `${originalTrack.name} (Copy)`,
+        options
+      );
+
+      // Copy MIDI notes if it's a MIDI track
+      if (duplicatedTrack && originalTrack.type === 'MIDI' && originalTrack.track) {
+        const originalMidiTrack = originalTrack.track as MidiTrackRead;
+        if (originalMidiTrack.notes && originalMidiTrack.notes.length > 0) {
+          // Update the duplicated track with the copied notes
+          _updateNestedTrackData(duplicatedTrack.id, {
+            notes: [...originalMidiTrack.notes]
+          });
+        }
+      }
+
+      return duplicatedTrack;
+    };
+
+    return _withErrorHandling(duplicateLogic, `duplicateTrack: ${trackId}`)();
+  };
+
+  const duplicateMultipleTracks = async (trackIds: string[], offsetX = 0): Promise<CombinedTrack[]> => {
+    const { tracks, _withErrorHandling } = rootGet();
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available");
+      return [];
+    }
+
+    const duplicateMultipleLogic = async (): Promise<CombinedTrack[]> => {
+      const duplicatedTracks: CombinedTrack[] = [];
+      
+      // Calculate base offset if not provided
+      let baseOffsetX = offsetX;
+      if (baseOffsetX === 0) {
+        // Find the rightmost track position
+        const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
+        const maxRightPosition = Math.max(...selectedTracks.map(t => t.x_position + ticksToPixels(t.duration_ticks, 1)));
+        baseOffsetX = maxRightPosition + 96; // 96px gap
+      }
+
+      // Find the leftmost track to calculate relative positions
+      const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
+      const minX = Math.min(...selectedTracks.map(t => t.x_position));
+
+      for (const trackId of trackIds) {
+        const originalTrack = tracks.find(t => t.id === trackId);
+        if (!originalTrack) continue;
+
+        // Calculate relative position
+        const relativeX = originalTrack.x_position - minX;
+        const newPosition = {
+          x: baseOffsetX + relativeX,
+          y: originalTrack.y_position + GRID_CONSTANTS.trackHeight * trackIds.length // Offset Y to avoid overlap
+        };
+
+        const duplicatedTrack = await duplicateTrack(trackId, newPosition);
+        if (duplicatedTrack) {
+          duplicatedTracks.push(duplicatedTrack);
+        }
+      }
+
+      return duplicatedTracks;
+    };
+
+    return _withErrorHandling(duplicateMultipleLogic, `duplicateMultipleTracks`)() || [];
+  };
+
+  const deleteMultipleTracks = async (trackIds: string[]): Promise<void> => {
+    const { _withErrorHandling } = rootGet();
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available");
+      return;
+    }
+
+    const deleteMultipleLogic = async (): Promise<void> => {
+      // Delete tracks in sequence to avoid issues with concurrent operations
+      for (const trackId of trackIds) {
+        await handleTrackDelete(trackId);
+      }
+    };
+
+    return _withErrorHandling(deleteMultipleLogic, `deleteMultipleTracks`)();
+  };
+
+  const resizeMultipleTracks = async (trackIds: string[], widthDelta: number, anchor: 'left' | 'right'): Promise<void> => {
+    const { tracks, _withErrorHandling } = rootGet();
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available");
+      return;
+    }
+
+    const resizeMultipleLogic = async (): Promise<void> => {
+      const deltaPixels = widthDelta; // Assuming widthDelta is already in pixels
+      
+      for (const trackId of trackIds) {
+        const track = tracks.find(t => t.id === trackId);
+        if (track) {
+          handleTrackResizeEnd(trackId, deltaPixels, anchor);
+        }
+      }
+    };
+
+    return _withErrorHandling(resizeMultipleLogic, `resizeMultipleTracks`)();
+  };
+
   // --- Initial State & Return --- 
   return {
     tracks: [],
@@ -989,5 +1154,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     // New actions
     removeSamplerTrack,
     addSamplerTrackToDrumTrack,
+
+    // Group operations for copy/paste functionality
+    duplicateTrack,
+    duplicateMultipleTracks,
+    deleteMultipleTracks,
+    resizeMultipleTracks,
   };
 };

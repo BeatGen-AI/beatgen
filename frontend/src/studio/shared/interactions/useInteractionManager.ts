@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { Tool, SelectionState, DragState, ToolState, Selectable } from './types';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Tool, SelectionState, DragState, ToolState, Selectable, ClipboardState, ResizeState } from './types';
 import { getItemsInRect, SelectableItem } from './selectionUtils';
 
 interface UseInteractionManagerOptions {
@@ -12,6 +12,16 @@ interface UseInteractionManagerOptions {
   onDragEnd?: (itemId: string, selectedIds: string[]) => void;
   onItemClick?: (itemId: string, tool: Tool) => void;
   onItemDoubleClick?: (itemId: string) => void;
+  // Clipboard operations
+  onCopy?: (items: Selectable[]) => void;
+  onCut?: (items: Selectable[]) => void;
+  onPaste?: (items: Selectable[], position?: { x: number; y: number }) => void;
+  onDelete?: (itemIds: string[]) => void;
+  onDuplicate?: (itemIds: string[]) => void;
+  // Resize operations
+  onResizeStart?: (itemId: string, selectedIds: string[], direction: 'left' | 'right') => void;
+  onResizeMove?: (itemId: string, delta: { x: number; y: number }, direction: 'left' | 'right') => void;
+  onResizeEnd?: (itemId: string, selectedIds: string[]) => void;
 }
 
 export function useInteractionManager(options: UseInteractionManagerOptions = {}) {
@@ -24,7 +34,15 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     onDragMove,
     onDragEnd,
     onItemClick,
-    onItemDoubleClick
+    onItemDoubleClick,
+    onCopy,
+    onCut,
+    onPaste,
+    onDelete,
+    onDuplicate,
+    onResizeStart,
+    onResizeMove,
+    onResizeEnd
   } = options;
 
   // Tool state
@@ -47,6 +65,22 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     dragOffset: { x: 0, y: 0 },
     isGroupDrag: false,
     initialPositions: {}
+  });
+
+  // Clipboard state
+  const [clipboardState, setClipboardState] = useState<ClipboardState>({
+    clipboardItems: [],
+    clipboardOperation: null,
+    isClipboardEmpty: true
+  });
+
+  // Resize state
+  const [resizeState, setResizeState] = useState<ResizeState>({
+    resizingItemId: null,
+    resizeDirection: null,
+    initialDimensions: {},
+    isGroupResize: false,
+    resizeStartPos: { x: 0, y: 0 }
   });
 
   // Refs for tracking mouse state
@@ -311,11 +345,83 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     }
   }, [toolState.selectedTool, clearSelection, startSelection]);
 
+  // Clipboard operations
+  const copyItems = useCallback((items: Selectable[]) => {
+    setClipboardState({
+      clipboardItems: [...items],
+      clipboardOperation: 'copy',
+      isClipboardEmpty: items.length === 0
+    });
+    onCopy?.(items);
+  }, [onCopy]);
+
+  const cutItems = useCallback((items: Selectable[]) => {
+    setClipboardState({
+      clipboardItems: [...items],
+      clipboardOperation: 'cut',
+      isClipboardEmpty: items.length === 0
+    });
+    onCut?.(items);
+  }, [onCut]);
+
+  const pasteItems = useCallback((position?: { x: number; y: number }) => {
+    if (clipboardState.isClipboardEmpty) return;
+    onPaste?.(clipboardState.clipboardItems, position);
+  }, [clipboardState.clipboardItems, clipboardState.isClipboardEmpty, onPaste]);
+
+  const deleteItems = useCallback((itemIds: string[]) => {
+    onDelete?.(itemIds);
+  }, [onDelete]);
+
+  const duplicateItems = useCallback((itemIds: string[]) => {
+    onDuplicate?.(itemIds);
+  }, [onDuplicate]);
+
+  // Keyboard shortcuts handler
+  const handleKeyDown = useCallback((event: KeyboardEvent, items: Selectable[] = []) => {
+    const selectedItems = items.filter(item => selectionState.selectedIds.includes(item.id));
+    
+    if (event.ctrlKey || event.metaKey) {
+      switch (event.key.toLowerCase()) {
+        case 'c':
+          event.preventDefault();
+          if (selectedItems.length > 0) {
+            copyItems(selectedItems);
+          }
+          break;
+        case 'x':
+          event.preventDefault();
+          if (selectedItems.length > 0) {
+            cutItems(selectedItems);
+          }
+          break;
+        case 'v':
+          event.preventDefault();
+          pasteItems();
+          break;
+        case 'd':
+          event.preventDefault();
+          if (selectedItems.length > 0) {
+            duplicateItems(selectionState.selectedIds);
+          }
+          break;
+      }
+    } else if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      if (selectedItems.length > 0) {
+        deleteItems(selectionState.selectedIds);
+        clearSelection();
+      }
+    }
+  }, [selectionState.selectedIds, copyItems, cutItems, pasteItems, duplicateItems, deleteItems, clearSelection]);
+
   return {
     // State
     toolState,
     selectionState,
     dragState,
+    clipboardState,
+    resizeState,
 
     // Tool methods
     setTool,
@@ -338,6 +444,14 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     updateSelection,
     endSelection,
 
+    // Clipboard methods
+    copyItems,
+    cutItems,
+    pasteItems,
+    deleteItems,
+    duplicateItems,
+    handleKeyDown,
+
     // Interaction handlers
     handleItemClick,
     handleItemDoubleClick,
@@ -352,6 +466,8 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     hasSelection: selectionState.selectedIds.length > 0,
     selectedCount: selectionState.selectedIds.length,
     isDragging: dragState.draggedItemId !== null,
-    isSelecting: selectionState.isSelecting
+    isSelecting: selectionState.isSelecting,
+    hasClipboard: !clipboardState.isClipboardEmpty,
+    isResizing: resizeState.resizingItemId !== null
   };
 }

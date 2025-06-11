@@ -33,6 +33,13 @@ export interface TimelineProps {
   onTrackDelete?: (trackId: string) => void;
   onTrackDuplicate?: (trackId: string) => void;
   selectedTrackIds?: string[];
+  
+  // Group operations for clipboard functionality
+  onCopyTracks?: (tracks: CombinedTrack[]) => void;
+  onCutTracks?: (tracks: CombinedTrack[]) => void;
+  onPasteTracks?: (tracks: CombinedTrack[], position?: { x: number; y: number }) => void;
+  onDeleteTracks?: (trackIds: string[]) => void;
+  onDuplicateTracks?: (trackIds: string[]) => void;
 }
 
 // Define imperative handle interface
@@ -72,7 +79,12 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   onTrackSelect,
   onTrackDelete,
   onTrackDuplicate,
-  selectedTrackIds = []
+  selectedTrackIds = [],
+  onCopyTracks,
+  onCutTracks,
+  onPasteTracks,
+  onDeleteTracks,
+  onDuplicateTracks
 }, ref) => {
   const theme = useTheme();
   // Calculate the total width needed for the entire timeline
@@ -132,8 +144,52 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     onItemDoubleClick: (itemId) => {
       console.log('Track double-clicked:', itemId);
       // Could open track editor or piano roll
+    },
+    // Clipboard operations
+    onCopy: (items) => {
+      const trackItems = items.filter(item => item.type === 'track') as (CombinedTrack & { type: 'track' })[];
+      const fullTracks = trackItems.map(item => tracks.find(t => t.id === item.id)).filter(Boolean) as CombinedTrack[];
+      onCopyTracks?.(fullTracks);
+    },
+    onCut: (items) => {
+      const trackItems = items.filter(item => item.type === 'track') as (CombinedTrack & { type: 'track' })[];
+      const fullTracks = trackItems.map(item => tracks.find(t => t.id === item.id)).filter(Boolean) as CombinedTrack[];
+      onCutTracks?.(fullTracks);
+    },
+    onPaste: (items, position) => {
+      const trackItems = items.filter(item => item.type === 'track') as (CombinedTrack & { type: 'track' })[];
+      const fullTracks = trackItems.map(item => tracks.find(t => t.id === item.id)).filter(Boolean) as CombinedTrack[];
+      onPasteTracks?.(fullTracks, position);
+    },
+    onDelete: (itemIds) => {
+      onDeleteTracks?.(itemIds);
+    },
+    onDuplicate: (itemIds) => {
+      onDuplicateTracks?.(itemIds);
     }
   });
+
+  // Keyboard event handling for clipboard operations
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Convert tracks to selectable items for the interaction manager
+      const selectableItems = tracks.map(track => ({
+        ...track,
+        type: 'track' as const
+      }));
+      
+      interaction.handleKeyDown(event, selectableItems);
+    };
+
+    // Add event listener to the container
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('keydown', handleKeyDown);
+      return () => {
+        container.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [tracks, interaction]);
   
   // Use theme color for border if gridLineStyle is default
   const defaultGridLineStyle = {
@@ -189,12 +245,17 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       <Box 
         ref={containerRef}
         className="timeline-container"
+        tabIndex={0} // Make focusable for keyboard events
         sx={{ 
           flex: 1, 
           position: 'relative', 
           overflow: 'auto',
           willChange: 'transform',
           bgcolor: 'background.default',
+          outline: 'none', // Remove default focus outline
+          '&:focus': {
+            outline: 'none', // Ensure no focus outline
+          },
           '& > *': {
             backfaceVisibility: 'hidden',
             perspective: 1000,
