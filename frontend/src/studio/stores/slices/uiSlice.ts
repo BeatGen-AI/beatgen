@@ -14,6 +14,9 @@ export interface UISlice {
   autoSaveStatus: AutoSaveStatus;
   autoSaveMessage?: string;
   
+  // Track selection state
+  selectedTrackIds: string[];
+  
   // Actions (mostly simple setters)
   setZoomLevel: (zoomLevel: number) => void;
   setMeasureCount: (measureCount: number) => void;
@@ -21,6 +24,7 @@ export interface UISlice {
   openDrumMachine: (drumTrackId: string) => void;
   closeDrumMachine: (drumTrackId: string) => void;
   setAutoSaveStatus: (status: AutoSaveStatus, message?: string) => void;
+  setSelectedTrackIds: (trackIds: string[]) => void;
   // Consider adding toggleDrumMachine if useful
 }
 
@@ -35,6 +39,7 @@ export const createUISlice: StoreSliceCreator<UISlice> = (set, get) => {
     openDrumMachines: {},
     autoSaveStatus: 'idle' as AutoSaveStatus,
     autoSaveMessage: undefined,
+    selectedTrackIds: [],
 
     // Actions implementations using Immer
     setZoomLevel: (zoomLevel) => set(produce((draft: RootState) => { draft.zoomLevel = zoomLevel; })),
@@ -44,6 +49,10 @@ export const createUISlice: StoreSliceCreator<UISlice> = (set, get) => {
     setAutoSaveStatus: (status, message) => set(produce((draft: RootState) => { 
       draft.autoSaveStatus = status; 
       draft.autoSaveMessage = message;
+    })),
+    
+    setSelectedTrackIds: (trackIds) => set(produce((draft: RootState) => { 
+      draft.selectedTrackIds = trackIds; 
     })),
     
     openDrumMachine: (drumTrackId) => set(produce((draft: RootState) => {
