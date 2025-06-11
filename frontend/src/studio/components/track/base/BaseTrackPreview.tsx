@@ -4,6 +4,7 @@ import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 import { pixelsToTicks, ticksToPixels } from '../../../constants/gridConstants';
 import { CombinedTrack } from 'src/platform/types/project';
 import { Position } from '../types';
+import { Tool } from '../../../shared/interactions';
 
 /**
  * BaseTrackPreview is the foundation for all track visualizations in the timeline.
@@ -59,6 +60,14 @@ export interface BaseTrackPreviewProps {
   
   /** Callback when track resizing finishes */
   onResizeEnd: (trackId: string, newTrimTicks: number, resizeDirection: 'left' | 'right') => void;
+  
+  /** Selection and tool integration */
+  isSelected?: boolean;
+  selectedTool?: Tool;
+  isGroupDrag?: boolean;
+  isPrimaryDrag?: boolean;
+  onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
+  onTrackDoubleClick?: (trackId: string) => void;
 }
 
 export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
@@ -73,7 +82,13 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   contentWidth,
   timeSignature = [4, 4],
   bpm,
-  onResizeEnd
+  onResizeEnd,
+  isSelected = false,
+  selectedTool = 'select',
+  isGroupDrag = false,
+  isPrimaryDrag = false,
+  onTrackClick,
+  onTrackDoubleClick
 }) => {
   // Use the provided content width or default to track width if not specified
   const actualContentWidth = contentWidth || trackWidth;
@@ -121,6 +136,32 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   // The normal position offset for content (used when not actively resizing)
   const contentOffsetX = calculateContentOffset();
 
+  // Calculate selection styles
+  const getSelectionStyles = () => {
+    const baseSelectionStyles: any = {};
+    
+    if (isSelected) {
+      baseSelectionStyles.outline = '3px solid #2196f3';
+      baseSelectionStyles.outlineOffset = '-2px';
+      baseSelectionStyles.zIndex = isDragging || isResizing ? 1001 : 1001; // Selected tracks have higher z-index
+      
+      if (isGroupDrag) {
+        baseSelectionStyles.transform = 'scale(1.02)';
+        baseSelectionStyles.opacity = 0.9;
+        if (isPrimaryDrag) {
+          baseSelectionStyles.boxShadow = '0 8px 32px rgba(33, 150, 243, 0.4)';
+        }
+      }
+    } else if (selectedTool === 'select') {
+      baseSelectionStyles['&:hover'] = {
+        outline: '2px dashed rgba(33, 150, 243, 0.7)',
+        backgroundColor: 'rgba(33, 150, 243, 0.05)'
+      };
+    }
+    
+    return baseSelectionStyles;
+  };
+
   // Create base style object for track
   const trackStyle = {
     display: 'flex',
@@ -131,9 +172,9 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     borderRadius: '6px',
     left: `${track.x_position}px`,
     top: `${track.y_position}px`,
-    cursor: isDragging ? 'grabbing' : (isResizing ? 'ew-resize' : 'grab'),
-    zIndex: isDragging || isResizing ? 1001 : 1000,
-    transition: isDragging || isResizing ? 'none' : 'width 0.2s ease, left 0.2s ease, top 0.2s ease',
+    cursor: isDragging ? 'grabbing' : (isResizing ? 'ew-resize' : isSelected ? 'grab' : getToolCursor()),
+    zIndex: isSelected ? 1001 : (isDragging || isResizing ? 1001 : 1000),
+    transition: isDragging || isResizing || isGroupDrag ? 'none' : 'width 0.2s ease, left 0.2s ease, top 0.2s ease, transform 0.2s ease',
     '&:hover': {
       boxShadow: `0 0 12px ${trackColor}`,
       zIndex: 9999
@@ -143,15 +184,54 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     padding: 0,
     width: `${trackWidth}px`,
     overflow: 'hidden', // This creates the clipping viewport
+    ...getSelectionStyles(),
     ...trackStyleOverrides
   };
 
-  // Mouse event handlers for dragging
+  // Get tool-specific cursor
+  function getToolCursor() {
+    switch (selectedTool) {
+      case 'select':
+        return 'pointer';
+      case 'eraser':
+        return 'crosshair';
+      case 'pen':
+        return 'copy';
+      case 'highlighter':
+        return 'cell';
+      default:
+        return 'grab';
+    }
+  }
+
+  // Mouse event handlers for dragging and selection
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!trackRef.current) return;
     
     // Prevent dragging when clicking on controls or resize handles
     if ((e.target as HTMLElement).closest('.track-control') || (e.target as HTMLElement).closest('.resize-handle')) return;
+
+    // Handle tool-specific interactions first
+    if (selectedTool !== 'select') {
+      e.stopPropagation();
+      if (onTrackClick) {
+        onTrackClick(track.id, {
+          shiftKey: e.shiftKey,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey
+        });
+      }
+      return;
+    }
+
+    // For select tool, handle selection logic
+    if (selectedTool === 'select' && onTrackClick) {
+      onTrackClick(track.id, {
+        shiftKey: e.shiftKey,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey
+      });
+    }
 
     // Find container element for scroll offset
     const container = 
@@ -523,130 +603,189 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     zIndex: 1002, // Ensure handles are above track content
   };
 
-  return (
-    <Box
-      ref={trackRef}
-      onMouseDown={handleMouseDown}
-      className="track"
-      sx={trackStyle}
-      data-track-width={trackWidth} // Add data attribute for debugging
-    >
-       {/* Left Resize Handle */}
-      <Box
-        className="resize-handle resize-handle-left"
-        sx={{
-          ...resizeHandleStyle,
-          left: '-4px', // Position slightly outside/overlapping the left edge
-        }}
-        onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
-      />
-      
-       {/* Right Resize Handle */}
-      <Box
-        className="resize-handle resize-handle-right"
-        sx={{
-          ...resizeHandleStyle,
-          right: '-4px', // Position slightly outside/overlapping the right edge
-        }}
-        onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
-      />
+  // Handle double click for selection integration
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (onTrackDoubleClick) {
+      e.stopPropagation();
+      onTrackDoubleClick(track.id);
+    }
+  }, [onTrackDoubleClick, track.id]);
 
-      {/* Track Timeline Content (Original Inner Box) */}
-      <Box sx={{ 
-        display: 'flex',
-        flex: 1,
-        position: 'relative',
-        overflow: 'hidden',
-        height: '100%',
-        width: `${trackWidth}px`,
-        margin: 0,
-        padding: 0,
-        boxSizing: 'border-box',
-        borderLeft: 'none',
-        borderRight: 'none',
-        background: `linear-gradient(180deg, ${trackColor}80 0%, ${trackColor} 100%)`,
-        opacity: track.mute ? 0.4 : 0.85,
-        '&:hover': {
-          opacity: track.mute ? 0.5 : 1,
-          boxShadow: 'inset 0 0 10px rgba(255,255,255,0.3)'
-        },
-        transition: 'opacity 0.2s ease',
-        pointerEvents: 'none' // Ensure content doesn't interfere with handles/dragging
-      }}>
-        {/* Track Type Badge */}
-        <Box sx={{
-          position: 'absolute',
-          right: 10,
-          top: 5,
-          bgcolor: track.type === 'AUDIO' ? '#4caf50' : 
-                  track.type === 'MIDI' ? '#2196f3' : 
-                  track.type === 'DRUM' ? '#ff9800' : '#9c27b0',
-          color: 'white',
-          fontSize: '10px',
-          fontWeight: 'bold',
-          padding: '2px 6px',
-          borderRadius: '3px',
-          textTransform: 'uppercase',
-          opacity: 0.7,
-          pointerEvents: 'none' // Ensure content doesn't interfere
-        }}>
-          {track.type}
-        </Box>
-        
-        {/* Content Wrapper - Visible part is controlled by the container's overflow: hidden */}
-        <Box 
-          ref={contentRef}
-          className="track-content-wrapper"
+  return (
+    <Box sx={{ position: 'relative' }}>
+      {/* Selection indicators */}
+      {isSelected && (
+        <>
+          {/* Selection background */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: -4,
+              left: -4,
+              right: -4,
+              bottom: -4,
+              backgroundColor: isPrimaryDrag 
+                ? 'rgba(33, 150, 243, 0.25)' 
+                : 'rgba(33, 150, 243, 0.15)',
+              borderRadius: '8px',
+              pointerEvents: 'none',
+              zIndex: -1,
+              border: isPrimaryDrag ? '2px solid #2196f3' : 'none'
+            }}
+          />
+          
+          {/* Selection badge */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+              width: 18,
+              height: 18,
+              backgroundColor: isPrimaryDrag ? '#ff9800' : '#2196f3',
+              color: 'white',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: isPrimaryDrag ? '8px' : '10px',
+              fontWeight: 'bold',
+              zIndex: 1002,
+              pointerEvents: 'none',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+            }}
+          >
+            {isPrimaryDrag ? '◉' : '✓'}
+          </Box>
+        </>
+      )}
+
+      <Box
+        ref={trackRef}
+        onMouseDown={handleMouseDown}
+        onDoubleClick={handleDoubleClick}
+        className="track"
+        sx={trackStyle}
+        data-track-width={trackWidth} // Add data attribute for debugging
+        data-track-id={track.id} // Add for selection layer integration
+      >
+        {/* Left Resize Handle */}
+        <Box
+          className="resize-handle resize-handle-left"
           sx={{
-            position: 'absolute',
-            top: '0',
-            left: '0',
-            width: `${actualContentWidth}px`, // Set to full content width
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            opacity: 0.8,
-            pointerEvents: 'none', // Ensure content doesn't interfere
-            transform: `translateX(${getContentTransform()}px)`,
-            transition: isResizing ? 'none' : 'transform 0.2s ease',
+            ...resizeHandleStyle,
+            left: '-4px', // Position slightly outside/overlapping the left edge
           }}
-        >
-          {renderTrackContent()}
-        </Box>
+          onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
+        />
         
-        {/* Track Name */}
+        {/* Right Resize Handle */}
+        <Box
+          className="resize-handle resize-handle-right"
+          sx={{
+            ...resizeHandleStyle,
+            right: '-4px', // Position slightly outside/overlapping the right edge
+          }}
+          onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
+        />
+
+        {/* Track Timeline Content (Original Inner Box) */}
         <Box sx={{ 
-          position: 'absolute', 
-          left: 10, 
-          top: 6, 
-          color: 'white',
-          fontSize: '12px',
-          fontWeight: 'bold',
-          textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
-          pointerEvents: 'none' // Ensure content doesn't interfere
+          display: 'flex',
+          flex: 1,
+          position: 'relative',
+          overflow: 'hidden',
+          height: '100%',
+          width: `${trackWidth}px`,
+          margin: 0,
+          padding: 0,
+          boxSizing: 'border-box',
+          borderLeft: 'none',
+          borderRight: 'none',
+          background: `linear-gradient(180deg, ${trackColor}80 0%, ${trackColor} 100%)`,
+          opacity: track.mute ? 0.4 : 0.85,
+          '&:hover': {
+            opacity: track.mute ? 0.5 : 1,
+            boxShadow: 'inset 0 0 10px rgba(255,255,255,0.3)'
+          },
+          transition: 'opacity 0.2s ease',
+          pointerEvents: 'none' // Ensure content doesn't interfere with handles/dragging
         }}>
-          {track.name}
-        </Box>
-        
-        {/* Muted indicator */}
-        {track.mute && (
+          {/* Track Type Badge */}
           <Box sx={{
             position: 'absolute',
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(0,0,0,0.4)',
+            right: 10,
+            top: 5,
+            bgcolor: track.type === 'AUDIO' ? '#4caf50' : 
+                    track.type === 'MIDI' ? '#2196f3' : 
+                    track.type === 'DRUM' ? '#ff9800' : '#9c27b0',
             color: 'white',
-            fontSize: '14px',
+            fontSize: '10px',
             fontWeight: 'bold',
+            padding: '2px 6px',
+            borderRadius: '3px',
+            textTransform: 'uppercase',
+            opacity: 0.7,
             pointerEvents: 'none' // Ensure content doesn't interfere
           }}>
-            MUTED
+            {track.type}
           </Box>
-        )}
+          
+          {/* Content Wrapper - Visible part is controlled by the container's overflow: hidden */}
+          <Box 
+            ref={contentRef}
+            className="track-content-wrapper"
+            sx={{
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              width: `${actualContentWidth}px`, // Set to full content width
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              opacity: 0.8,
+              pointerEvents: 'none', // Ensure content doesn't interfere
+              transform: `translateX(${getContentTransform()}px)`,
+              transition: isResizing ? 'none' : 'transform 0.2s ease',
+            }}
+          >
+            {renderTrackContent()}
+          </Box>
+          
+          {/* Track Name */}
+          <Box sx={{ 
+            position: 'absolute', 
+            left: 10, 
+            top: 6, 
+            color: 'white',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
+            pointerEvents: 'none' // Ensure content doesn't interfere
+          }}>
+            {track.name}
+          </Box>
+          
+          {/* Muted indicator */}
+          {track.mute && (
+            <Box sx={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              color: 'white',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              pointerEvents: 'none' // Ensure content doesn't interfere
+            }}>
+              MUTED
+            </Box>
+          )}
+        </Box>
       </Box>
     </Box>
   );
