@@ -193,28 +193,46 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       const snapSizeTicks = pixelsToTicks(actualSnapSize, bpm, timeSignature);
       
       if (isGroupDrag) {
-        // Apply cumulative delta to all tracks that have initial positions stored
+        // For group drag, first calculate the new position of the dragged track
+        const draggedInitialPos = groupDragState.initialPositions[itemId];
+        if (!draggedInitialPos) return;
+        
+        // Calculate intended position for the dragged track
+        let draggedNewX = draggedInitialPos.x + deltaTicks;
+        let draggedNewY = draggedInitialPos.y + delta.y;
+        
+        // Snap X position if enabled
+        if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
+          draggedNewX = Math.floor(draggedNewX / snapSizeTicks) * snapSizeTicks;
+        }
+        
+        // Snap Y to track row height
+        draggedNewY = Math.floor(draggedNewY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
+        
+        // Apply boundaries to dragged track
+        draggedNewX = Math.max(0, draggedNewX);
+        draggedNewY = Math.max(0, draggedNewY);
+        
+        // Calculate the actual delta from initial to bounded position
+        const actualDeltaX = draggedNewX - draggedInitialPos.x;
+        const actualDeltaY = draggedNewY - draggedInitialPos.y;
+        
+        // Apply the same delta to all tracks in the group to maintain relative positions
         tracksInGroup.forEach(trackId => {
           const initialPos = groupDragState.initialPositions[trackId];
           if (initialPos) {
-            // Calculate new position by adding delta to initial position
-            let newX = initialPos.x + deltaTicks;
-            
-            // Snap the position if grid snap is enabled
-            if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
-              newX = Math.floor(newX / snapSizeTicks) * snapSizeTicks;
-            }
-            
-            newX = Math.max(0, newX);
-            const newY = Math.max(0, initialPos.y + delta.y);
+            // Apply the same delta to maintain relative positions
+            const newX = Math.max(0, initialPos.x + actualDeltaX);
+            const newY = Math.max(0, initialPos.y + actualDeltaY);
             
             console.log('[Timeline] Moving track in group:', { 
               trackId, 
               initialX: initialPos.x, 
+              initialY: initialPos.y,
               newX, 
-              deltaTicks,
-              snapSizeTicks,
-              snapped: gridSnapEnabled
+              newY,
+              actualDeltaX,
+              actualDeltaY
             });
             onTrackPositionChange?.(trackId, { x: newX, y: newY }, false);
           }
@@ -225,22 +243,27 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         if (initialPos) {
           // Calculate new position by adding delta to initial position
           let newX = initialPos.x + deltaTicks;
+          let newY = initialPos.y + delta.y;
           
-          // Snap the position if grid snap is enabled
+          // Snap X position if grid snap is enabled
           if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
             newX = Math.floor(newX / snapSizeTicks) * snapSizeTicks;
           }
           
+          // Snap Y to track row height
+          newY = Math.floor(newY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
+          
+          // Apply boundaries
           newX = Math.max(0, newX);
-          const newY = Math.max(0, initialPos.y + delta.y);
+          newY = Math.max(0, newY);
           
           console.log('[Timeline] Moving single track:', { 
             trackId: itemId, 
             initialX: initialPos.x, 
+            initialY: initialPos.y,
             newX, 
-            deltaTicks,
-            snapSizeTicks,
-            snapped: gridSnapEnabled
+            newY,
+            trackHeight: GRID_CONSTANTS.trackHeight
           });
           onTrackPositionChange?.(itemId, { x: newX, y: newY }, false);
         } else {
