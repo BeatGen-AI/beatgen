@@ -86,6 +86,7 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
   // Refs for tracking mouse state
   const dragStartPos = useRef({ x: 0, y: 0 });
   const selectionStartPos = useRef({ x: 0, y: 0 });
+  const resizeStartPos = useRef({ x: 0, y: 0 });
 
   // Tool management
   const setTool = useCallback((tool: Tool) => {
@@ -431,6 +432,64 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     }
   }, [selectionState.selectedIds, copyItems, cutItems, pasteItems, duplicateItems, deleteItems, clearSelection]);
 
+  // Resize management
+  const startResize = useCallback((itemId: string, direction: 'left' | 'right', startPosition: { x: number; y: number }, initialDimensions: Record<string, { x: number; width: number }>) => {
+    console.log('[useInteractionManager] startResize called:', {
+      itemId,
+      direction,
+      startPosition,
+      initialDimensions,
+      selectedIds: selectionState.selectedIds
+    });
+    
+    const isGroupResize = selectionState.selectedIds.includes(itemId) && selectionState.selectedIds.length > 1;
+    
+    console.log('[useInteractionManager] startResize - isGroupResize:', isGroupResize);
+    
+    setResizeState({
+      resizingItemId: itemId,
+      resizeDirection: direction,
+      initialDimensions,
+      isGroupResize,
+      resizeStartPos: startPosition
+    });
+
+    resizeStartPos.current = startPosition;
+    
+    console.log('[useInteractionManager] startResize - calling onResizeStart callback');
+    onResizeStart?.(itemId, selectionState.selectedIds, direction);
+  }, [selectionState.selectedIds, onResizeStart]);
+
+  const updateResize = useCallback((currentPosition: { x: number; y: number }) => {
+    if (!resizeState.resizingItemId || !resizeState.resizeDirection) return;
+
+    const deltaX = currentPosition.x - resizeStartPos.current.x;
+    
+    const snappedDelta = {
+      x: snapToGridValue(deltaX),
+      y: 0 // Resize doesn't affect Y position
+    };
+
+    onResizeMove?.(resizeState.resizingItemId, snappedDelta, resizeState.resizeDirection);
+  }, [resizeState.resizingItemId, resizeState.resizeDirection, snapToGridValue, onResizeMove]);
+
+  const endResize = useCallback(() => {
+    if (!resizeState.resizingItemId) return;
+
+    const resizedId = resizeState.resizingItemId;
+    const selectedIds = resizeState.isGroupResize ? selectionState.selectedIds : [resizedId];
+    
+    setResizeState({
+      resizingItemId: null,
+      resizeDirection: null,
+      initialDimensions: {},
+      isGroupResize: false,
+      resizeStartPos: { x: 0, y: 0 }
+    });
+
+    onResizeEnd?.(resizedId, selectedIds);
+  }, [resizeState, selectionState.selectedIds, onResizeEnd]);
+
   return {
     // State
     toolState,
@@ -454,6 +513,11 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     startDrag,
     updateDrag,
     endDrag,
+
+    // Resize methods
+    startResize,
+    updateResize,
+    endResize,
 
     // Selection rectangle methods
     startSelection,

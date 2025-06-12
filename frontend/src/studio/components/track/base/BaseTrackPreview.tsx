@@ -66,6 +66,8 @@ export interface BaseTrackPreviewProps {
   selectedTool?: Tool;
   isGroupDrag?: boolean;
   isPrimaryDrag?: boolean;
+  isGroupResize?: boolean;
+  isPrimaryResize?: boolean;
   onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
   onTrackDoubleClick?: (trackId: string) => void;
   
@@ -90,6 +92,8 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   selectedTool = 'select',
   isGroupDrag = false,
   isPrimaryDrag = false,
+  isGroupResize = false,
+  isPrimaryResize = false,
   onTrackClick,
   onTrackDoubleClick,
   interaction
@@ -154,6 +158,12 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         baseSelectionStyles.opacity = 0.9;
         if (isPrimaryDrag) {
           baseSelectionStyles.boxShadow = '0 8px 32px rgba(33, 150, 243, 0.4)';
+        }
+      } else if (isGroupResize) {
+        baseSelectionStyles.opacity = 0.95;
+        if (isPrimaryResize) {
+          baseSelectionStyles.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.6)';
+          baseSelectionStyles.borderColor = '#1976d2';
         }
       }
     } else if (selectedTool === 'select') {
@@ -337,12 +347,50 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   const handleResizeMouseDown = (e: React.MouseEvent, direction: 'left' | 'right') => {
     if (!trackRef.current) return;
     
+    console.log('[BaseTrackPreview] handleResizeMouseDown called for track:', track.id, {
+      direction,
+      isSelected,
+      hasInteraction: !!interaction,
+      isGroupResize
+    });
+    
     const container = 
       trackRef.current.closest('.timeline-container') || 
       trackRef.current.closest('.MuiBox-root') ||
       trackRef.current.parentElement?.parentElement;
       
     if (!container) return;
+
+    // Use interaction manager for group resize if available and track is selected
+    if (interaction && selectedTool === 'select' && isSelected && interaction.selectionState.selectedIds.length > 1) {
+      console.log('[BaseTrackPreview] Starting group resize through interaction manager');
+      
+      // Calculate mouse position with scroll offset
+      const mousePosition = {
+        x: e.clientX + (container.scrollLeft || 0),
+        y: e.clientY + (container.scrollTop || 0)
+      };
+      
+      // Prepare initial dimensions for all selected tracks
+      const initialDimensions: Record<string, { x: number; width: number }> = {};
+      
+      // For the current track
+      const trackXPixels = ticksToPixels(track.x_position, bpm, timeSignature);
+      initialDimensions[track.id] = {
+        x: trackXPixels,
+        width: trackWidthRef.current
+      };
+      
+      // Note: Timeline will handle getting dimensions for other selected tracks
+      console.log('[BaseTrackPreview] Calling interaction.startResize');
+      interaction.startResize(track.id, direction, mousePosition, initialDimensions);
+      
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    
+    console.log('[BaseTrackPreview] Using fallback resize logic');
 
     setIsResizing(true);
     setResizeDirection(direction);
@@ -419,6 +467,28 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       
       // Also update visual position for immediate feedback
       // The Timeline will send back the snapped position via onPositionChange
+      return;
+    }
+
+    // If using interaction manager for resize, let it handle the resize updates
+    if (interaction && interaction.isResizing) {
+      const container = 
+        trackRef.current.closest('.timeline-container') || 
+        trackRef.current.closest('.MuiBox-root') ||
+        trackRef.current.parentElement?.parentElement;
+        
+      if (!container) return;
+      
+      // Calculate current mouse position with scroll offset
+      const currentPosition = {
+        x: e.clientX + container.scrollLeft,
+        y: e.clientY + container.scrollTop
+      };
+      
+      // Update resize through interaction manager
+      interaction.updateResize(currentPosition);
+      
+      // The interaction manager will handle the visual updates
       return;
     }
 
@@ -570,6 +640,16 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       return;
     }
 
+    // If using interaction manager for resize, let it handle the resize end
+    if (interaction && interaction.isResizing) {
+      console.log('[BaseTrackPreview] Ending resize through interaction manager');
+      // End resize through interaction manager
+      // This will trigger Timeline's onResizeEnd callback which handles group logic
+      interaction.endResize();
+      setIsResizing(false); // Reset our local state too
+      return;
+    }
+
     console.log('[BaseTrackPreview] handleMouseUp for track:', track.id, { isDragging, isResizing });
 
     // --- Individual Drag End ---
@@ -664,7 +744,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       };
     } else if (usingInteractionManager && interaction.isDragging) {
       // If using interaction manager, add global listeners that call the interaction manager
-      console.log('[BaseTrackPreview] Adding interaction manager listeners');
+      console.log('[BaseTrackPreview] Adding interaction manager listeners for drag');
       
       const handleInteractionMouseMove = (e: MouseEvent) => {
         const container = document.querySelector('.timeline-container') || document.querySelector('.MuiBox-root');
@@ -689,8 +769,35 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         window.removeEventListener('mousemove', handleInteractionMouseMove);
         window.removeEventListener('mouseup', handleInteractionMouseUp);
       };
+    } else if (usingInteractionManager && interaction.isResizing) {
+      // If using interaction manager for resize, add global listeners
+      console.log('[BaseTrackPreview] Adding interaction manager listeners for resize');
+      
+      const handleInteractionMouseMove = (e: MouseEvent) => {
+        const container = document.querySelector('.timeline-container') || document.querySelector('.MuiBox-root');
+        if (container && container instanceof HTMLElement) {
+          const currentPosition = {
+            x: e.clientX + container.scrollLeft,
+            y: e.clientY + container.scrollTop
+          };
+          interaction.updateResize(currentPosition);
+        }
+      };
+      
+      const handleInteractionMouseUp = () => {
+        interaction.endResize();
+        setIsResizing(false); // Reset local state
+      };
+      
+      window.addEventListener('mousemove', handleInteractionMouseMove);
+      window.addEventListener('mouseup', handleInteractionMouseUp);
+      
+      return () => {
+        window.removeEventListener('mousemove', handleInteractionMouseMove);
+        window.removeEventListener('mouseup', handleInteractionMouseUp);
+      };
     }
-  }, [isDragging, isResizing, handleMouseMove, handleMouseUp, interaction, interaction?.isDragging, selectedTool]);
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp, interaction, interaction?.isDragging, interaction?.isResizing, selectedTool]);
   
   // Sync position AND width from props to DOM (for undo/redo, or external changes)
   useEffect(() => {
@@ -756,6 +863,10 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     width: '8px', // Make handle easier to grab
     cursor: 'ew-resize',
     zIndex: 1002, // Ensure handles are above track content
+    backgroundColor: isGroupResize ? 'rgba(33, 150, 243, 0.3)' : 'transparent',
+    '&:hover': {
+      backgroundColor: 'rgba(33, 150, 243, 0.5)'
+    }
   };
 
   // Handle double click for selection integration

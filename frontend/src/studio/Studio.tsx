@@ -100,6 +100,7 @@ function Studio({ projectId }: StudioProps) {
     handleTrackDelete,
     handleAddTrack,
     handleTrackPositionChange,
+    handleTrackResizeEnd,
     handleTrackNameChange,
     handleInstrumentChange,
     // Group operations for clipboard functionality
@@ -591,6 +592,7 @@ function Studio({ projectId }: StudioProps) {
             selectedTrackIds={selectedTrackIds}
             onTrackSelect={setSelectedTrackIds}
             onTrackDelete={handleTrackDelete}
+            onTrackResizeEnd={handleTrackResizeEnd}
             selectedTool={selectedTool}
             onToolChange={setSelectedTool}
             onCopyTracks={handleCopyTracks}

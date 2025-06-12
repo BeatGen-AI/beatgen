@@ -33,6 +33,7 @@ export interface TimelineProps {
   onTrackSelect?: (trackIds: string[]) => void;
   onTrackDelete?: (trackId: string) => void;
   onTrackDuplicate?: (trackId: string) => void;
+  onTrackResizeEnd?: (trackId: string, deltaPixels: number, direction: 'left' | 'right') => void;
   selectedTrackIds?: string[];
   
   // Group operations for clipboard functionality
@@ -80,6 +81,7 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   onTrackSelect,
   onTrackDelete,
   onTrackDuplicate,
+  onTrackResizeEnd,
   selectedTrackIds = [],
   onCopyTracks,
   onCutTracks,
@@ -107,6 +109,19 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     isDragging: false,
     initialPositions: {},
     draggedTrackId: null
+  });
+
+  // State for group resize operations
+  const [groupResizeState, setGroupResizeState] = useState<{
+    isResizing: boolean;
+    initialDimensions: Record<string, { x: number; width: number; trimStart: number; trimEnd: number }>;
+    resizedTrackId: string | null;
+    resizeDirection: 'left' | 'right' | null;
+  }>({
+    isResizing: false,
+    initialDimensions: {},
+    resizedTrackId: null,
+    resizeDirection: null
   });
 
   // State for grid snap options
@@ -367,6 +382,183 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     },
     onDuplicate: (itemIds) => {
       onDuplicateTracks?.(itemIds);
+    },
+    // Resize operations
+    onResizeStart: (itemId, selectedIds, direction) => {
+      console.log('[Timeline] onResizeStart called:', { itemId, selectedIds, direction });
+      
+      // Determine which tracks will be affected by the resize
+      const tracksToResize = selectedIds.length > 1 && selectedIds.includes(itemId) 
+        ? selectedIds 
+        : [itemId];
+      
+      console.log('[Timeline] Tracks to resize:', tracksToResize);
+      
+      // Store initial dimensions for all tracks that will be resized
+      const initialDimensions: Record<string, { x: number; width: number; trimStart: number; trimEnd: number }> = {};
+      tracksToResize.forEach(trackId => {
+        const track = tracks.find(t => t.id === trackId);
+        if (track) {
+          // Calculate current width
+          const startTicks = track.trim_start_ticks || 0;
+          const endTicks = track.trim_end_ticks || track.duration_ticks || 0;
+          const visibleDurationTicks = Math.max(0, endTicks - startTicks);
+          const width = ticksToPixels(visibleDurationTicks, bpm, timeSignature);
+          
+          initialDimensions[trackId] = {
+            x: track.x_position,
+            width: width,
+            trimStart: track.trim_start_ticks || 0,
+            trimEnd: track.trim_end_ticks || track.duration_ticks || 0
+          };
+          console.log('[Timeline] Storing initial dimensions for track:', {
+            trackId,
+            x_position: track.x_position,
+            width: width,
+            trimStart: track.trim_start_ticks,
+            trimEnd: track.trim_end_ticks
+          });
+        }
+      });
+      
+      console.log('[Timeline] Initial dimensions stored:', initialDimensions);
+      
+      // Update group resize state
+      setGroupResizeState({
+        isResizing: true,
+        initialDimensions,
+        resizedTrackId: itemId,
+        resizeDirection: direction
+      });
+    },
+    onResizeMove: (itemId, delta, direction) => {
+      console.log('[Timeline] onResizeMove called:', {
+        itemId,
+        delta,
+        direction,
+        selectedIds: interaction.selectionState.selectedIds,
+        groupResizeState: groupResizeState.isResizing,
+        initialDimensions: Object.keys(groupResizeState.initialDimensions)
+      });
+      
+      // The delta is already snapped by the interaction manager
+      
+      // Determine if this is a group resize based on how many tracks we stored initial dimensions for
+      const tracksInGroup = Object.keys(groupResizeState.initialDimensions);
+      const isGroupResize = tracksInGroup.length > 1 && tracksInGroup.includes(itemId);
+      
+      console.log('[Timeline] Resize mode:', { 
+        isGroupResize, 
+        deltaPixels: delta.x,
+        tracksInGroup,
+        itemId,
+        direction
+      });
+      
+      // For each track in the group, trigger a visual update
+      // Note: We don't update the actual state here, just the visual representation
+      // The actual state update happens on resize end
+      if (isGroupResize) {
+        // For group resize, we need to ensure all tracks update visually
+        tracksInGroup.forEach(trackId => {
+          const track = tracks.find(t => t.id === trackId);
+          const initialDim = groupResizeState.initialDimensions[trackId];
+          if (track && initialDim) {
+            // Find the track's DOM element and update its visual state
+            const trackElement = document.querySelector(`[data-track-id="${trackId}"].track`);
+            if (trackElement && trackElement instanceof HTMLElement) {
+              // Update width and position based on resize direction
+              if (direction === 'right') {
+                // Right resize - just change width
+                const newWidth = Math.max(48, initialDim.width + delta.x); // Min width of 48px
+                trackElement.style.width = `${newWidth}px`;
+              } else if (direction === 'left') {
+                // Left resize - change both position and width
+                const newWidth = Math.max(48, initialDim.width - delta.x);
+                const widthDiff = initialDim.width - newWidth;
+                const newX = ticksToPixels(initialDim.x, bpm, timeSignature) + widthDiff;
+                
+                trackElement.style.width = `${newWidth}px`;
+                trackElement.style.left = `${newX}px`;
+              }
+            }
+          }
+        });
+      } else {
+        // Single track resize - handle the same way
+        const track = tracks.find(t => t.id === itemId);
+        const initialDim = groupResizeState.initialDimensions[itemId];
+        if (track && initialDim) {
+          const trackElement = document.querySelector(`[data-track-id="${itemId}"].track`);
+          if (trackElement && trackElement instanceof HTMLElement) {
+            if (direction === 'right') {
+              const newWidth = Math.max(48, initialDim.width + delta.x);
+              trackElement.style.width = `${newWidth}px`;
+            } else if (direction === 'left') {
+              const newWidth = Math.max(48, initialDim.width - delta.x);
+              const widthDiff = initialDim.width - newWidth;
+              const newX = ticksToPixels(initialDim.x, bpm, timeSignature) + widthDiff;
+              
+              trackElement.style.width = `${newWidth}px`;
+              trackElement.style.left = `${newX}px`;
+            }
+          }
+        }
+      }
+    },
+    onResizeEnd: (itemId, selectedIds) => {
+      console.log('Track resize ended:', itemId, selectedIds);
+      
+      // Determine if this was a group resize based on how many tracks we stored initial dimensions for
+      const tracksInGroup = Object.keys(groupResizeState.initialDimensions);
+      const isGroupResize = tracksInGroup.length > 1 && tracksInGroup.includes(itemId);
+      const direction = groupResizeState.resizeDirection;
+      
+      if (isGroupResize && direction) {
+        // For group resize, calculate the final delta from the primary track
+        const primaryTrackElement = document.querySelector(`[data-track-id="${itemId}"].track`);
+        const initialDim = groupResizeState.initialDimensions[itemId];
+        
+        if (primaryTrackElement && primaryTrackElement instanceof HTMLElement && initialDim) {
+          // Calculate the delta based on current visual state
+          const currentWidth = parseFloat(primaryTrackElement.style.width) || 0;
+          const deltaPixels = currentWidth - initialDim.width;
+          
+          console.log('[Timeline] Group resize final delta:', { deltaPixels, direction });
+          
+          // Apply resize to all tracks in the group
+          tracksInGroup.forEach(trackId => {
+            const track = tracks.find(t => t.id === trackId);
+            if (track && onTrackResizeEnd) {
+              // Call the resize handler from the store
+              // Note: The store expects pixel delta and direction
+              onTrackResizeEnd(trackId, deltaPixels, direction);
+            }
+          });
+        }
+      } else if (direction) {
+        // Single track resize end
+        const trackElement = document.querySelector(`[data-track-id="${itemId}"].track`);
+        const initialDim = groupResizeState.initialDimensions[itemId];
+        
+        if (trackElement && trackElement instanceof HTMLElement && initialDim) {
+          const currentWidth = parseFloat(trackElement.style.width) || 0;
+          const deltaPixels = currentWidth - initialDim.width;
+          
+          const track = tracks.find(t => t.id === itemId);
+          if (track && onTrackResizeEnd) {
+            onTrackResizeEnd(itemId, deltaPixels, direction);
+          }
+        }
+      }
+      
+      // Reset group resize state
+      setGroupResizeState({
+        isResizing: false,
+        initialDimensions: {},
+        resizedTrackId: null,
+        resizeDirection: null
+      });
     }
   });
 
@@ -670,6 +862,7 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
             selectedTrackIds={selectedTrackIds}
             interaction={interaction}
             justCompletedSelection={justCompletedSelection}
+            groupResizeState={groupResizeState}
           />
         ) : (
           <EmptyTimelineDropZone onTimeChange={onTimeChange} bpm={bpm} timeSignature={timeSignature} />
@@ -897,6 +1090,12 @@ interface TimelineContentProps extends TimelineRulerProps {
   selectedTrackIds: string[];
   interaction: any; // Type from useInteractionManager
   justCompletedSelection: boolean;
+  groupResizeState?: {
+    isResizing: boolean;
+    initialDimensions: Record<string, { x: number; width: number; trimStart: number; trimEnd: number }>;
+    resizedTrackId: string | null;
+    resizeDirection: 'left' | 'right' | null;
+  };
 }
 
 function TimelineContent({
@@ -913,7 +1112,8 @@ function TimelineContent({
   selectedTool,
   selectedTrackIds,
   interaction,
-  justCompletedSelection
+  justCompletedSelection,
+  groupResizeState
 }: TimelineContentProps) {
   // const theme = useTheme(); // No longer need theme for grid colors
   
@@ -994,6 +1194,8 @@ function TimelineContent({
           selectedTool={selectedTool}
           isGroupDrag={interaction.isDragging && selectedTrackIds.includes(track.id)}
           isPrimaryDrag={interaction.dragState.draggedItemId === track.id}
+          isGroupResize={groupResizeState?.isResizing && selectedTrackIds.includes(track.id)}
+          isPrimaryResize={groupResizeState?.resizedTrackId === track.id}
           onTrackClick={(trackId, event) => {
             interaction.handleItemClick(trackId, event);
           }}

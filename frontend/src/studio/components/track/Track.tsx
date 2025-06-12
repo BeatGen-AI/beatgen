@@ -25,6 +25,8 @@ interface TrackProps {
   selectedTool?: Tool;
   isGroupDrag?: boolean;
   isPrimaryDrag?: boolean;
+  isGroupResize?: boolean;
+  isPrimaryResize?: boolean;
   onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
   onTrackDoubleClick?: (trackId: string) => void;
   interaction?: any;
@@ -39,6 +41,8 @@ function Track(props: TrackProps) {
     selectedTool = 'select',
     isGroupDrag = false,
     isPrimaryDrag = false,
+    isGroupResize = false,
+    isPrimaryResize = false,
     onTrackClick,
     onTrackDoubleClick,
     interaction
@@ -147,6 +151,8 @@ function Track(props: TrackProps) {
         selectedTool={selectedTool}
         isGroupDrag={isGroupDrag}
         isPrimaryDrag={isPrimaryDrag}
+        isGroupResize={isGroupResize}
+        isPrimaryResize={isPrimaryResize}
         onTrackClick={onTrackClick}
         onTrackDoubleClick={onTrackDoubleClick}
         interaction={interaction}
