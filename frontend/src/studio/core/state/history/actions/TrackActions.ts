@@ -14,6 +14,7 @@ import { ActionType } from '.';
 // Fix: Import TRACK_CONFIG
 import { TRACK_CONFIG } from '../../../../stores/config'; 
 import { DrumTrackRead } from 'src/platform/types/track_models/drum_track';
+import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 
 /**
  * Action for changing track position without callbacks
@@ -54,7 +55,7 @@ export class TrackPositionAction extends TrackAction {
         if (track && (track.type === 'MIDI' || track.type === 'DRUM' || track.type === 'SAMPLER')) {
             const bpm = this.get().bpm;
             const timeSignature = this.get().timeSignature;
-            const PPQ = 480; 
+            const PPQ = MUSIC_CONSTANTS.pulsesPerQuarterNote; 
             const offsetBeats = position.x / PPQ;
             const beatDurationMs = (60 / bpm) * 1000;
             const offsetMs = offsetBeats * beatDurationMs;
@@ -397,6 +398,13 @@ export class TrackResizeAction extends TrackAction {
         positionXTicks: number,
         operation: string
     ): void {
+        console.log(`[TrackResize.${operation}] Updating track with values:`, {
+            trackId: this.trackId,
+            trimStartTicks,
+            trimEndTicks,
+            positionXTicks
+        });
+        
         const currentY = this.get().findTrackById(this.trackId)?.y_position ?? 0;
         this.get().updateTrackState(this.trackId, {
             trim_start_ticks: trimStartTicks,
@@ -466,6 +474,129 @@ export class TrackResizeAction extends TrackAction {
         });
     }
 }
+
+/**
+ * Action for resizing multiple tracks as a group
+ */
+export class GroupTrackResizeAction extends BaseAction {
+    readonly type = 'GROUP_TRACK_RESIZE';
+    private trackResizeData: Array<{
+        trackId: string;
+        oldTrimStartTicks: number;
+        oldTrimEndTicks: number;
+        oldPositionX: number;
+        newTrimStartTicks: number;
+        newTrimEndTicks: number;
+        newPositionX: number;
+    }>;
+    
+    constructor(
+        get: GetFn,
+        trackResizeData: Array<{
+            trackId: string;
+            oldTrimStartTicks: number;
+            oldTrimEndTicks: number;
+            oldPositionX: number;
+            newTrimStartTicks: number;
+            newTrimEndTicks: number;
+            newPositionX: number;
+        }>
+    ) {
+        super(get);
+        this.trackResizeData = trackResizeData.map(data => ({ ...data }));
+    }
+    
+    private updateTrackResize(
+        trackData: {
+            trackId: string;
+            trimStartTicks: number;
+            trimEndTicks: number;
+            positionXTicks: number;
+        },
+        operation: string
+    ): void {
+        const currentY = this.get().findTrackById(trackData.trackId)?.y_position ?? 0;
+        this.get().updateTrackState(trackData.trackId, {
+            trim_start_ticks: trackData.trimStartTicks,
+            trim_end_ticks: trackData.trimEndTicks,
+            x_position: trackData.positionXTicks, 
+            position: { x: trackData.positionXTicks, y: currentY }
+        });
+        
+        this.store.getAudioEngine().setTrackTrim(trackData.trackId, trackData.trimStartTicks, trackData.trimEndTicks);
+        this.store.getAudioEngine().setTrackPosition(
+            trackData.trackId, 
+            trackData.positionXTicks,
+            currentY
+        );
+        
+        const isCurrentlyPlaying = this.get().isPlaying;
+        if (isCurrentlyPlaying && this.store.getTransport().handleTrackPositionChange) {
+            this.store.getTransport().handleTrackPositionChange(trackData.trackId, trackData.positionXTicks);
+        }
+    }
+    
+    async execute(): Promise<void> {
+        // Apply resize to all tracks in the group
+        this.trackResizeData.forEach(data => {
+            this.updateTrackResize({
+                trackId: data.trackId,
+                trimStartTicks: data.newTrimStartTicks,
+                trimEndTicks: data.newTrimEndTicks,
+                positionXTicks: data.newPositionX
+            }, 'execute');
+        });
+        
+        this.log('Execute', { 
+            trackCount: this.trackResizeData.length,
+            tracks: this.trackResizeData.map(data => ({
+                trackId: data.trackId,
+                from: {
+                    trimStartTicks: data.oldTrimStartTicks,
+                    trimEndTicks: data.oldTrimEndTicks,
+                    positionX: data.oldPositionX
+                },
+                to: {
+                    trimStartTicks: data.newTrimStartTicks,
+                    trimEndTicks: data.newTrimEndTicks,
+                    positionX: data.newPositionX
+                }
+            })),
+            isCurrentlyPlaying: this.get().isPlaying
+        });
+    }
+    
+    async undo(): Promise<void> {
+        // Revert resize for all tracks in the group
+        this.trackResizeData.forEach(data => {
+            this.updateTrackResize({
+                trackId: data.trackId,
+                trimStartTicks: data.oldTrimStartTicks,
+                trimEndTicks: data.oldTrimEndTicks,
+                positionXTicks: data.oldPositionX
+            }, 'undo');
+        });
+        
+        this.log('Undo', { 
+            trackCount: this.trackResizeData.length,
+            tracks: this.trackResizeData.map(data => ({
+                trackId: data.trackId,
+                from: {
+                    trimStartTicks: data.newTrimStartTicks,
+                    trimEndTicks: data.newTrimEndTicks,
+                    positionX: data.newPositionX
+                },
+                to: {
+                    trimStartTicks: data.oldTrimStartTicks,
+                    trimEndTicks: data.oldTrimEndTicks,
+                    positionX: data.oldPositionX
+                }
+            })),
+            isCurrentlyPlaying: this.get().isPlaying
+        });
+    }
+}
+
     // Example structure - adjust based on your ActionBase and state access needs
 export class UpdateDrumTrackSamplers extends BaseAction {
     readonly type = 'DRUM_TRACK_SAMPLER_UPDATE';
@@ -515,5 +646,6 @@ export const TrackActions = {
     DeleteTrack: DeleteTrackAction,
     ParameterChange: ParameterChangeAction,
     TrackResize: TrackResizeAction,
+    GroupTrackResize: GroupTrackResizeAction,
     UpdateDrumTrackSamplers: UpdateDrumTrackSamplers
 };

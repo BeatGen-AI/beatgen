@@ -22,9 +22,15 @@ interface TrackFactoryProps extends TrackPreviewProps {
   isPrimaryDrag?: boolean;
   isGroupResize?: boolean;
   isPrimaryResize?: boolean;
+  resizeDelta?: { x: number; y: number };
+  resizeDirection?: 'left' | 'right' | null;
+  resizeInitialDimensions?: { x: number; width: number; trimStart: number; trimEnd: number };
   onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
   onTrackDoubleClick?: (trackId: string) => void;
   interaction?: any;
+  gridSnapEnabled?: boolean;
+  gridSnapSize?: number;
+  actualSnapSize?: number;
 }
 
 export const TrackFactory: React.FC<TrackFactoryProps> = (props) => {
@@ -39,9 +45,15 @@ export const TrackFactory: React.FC<TrackFactoryProps> = (props) => {
     isPrimaryDrag,
     isGroupResize,
     isPrimaryResize,
+    resizeDelta,
+    resizeDirection,
+    resizeInitialDimensions,
     onTrackClick,
     onTrackDoubleClick,
-    interaction
+    interaction,
+    gridSnapEnabled,
+    gridSnapSize,
+    actualSnapSize
   } = props;
   const trackColor = providedTrackColor || getTrackColor(trackIndex);
   
@@ -70,9 +82,15 @@ export const TrackFactory: React.FC<TrackFactoryProps> = (props) => {
     isPrimaryDrag,
     isGroupResize,
     isPrimaryResize,
+    resizeDelta,
+    resizeDirection,
+    resizeInitialDimensions,
     onTrackClick,
     onTrackDoubleClick,
-    interaction
+    interaction,
+    gridSnapEnabled,
+    gridSnapSize,
+    actualSnapSize
   };
 
   switch(trackType) {

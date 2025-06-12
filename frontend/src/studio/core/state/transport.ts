@@ -4,6 +4,7 @@ import { convertVolumeToDecibels } from '../../utils/audioProcessing';
 import { calculatePositionTime } from '../../constants/gridConstants';
 import { SoundfontEngineController } from '../audio-engine/soundfontEngineController';
 import { SamplerController } from '../audio-engine/samplerController';
+import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 
 export interface Transport {
     position: number;        // Current playback position
@@ -68,7 +69,7 @@ export class TransportController implements Transport {
      */
     private getTrackTimeOffset(trackXTicks: number): number {
         // First convert ticks to beats
-        const ppq = 480; // Standard MIDI ticks per quarter note
+        const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote; // Standard MIDI ticks per quarter note
         const beats = trackXTicks / ppq;
         
         // Then convert beats to seconds based on current BPM

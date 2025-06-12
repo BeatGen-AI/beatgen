@@ -548,8 +548,8 @@ def transform_chord_progression_to_instrument_format(
             for pitch in chord_notes:
                 midi_note = {
                     "pitch": pitch,
-                    "start": current_time * 480,
-                    "duration": chord_duration * 480,
+                    "start": current_time * settings.audio.PPQ,
+                    "duration": chord_duration * settings.audio.PPQ,
                     "velocity": 70,  # Default velocity for chords
                 }
                 midi_notes.append(midi_note)

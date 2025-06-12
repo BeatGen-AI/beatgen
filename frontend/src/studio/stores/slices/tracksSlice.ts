@@ -5,6 +5,7 @@ import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions'; 
 import { TRACK_CONFIG, DEFAULT_SAMPLER_CONFIG } from '../config';
 import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
+import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { PULSES_PER_QUARTER_NOTE } from '../../utils/noteConversion';
 import { produce } from 'immer';
 import { StateCreator } from 'zustand';
@@ -716,19 +717,71 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         const oldPositionX = fullTrack.x_position || 0;
         const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
 
+        console.log('[tracksSlice] handleTrackResizeEnd:', {
+            trackId,
+            deltaPixels,
+            deltaTicks,
+            resizeDirection,
+            oldPositionX,
+            oldTrimStartTicks,
+            oldTrimEndTicks,
+            trackDuration: fullTrack.duration_ticks,
+            bpm,
+            timeSignature,
+            ppq: MUSIC_CONSTANTS.pulsesPerQuarterNote
+        });
+
         let newTrimStartTicks = oldTrimStartTicks;
         let newTrimEndTicks = oldTrimEndTicks;
         let newPositionX = oldPositionX;
 
         if (resizeDirection === 'left') {
+            // For left resize, deltaTicks represents position change
             newTrimStartTicks = oldTrimStartTicks + deltaTicks;
             newPositionX = oldPositionX + deltaTicks;
+            // Ensure trim start doesn't exceed trim end
             newTrimStartTicks = Math.max(0, Math.min(newTrimStartTicks, oldTrimEndTicks));
+            // Ensure position doesn't go negative
             newPositionX = Math.max(0, newPositionX);
+            
+            console.log('[tracksSlice] Left resize calculation:', {
+                'oldTrimStart': oldTrimStartTicks,
+                'deltaTicks': deltaTicks,
+                'newTrimStart': newTrimStartTicks,
+                'oldPosition': oldPositionX,
+                'newPosition': newPositionX
+            });
         } else { 
+            // For right resize, deltaTicks represents width change
             newTrimEndTicks = oldTrimEndTicks + deltaTicks;
+            // Ensure trim end doesn't go below trim start
             newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
+            
+            console.log('[tracksSlice] Right resize calculation:', {
+                'oldTrimEnd': oldTrimEndTicks,
+                'deltaTicks': deltaTicks,
+                'newTrimEnd': newTrimEndTicks,
+                'positionStaysSame': newPositionX === oldPositionX
+            });
         }
+
+        console.log('[tracksSlice] Calculated new values:', {
+            newPositionX,
+            newTrimStartTicks,
+            newTrimEndTicks,
+            positionChanged: newPositionX !== oldPositionX,
+            actualWidth: ticksToPixels(newTrimEndTicks - newTrimStartTicks, bpm, timeSignature)
+        });
+
+        console.log('[tracksSlice] Creating TrackResize action with values:', {
+            trackId,
+            oldTrimStartTicks,
+            oldTrimEndTicks,
+            oldPositionX,
+            newTrimStartTicks,
+            newTrimEndTicks,
+            newPositionX
+        });
 
         // Create the history action without width params
         const action = new Actions.TrackResize(
@@ -1091,7 +1144,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
 
   const resizeMultipleTracks = async (trackIds: string[], widthDelta: number, anchor: 'left' | 'right'): Promise<void> => {
-    const { tracks, _withErrorHandling } = rootGet();
+    const { tracks, bpm, timeSignature, executeHistoryAction, _withErrorHandling } = rootGet();
     if (!_withErrorHandling) {
       console.error("_withErrorHandling not available");
       return;
@@ -1099,12 +1152,60 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const resizeMultipleLogic = async (): Promise<void> => {
       const deltaPixels = widthDelta; // Assuming widthDelta is already in pixels
+      const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
+      
+      // Collect resize data for all tracks
+      const trackResizeData: Array<{
+        trackId: string;
+        oldTrimStartTicks: number;
+        oldTrimEndTicks: number;
+        oldPositionX: number;
+        newTrimStartTicks: number;
+        newTrimEndTicks: number;
+        newPositionX: number;
+      }> = [];
       
       for (const trackId of trackIds) {
         const track = tracks.find(t => t.id === trackId);
         if (track) {
-          handleTrackResizeEnd(trackId, deltaPixels, anchor);
+          const oldTrimStartTicks = track.trim_start_ticks || 0;
+          const oldTrimEndTicks = track.trim_end_ticks || track.duration_ticks || 0;
+          const oldPositionX = track.x_position || 0;
+          
+          let newTrimStartTicks = oldTrimStartTicks;
+          let newTrimEndTicks = oldTrimEndTicks;
+          let newPositionX = oldPositionX;
+          
+          if (anchor === 'left') {
+            // Left resize: deltaTicks represents position change
+            newTrimStartTicks = oldTrimStartTicks + deltaTicks;
+            newPositionX = oldPositionX + deltaTicks;
+            // Ensure trim start doesn't exceed trim end
+            newTrimStartTicks = Math.max(0, Math.min(newTrimStartTicks, oldTrimEndTicks));
+            newPositionX = Math.max(0, newPositionX);
+          } else {
+            // Right resize: deltaTicks represents width change
+            newTrimEndTicks = oldTrimEndTicks + deltaTicks;
+            // Ensure trim end doesn't go below trim start
+            newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
+          }
+          
+          trackResizeData.push({
+            trackId,
+            oldTrimStartTicks,
+            oldTrimEndTicks,
+            oldPositionX,
+            newTrimStartTicks,
+            newTrimEndTicks,
+            newPositionX
+          });
         }
+      }
+      
+      // Create and execute group resize action
+      if (trackResizeData.length > 0) {
+        const action = new Actions.GroupTrackResize(get, trackResizeData);
+        await executeHistoryAction(action);
       }
     };
 

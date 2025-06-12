@@ -27,9 +27,17 @@ interface TrackProps {
   isPrimaryDrag?: boolean;
   isGroupResize?: boolean;
   isPrimaryResize?: boolean;
+  resizeDelta?: { x: number; y: number };
+  resizeDirection?: 'left' | 'right' | null;
+  resizeInitialDimensions?: { x: number; width: number; trimStart: number; trimEnd: number };
   onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
   onTrackDoubleClick?: (trackId: string) => void;
   interaction?: any;
+  
+  // Grid snap props
+  gridSnapEnabled?: boolean;
+  gridSnapSize?: number;
+  actualSnapSize?: number;
 }
 
 function Track(props: TrackProps) {
@@ -43,9 +51,15 @@ function Track(props: TrackProps) {
     isPrimaryDrag = false,
     isGroupResize = false,
     isPrimaryResize = false,
+    resizeDelta,
+    resizeDirection,
+    resizeInitialDimensions,
     onTrackClick,
     onTrackDoubleClick,
-    interaction
+    interaction,
+    gridSnapEnabled = true,
+    gridSnapSize,
+    actualSnapSize
   } = props;
   // Fix: Select tracks array individually
   const tracks = useStudioStore(state => state.tracks);
@@ -153,9 +167,15 @@ function Track(props: TrackProps) {
         isPrimaryDrag={isPrimaryDrag}
         isGroupResize={isGroupResize}
         isPrimaryResize={isPrimaryResize}
+        resizeDelta={resizeDelta}
+        resizeDirection={resizeDirection}
+        resizeInitialDimensions={resizeInitialDimensions}
         onTrackClick={onTrackClick}
         onTrackDoubleClick={onTrackDoubleClick}
         interaction={interaction}
+        gridSnapEnabled={gridSnapEnabled}
+        gridSnapSize={gridSnapSize}
+        actualSnapSize={actualSnapSize}
       />
     </Box>
   );

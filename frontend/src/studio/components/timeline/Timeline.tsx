@@ -2,6 +2,7 @@ import React, { forwardRef, useRef, useImperativeHandle, useState } from 'react'
 import { Box, useTheme } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { GRID_CONSTANTS, calculatePositionTime, ticksToPixels, pixelsToTicks, calculateTrackWidth } from '../../constants/gridConstants';
+import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import Track from '../track/Track';
 import PlaybackCursor, { PlaybackCursorRef } from './PlaybackCursor';
 import { CombinedTrack } from 'src/platform/types/project';
@@ -30,6 +31,7 @@ export interface TimelineProps {
   selectedTool?: Tool;
   onToolChange?: (tool: Tool) => void;
   showToolbar?: boolean;
+  gridSnapSize?: GridSnapOption;
   onTrackSelect?: (trackIds: string[]) => void;
   onTrackDelete?: (trackId: string) => void;
   onTrackDuplicate?: (trackId: string) => void;
@@ -78,6 +80,7 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   selectedTool = 'select',
   onToolChange,
   showToolbar = false,
+  gridSnapSize: propGridSnapSize,
   onTrackSelect,
   onTrackDelete,
   onTrackDuplicate,
@@ -117,16 +120,25 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     initialDimensions: Record<string, { x: number; width: number; trimStart: number; trimEnd: number }>;
     resizedTrackId: string | null;
     resizeDirection: 'left' | 'right' | null;
+    currentDelta: { x: number; y: number };
   }>({
     isResizing: false,
     initialDimensions: {},
     resizedTrackId: null,
-    resizeDirection: null
+    resizeDirection: null,
+    currentDelta: { x: 0, y: 0 }
   });
 
   // State for grid snap options
-  const [gridSnapSize, setGridSnapSize] = useState(GridSnapOption.STEP); // Default to "Step" snap
+  const [gridSnapSize, setGridSnapSize] = useState(propGridSnapSize || GridSnapOption.STEP); // Use prop or default to "Step" snap
   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
+  
+  // Update gridSnapSize when prop changes
+  React.useEffect(() => {
+    if (propGridSnapSize !== undefined) {
+      setGridSnapSize(propGridSnapSize);
+    }
+  }, [propGridSnapSize]);
   
   // Calculate actual grid size based on snap option
   const effectiveGridSize = GRID_CONSTANTS.measureWidth / (timeSignature[0] * 4); // Size of one step
@@ -428,7 +440,8 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         isResizing: true,
         initialDimensions,
         resizedTrackId: itemId,
-        resizeDirection: direction
+        resizeDirection: direction,
+        currentDelta: { x: 0, y: 0 }
       });
     },
     onResizeMove: (itemId, delta, direction) => {
@@ -442,69 +455,11 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       });
       
       // The delta is already snapped by the interaction manager
-      
-      // Determine if this is a group resize based on how many tracks we stored initial dimensions for
-      const tracksInGroup = Object.keys(groupResizeState.initialDimensions);
-      const isGroupResize = tracksInGroup.length > 1 && tracksInGroup.includes(itemId);
-      
-      console.log('[Timeline] Resize mode:', { 
-        isGroupResize, 
-        deltaPixels: delta.x,
-        tracksInGroup,
-        itemId,
-        direction
-      });
-      
-      // For each track in the group, trigger a visual update
-      // Note: We don't update the actual state here, just the visual representation
-      // The actual state update happens on resize end
-      if (isGroupResize) {
-        // For group resize, we need to ensure all tracks update visually
-        tracksInGroup.forEach(trackId => {
-          const track = tracks.find(t => t.id === trackId);
-          const initialDim = groupResizeState.initialDimensions[trackId];
-          if (track && initialDim) {
-            // Find the track's DOM element and update its visual state
-            const trackElement = document.querySelector(`[data-track-id="${trackId}"].track`);
-            if (trackElement && trackElement instanceof HTMLElement) {
-              // Update width and position based on resize direction
-              if (direction === 'right') {
-                // Right resize - just change width
-                const newWidth = Math.max(48, initialDim.width + delta.x); // Min width of 48px
-                trackElement.style.width = `${newWidth}px`;
-              } else if (direction === 'left') {
-                // Left resize - change both position and width
-                const newWidth = Math.max(48, initialDim.width - delta.x);
-                const widthDiff = initialDim.width - newWidth;
-                const newX = ticksToPixels(initialDim.x, bpm, timeSignature) + widthDiff;
-                
-                trackElement.style.width = `${newWidth}px`;
-                trackElement.style.left = `${newX}px`;
-              }
-            }
-          }
-        });
-      } else {
-        // Single track resize - handle the same way
-        const track = tracks.find(t => t.id === itemId);
-        const initialDim = groupResizeState.initialDimensions[itemId];
-        if (track && initialDim) {
-          const trackElement = document.querySelector(`[data-track-id="${itemId}"].track`);
-          if (trackElement && trackElement instanceof HTMLElement) {
-            if (direction === 'right') {
-              const newWidth = Math.max(48, initialDim.width + delta.x);
-              trackElement.style.width = `${newWidth}px`;
-            } else if (direction === 'left') {
-              const newWidth = Math.max(48, initialDim.width - delta.x);
-              const widthDiff = initialDim.width - newWidth;
-              const newX = ticksToPixels(initialDim.x, bpm, timeSignature) + widthDiff;
-              
-              trackElement.style.width = `${newWidth}px`;
-              trackElement.style.left = `${newX}px`;
-            }
-          }
-        }
-      }
+      // Store the current delta in state so tracks can use it for visual updates
+      setGroupResizeState(prev => ({
+        ...prev,
+        currentDelta: delta
+      }));
     },
     onResizeEnd: (itemId, selectedIds) => {
       console.log('Track resize ended:', itemId, selectedIds);
@@ -515,41 +470,39 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       const direction = groupResizeState.resizeDirection;
       
       if (isGroupResize && direction) {
-        // For group resize, calculate the final delta from the primary track
-        const primaryTrackElement = document.querySelector(`[data-track-id="${itemId}"].track`);
-        const initialDim = groupResizeState.initialDimensions[itemId];
+        // For group resize, we need to calculate the correct delta based on the resize direction
+        // The currentDelta.x represents the pixel change in position/width
         
-        if (primaryTrackElement && primaryTrackElement instanceof HTMLElement && initialDim) {
-          // Calculate the delta based on current visual state
-          const currentWidth = parseFloat(primaryTrackElement.style.width) || 0;
-          const deltaPixels = currentWidth - initialDim.width;
+        console.log('[Timeline] Group resize final delta:', { 
+          currentDelta: groupResizeState.currentDelta, 
+          direction,
+          tracksInGroup 
+        });
+        
+        // Apply resize to all tracks in the group
+        tracksInGroup.forEach(trackId => {
+          const track = tracks.find(t => t.id === trackId);
+          const initialDim = groupResizeState.initialDimensions[trackId];
           
-          console.log('[Timeline] Group resize final delta:', { deltaPixels, direction });
-          
-          // Apply resize to all tracks in the group
-          tracksInGroup.forEach(trackId => {
-            const track = tracks.find(t => t.id === trackId);
-            if (track && onTrackResizeEnd) {
-              // Call the resize handler from the store
-              // Note: The store expects pixel delta and direction
-              onTrackResizeEnd(trackId, deltaPixels, direction);
+          if (track && initialDim && onTrackResizeEnd) {
+            if (direction === 'left') {
+              // For left resize: calculate position change
+              // The delta represents how much the left edge moved
+              const deltaPositionPixels = groupResizeState.currentDelta.x;
+              console.log('[Timeline] Left resize - position delta:', deltaPositionPixels);
+              onTrackResizeEnd(trackId, deltaPositionPixels, direction);
+            } else {
+              // For right resize: calculate width change
+              // The delta represents how much the width changed
+              const deltaWidthPixels = groupResizeState.currentDelta.x;
+              console.log('[Timeline] Right resize - width delta:', deltaWidthPixels);
+              onTrackResizeEnd(trackId, deltaWidthPixels, direction);
             }
-          });
-        }
-      } else if (direction) {
-        // Single track resize end
-        const trackElement = document.querySelector(`[data-track-id="${itemId}"].track`);
-        const initialDim = groupResizeState.initialDimensions[itemId];
-        
-        if (trackElement && trackElement instanceof HTMLElement && initialDim) {
-          const currentWidth = parseFloat(trackElement.style.width) || 0;
-          const deltaPixels = currentWidth - initialDim.width;
-          
-          const track = tracks.find(t => t.id === itemId);
-          if (track && onTrackResizeEnd) {
-            onTrackResizeEnd(itemId, deltaPixels, direction);
           }
-        }
+        });
+      } else if (direction) {
+        // Single track resize end - BaseTrackPreview handles this entirely
+        // We don't need to do anything here
       }
       
       // Reset group resize state
@@ -557,7 +510,8 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         isResizing: false,
         initialDimensions: {},
         resizedTrackId: null,
-        resizeDirection: null
+        resizeDirection: null,
+        currentDelta: { x: 0, y: 0 }
       });
     }
   });
@@ -575,13 +529,18 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         currentSelection
       });
       
-      if (selectedTrackIds.length > 0) {
-        interaction.selectMultiple(selectedTrackIds, true);
-      } else {
-        interaction.clearSelection();
-      }
+      // Use a timeout to break the synchronous update cycle
+      const timeoutId = setTimeout(() => {
+        if (selectedTrackIds.length > 0) {
+          interaction.selectMultiple(selectedTrackIds, true);
+        } else {
+          interaction.clearSelection();
+        }
+      }, 0);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [selectedTrackIds]);
+  }, [selectedTrackIds, interaction]);
   
   // Update interaction manager grid size when snap size changes
   React.useEffect(() => {
@@ -659,6 +618,19 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
               setGridSnapEnabled(!gridSnapEnabled);
               interaction.toggleSnapToGrid();
             }}
+            gridSnapSize={gridSnapSize}
+            onGridSnapSizeChange={(size) => {
+              setGridSnapSize(size);
+              // If setting to NONE, disable grid snapping
+              if (size === GridSnapOption.NONE) {
+                setGridSnapEnabled(false);
+                interaction.toggleSnapToGrid();
+              } else if (!gridSnapEnabled) {
+                // If selecting a size other than NONE, enable grid snapping
+                setGridSnapEnabled(true);
+                interaction.toggleSnapToGrid();
+              }
+            }}
             showGridToggle={true}
             orientation="horizontal"
             size="small"
@@ -704,8 +676,10 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
           // Check if clicking on a track with proper width calculation
           const clickedTrack = tracks.find((track, index) => {
             // Calculate actual track width using proper function
+            // Convert ticks to seconds: ticks / PPQ = beats, beats / (BPM/60) = seconds
+            const durationInSeconds = (track.duration_ticks || 0) / MUSIC_CONSTANTS.pulsesPerQuarterNote / (bpm / 60);
             const actualTrackWidth = calculateTrackWidth(
-              (track.duration_ticks || 0) / 960, // Convert ticks to seconds (assuming standard 960 ticks/beat at 120 BPM)
+              durationInSeconds,
               bpm,
               timeSignature,
               {
@@ -862,6 +836,9 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
             selectedTrackIds={selectedTrackIds}
             interaction={interaction}
             justCompletedSelection={justCompletedSelection}
+            gridSnapEnabled={gridSnapEnabled}
+            gridSnapSize={gridSnapSize}
+            actualSnapSize={actualSnapSize}
             groupResizeState={groupResizeState}
           />
         ) : (
@@ -1095,7 +1072,11 @@ interface TimelineContentProps extends TimelineRulerProps {
     initialDimensions: Record<string, { x: number; width: number; trimStart: number; trimEnd: number }>;
     resizedTrackId: string | null;
     resizeDirection: 'left' | 'right' | null;
+    currentDelta: { x: number; y: number };
   };
+  gridSnapEnabled?: boolean;
+  gridSnapSize?: GridSnapOption;
+  actualSnapSize?: number;
 }
 
 function TimelineContent({
@@ -1113,6 +1094,9 @@ function TimelineContent({
   selectedTrackIds,
   interaction,
   justCompletedSelection,
+  gridSnapEnabled = true,
+  gridSnapSize = GridSnapOption.STEP,
+  actualSnapSize,
   groupResizeState
 }: TimelineContentProps) {
   // const theme = useTheme(); // No longer need theme for grid colors
@@ -1196,6 +1180,9 @@ function TimelineContent({
           isPrimaryDrag={interaction.dragState.draggedItemId === track.id}
           isGroupResize={groupResizeState?.isResizing && selectedTrackIds.includes(track.id)}
           isPrimaryResize={groupResizeState?.resizedTrackId === track.id}
+          resizeDelta={groupResizeState?.isResizing ? groupResizeState.currentDelta : undefined}
+          resizeDirection={groupResizeState?.resizeDirection}
+          resizeInitialDimensions={groupResizeState?.initialDimensions[track.id]}
           onTrackClick={(trackId, event) => {
             interaction.handleItemClick(trackId, event);
           }}
@@ -1203,6 +1190,9 @@ function TimelineContent({
             interaction.handleItemDoubleClick(trackId);
           }}
           interaction={interaction}
+          gridSnapEnabled={gridSnapEnabled}
+          gridSnapSize={gridSnapSize}
+          actualSnapSize={actualSnapSize}
           // gridLineStyle={gridLineStyle} // Removed, GridOverlay handles this
         />
       ))}
