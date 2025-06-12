@@ -68,11 +68,19 @@ export interface BaseTrackPreviewProps {
   isPrimaryDrag?: boolean;
   isGroupResize?: boolean;
   isPrimaryResize?: boolean;
+  resizeDelta?: { x: number; y: number };
+  resizeDirection?: 'left' | 'right' | null;
+  resizeInitialDimensions?: { x: number; width: number; trimStart: number; trimEnd: number };
   onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
   onTrackDoubleClick?: (trackId: string) => void;
   
   /** Interaction manager for coordinated drag operations */
   interaction?: any;
+  
+  /** Grid snap configuration */
+  gridSnapEnabled?: boolean;
+  gridSnapSize?: number;
+  actualSnapSize?: number;
 }
 
 export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
@@ -94,9 +102,15 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   isPrimaryDrag = false,
   isGroupResize = false,
   isPrimaryResize = false,
+  resizeDelta,
+  resizeDirection: propResizeDirection,
+  resizeInitialDimensions,
   onTrackClick,
   onTrackDoubleClick,
-  interaction
+  interaction,
+  gridSnapEnabled = true,
+  gridSnapSize,
+  actualSnapSize
 }) => {
   // Use the provided content width or default to track width if not specified
   const actualContentWidth = contentWidth || trackWidth;
@@ -121,6 +135,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   // Refs and state for resize functionality
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDirection, setResizeDirection] = useState<'left' | 'right' | null>(null);
+  const [isInteractionManaged, setIsInteractionManaged] = useState(false); // Track if resize is managed by interaction manager
   const [startResizeInfo, setStartResizeInfo] = useState<{ 
     startMouseX: number, 
     startTrackX: number, 
@@ -361,9 +376,14 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       
     if (!container) return;
 
-    // Use interaction manager for group resize if available and track is selected
-    if (interaction && selectedTool === 'select' && isSelected && interaction.selectionState.selectedIds.length > 1) {
+    // Use interaction manager for group resize if available and track is selected as part of multiple
+    const useInteractionManager = interaction && selectedTool === 'select' && isSelected && interaction.selectionState.selectedIds.length > 1;
+    
+    if (useInteractionManager) {
       console.log('[BaseTrackPreview] Starting group resize through interaction manager');
+      
+      // Mark this resize as managed by interaction manager
+      setIsInteractionManaged(true);
       
       // Calculate mouse position with scroll offset
       const mousePosition = {
@@ -391,6 +411,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     }
     
     console.log('[BaseTrackPreview] Using fallback resize logic');
+    setIsInteractionManaged(false); // Explicitly mark as not interaction managed
 
     setIsResizing(true);
     setResizeDirection(direction);
@@ -614,8 +635,10 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
           }
       }
       
-      // Store values for final update on mouse up
-      lastResizeDataRef.current = { newX: snappedNewX, newWidth: snappedNewWidth };
+      // Store values for final update on mouse up (only if not interaction managed)
+      if (!isInteractionManaged) {
+        lastResizeDataRef.current = { newX: snappedNewX, newWidth: snappedNewWidth };
+      }
     }
   }, [
     isDragging, 
@@ -627,7 +650,8 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     timeSignature,
     contentOffsetX,
     bpm,
-    interaction
+    interaction,
+    isInteractionManaged
   ]);
 
   const handleMouseUp = useCallback(() => {
@@ -647,6 +671,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       // This will trigger Timeline's onResizeEnd callback which handles group logic
       interaction.endResize();
       setIsResizing(false); // Reset our local state too
+      setIsInteractionManaged(false); // Reset the flag
       return;
     }
 
@@ -674,14 +699,19 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       }
     } 
     // --- Resize End ---
-    else if (isResizing && trackRef.current) {
+    else if (isResizing && trackRef.current && !isInteractionManaged) {
       const finalResizeData = lastResizeDataRef.current;
       const currentDirection = resizeDirection;
       
-      console.log('Final resize data before ending resize:', finalResizeData);
+      console.log('[BaseTrackPreview] Individual resize end:', {
+        trackId: track.id,
+        finalResizeData,
+        isInteractionManaged
+      });
       
       setIsResizing(false); // Reset state first
       setResizeDirection(null);
+      setIsInteractionManaged(false); // Reset the flag
       
       // Enable transitions for smooth visual updates
       if (contentRef.current) {
@@ -691,6 +721,15 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       if (currentDirection === 'left') {
         // For left resize: calculate position change in pixels
         const deltaXPixels = finalResizeData.newX - (startResizeInfo?.startTrackX || 0);
+        
+        console.log('[BaseTrackPreview] Left resize final calculation:', {
+          trackId: track.id,
+          startX: startResizeInfo?.startTrackX,
+          finalX: finalResizeData.newX,
+          deltaXPixels,
+          startWidth: startResizeInfo?.startTrackWidth,
+          finalWidth: finalResizeData.newWidth
+        });
         
         // Set final visual position and width
         if (trackRef.current) {
@@ -715,6 +754,14 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         // For right resize: calculate width change in pixels
         const deltaWidthPixels = finalResizeData.newWidth - (startResizeInfo?.startTrackWidth || trackWidth);
         
+        console.log('[BaseTrackPreview] Right resize final calculation:', {
+          trackId: track.id,
+          startWidth: startResizeInfo?.startTrackWidth,
+          finalWidth: finalResizeData.newWidth,
+          deltaWidthPixels,
+          trackWidth
+        });
+        
         // No transform adjustments needed for right resize
         
         // Pass the pixel delta directly to the callback
@@ -725,7 +772,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       setStartResizeInfo(null);
     }
     
-  }, [isDragging, isResizing, resizeDirection, track.id, track.x_position, track.y_position, onPositionChange, onResizeEnd, trackWidth, bpm, timeSignature, startResizeInfo, contentOffsetX, interaction]);
+  }, [isDragging, isResizing, resizeDirection, track.id, track.x_position, track.y_position, onPositionChange, onResizeEnd, trackWidth, bpm, timeSignature, startResizeInfo, contentOffsetX, interaction, isInteractionManaged]);
 
   // Add/remove mouse event listeners
   useEffect(() => {
@@ -802,11 +849,12 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   // Sync position AND width from props to DOM (for undo/redo, or external changes)
   useEffect(() => {
     const usingInteractionManager = interaction && selectedTool === 'select' && interaction.isDragging;
+    const usingInteractionResize = interaction && interaction.isResizing;
     
     // Update position if:
     // 1. Not using fallback drag/resize system OR
     // 2. Using interaction manager (need real-time updates for snapping)
-    if (trackRef.current && (!isDragging && !isResizing || usingInteractionManager)) {
+    if (trackRef.current && (!isDragging && !isResizing && !isGroupResize || usingInteractionManager)) {
       // Convert track position from ticks to pixels for display
       const pixelX = ticksToPixels(track.x_position, bpm, timeSignature);
       
@@ -817,21 +865,25 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       trackRef.current.style.width = `${trackWidth}px`;
       
       // Remove transition during interaction manager drag for smooth movement
-      if (usingInteractionManager) {
+      if (usingInteractionManager || usingInteractionResize) {
         trackRef.current.style.transition = 'none';
       } else {
         trackRef.current.style.transition = 'left 0.2s ease, top 0.2s ease, width 0.2s ease';
       }
       
-      console.log('Syncing track DOM:', { 
+      console.log('Syncing track DOM after state update:', { 
         id: track.id, 
-        width: trackWidth, 
-        ticksX: track.x_position, 
-        pixelsX: pixelX,
-        usingInteractionManager 
+        propWidth: trackWidth, 
+        propXTicks: track.x_position, 
+        calculatedPixelX: pixelX,
+        trimStart: track.trim_start_ticks,
+        trimEnd: track.trim_end_ticks,
+        duration: track.duration_ticks,
+        usingInteractionManager,
+        isGroupResize 
       });
     }
-  }, [track.x_position, track.y_position, trackWidth, isDragging, isResizing, track.id, bpm, timeSignature, interaction, selectedTool]);
+  }, [track.x_position, track.y_position, trackWidth, isDragging, isResizing, isGroupResize, track.id, bpm, timeSignature, interaction, selectedTool, track.trim_start_ticks, track.trim_end_ticks, track.duration_ticks]);
 
   // Reset content transform after trim values change and component re-renders
   // This ensures we switch back to using the calculated offset once state updates
@@ -844,6 +896,69 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       return () => clearTimeout(timer);
     }
   }, [track.trim_start_ticks, track.trim_end_ticks, isResizing, contentTransform]);
+  
+  // Handle resize delta from parent (when using interaction manager for group resize)
+  useEffect(() => {
+    if (isGroupResize && resizeDelta && resizeInitialDimensions && propResizeDirection && trackRef.current) {
+      // Mark as interaction managed when we start receiving group resize updates
+      if (!isInteractionManaged && !isResizing) {
+        setIsInteractionManaged(true);
+      }
+      
+      const delta = resizeDelta.x;
+      const initialDim = resizeInitialDimensions;
+      
+      console.log('[BaseTrackPreview] Applying group resize delta:', {
+        trackId: track.id,
+        delta,
+        direction: propResizeDirection,
+        initialDim,
+        currentX: track.x_position,
+        currentWidth: trackWidth,
+        isGroupResize,
+        isPrimaryResize,
+        isInteractionManaged
+      });
+      
+      // Disable transitions during resize
+      trackRef.current.style.transition = 'none';
+      if (contentRef.current) {
+        contentRef.current.style.transition = 'none';
+      }
+      
+      if (propResizeDirection === 'right') {
+        // Right resize - just change width
+        const newWidth = Math.max(48, initialDim.width + delta);
+        trackRef.current.style.width = `${newWidth}px`;
+        // Keep position unchanged
+        const currentPosPixels = ticksToPixels(track.x_position, bpm, timeSignature);
+        trackRef.current.style.left = `${currentPosPixels}px`;
+      } else if (propResizeDirection === 'left') {
+        // Left resize - change both position and width
+        const newWidth = Math.max(48, initialDim.width - delta);
+        const widthDiff = initialDim.width - newWidth;
+        const initialPosPixels = ticksToPixels(initialDim.x, bpm, timeSignature);
+        const newX = initialPosPixels + widthDiff;
+        
+        trackRef.current.style.width = `${newWidth}px`;
+        trackRef.current.style.left = `${newX}px`;
+        
+        // Adjust content transform
+        if (contentRef.current) {
+          const containerDeltaX = newX - initialPosPixels;
+          const initialTransform = calculateContentOffset();
+          const transform = initialTransform - containerDeltaX;
+          contentRef.current.style.transform = `translateX(${transform}px)`;
+        }
+      }
+      
+      // Don't update lastResizeDataRef during group resize - Timeline handles the end
+      // This prevents double-handling of the resize
+    } else if (isInteractionManaged && !isGroupResize) {
+      // Group resize ended, reset the flag
+      setIsInteractionManaged(false);
+    }
+  }, [isGroupResize, resizeDelta, resizeInitialDimensions, propResizeDirection, bpm, timeSignature, track.x_position, track.id, trackWidth, isInteractionManaged, isResizing]);
 
   // Calculate the transform to use for content position
   const getContentTransform = () => {

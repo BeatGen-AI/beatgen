@@ -29,9 +29,9 @@ const DARK_THEME = {
 // Define our note state interface (normalized values independent of zoom) - aligned with PianoRoll's NoteState
 export interface NoteState {
   id: number;
-  length: number;  // Length in ticks (1/960th of a beat)
+  length: number;  // Length in ticks (480 ticks per beat)
   row: number;     // Row index (0-131 for our 132 keys)
-  column: number;  // Column position in ticks (1/960th of a beat)
+  column: number;  // Column position in ticks (480 ticks per beat)
   velocity?: number;
 }
 

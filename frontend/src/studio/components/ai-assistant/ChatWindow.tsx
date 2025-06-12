@@ -34,6 +34,7 @@ import { SamplerTrackRead } from 'src/platform/types/track_models/sampler_track'
 import { DrumTrackRead } from 'src/platform/types/track_models/drum_track';
 import { alpha } from '@mui/material/styles';
 import ChatModelMenu from './ChatModelMenu';
+import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 
 interface Message {
   text: string;
@@ -510,7 +511,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
               // Fields related to audio clips, might not be relevant here or default to 0
               trim_start_ticks: 0,
               trim_end_ticks: 0,
-              duration_ticks: 480*16,
+              duration_ticks: MUSIC_CONSTANTS.pulsesPerQuarterNote*16,
 
               // Nest the specific track data
               track: drumTrackData
@@ -557,7 +558,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                   // Fields related to audio clips, might not be relevant here or default to 0
                   trim_start_ticks: 0,
                   trim_end_ticks: 0,
-                  duration_ticks: 480*16,
+                  duration_ticks: MUSIC_CONSTANTS.pulsesPerQuarterNote*16,
 
                   // Nest the specific track data
                   track: midiTrackData

@@ -1,5 +1,5 @@
-import React, { forwardRef, memo, useRef } from 'react';
-import { Box, IconButton, Typography, TextField, Tooltip, useTheme } from '@mui/material';
+import React, { forwardRef, memo, useRef, useState } from 'react';
+import { Box, IconButton, Typography, TextField, Tooltip, useTheme, Menu, MenuItem } from '@mui/material';
 // Import components
 import BPMControl from './BPMControl';
 import TimeSignatureDisplay from './TimeSignatureDisplay';
@@ -10,8 +10,9 @@ import { SaveStatusIndicator } from '../ui/SaveStatusIndicator';
 import { useStudioStore } from '../../stores/studioStore';
 import { IconPlayerPlayFilled, IconPlayerSkipBackFilled, IconPlayerPauseFilled, IconArrowForwardUp, IconArrowBackUp, IconZoomIn, IconZoomOut, IconInputAi, IconChevronsRight, IconArrowLeft } from '@tabler/icons-react';
 import { IconSettings } from '@tabler/icons-react';
-import { CropFree as SelectIcon, Edit as PenIcon, Highlight as HighlighterIcon, Delete as EraserIcon, GridOn as GridIcon } from '@mui/icons-material';
+import { CropFree as SelectIcon, Edit as PenIcon, Highlight as HighlighterIcon, Delete as EraserIcon, GridOn as GridIcon, GridOff as GridOffIcon, Check as CheckIcon } from '@mui/icons-material';
 import { Tool } from '../../shared/interactions';
+import { GridSnapOption, getGridSnapOptionName } from '../piano-roll2/gridConstants';
 
 interface StudioControlBarProps {
     canUndo: boolean;
@@ -35,6 +36,7 @@ interface StudioControlBarProps {
     selectedTool?: Tool;
     snapToGrid?: boolean;
     showToolbar?: boolean;
+    gridSnapSize?: GridSnapOption;
 
     // Handlers
     onUndo: () => void;
@@ -52,6 +54,7 @@ interface StudioControlBarProps {
     onAutoSaveRetry?: () => void;
     onToolChange?: (tool: Tool) => void;
     onToggleSnapToGrid?: () => void;
+    onGridSnapSizeChange?: (size: GridSnapOption) => void;
 }
 
 // Wrap with forwardRef and memo
@@ -74,6 +77,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     selectedTool = 'select',
     snapToGrid = true,
     showToolbar = true,
+    gridSnapSize = GridSnapOption.STEP,
     onUndo,
     onRedo,
     onBpmChange,
@@ -89,9 +93,12 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     onAutoSaveRetry,
     onToolChange,
     onToggleSnapToGrid,
+    onGridSnapSizeChange,
 }, ref) => {
     const theme = useTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
+    const [gridMenuAnchor, setGridMenuAnchor] = useState<null | HTMLElement>(null);
+    const gridMenuOpen = Boolean(gridMenuAnchor);
 
     const handlePlayPause = () => {
         if (isPlaying) {
@@ -105,6 +112,19 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     const handleStop = () => {
         timeDisplayRef.current?.reset(0);
         onStop();
+    };
+
+    const handleGridClick = (event: React.MouseEvent<HTMLElement>) => {
+        setGridMenuAnchor(event.currentTarget);
+    };
+
+    const handleGridMenuClose = () => {
+        setGridMenuAnchor(null);
+    };
+
+    const handleGridSnapSizeChange = (option: GridSnapOption) => {
+        onGridSnapSizeChange?.(option);
+        handleGridMenuClose();
     };
 
     return (
@@ -260,22 +280,23 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         >
                             <EraserIcon />
                         </IconButton>
-                        <IconButton
-                            size="small"
-                            color="inherit"
-                            onClick={() => onToggleSnapToGrid?.()}
-                            sx={{
-                                borderRadius: '8px',
-                                backgroundColor: snapToGrid ? theme.palette.action.selected : 'transparent',
-                                '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
-                                },
-                            }}
-                            title="Toggle Grid Snap"
-                            disableRipple
-                        >
-                            <GridIcon />
-                        </IconButton>
+                        <Tooltip title={`Grid snap: ${getGridSnapOptionName(gridSnapSize)}`}>
+                            <IconButton
+                                size="small"
+                                color="inherit"
+                                onClick={handleGridClick}
+                                sx={{
+                                    borderRadius: '8px',
+                                    backgroundColor: snapToGrid ? theme.palette.action.selected : 'transparent',
+                                    '&:hover': {
+                                        backgroundColor: theme.palette.action.hover,
+                                    },
+                                }}
+                                disableRipple
+                            >
+                                {snapToGrid ? <GridIcon /> : <GridOffIcon />}
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                 )}
 
@@ -457,6 +478,99 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                 </Box>
             </Box>
             </Box>
+
+            {/* Grid Snap Menu */}
+            <Menu
+                anchorEl={gridMenuAnchor}
+                open={gridMenuOpen}
+                onClose={handleGridMenuClose}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'center',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'center',
+                }}
+                PaperProps={{
+                    sx: {
+                        bgcolor: 'background.paper',
+                        minWidth: 150,
+                        maxHeight: 400,
+                        '& .MuiMenuItem-root': {
+                            fontSize: '0.875rem',
+                            py: 0.75,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }
+                    }
+                }}
+            >
+                {/* None option */}
+                <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.NONE)}>
+                    <span>None</span>
+                    {gridSnapSize === GridSnapOption.NONE && <CheckIcon fontSize="small" />}
+                </MenuItem>
+                
+                {/* Step section */}
+                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5, pt: 0.5 }}>
+                    <Box sx={{ fontSize: '0.75rem', color: 'text.secondary', px: 2, py: 0.5 }}>STEP</Box>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_6)}>
+                        <span>1/6 step</span>
+                        {gridSnapSize === GridSnapOption.STEP_1_6 && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_4)}>
+                        <span>1/4 step</span>
+                        {gridSnapSize === GridSnapOption.STEP_1_4 && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_3)}>
+                        <span>1/3 step</span>
+                        {gridSnapSize === GridSnapOption.STEP_1_3 && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_2)}>
+                        <span>1/2 step</span>
+                        {gridSnapSize === GridSnapOption.STEP_1_2 && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP)}>
+                        <span>Step</span>
+                        {gridSnapSize === GridSnapOption.STEP && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                </Box>
+                
+                {/* Beat section */}
+                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5, pt: 0.5 }}>
+                    <Box sx={{ fontSize: '0.75rem', color: 'text.secondary', px: 2, py: 0.5 }}>BEAT</Box>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_6)}>
+                        <span>1/6 beat</span>
+                        {gridSnapSize === GridSnapOption.BEAT_1_6 && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_4)}>
+                        <span>1/4 beat</span>
+                        {gridSnapSize === GridSnapOption.BEAT_1_4 && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_3)}>
+                        <span>1/3 beat</span>
+                        {gridSnapSize === GridSnapOption.BEAT_1_3 && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_2)}>
+                        <span>1/2 beat</span>
+                        {gridSnapSize === GridSnapOption.BEAT_1_2 && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT)}>
+                        <span>Beat</span>
+                        {gridSnapSize === GridSnapOption.BEAT && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                </Box>
+                
+                {/* Bar option */}
+                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5, pt: 0.5 }}>
+                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BAR)}>
+                        <span>Bar</span>
+                        {gridSnapSize === GridSnapOption.BAR && <CheckIcon fontSize="small" />}
+                    </MenuItem>
+                </Box>
+            </Menu>
         </Box>
     );
 }));

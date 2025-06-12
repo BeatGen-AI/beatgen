@@ -28,6 +28,7 @@ import { useAppTheme } from '../platform/theme/ThemeContext';
 import { studioLightTheme, studioDarkTheme } from '../platform/theme/ThemeContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconChevronLeftPipe, IconChevronRightPipe } from '@tabler/icons-react';
+import { GridSnapOption } from './components/piano-roll2/gridConstants';
 
 // Studio Component Props
 interface StudioProps {
@@ -108,6 +109,7 @@ function Studio({ projectId }: StudioProps) {
     duplicateMultipleTracks,
     deleteMultipleTracks,
     updateMultipleTrackPositions,
+    resizeMultipleTracks,
     uploadAudioFile,
     setAddMenuAnchor,
     openDrumMachines,
@@ -132,6 +134,7 @@ function Studio({ projectId }: StudioProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [trackIdForFileUpload, setTrackIdForFileUpload] = useState<string | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [gridSnapSize, setGridSnapSize] = useState(GridSnapOption.STEP);
 
   const handleChatToggle = () => {
     setIsChatOpen(prev => !prev);
@@ -356,6 +359,14 @@ function Studio({ projectId }: StudioProps) {
     console.log('Duplicating tracks:', trackIds);
     duplicateMultipleTracks(trackIds);
   }, [duplicateMultipleTracks]);
+  
+  // Handle track resize - Timeline already handles group resize logic
+  const handleTrackResize = useCallback((trackId: string, deltaPixels: number, direction: 'left' | 'right') => {
+    // Timeline's interaction manager handles group resize internally
+    // We just need to pass through to the single track handler
+    console.log('Track resize:', trackId, 'delta:', deltaPixels, 'direction:', direction);
+    handleTrackResizeEnd(trackId, deltaPixels, direction);
+  }, [handleTrackResizeEnd]);
 
   // Determine the theme for the studio based on studioMode
   const currentStudioTheme = useMemo(() => {
@@ -403,8 +414,10 @@ function Studio({ projectId }: StudioProps) {
           selectedTool={selectedTool}
           snapToGrid={snapToGrid}
           showToolbar={true}
+          gridSnapSize={gridSnapSize}
           onToolChange={setSelectedTool}
           onToggleSnapToGrid={toggleSnapToGrid}
+          onGridSnapSizeChange={setGridSnapSize}
         />
 
         {/* Main Content Area */}
@@ -571,6 +584,8 @@ function Studio({ projectId }: StudioProps) {
             zoomLevel={zoomLevel}
             bpm={bpm}
             timeSignature={timeSignature}
+            showToolbar={false}
+            gridSnapSize={gridSnapSize}
             onTrackPositionChange={handleTrackPositionChange}
             onTimeChange={(newTime) => {
               // Update global state only when user explicitly changes time
@@ -592,7 +607,7 @@ function Studio({ projectId }: StudioProps) {
             selectedTrackIds={selectedTrackIds}
             onTrackSelect={setSelectedTrackIds}
             onTrackDelete={handleTrackDelete}
-            onTrackResizeEnd={handleTrackResizeEnd}
+            onTrackResizeEnd={handleTrackResize}
             selectedTool={selectedTool}
             onToolChange={setSelectedTool}
             onCopyTracks={handleCopyTracks}
