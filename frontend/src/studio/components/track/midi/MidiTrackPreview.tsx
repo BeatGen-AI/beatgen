@@ -7,6 +7,7 @@ import MidiNotesPreview from '../../piano-roll/components/MidiNotesPreview';
 import BaseTrackPreview from '../base/BaseTrackPreview';
 import { TrackPreviewProps } from '../types';
 import { useStudioStore } from '../../../stores/studioStore';
+import { Tool } from '../../../shared/interactions';
 
 /**
  * MidiTrackPreview is a specialized track component for MIDI tracks.
@@ -15,7 +16,17 @@ import { useStudioStore } from '../../../stores/studioStore';
  * Includes a trigger area to open the piano roll editor.
  */
 
-export const MidiTrackPreview: React.FC<TrackPreviewProps> = (props) => {
+interface MidiTrackPreviewProps extends TrackPreviewProps {
+  isSelected?: boolean;
+  selectedTool?: Tool;
+  isGroupDrag?: boolean;
+  isPrimaryDrag?: boolean;
+  onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
+  onTrackDoubleClick?: (trackId: string) => void;
+  interaction?: any;
+}
+
+export const MidiTrackPreview: React.FC<MidiTrackPreviewProps> = (props) => {
   const { 
     track, 
     timeSignature = [4, 4],
@@ -23,6 +34,13 @@ export const MidiTrackPreview: React.FC<TrackPreviewProps> = (props) => {
     trackColor: providedTrackColor,
     trackWidth: providedTrackWidth,
     onResizeEnd,
+    isSelected,
+    selectedTool,
+    isGroupDrag,
+    isPrimaryDrag,
+    onTrackClick,
+    onTrackDoubleClick,
+    interaction,
     ...restProps
   } = props;
   
@@ -104,6 +122,13 @@ export const MidiTrackPreview: React.FC<TrackPreviewProps> = (props) => {
       renderTrackContent={renderTrackContent}
       trackIndex={trackIndex}
       onResizeEnd={onResizeEnd}
+      isSelected={isSelected}
+      selectedTool={selectedTool}
+      isGroupDrag={isGroupDrag}
+      isPrimaryDrag={isPrimaryDrag}
+      onTrackClick={onTrackClick}
+      onTrackDoubleClick={onTrackDoubleClick}
+      interaction={interaction}
     />
   );
 };

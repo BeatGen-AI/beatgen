@@ -9,6 +9,7 @@ import { CombinedTrack } from 'src/platform/types/project'; // Import CombinedTr
 import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions';
 import { MidiTrack } from 'src/platform/types/track_models/midi_track'; // Keep MidiTrack import
+import { Tool } from '../../shared/interactions';
 
 /**
  * Track component serves as the main entry point for rendering tracks in the timeline.
@@ -18,10 +19,34 @@ interface TrackProps {
   id: string;
   index: number;
   gridLineStyle?: { borderRight: string };
+  
+  // Selection and interaction props
+  isSelected?: boolean;
+  selectedTool?: Tool;
+  isGroupDrag?: boolean;
+  isPrimaryDrag?: boolean;
+  isGroupResize?: boolean;
+  isPrimaryResize?: boolean;
+  onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
+  onTrackDoubleClick?: (trackId: string) => void;
+  interaction?: any;
 }
 
 function Track(props: TrackProps) {
-  const { id, index, gridLineStyle } = props;
+  const { 
+    id, 
+    index, 
+    gridLineStyle,
+    isSelected = false,
+    selectedTool = 'select',
+    isGroupDrag = false,
+    isPrimaryDrag = false,
+    isGroupResize = false,
+    isPrimaryResize = false,
+    onTrackClick,
+    onTrackDoubleClick,
+    interaction
+  } = props;
   // Fix: Select tracks array individually
   const tracks = useStudioStore(state => state.tracks);
   // Select other state/actions individually
@@ -122,6 +147,15 @@ function Track(props: TrackProps) {
         timeSignature={timeSignature}
         trackIndex={index}
         trackWidth={trackWidth}
+        isSelected={isSelected}
+        selectedTool={selectedTool}
+        isGroupDrag={isGroupDrag}
+        isPrimaryDrag={isPrimaryDrag}
+        isGroupResize={isGroupResize}
+        isPrimaryResize={isPrimaryResize}
+        onTrackClick={onTrackClick}
+        onTrackDoubleClick={onTrackDoubleClick}
+        interaction={interaction}
       />
     </Box>
   );

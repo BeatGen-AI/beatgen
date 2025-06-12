@@ -12,6 +12,7 @@ import {
     TrackType
 } from '../../platform/types/project';
 import { DrumSamplePublicRead } from '../../platform/types/public_models/drum_samples';
+import { Tool } from '../shared/interactions';
 // Remove the type re-export for now
 // export type { ProjectWithTracks as ProjectStateData }; 
 
@@ -265,6 +266,12 @@ export interface RootState {
   openDrumMachine: (drumTrackId: string) => void;
   closeDrumMachine: (trackId: string) => void;
   setAutoSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', message?: string) => void;
+
+  // Tool State
+  selectedTool: Tool;
+  snapToGrid: boolean;
+  setSelectedTool: (tool: Tool) => void;
+  toggleSnapToGrid: () => void;
 
   // Utility / Generic Updater (Keep internal helpers exposed)
   updateState: <K extends keyof RootState>(key: K, value: RootState[K] | ((prev: RootState[K]) => RootState[K])) => void;

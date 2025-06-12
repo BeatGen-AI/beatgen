@@ -18,6 +18,12 @@ const PianoRollWindows: React.FC = memo(() => {
   const addMidiNote = useStudioStore(state => state.addMidiNote);
   const removeMidiNote = useStudioStore(state => state.removeMidiNote);
   const updateMidiNote = useStudioStore(state => state.updateMidiNote);
+  
+  // Tool state from store
+  const selectedTool = useStudioStore(state => state.selectedTool);
+  const snapToGrid = useStudioStore(state => state.snapToGrid);
+  const setSelectedTool = useStudioStore(state => state.setSelectedTool);
+  const toggleSnapToGrid = useStudioStore(state => state.toggleSnapToGrid);
   const getKeyNotes = useCallback(() => {
     return store?.getProjectManager()?.getKeyNotes() || [];
   }, [store]);
@@ -145,6 +151,11 @@ const PianoRollWindows: React.FC = memo(() => {
               keyboardWidth={60} 
               scaleNotes={[]} 
               onClose={() => closePianoRoll(trackId)}
+              // Tool state props
+              selectedTool={selectedTool}
+              snapToGrid={snapToGrid}
+              onToolChange={setSelectedTool}
+              onToggleSnapToGrid={toggleSnapToGrid}
             />
           </div>
         );

@@ -14,6 +14,7 @@ import {
   getSnapSizeInPixels 
 } from './gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
+import { Tool } from '../../shared/interactions';
 
 // Define a constant grid size to use throughout the component
 const GRID_SIZE = 48; // pixels
@@ -137,7 +138,7 @@ interface NotesLayerProps {
   gridSize: number;
   snapEnabled: boolean;
   zoomLevel: number;
-  selectedTool: 'select' | 'pen' | 'highlighter' | 'eraser';
+  selectedTool: Tool;
   noteColor: string; // Add note color prop
   hideResizingNotes?: boolean; // Add a prop to control note visibility
 }
@@ -162,6 +163,12 @@ interface PianoRollProps {
   title?: string; // Add title prop
   onClose?: () => void; // Add callback for close button
   initialGridSnapSize?: GridSnapOption; // Use enum for initial grid snap size
+  
+  // Shared tool system props
+  selectedTool?: Tool;
+  snapToGrid?: boolean;
+  onToolChange?: (tool: Tool) => void;
+  onToggleSnapToGrid?: () => void;
 }
 
 // Add this utility function at the top of your file, near the other helper functions
@@ -1132,7 +1139,11 @@ export const PianoRoll: FC<PianoRollProps> = ({
   scaleNotes = [], // Default to empty array (all notes in scale)
   title = "Piano Roll (132 Keys)", // Default title
   onClose,
-  initialGridSnapSize = GridSnapOption.STEP // Default to "Step" if not provided
+  initialGridSnapSize = GridSnapOption.STEP, // Default to "Step" if not provided
+  selectedTool: externalSelectedTool = 'pen',
+  snapToGrid: externalSnapToGrid = true,
+  onToolChange,
+  onToggleSnapToGrid
 }) => {
   // Add mouseOffsetRef at the top of the component
   const mouseOffsetRef = useRef<{ 
@@ -1150,10 +1161,15 @@ export const PianoRoll: FC<PianoRollProps> = ({
   });
 
   // Grid snap settings
-  const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(externalSnapToGrid);
   const [gridSnapSize, setGridSnapSize] = useState<GridSnapOption>(initialGridSnapSize); // Use the enum state
   const [gridSnapAnchorEl, setGridSnapAnchorEl] = useState<null | HTMLElement>(null);
   const gridSnapMenuOpen = Boolean(gridSnapAnchorEl);
+  
+  // Sync external snapToGrid prop with internal state
+  useEffect(() => {
+    setGridSnapEnabled(externalSnapToGrid);
+  }, [externalSnapToGrid]);
   
   // Zoom control
   const [zoomLevel, setZoomLevel] = useState(1.0); // Default zoom level
@@ -1162,8 +1178,13 @@ export const PianoRoll: FC<PianoRollProps> = ({
   const MAX_ZOOM = 4.0;
   const ZOOM_STEP = 0.25; // Increment/decrement by 25%
   
-  // Tool selection state
-  const [selectedTool, setSelectedTool] = useState<'select' | 'pen' | 'highlighter' | 'eraser'>('pen'); // Default to pen
+  // Use internal tool state to avoid conflicts with complex drag/resize system
+  const [selectedTool, setSelectedTool] = useState<Tool>(externalSelectedTool);
+  
+  // Sync with external tool state when it changes
+  useEffect(() => {
+    setSelectedTool(externalSelectedTool);
+  }, [externalSelectedTool]);
   
   // Selection rectangle state
   const [selectionRect, setSelectionRect] = useState<{startX: number, startY: number, width: number, height: number} | null>(null);
@@ -1186,12 +1207,13 @@ export const PianoRoll: FC<PianoRollProps> = ({
   }, [initialNotes]); // Depend ONLY on the initialNotes prop
   
   // Handle tool selection with note deselection
-  const handleToolSelect = (tool: 'select' | 'pen' | 'highlighter' | 'eraser') => {
+  const handleToolSelect = (tool: Tool) => {
     // If switching away from select tool, clear the selection
     if (selectedTool === 'select' && tool !== 'select') {
       setSelectedNoteIds([]);
     }
-    setSelectedTool(tool);
+    setSelectedTool(tool); // Update internal state
+    onToolChange?.(tool); // Sync to global state
   };
   
   // Handle zoom in
@@ -1268,7 +1290,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
   
   // Toggle grid snap on/off
   const toggleGridSnap = () => {
-    setGridSnapEnabled(!gridSnapEnabled);
+    onToggleSnapToGrid?.();
   };
 
   // Track scroll position
@@ -2105,14 +2127,21 @@ export const PianoRoll: FC<PianoRollProps> = ({
       const width = Math.abs(selectionRect.width);
       const height = Math.abs(selectionRect.height);
       
-      // Find notes that start within the selection rectangle
+      // Find notes that intersect with the selection rectangle
       const selectedIds = visualNotes
-        .filter(note => 
-          note.start >= x && 
-          note.start <= x + width && 
-          note.top >= y && 
-          note.top <= y + height
-        )
+        .filter(note => {
+          // Use rectangle intersection instead of just checking start position
+          const noteRight = note.start + note.width;
+          const noteBottom = note.top + keyHeight; // Use keyHeight for note height
+          const rectRight = x + width;
+          const rectBottom = y + height;
+          
+          // Two rectangles intersect if they overlap in both X and Y dimensions
+          const xOverlap = note.start < rectRight && noteRight > x;
+          const yOverlap = note.top < rectBottom && noteBottom > y;
+          
+          return xOverlap && yOverlap;
+        })
         .map(note => note.id);
       
       // Update selected notes

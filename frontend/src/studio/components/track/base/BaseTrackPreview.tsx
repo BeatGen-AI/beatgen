@@ -4,6 +4,7 @@ import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 import { pixelsToTicks, ticksToPixels } from '../../../constants/gridConstants';
 import { CombinedTrack } from 'src/platform/types/project';
 import { Position } from '../types';
+import { Tool } from '../../../shared/interactions';
 
 /**
  * BaseTrackPreview is the foundation for all track visualizations in the timeline.
@@ -59,6 +60,19 @@ export interface BaseTrackPreviewProps {
   
   /** Callback when track resizing finishes */
   onResizeEnd: (trackId: string, newTrimTicks: number, resizeDirection: 'left' | 'right') => void;
+  
+  /** Selection and tool integration */
+  isSelected?: boolean;
+  selectedTool?: Tool;
+  isGroupDrag?: boolean;
+  isPrimaryDrag?: boolean;
+  isGroupResize?: boolean;
+  isPrimaryResize?: boolean;
+  onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
+  onTrackDoubleClick?: (trackId: string) => void;
+  
+  /** Interaction manager for coordinated drag operations */
+  interaction?: any;
 }
 
 export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
@@ -73,7 +87,16 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   contentWidth,
   timeSignature = [4, 4],
   bpm,
-  onResizeEnd
+  onResizeEnd,
+  isSelected = false,
+  selectedTool = 'select',
+  isGroupDrag = false,
+  isPrimaryDrag = false,
+  isGroupResize = false,
+  isPrimaryResize = false,
+  onTrackClick,
+  onTrackDoubleClick,
+  interaction
 }) => {
   // Use the provided content width or default to track width if not specified
   const actualContentWidth = contentWidth || trackWidth;
@@ -121,6 +144,38 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   // The normal position offset for content (used when not actively resizing)
   const contentOffsetX = calculateContentOffset();
 
+  // Calculate selection styles
+  const getSelectionStyles = () => {
+    const baseSelectionStyles: any = {};
+    
+    if (isSelected) {
+      baseSelectionStyles.outline = '3px solid #2196f3';
+      baseSelectionStyles.outlineOffset = '-2px';
+      baseSelectionStyles.zIndex = isDragging || isResizing ? 1001 : 1001; // Selected tracks have higher z-index
+      
+      if (isGroupDrag) {
+        baseSelectionStyles.transform = 'scale(1.02)';
+        baseSelectionStyles.opacity = 0.9;
+        if (isPrimaryDrag) {
+          baseSelectionStyles.boxShadow = '0 8px 32px rgba(33, 150, 243, 0.4)';
+        }
+      } else if (isGroupResize) {
+        baseSelectionStyles.opacity = 0.95;
+        if (isPrimaryResize) {
+          baseSelectionStyles.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.6)';
+          baseSelectionStyles.borderColor = '#1976d2';
+        }
+      }
+    } else if (selectedTool === 'select') {
+      baseSelectionStyles['&:hover'] = {
+        outline: '2px dashed rgba(33, 150, 243, 0.7)',
+        backgroundColor: 'rgba(33, 150, 243, 0.05)'
+      };
+    }
+    
+    return baseSelectionStyles;
+  };
+
   // Create base style object for track
   const trackStyle = {
     display: 'flex',
@@ -131,9 +186,9 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     borderRadius: '6px',
     left: `${track.x_position}px`,
     top: `${track.y_position}px`,
-    cursor: isDragging ? 'grabbing' : (isResizing ? 'ew-resize' : 'grab'),
-    zIndex: isDragging || isResizing ? 1001 : 1000,
-    transition: isDragging || isResizing ? 'none' : 'width 0.2s ease, left 0.2s ease, top 0.2s ease',
+    cursor: isDragging ? 'grabbing' : (isResizing ? 'ew-resize' : isSelected ? 'grab' : getToolCursor()),
+    zIndex: isSelected ? 1001 : (isDragging || isResizing ? 1001 : 1000),
+    transition: isDragging || isResizing || isGroupDrag ? 'none' : 'width 0.2s ease, left 0.2s ease, top 0.2s ease, transform 0.2s ease',
     '&:hover': {
       boxShadow: `0 0 12px ${trackColor}`,
       zIndex: 9999
@@ -143,16 +198,118 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     padding: 0,
     width: `${trackWidth}px`,
     overflow: 'hidden', // This creates the clipping viewport
+    ...getSelectionStyles(),
     ...trackStyleOverrides
   };
 
-  // Mouse event handlers for dragging
+  // Get tool-specific cursor
+  function getToolCursor() {
+    switch (selectedTool) {
+      case 'select':
+        return 'pointer';
+      case 'eraser':
+        return 'crosshair';
+      case 'pen':
+        return 'copy';
+      case 'highlighter':
+        return 'cell';
+      default:
+        return 'grab';
+    }
+  }
+
+  // Mouse event handlers for dragging and selection
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!trackRef.current) return;
+    console.log('[BaseTrackPreview] handleMouseDown called for track:', track.id, {
+      selectedTool,
+      hasInteraction: !!interaction,
+      trackRef: !!trackRef.current,
+      target: e.target,
+      currentTarget: e.currentTarget
+    });
+    
+    if (!trackRef.current) {
+      console.log('[BaseTrackPreview] No trackRef.current, returning early');
+      return;
+    }
     
     // Prevent dragging when clicking on controls or resize handles
-    if ((e.target as HTMLElement).closest('.track-control') || (e.target as HTMLElement).closest('.resize-handle')) return;
+    if ((e.target as HTMLElement).closest('.track-control') || (e.target as HTMLElement).closest('.resize-handle')) {
+      console.log('[BaseTrackPreview] Clicked on control or resize handle, returning early');
+      return;
+    }
 
+    // Handle tool-specific interactions first
+    if (selectedTool !== 'select') {
+      console.log('[BaseTrackPreview] Tool is not select, tool:', selectedTool);
+      e.stopPropagation();
+      if (onTrackClick) {
+        onTrackClick(track.id, {
+          shiftKey: e.shiftKey,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey
+        });
+      }
+      return;
+    }
+
+    // For select tool, handle selection logic
+    if (selectedTool === 'select' && onTrackClick) {
+      console.log('[BaseTrackPreview] Calling onTrackClick for selection');
+      onTrackClick(track.id, {
+        shiftKey: e.shiftKey,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey
+      });
+    }
+
+    // Use interaction manager for coordinated drag operations
+    if (interaction && selectedTool === 'select') {
+      console.log('[BaseTrackPreview] Starting interaction manager drag process');
+      
+      // Find container element for scroll offset
+      const container = 
+        trackRef.current.closest('.timeline-container') || 
+        trackRef.current.closest('.MuiBox-root') ||
+        trackRef.current.parentElement?.parentElement;
+        
+      if (!container) {
+        console.log('[BaseTrackPreview] No container found for interaction manager');
+        return;
+      }
+      
+      // Calculate mouse position with scroll offset
+      const mousePosition = {
+        x: e.clientX + (container.scrollLeft || 0),
+        y: e.clientY + (container.scrollTop || 0)
+      };
+      
+      // Calculate mouse offset within the track
+      // This is where the user clicked relative to the track's top-left corner
+      const trackPixelX = ticksToPixels(track.x_position, bpm, timeSignature);
+      const mouseOffset = {
+        x: mousePosition.x - trackPixelX,
+        y: mousePosition.y - track.y_position
+      };
+      
+      // Create initial positions map for the interaction manager
+      const initialPositions: Record<string, { x: number; y: number }> = {
+        [track.id]: {
+          x: track.x_position,
+          y: track.y_position
+        }
+      };
+      
+      console.log('[BaseTrackPreview] Calling interaction.startDrag with mouseOffset:', mouseOffset);
+      interaction.startDrag(track.id, mousePosition, initialPositions, mouseOffset);
+      
+      e.preventDefault();
+      return;
+    }
+    
+    console.log('[BaseTrackPreview] Using fallback drag logic');
+
+    // Fallback: original individual drag logic for cases without interaction manager
     // Find container element for scroll offset
     const container = 
       trackRef.current.closest('.timeline-container') || 
@@ -190,12 +347,50 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   const handleResizeMouseDown = (e: React.MouseEvent, direction: 'left' | 'right') => {
     if (!trackRef.current) return;
     
+    console.log('[BaseTrackPreview] handleResizeMouseDown called for track:', track.id, {
+      direction,
+      isSelected,
+      hasInteraction: !!interaction,
+      isGroupResize
+    });
+    
     const container = 
       trackRef.current.closest('.timeline-container') || 
       trackRef.current.closest('.MuiBox-root') ||
       trackRef.current.parentElement?.parentElement;
       
     if (!container) return;
+
+    // Use interaction manager for group resize if available and track is selected
+    if (interaction && selectedTool === 'select' && isSelected && interaction.selectionState.selectedIds.length > 1) {
+      console.log('[BaseTrackPreview] Starting group resize through interaction manager');
+      
+      // Calculate mouse position with scroll offset
+      const mousePosition = {
+        x: e.clientX + (container.scrollLeft || 0),
+        y: e.clientY + (container.scrollTop || 0)
+      };
+      
+      // Prepare initial dimensions for all selected tracks
+      const initialDimensions: Record<string, { x: number; width: number }> = {};
+      
+      // For the current track
+      const trackXPixels = ticksToPixels(track.x_position, bpm, timeSignature);
+      initialDimensions[track.id] = {
+        x: trackXPixels,
+        width: trackWidthRef.current
+      };
+      
+      // Note: Timeline will handle getting dimensions for other selected tracks
+      console.log('[BaseTrackPreview] Calling interaction.startResize');
+      interaction.startResize(track.id, direction, mousePosition, initialDimensions);
+      
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    
+    console.log('[BaseTrackPreview] Using fallback resize logic');
 
     setIsResizing(true);
     setResizeDirection(direction);
@@ -250,6 +445,54 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!trackRef.current) return;
+
+    // If using interaction manager, let it handle the drag updates
+    if (interaction && interaction.isDragging) {
+      const container = 
+        trackRef.current.closest('.timeline-container') || 
+        trackRef.current.closest('.MuiBox-root') ||
+        trackRef.current.parentElement?.parentElement;
+        
+      if (!container) return;
+      
+      // Calculate current mouse position with scroll offset
+      const currentPosition = {
+        x: e.clientX + container.scrollLeft,
+        y: e.clientY + container.scrollTop
+      };
+      
+      // Update drag through interaction manager
+      // This will trigger Timeline's onDragMove callback which handles group logic
+      interaction.updateDrag(currentPosition);
+      
+      // Also update visual position for immediate feedback
+      // The Timeline will send back the snapped position via onPositionChange
+      return;
+    }
+
+    // If using interaction manager for resize, let it handle the resize updates
+    if (interaction && interaction.isResizing) {
+      const container = 
+        trackRef.current.closest('.timeline-container') || 
+        trackRef.current.closest('.MuiBox-root') ||
+        trackRef.current.parentElement?.parentElement;
+        
+      if (!container) return;
+      
+      // Calculate current mouse position with scroll offset
+      const currentPosition = {
+        x: e.clientX + container.scrollLeft,
+        y: e.clientY + container.scrollTop
+      };
+      
+      // Update resize through interaction manager
+      interaction.updateResize(currentPosition);
+      
+      // The interaction manager will handle the visual updates
+      return;
+    }
+
+    console.log('[BaseTrackPreview] handleMouseMove for track:', track.id, { isDragging, isResizing });
 
     const container = 
       trackRef.current.closest('.timeline-container') || 
@@ -383,11 +626,33 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     startDragTrackPosition, 
     timeSignature,
     contentOffsetX,
-    bpm
+    bpm,
+    interaction
   ]);
 
   const handleMouseUp = useCallback(() => {
-    // --- Drag End ---
+    // If using interaction manager, let it handle the drag end
+    if (interaction && interaction.isDragging) {
+      // End drag through interaction manager
+      // This will trigger Timeline's onDragEnd callback which handles group logic
+      interaction.endDrag();
+      setIsDragging(false); // Reset our local state too
+      return;
+    }
+
+    // If using interaction manager for resize, let it handle the resize end
+    if (interaction && interaction.isResizing) {
+      console.log('[BaseTrackPreview] Ending resize through interaction manager');
+      // End resize through interaction manager
+      // This will trigger Timeline's onResizeEnd callback which handles group logic
+      interaction.endResize();
+      setIsResizing(false); // Reset our local state too
+      return;
+    }
+
+    console.log('[BaseTrackPreview] handleMouseUp for track:', track.id, { isDragging, isResizing });
+
+    // --- Individual Drag End ---
     if (isDragging && trackRef.current) {
       const finalPosition = lastMovedPositionRef.current;
       setIsDragging(false); // Reset state first
@@ -460,24 +725,88 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       setStartResizeInfo(null);
     }
     
-  }, [isDragging, isResizing, resizeDirection, track.id, track.x_position, track.y_position, onPositionChange, onResizeEnd, trackWidth, bpm, timeSignature, startResizeInfo, contentOffsetX]);
+  }, [isDragging, isResizing, resizeDirection, track.id, track.x_position, track.y_position, onPositionChange, onResizeEnd, trackWidth, bpm, timeSignature, startResizeInfo, contentOffsetX, interaction]);
 
   // Add/remove mouse event listeners
   useEffect(() => {
-    // Listen if either dragging or resizing
-    if (isDragging || isResizing) {
+    // Only add listeners if we're using the fallback drag system
+    // Don't add if the interaction manager is being used for this track
+    const usingInteractionManager = interaction && selectedTool === 'select';
+    
+    if (!usingInteractionManager && (isDragging || isResizing)) {
+      console.log('[BaseTrackPreview] Adding mouse event listeners for track:', track.id);
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    } else if (usingInteractionManager && interaction.isDragging) {
+      // If using interaction manager, add global listeners that call the interaction manager
+      console.log('[BaseTrackPreview] Adding interaction manager listeners for drag');
+      
+      const handleInteractionMouseMove = (e: MouseEvent) => {
+        const container = document.querySelector('.timeline-container') || document.querySelector('.MuiBox-root');
+        if (container && container instanceof HTMLElement) {
+          const currentPosition = {
+            x: e.clientX + container.scrollLeft,
+            y: e.clientY + container.scrollTop
+          };
+          interaction.updateDrag(currentPosition);
+        }
+      };
+      
+      const handleInteractionMouseUp = () => {
+        interaction.endDrag();
+        setIsDragging(false); // Reset local state
+      };
+      
+      window.addEventListener('mousemove', handleInteractionMouseMove);
+      window.addEventListener('mouseup', handleInteractionMouseUp);
+      
+      return () => {
+        window.removeEventListener('mousemove', handleInteractionMouseMove);
+        window.removeEventListener('mouseup', handleInteractionMouseUp);
+      };
+    } else if (usingInteractionManager && interaction.isResizing) {
+      // If using interaction manager for resize, add global listeners
+      console.log('[BaseTrackPreview] Adding interaction manager listeners for resize');
+      
+      const handleInteractionMouseMove = (e: MouseEvent) => {
+        const container = document.querySelector('.timeline-container') || document.querySelector('.MuiBox-root');
+        if (container && container instanceof HTMLElement) {
+          const currentPosition = {
+            x: e.clientX + container.scrollLeft,
+            y: e.clientY + container.scrollTop
+          };
+          interaction.updateResize(currentPosition);
+        }
+      };
+      
+      const handleInteractionMouseUp = () => {
+        interaction.endResize();
+        setIsResizing(false); // Reset local state
+      };
+      
+      window.addEventListener('mousemove', handleInteractionMouseMove);
+      window.addEventListener('mouseup', handleInteractionMouseUp);
+      
+      return () => {
+        window.removeEventListener('mousemove', handleInteractionMouseMove);
+        window.removeEventListener('mouseup', handleInteractionMouseUp);
+      };
     }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp, interaction, interaction?.isDragging, interaction?.isResizing, selectedTool]);
   
   // Sync position AND width from props to DOM (for undo/redo, or external changes)
   useEffect(() => {
-    if (trackRef.current && !isDragging && !isResizing) { // Only sync if not actively dragging/resizing
+    const usingInteractionManager = interaction && selectedTool === 'select' && interaction.isDragging;
+    
+    // Update position if:
+    // 1. Not using fallback drag/resize system OR
+    // 2. Using interaction manager (need real-time updates for snapping)
+    if (trackRef.current && (!isDragging && !isResizing || usingInteractionManager)) {
       // Convert track position from ticks to pixels for display
       const pixelX = ticksToPixels(track.x_position, bpm, timeSignature);
       
@@ -487,9 +816,22 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       // Important: Always update the width to match props
       trackRef.current.style.width = `${trackWidth}px`;
       
-      console.log('Syncing track DOM:', { id: track.id, width: trackWidth, ticksX: track.x_position, pixelsX: pixelX });
+      // Remove transition during interaction manager drag for smooth movement
+      if (usingInteractionManager) {
+        trackRef.current.style.transition = 'none';
+      } else {
+        trackRef.current.style.transition = 'left 0.2s ease, top 0.2s ease, width 0.2s ease';
+      }
+      
+      console.log('Syncing track DOM:', { 
+        id: track.id, 
+        width: trackWidth, 
+        ticksX: track.x_position, 
+        pixelsX: pixelX,
+        usingInteractionManager 
+      });
     }
-  }, [track.x_position, track.y_position, trackWidth, isDragging, isResizing, track.id, bpm, timeSignature]);
+  }, [track.x_position, track.y_position, trackWidth, isDragging, isResizing, track.id, bpm, timeSignature, interaction, selectedTool]);
 
   // Reset content transform after trim values change and component re-renders
   // This ensures we switch back to using the calculated offset once state updates
@@ -521,132 +863,195 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     width: '8px', // Make handle easier to grab
     cursor: 'ew-resize',
     zIndex: 1002, // Ensure handles are above track content
+    backgroundColor: isGroupResize ? 'rgba(33, 150, 243, 0.3)' : 'transparent',
+    '&:hover': {
+      backgroundColor: 'rgba(33, 150, 243, 0.5)'
+    }
   };
 
-  return (
-    <Box
-      ref={trackRef}
-      onMouseDown={handleMouseDown}
-      className="track"
-      sx={trackStyle}
-      data-track-width={trackWidth} // Add data attribute for debugging
-    >
-       {/* Left Resize Handle */}
-      <Box
-        className="resize-handle resize-handle-left"
-        sx={{
-          ...resizeHandleStyle,
-          left: '-4px', // Position slightly outside/overlapping the left edge
-        }}
-        onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
-      />
-      
-       {/* Right Resize Handle */}
-      <Box
-        className="resize-handle resize-handle-right"
-        sx={{
-          ...resizeHandleStyle,
-          right: '-4px', // Position slightly outside/overlapping the right edge
-        }}
-        onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
-      />
+  // Handle double click for selection integration
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (onTrackDoubleClick) {
+      e.stopPropagation();
+      onTrackDoubleClick(track.id);
+    }
+  }, [onTrackDoubleClick, track.id]);
 
-      {/* Track Timeline Content (Original Inner Box) */}
-      <Box sx={{ 
-        display: 'flex',
-        flex: 1,
-        position: 'relative',
-        overflow: 'hidden',
-        height: '100%',
-        width: `${trackWidth}px`,
-        margin: 0,
-        padding: 0,
-        boxSizing: 'border-box',
-        borderLeft: 'none',
-        borderRight: 'none',
-        background: `linear-gradient(180deg, ${trackColor}80 0%, ${trackColor} 100%)`,
-        opacity: track.mute ? 0.4 : 0.85,
-        '&:hover': {
-          opacity: track.mute ? 0.5 : 1,
-          boxShadow: 'inset 0 0 10px rgba(255,255,255,0.3)'
-        },
-        transition: 'opacity 0.2s ease',
-        pointerEvents: 'none' // Ensure content doesn't interfere with handles/dragging
-      }}>
-        {/* Track Type Badge */}
-        <Box sx={{
-          position: 'absolute',
-          right: 10,
-          top: 5,
-          bgcolor: track.type === 'AUDIO' ? '#4caf50' : 
-                  track.type === 'MIDI' ? '#2196f3' : 
-                  track.type === 'DRUM' ? '#ff9800' : '#9c27b0',
-          color: 'white',
-          fontSize: '10px',
-          fontWeight: 'bold',
-          padding: '2px 6px',
-          borderRadius: '3px',
-          textTransform: 'uppercase',
-          opacity: 0.7,
-          pointerEvents: 'none' // Ensure content doesn't interfere
-        }}>
-          {track.type}
-        </Box>
-        
-        {/* Content Wrapper - Visible part is controlled by the container's overflow: hidden */}
-        <Box 
-          ref={contentRef}
-          className="track-content-wrapper"
+  return (
+    <Box sx={{ position: 'relative' }}>
+      {/* Selection indicators */}
+      {isSelected && (
+        <>
+          {/* Selection background */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: -4,
+              left: -4,
+              right: -4,
+              bottom: -4,
+              backgroundColor: isPrimaryDrag 
+                ? 'rgba(33, 150, 243, 0.25)' 
+                : 'rgba(33, 150, 243, 0.15)',
+              borderRadius: '8px',
+              pointerEvents: 'none',
+              zIndex: -1,
+              border: isPrimaryDrag ? '2px solid #2196f3' : 'none'
+            }}
+          />
+          
+          {/* Selection badge */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+              width: 18,
+              height: 18,
+              backgroundColor: isPrimaryDrag ? '#ff9800' : '#2196f3',
+              color: 'white',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: isPrimaryDrag ? '8px' : '10px',
+              fontWeight: 'bold',
+              zIndex: 1002,
+              pointerEvents: 'none',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+            }}
+          >
+            {isPrimaryDrag ? '◉' : '✓'}
+          </Box>
+        </>
+      )}
+
+      <Box
+        ref={trackRef}
+        onMouseDown={handleMouseDown}
+        onDoubleClick={handleDoubleClick}
+        className="track"
+        sx={trackStyle}
+        data-track-width={trackWidth} // Add data attribute for debugging
+        data-track-id={track.id} // Add for selection layer integration
+      >
+        {/* Left Resize Handle */}
+        <Box
+          className="resize-handle resize-handle-left"
           sx={{
-            position: 'absolute',
-            top: '0',
-            left: '0',
-            width: `${actualContentWidth}px`, // Set to full content width
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            opacity: 0.8,
-            pointerEvents: 'none', // Ensure content doesn't interfere
-            transform: `translateX(${getContentTransform()}px)`,
-            transition: isResizing ? 'none' : 'transform 0.2s ease',
+            ...resizeHandleStyle,
+            left: '-4px', // Position slightly outside/overlapping the left edge
           }}
-        >
-          {renderTrackContent()}
-        </Box>
+          onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
+        />
         
-        {/* Track Name */}
+        {/* Right Resize Handle */}
+        <Box
+          className="resize-handle resize-handle-right"
+          sx={{
+            ...resizeHandleStyle,
+            right: '-4px', // Position slightly outside/overlapping the right edge
+          }}
+          onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
+        />
+
+        {/* Track Timeline Content (Original Inner Box) */}
         <Box sx={{ 
-          position: 'absolute', 
-          left: 10, 
-          top: 6, 
-          color: 'white',
-          fontSize: '12px',
-          fontWeight: 'bold',
-          textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
-          pointerEvents: 'none' // Ensure content doesn't interfere
+          display: 'flex',
+          flex: 1,
+          position: 'relative',
+          overflow: 'hidden',
+          height: '100%',
+          width: `${trackWidth}px`,
+          margin: 0,
+          padding: 0,
+          boxSizing: 'border-box',
+          borderLeft: 'none',
+          borderRight: 'none',
+          background: `linear-gradient(180deg, ${trackColor}80 0%, ${trackColor} 100%)`,
+          opacity: track.mute ? 0.4 : 0.85,
+          '&:hover': {
+            opacity: track.mute ? 0.5 : 1,
+            boxShadow: 'inset 0 0 10px rgba(255,255,255,0.3)'
+          },
+          transition: 'opacity 0.2s ease',
+          pointerEvents: 'none' // Ensure content doesn't interfere with handles/dragging
         }}>
-          {track.name}
-        </Box>
-        
-        {/* Muted indicator */}
-        {track.mute && (
+          {/* Track Type Badge */}
           <Box sx={{
             position: 'absolute',
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(0,0,0,0.4)',
+            right: 10,
+            top: 5,
+            bgcolor: track.type === 'AUDIO' ? '#4caf50' : 
+                    track.type === 'MIDI' ? '#2196f3' : 
+                    track.type === 'DRUM' ? '#ff9800' : '#9c27b0',
             color: 'white',
-            fontSize: '14px',
+            fontSize: '10px',
             fontWeight: 'bold',
+            padding: '2px 6px',
+            borderRadius: '3px',
+            textTransform: 'uppercase',
+            opacity: 0.7,
             pointerEvents: 'none' // Ensure content doesn't interfere
           }}>
-            MUTED
+            {track.type}
           </Box>
-        )}
+          
+          {/* Content Wrapper - Visible part is controlled by the container's overflow: hidden */}
+          <Box 
+            ref={contentRef}
+            className="track-content-wrapper"
+            sx={{
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              width: `${actualContentWidth}px`, // Set to full content width
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              opacity: 0.8,
+              pointerEvents: 'none', // Ensure content doesn't interfere
+              transform: `translateX(${getContentTransform()}px)`,
+              transition: isResizing ? 'none' : 'transform 0.2s ease',
+            }}
+          >
+            {renderTrackContent()}
+          </Box>
+          
+          {/* Track Name */}
+          <Box sx={{ 
+            position: 'absolute', 
+            left: 10, 
+            top: 6, 
+            color: 'white',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
+            pointerEvents: 'none' // Ensure content doesn't interfere
+          }}>
+            {track.name}
+          </Box>
+          
+          {/* Muted indicator */}
+          {track.mute && (
+            <Box sx={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              color: 'white',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              pointerEvents: 'none' // Ensure content doesn't interfere
+            }}>
+              MUTED
+            </Box>
+          )}
+        </Box>
       </Box>
     </Box>
   );

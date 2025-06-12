@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo, useLayoutEffect } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useLayoutEffect, useCallback } from 'react';
 import { Box, Button } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
@@ -6,6 +6,7 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 // Import components
 import TrackControlsSidebar from './components/sidebar/TrackControlsSidebar';
 import { Timeline, TimelineRef } from './components/timeline/Timeline';
+import { CombinedTrack } from '../platform/types/project';
 import AddTrackMenu from './components/sidebar/AddTrackMenu';
 import { GRID_CONSTANTS } from './constants/gridConstants';
 import { useStudioStore } from './stores/studioStore';
@@ -71,6 +72,13 @@ function Studio({ projectId }: StudioProps) {
     addMenuAnchor,
     autoSaveStatus,
     autoSaveMessage,
+    selectedTrackIds,
+    
+    // Tool state
+    selectedTool,
+    snapToGrid,
+    setSelectedTool,
+    toggleSnapToGrid,
     
     // Actions
     initializeAudio,
@@ -84,6 +92,7 @@ function Studio({ projectId }: StudioProps) {
     undo,
     redo,
     setAutoSaveStatus,
+    setSelectedTrackIds,
     handleTrackVolumeChange,
     handleTrackPanChange,
     handleTrackMuteToggle,
@@ -91,8 +100,14 @@ function Studio({ projectId }: StudioProps) {
     handleTrackDelete,
     handleAddTrack,
     handleTrackPositionChange,
+    handleTrackResizeEnd,
     handleTrackNameChange,
     handleInstrumentChange,
+    // Group operations for clipboard functionality
+    duplicateTrack,
+    duplicateMultipleTracks,
+    deleteMultipleTracks,
+    updateMultipleTrackPositions,
     uploadAudioFile,
     setAddMenuAnchor,
     openDrumMachines,
@@ -309,6 +324,39 @@ function Studio({ projectId }: StudioProps) {
     return () => scrollContainer.removeEventListener("scroll", debounceScroll);
   }, [handleScroll]);
 
+  // Clipboard operation handlers
+  const handleCopyTracks = useCallback((tracks: CombinedTrack[]) => {
+    console.log('Copying tracks:', tracks.map(t => t.name));
+    // The interaction manager handles the clipboard state
+  }, []);
+
+  const handleCutTracks = useCallback((tracks: CombinedTrack[]) => {
+    console.log('Cutting tracks:', tracks.map(t => t.name));
+    // Cut = copy + delete
+    const trackIds = tracks.map(t => t.id);
+    deleteMultipleTracks(trackIds);
+  }, [deleteMultipleTracks]);
+
+  const handlePasteTracks = useCallback((tracks: CombinedTrack[], position?: { x: number; y: number }) => {
+    console.log('Pasting tracks:', tracks.map(t => t.name), 'at position:', position);
+    const trackIds = tracks.map(t => t.id);
+    // Calculate offset based on position or default to end of timeline
+    const offsetX = position?.x ?? 0;
+    duplicateMultipleTracks(trackIds, offsetX);
+  }, [duplicateMultipleTracks]);
+
+  const handleDeleteTracks = useCallback((trackIds: string[]) => {
+    console.log('Deleting tracks:', trackIds);
+    deleteMultipleTracks(trackIds);
+    // Clear selection after delete
+    setSelectedTrackIds([]);
+  }, [deleteMultipleTracks, setSelectedTrackIds]);
+
+  const handleDuplicateTracks = useCallback((trackIds: string[]) => {
+    console.log('Duplicating tracks:', trackIds);
+    duplicateMultipleTracks(trackIds);
+  }, [duplicateMultipleTracks]);
+
   // Determine the theme for the studio based on studioMode
   const currentStudioTheme = useMemo(() => {
     return studioMode === 'light' ? studioLightTheme : studioDarkTheme;
@@ -352,6 +400,11 @@ function Studio({ projectId }: StudioProps) {
           onChatToggle={handleChatToggle}
           onSettingsToggle={handleSettingsToggle}
           onAutoSaveRetry={() => autoSave.forceSave()}
+          selectedTool={selectedTool}
+          snapToGrid={snapToGrid}
+          showToolbar={true}
+          onToolChange={setSelectedTool}
+          onToggleSnapToGrid={toggleSnapToGrid}
         />
 
         {/* Main Content Area */}
@@ -536,6 +589,17 @@ function Studio({ projectId }: StudioProps) {
             gridLineStyle={{
               borderRight: `${GRID_CONSTANTS.borderWidth} solid ${GRID_CONSTANTS.borderColor}`
             }}
+            selectedTrackIds={selectedTrackIds}
+            onTrackSelect={setSelectedTrackIds}
+            onTrackDelete={handleTrackDelete}
+            onTrackResizeEnd={handleTrackResizeEnd}
+            selectedTool={selectedTool}
+            onToolChange={setSelectedTool}
+            onCopyTracks={handleCopyTracks}
+            onCutTracks={handleCutTracks}
+            onPasteTracks={handlePasteTracks}
+            onDeleteTracks={handleDeleteTracks}
+            onDuplicateTracks={handleDuplicateTracks}
             ref={scrollRef}
           />
           
