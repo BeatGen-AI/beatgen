@@ -147,15 +147,24 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     selectMultiple(allIds, true);
   }, [selectMultiple]);
 
-  // Grid snapping utility
+  // Grid snapping utility - use Math.floor like piano roll for consistent behavior
   const snapToGridValue = useCallback((value: number) => {
     if (!toolState.snapToGrid) return value;
-    return Math.round(value / toolState.gridSize) * toolState.gridSize;
+    return Math.floor(value / toolState.gridSize) * toolState.gridSize;
   }, [toolState.snapToGrid, toolState.gridSize]);
 
   // Drag management
   const startDrag = useCallback((itemId: string, startPosition: { x: number; y: number }, initialPositions: Record<string, { x: number; y: number }>) => {
+    console.log('[useInteractionManager] startDrag called:', {
+      itemId,
+      startPosition,
+      initialPositions,
+      selectedIds: selectionState.selectedIds
+    });
+    
     const isGroupDrag = selectionState.selectedIds.includes(itemId) && selectionState.selectedIds.length > 1;
+    
+    console.log('[useInteractionManager] startDrag - isGroupDrag:', isGroupDrag);
     
     setDragState({
       draggedItemId: itemId,
@@ -165,6 +174,7 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     });
 
     dragStartPos.current = startPosition;
+    console.log('[useInteractionManager] startDrag - calling onDragStart callback');
     onDragStart?.(itemId, selectionState.selectedIds);
   }, [selectionState.selectedIds, onDragStart]);
 

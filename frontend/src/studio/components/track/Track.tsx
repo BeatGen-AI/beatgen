@@ -27,6 +27,7 @@ interface TrackProps {
   isPrimaryDrag?: boolean;
   onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
   onTrackDoubleClick?: (trackId: string) => void;
+  interaction?: any;
 }
 
 function Track(props: TrackProps) {
@@ -39,7 +40,8 @@ function Track(props: TrackProps) {
     isGroupDrag = false,
     isPrimaryDrag = false,
     onTrackClick,
-    onTrackDoubleClick
+    onTrackDoubleClick,
+    interaction
   } = props;
   // Fix: Select tracks array individually
   const tracks = useStudioStore(state => state.tracks);
@@ -147,6 +149,7 @@ function Track(props: TrackProps) {
         isPrimaryDrag={isPrimaryDrag}
         onTrackClick={onTrackClick}
         onTrackDoubleClick={onTrackDoubleClick}
+        interaction={interaction}
       />
     </Box>
   );

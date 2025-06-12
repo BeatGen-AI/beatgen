@@ -74,6 +74,9 @@ export interface TracksSlice {
   duplicateMultipleTracks: (trackIds: string[], offsetX?: number) => Promise<CombinedTrack[]>;
   deleteMultipleTracks: (trackIds: string[]) => Promise<void>;
   resizeMultipleTracks: (trackIds: string[], widthDelta: number, anchor: 'left' | 'right') => Promise<void>;
+  
+  // Group position operations for group moving
+  updateMultipleTrackPositions: (trackIds: string[], deltaX: number, deltaY: number) => Promise<void>;
 }
 
 // Remove local type alias if it causes confusion
@@ -1108,6 +1111,35 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     return _withErrorHandling(resizeMultipleLogic, `resizeMultipleTracks`)();
   };
 
+  const updateMultipleTrackPositions = async (trackIds: string[], deltaX: number, deltaY: number): Promise<void> => {
+    const { tracks, _withErrorHandling } = rootGet();
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available");
+      return;
+    }
+
+    const updatePositionsLogic = async (): Promise<void> => {
+      console.log(`Updating positions for ${trackIds.length} tracks with delta: x=${deltaX}, y=${deltaY}`);
+      
+      // Update positions for all specified tracks
+      trackIds.forEach(trackId => {
+        const track = tracks.find(t => t.id === trackId);
+        if (track) {
+          const newX = Math.max(0, track.x_position + deltaX);
+          const newY = Math.max(0, track.y_position + deltaY);
+          
+          // Update track position using existing method
+          updateTrackState(trackId, {
+            x_position: newX,
+            y_position: newY
+          });
+        }
+      });
+    };
+
+    return _withErrorHandling(updatePositionsLogic, `updateMultipleTrackPositions`)();
+  };
+
   // --- Initial State & Return --- 
   return {
     tracks: [],
@@ -1160,5 +1192,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     duplicateMultipleTracks,
     deleteMultipleTracks,
     resizeMultipleTracks,
+    
+    // Group position operations for group moving
+    updateMultipleTrackPositions,
   };
 };
