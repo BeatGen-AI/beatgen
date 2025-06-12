@@ -20,6 +20,8 @@ interface TrackFactoryProps extends TrackPreviewProps {
   selectedTool?: Tool;
   isGroupDrag?: boolean;
   isPrimaryDrag?: boolean;
+  isGroupResize?: boolean;
+  isPrimaryResize?: boolean;
   onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
   onTrackDoubleClick?: (trackId: string) => void;
   interaction?: any;
@@ -35,6 +37,8 @@ export const TrackFactory: React.FC<TrackFactoryProps> = (props) => {
     selectedTool,
     isGroupDrag,
     isPrimaryDrag,
+    isGroupResize,
+    isPrimaryResize,
     onTrackClick,
     onTrackDoubleClick,
     interaction
@@ -64,6 +68,8 @@ export const TrackFactory: React.FC<TrackFactoryProps> = (props) => {
     selectedTool,
     isGroupDrag,
     isPrimaryDrag,
+    isGroupResize,
+    isPrimaryResize,
     onTrackClick,
     onTrackDoubleClick,
     interaction
