@@ -21,6 +21,7 @@ interface AudioTrackPreviewProps extends TrackPreviewProps {
   isPrimaryDrag?: boolean;
   onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
   onTrackDoubleClick?: (trackId: string) => void;
+  interaction?: any;
 }
 
 export const AudioTrackPreview: React.FC<AudioTrackPreviewProps> = (props) => {
@@ -37,6 +38,7 @@ export const AudioTrackPreview: React.FC<AudioTrackPreviewProps> = (props) => {
     isPrimaryDrag,
     onTrackClick,
     onTrackDoubleClick,
+    interaction,
     ...restProps 
   } = props;
   
@@ -112,6 +114,7 @@ export const AudioTrackPreview: React.FC<AudioTrackPreviewProps> = (props) => {
       isPrimaryDrag={isPrimaryDrag}
       onTrackClick={onTrackClick}
       onTrackDoubleClick={onTrackDoubleClick}
+      interaction={interaction}
     />
   );
 };

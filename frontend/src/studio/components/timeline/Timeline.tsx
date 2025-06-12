@@ -1,7 +1,7 @@
 import React, { forwardRef, useRef, useImperativeHandle, useState } from 'react';
 import { Box, useTheme } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { GRID_CONSTANTS, calculatePositionTime, ticksToPixels, calculateTrackWidth } from '../../constants/gridConstants';
+import { GRID_CONSTANTS, calculatePositionTime, ticksToPixels, pixelsToTicks, calculateTrackWidth } from '../../constants/gridConstants';
 import Track from '../track/Track';
 import PlaybackCursor, { PlaybackCursorRef } from './PlaybackCursor';
 import { CombinedTrack } from 'src/platform/types/project';
@@ -9,6 +9,7 @@ import { Position } from '../track/types';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import { cn } from '@/lib/utils';
 import { useInteractionManager, SelectionOverlay, InteractionToolbar, Tool } from '../../shared/interactions';
+import { getSnapSizeInPixels, GridSnapOption } from '../piano-roll2/gridConstants';
 
 export interface TimelineProps {
   tracks: CombinedTrack[];
@@ -96,38 +97,192 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   
   // Track if we just completed a selection
   const [justCompletedSelection, setJustCompletedSelection] = useState(false);
+  
+  // State for group drag operations
+  const [groupDragState, setGroupDragState] = useState<{
+    isDragging: boolean;
+    initialPositions: Record<string, { x: number; y: number }>;
+    draggedTrackId: string | null;
+  }>({
+    isDragging: false,
+    initialPositions: {},
+    draggedTrackId: null
+  });
 
+  // State for grid snap options
+  const [gridSnapSize, setGridSnapSize] = useState(GridSnapOption.STEP); // Default to "Step" snap
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
+  
+  // Calculate actual grid size based on snap option
+  const effectiveGridSize = GRID_CONSTANTS.measureWidth / (timeSignature[0] * 4); // Size of one step
+  const actualSnapSize = React.useMemo(() => {
+    return getSnapSizeInPixels(gridSnapSize, effectiveGridSize);
+  }, [gridSnapSize, effectiveGridSize]);
+  
   // Initialize interaction manager for track selection
   const interaction = useInteractionManager({
     initialTool: selectedTool,
-    snapToGrid: true,
-    gridSize: GRID_CONSTANTS.measureWidth / 16, // 16th note grid
+    snapToGrid: gridSnapEnabled,
+    gridSize: actualSnapSize,
     onSelectionChange: (selectedIds) => {
       onTrackSelect?.(selectedIds);
     },
     onDragStart: (itemId, selectedIds) => {
-      console.log('Track drag started:', itemId, selectedIds);
+      console.log('[Timeline] onDragStart called:', { itemId, selectedIds });
+      
+      // Determine which tracks will be affected by the drag
+      const tracksToMove = selectedIds.length > 1 && selectedIds.includes(itemId) 
+        ? selectedIds 
+        : [itemId];
+      
+      console.log('[Timeline] Tracks to move:', tracksToMove);
+      
+      // Store initial positions for all tracks that will be moved
+      const initialPositions: Record<string, { x: number; y: number }> = {};
+      tracksToMove.forEach(trackId => {
+        const track = tracks.find(t => t.id === trackId);
+        if (track) {
+          initialPositions[trackId] = {
+            x: track.x_position,
+            y: track.y_position
+          };
+          console.log('[Timeline] Storing initial position for track:', {
+            trackId,
+            x_position: track.x_position,
+            y_position: track.y_position
+          });
+        }
+      });
+      
+      console.log('[Timeline] Initial positions stored:', initialPositions);
+      
+      // Update group drag state
+      setGroupDragState({
+        isDragging: true,
+        initialPositions,
+        draggedTrackId: itemId
+      });
     },
     onDragMove: (itemId, delta) => {
-      // Handle track position updates during drag
-      const track = tracks.find(t => t.id === itemId);
-      if (track) {
-        onTrackPositionChange?.(itemId, {
-          x: Math.max(0, track.x_position + delta.x),
-          y: Math.max(0, track.y_position + delta.y)
-        }, false);
+      console.log('[Timeline] onDragMove called:', {
+        itemId,
+        delta,
+        selectedIds: interaction.selectionState.selectedIds,
+        groupDragState: groupDragState.isDragging,
+        initialPositions: Object.keys(groupDragState.initialPositions)
+      });
+      
+      // The delta is already snapped by the interaction manager
+      // Convert the snapped pixel delta to ticks
+      const deltaTicks = pixelsToTicks(Math.abs(delta.x), bpm, timeSignature) * (delta.x >= 0 ? 1 : -1);
+      
+      // Determine if this is a group drag based on how many tracks we stored initial positions for
+      const tracksInGroup = Object.keys(groupDragState.initialPositions);
+      const isGroupDrag = tracksInGroup.length > 1 && tracksInGroup.includes(itemId);
+      
+      console.log('[Timeline] Drag mode:', { 
+        isGroupDrag, 
+        deltaTicks, 
+        deltaPixels: delta.x,
+        tracksInGroup,
+        itemId,
+        snapSize: actualSnapSize
+      });
+      
+      // Calculate snap size in ticks for position snapping
+      const snapSizeTicks = pixelsToTicks(actualSnapSize, bpm, timeSignature);
+      
+      if (isGroupDrag) {
+        // Apply cumulative delta to all tracks that have initial positions stored
+        tracksInGroup.forEach(trackId => {
+          const initialPos = groupDragState.initialPositions[trackId];
+          if (initialPos) {
+            // Calculate new position by adding delta to initial position
+            let newX = initialPos.x + deltaTicks;
+            
+            // Snap the position if grid snap is enabled
+            if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
+              newX = Math.floor(newX / snapSizeTicks) * snapSizeTicks;
+            }
+            
+            newX = Math.max(0, newX);
+            const newY = Math.max(0, initialPos.y + delta.y);
+            
+            console.log('[Timeline] Moving track in group:', { 
+              trackId, 
+              initialX: initialPos.x, 
+              newX, 
+              deltaTicks,
+              snapSizeTicks,
+              snapped: gridSnapEnabled
+            });
+            onTrackPositionChange?.(trackId, { x: newX, y: newY }, false);
+          }
+        });
+      } else {
+        // Single track drag
+        const initialPos = groupDragState.initialPositions[itemId];
+        if (initialPos) {
+          // Calculate new position by adding delta to initial position
+          let newX = initialPos.x + deltaTicks;
+          
+          // Snap the position if grid snap is enabled
+          if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
+            newX = Math.floor(newX / snapSizeTicks) * snapSizeTicks;
+          }
+          
+          newX = Math.max(0, newX);
+          const newY = Math.max(0, initialPos.y + delta.y);
+          
+          console.log('[Timeline] Moving single track:', { 
+            trackId: itemId, 
+            initialX: initialPos.x, 
+            newX, 
+            deltaTicks,
+            snapSizeTicks,
+            snapped: gridSnapEnabled
+          });
+          onTrackPositionChange?.(itemId, { x: newX, y: newY }, false);
+        } else {
+          console.warn('[Timeline] No initial position for single track:', itemId);
+        }
       }
     },
     onDragEnd: (itemId, selectedIds) => {
       console.log('Track drag ended:', itemId, selectedIds);
-      // Final position update
-      const track = tracks.find(t => t.id === itemId);
-      if (track) {
-        onTrackPositionChange?.(itemId, {
-          x: track.x_position,
-          y: track.y_position
-        }, true);
+      
+      // Determine if this was a group drag based on how many tracks we stored initial positions for
+      const tracksInGroup = Object.keys(groupDragState.initialPositions);
+      const isGroupDrag = tracksInGroup.length > 1 && tracksInGroup.includes(itemId);
+      
+      if (isGroupDrag) {
+        // Send final position updates for all tracks that were moved
+        tracksInGroup.forEach(trackId => {
+          const track = tracks.find(t => t.id === trackId);
+          if (track) {
+            onTrackPositionChange?.(trackId, {
+              x: track.x_position,
+              y: track.y_position
+            }, true);
+          }
+        });
+      } else {
+        // Single track drag end
+        const track = tracks.find(t => t.id === itemId);
+        if (track) {
+          onTrackPositionChange?.(itemId, {
+            x: track.x_position,
+            y: track.y_position
+          }, true);
+        }
       }
+      
+      // Reset group drag state
+      setGroupDragState({
+        isDragging: false,
+        initialPositions: {},
+        draggedTrackId: null
+      });
     },
     onItemClick: (itemId, tool) => {
       switch (tool) {
@@ -147,18 +302,18 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     },
     // Clipboard operations
     onCopy: (items) => {
-      const trackItems = items.filter(item => item.type === 'track') as (CombinedTrack & { type: 'track' })[];
-      const fullTracks = trackItems.map(item => tracks.find(t => t.id === item.id)).filter(Boolean) as CombinedTrack[];
+      const trackIds = items.map(item => item.id);
+      const fullTracks = tracks.filter(t => trackIds.includes(t.id));
       onCopyTracks?.(fullTracks);
     },
     onCut: (items) => {
-      const trackItems = items.filter(item => item.type === 'track') as (CombinedTrack & { type: 'track' })[];
-      const fullTracks = trackItems.map(item => tracks.find(t => t.id === item.id)).filter(Boolean) as CombinedTrack[];
+      const trackIds = items.map(item => item.id);
+      const fullTracks = tracks.filter(t => trackIds.includes(t.id));
       onCutTracks?.(fullTracks);
     },
     onPaste: (items, position) => {
-      const trackItems = items.filter(item => item.type === 'track') as (CombinedTrack & { type: 'track' })[];
-      const fullTracks = trackItems.map(item => tracks.find(t => t.id === item.id)).filter(Boolean) as CombinedTrack[];
+      const trackIds = items.map(item => item.id);
+      const fullTracks = tracks.filter(t => trackIds.includes(t.id));
       onPasteTracks?.(fullTracks, position);
     },
     onDelete: (itemIds) => {
@@ -169,13 +324,41 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     }
   });
 
+  // Sync external selection state with interaction manager
+  React.useEffect(() => {
+    // Sync selectedTrackIds with interaction manager
+    const currentSelection = interaction.selectionState.selectedIds;
+    const isDifferent = selectedTrackIds.length !== currentSelection.length || 
+                       !selectedTrackIds.every(id => currentSelection.includes(id));
+    
+    if (isDifferent) {
+      console.log('[Timeline] Syncing selection state with interaction manager:', {
+        selectedTrackIds,
+        currentSelection
+      });
+      
+      if (selectedTrackIds.length > 0) {
+        interaction.selectMultiple(selectedTrackIds, true);
+      } else {
+        interaction.clearSelection();
+      }
+    }
+  }, [selectedTrackIds]);
+  
+  // Update interaction manager grid size when snap size changes
+  React.useEffect(() => {
+    interaction.setGridSize(actualSnapSize);
+  }, [actualSnapSize]);
+
   // Keyboard event handling for clipboard operations
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Convert tracks to selectable items for the interaction manager
       const selectableItems = tracks.map(track => ({
-        ...track,
-        type: 'track' as const
+        id: track.id,
+        type: 'track' as const,
+        x: track.x_position,
+        y: track.y_position
       }));
       
       interaction.handleKeyDown(event, selectableItems);
@@ -233,8 +416,11 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
               interaction.setTool(tool);
               onToolChange?.(tool);
             }}
-            snapToGrid={interaction.toolState.snapToGrid}
-            onToggleSnapToGrid={interaction.toggleSnapToGrid}
+            snapToGrid={gridSnapEnabled}
+            onToggleSnapToGrid={() => {
+              setGridSnapEnabled(!gridSnapEnabled);
+              interaction.toggleSnapToGrid();
+            }}
             showGridToggle={true}
             orientation="horizontal"
             size="small"
@@ -768,6 +954,7 @@ function TimelineContent({
           onTrackDoubleClick={(trackId) => {
             interaction.handleItemDoubleClick(trackId);
           }}
+          interaction={interaction}
           // gridLineStyle={gridLineStyle} // Removed, GridOverlay handles this
         />
       ))}

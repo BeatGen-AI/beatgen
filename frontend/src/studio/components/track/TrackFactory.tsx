@@ -22,6 +22,7 @@ interface TrackFactoryProps extends TrackPreviewProps {
   isPrimaryDrag?: boolean;
   onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
   onTrackDoubleClick?: (trackId: string) => void;
+  interaction?: any;
 }
 
 export const TrackFactory: React.FC<TrackFactoryProps> = (props) => {
@@ -35,7 +36,8 @@ export const TrackFactory: React.FC<TrackFactoryProps> = (props) => {
     isGroupDrag,
     isPrimaryDrag,
     onTrackClick,
-    onTrackDoubleClick
+    onTrackDoubleClick,
+    interaction
   } = props;
   const trackColor = providedTrackColor || getTrackColor(trackIndex);
   
@@ -63,7 +65,8 @@ export const TrackFactory: React.FC<TrackFactoryProps> = (props) => {
     isGroupDrag,
     isPrimaryDrag,
     onTrackClick,
-    onTrackDoubleClick
+    onTrackDoubleClick,
+    interaction
   };
 
   switch(trackType) {

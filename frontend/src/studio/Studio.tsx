@@ -106,6 +106,7 @@ function Studio({ projectId }: StudioProps) {
     duplicateTrack,
     duplicateMultipleTracks,
     deleteMultipleTracks,
+    updateMultipleTrackPositions,
     uploadAudioFile,
     setAddMenuAnchor,
     openDrumMachines,

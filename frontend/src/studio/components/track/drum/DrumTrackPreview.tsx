@@ -9,6 +9,7 @@ import BaseTrackPreview from '../base/BaseTrackPreview';
 import { TrackPreviewProps } from '../types';
 import DrumGridPreview from './DrumGridPreview';
 import { MUSIC_CONSTANTS } from '../../../constants/musicConstants';
+import { Tool } from '../../../shared/interactions';
 
 const TICKS_PER_STEP = MUSIC_CONSTANTS.pulsesPerQuarterNote / 4;
 const MAX_COLUMNS = 64;
@@ -20,7 +21,17 @@ const MAX_COLUMNS = 64;
  * Includes a trigger area to open the piano roll editor in drum mode.
  */
 
-export const DrumTrackPreview: React.FC<TrackPreviewProps> = (props) => {
+interface DrumTrackPreviewProps extends TrackPreviewProps {
+  isSelected?: boolean;
+  selectedTool?: Tool;
+  isGroupDrag?: boolean;
+  isPrimaryDrag?: boolean;
+  onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
+  onTrackDoubleClick?: (trackId: string) => void;
+  interaction?: any;
+}
+
+export const DrumTrackPreview: React.FC<DrumTrackPreviewProps> = (props) => {
   const { 
     track, 
     timeSignature = [4, 4],
@@ -28,6 +39,13 @@ export const DrumTrackPreview: React.FC<TrackPreviewProps> = (props) => {
     trackColor: providedTrackColor,
     trackWidth: providedTrackWidth,
     onResizeEnd,
+    isSelected,
+    selectedTool,
+    isGroupDrag,
+    isPrimaryDrag,
+    onTrackClick,
+    onTrackDoubleClick,
+    interaction,
     ...restProps
   } = props;
   
@@ -120,6 +138,13 @@ export const DrumTrackPreview: React.FC<TrackPreviewProps> = (props) => {
       renderTrackContent={renderTrackContent}
       trackIndex={trackIndex}
       onResizeEnd={onResizeEnd}
+      isSelected={isSelected}
+      selectedTool={selectedTool}
+      isGroupDrag={isGroupDrag}
+      isPrimaryDrag={isPrimaryDrag}
+      onTrackClick={onTrackClick}
+      onTrackDoubleClick={onTrackDoubleClick}
+      interaction={interaction}
     />
   );
 };
