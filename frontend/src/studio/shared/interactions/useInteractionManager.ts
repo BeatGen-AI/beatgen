@@ -8,7 +8,7 @@ interface UseInteractionManagerOptions {
   gridSize?: number;
   onSelectionChange?: (selectedIds: string[]) => void;
   onDragStart?: (itemId: string, selectedIds: string[]) => void;
-  onDragMove?: (itemId: string, delta: { x: number; y: number }) => void;
+  onDragMove?: (itemId: string, delta: { x: number; y: number }, mousePosition?: { x: number; y: number }, mouseOffset?: { x: number; y: number }) => void;
   onDragEnd?: (itemId: string, selectedIds: string[]) => void;
   onItemClick?: (itemId: string, tool: Tool) => void;
   onItemDoubleClick?: (itemId: string) => void;
@@ -154,11 +154,12 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
   }, [toolState.snapToGrid, toolState.gridSize]);
 
   // Drag management
-  const startDrag = useCallback((itemId: string, startPosition: { x: number; y: number }, initialPositions: Record<string, { x: number; y: number }>) => {
+  const startDrag = useCallback((itemId: string, startPosition: { x: number; y: number }, initialPositions: Record<string, { x: number; y: number }>, mouseOffset?: { x: number; y: number }) => {
     console.log('[useInteractionManager] startDrag called:', {
       itemId,
       startPosition,
       initialPositions,
+      mouseOffset,
       selectedIds: selectionState.selectedIds
     });
     
@@ -174,6 +175,9 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     });
 
     dragStartPos.current = startPosition;
+    // Store mouse offset for position-based dragging
+    (dragStartPos.current as any).mouseOffset = mouseOffset || { x: 0, y: 0 };
+    
     console.log('[useInteractionManager] startDrag - calling onDragStart callback');
     onDragStart?.(itemId, selectionState.selectedIds);
   }, [selectionState.selectedIds, onDragStart]);
@@ -194,7 +198,9 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
       dragOffset: snappedDelta
     }));
 
-    onDragMove?.(dragState.draggedItemId, snappedDelta);
+    // Pass delta, current position, and mouse offset for flexible position calculation
+    const mouseOffset = (dragStartPos.current as any).mouseOffset || { x: 0, y: 0 };
+    onDragMove?.(dragState.draggedItemId, snappedDelta, currentPosition, mouseOffset);
   }, [dragState.draggedItemId, snapToGridValue, onDragMove]);
 
   const endDrag = useCallback(() => {

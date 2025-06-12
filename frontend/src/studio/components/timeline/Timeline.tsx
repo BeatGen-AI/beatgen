@@ -163,10 +163,12 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         draggedTrackId: itemId
       });
     },
-    onDragMove: (itemId, delta) => {
+    onDragMove: (itemId, delta, mousePosition, mouseOffset) => {
       console.log('[Timeline] onDragMove called:', {
         itemId,
         delta,
+        mousePosition,
+        mouseOffset,
         selectedIds: interaction.selectionState.selectedIds,
         groupDragState: groupDragState.isDragging,
         initialPositions: Object.keys(groupDragState.initialPositions)
@@ -186,7 +188,9 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         deltaPixels: delta.x,
         tracksInGroup,
         itemId,
-        snapSize: actualSnapSize
+        snapSize: actualSnapSize,
+        mouseY: mousePosition?.y,
+        mouseOffsetY: mouseOffset?.y
       });
       
       // Calculate snap size in ticks for position snapping
@@ -199,15 +203,25 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         
         // Calculate intended position for the dragged track
         let draggedNewX = draggedInitialPos.x + deltaTicks;
-        let draggedNewY = draggedInitialPos.y + delta.y;
+        
+        // For Y position, use absolute mouse position if available for more responsive dragging
+        let draggedNewY;
+        if (mousePosition && mouseOffset) {
+          // Calculate where the track should be based on mouse position
+          // The track should be positioned so the grabbed point stays under the mouse
+          const targetY = mousePosition.y - mouseOffset.y;
+          // Snap to track row height
+          draggedNewY = Math.round(targetY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
+        } else {
+          // Fallback to delta-based calculation
+          draggedNewY = draggedInitialPos.y + delta.y;
+          draggedNewY = Math.round(draggedNewY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
+        }
         
         // Snap X position if enabled
         if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
           draggedNewX = Math.floor(draggedNewX / snapSizeTicks) * snapSizeTicks;
         }
-        
-        // Snap Y to track row height
-        draggedNewY = Math.floor(draggedNewY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
         
         // Apply boundaries to dragged track
         draggedNewX = Math.max(0, draggedNewX);
@@ -243,15 +257,24 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
         if (initialPos) {
           // Calculate new position by adding delta to initial position
           let newX = initialPos.x + deltaTicks;
-          let newY = initialPos.y + delta.y;
+          
+          // For Y position, use absolute mouse position if available for more responsive dragging
+          let newY;
+          if (mousePosition && mouseOffset) {
+            // Calculate where the track should be based on mouse position
+            const targetY = mousePosition.y - mouseOffset.y;
+            // Snap to track row height
+            newY = Math.round(targetY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
+          } else {
+            // Fallback to delta-based calculation
+            newY = initialPos.y + delta.y;
+            newY = Math.round(newY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
+          }
           
           // Snap X position if grid snap is enabled
           if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
             newX = Math.floor(newX / snapSizeTicks) * snapSizeTicks;
           }
-          
-          // Snap Y to track row height
-          newY = Math.floor(newY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
           
           // Apply boundaries
           newX = Math.max(0, newX);

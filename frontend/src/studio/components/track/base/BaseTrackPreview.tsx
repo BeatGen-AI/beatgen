@@ -274,6 +274,14 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         y: e.clientY + (container.scrollTop || 0)
       };
       
+      // Calculate mouse offset within the track
+      // This is where the user clicked relative to the track's top-left corner
+      const trackPixelX = ticksToPixels(track.x_position, bpm, timeSignature);
+      const mouseOffset = {
+        x: mousePosition.x - trackPixelX,
+        y: mousePosition.y - track.y_position
+      };
+      
       // Create initial positions map for the interaction manager
       const initialPositions: Record<string, { x: number; y: number }> = {
         [track.id]: {
@@ -282,8 +290,8 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         }
       };
       
-      console.log('[BaseTrackPreview] Calling interaction.startDrag');
-      interaction.startDrag(track.id, mousePosition, initialPositions);
+      console.log('[BaseTrackPreview] Calling interaction.startDrag with mouseOffset:', mouseOffset);
+      interaction.startDrag(track.id, mousePosition, initialPositions, mouseOffset);
       
       e.preventDefault();
       return;
