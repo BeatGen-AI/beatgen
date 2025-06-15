@@ -143,12 +143,12 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Convert pixel coordinates to logical units
   const pixelsToLogical = useCallback((pixels: number) => {
-    return pixels / (pixelsPerUnit * zoom);
+    return pixels / (pixelsPerUnit);
   }, [pixelsPerUnit, zoom]);
 
   // Convert logical units to pixels
   const logicalToPixels = useCallback((logical: number) => {
-    return logical * pixelsPerUnit * zoom;
+    return logical * pixelsPerUnit;
   }, [pixelsPerUnit, zoom]);
 
   // Snap value to grid
