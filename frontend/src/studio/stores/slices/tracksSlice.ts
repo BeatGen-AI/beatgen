@@ -1229,11 +1229,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           const newX = Math.max(0, track.x_position + deltaX);
           const newY = Math.max(0, track.y_position + deltaY);
           
-          // Update track position using existing method
-          updateTrackState(trackId, {
-            x_position: newX,
-            y_position: newY
-          });
+          // Use handleTrackPositionChange to properly update audio engine and history
+          handleTrackPositionChange(trackId, { x: newX, y: newY }, true);
         }
       });
     };

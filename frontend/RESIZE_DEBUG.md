@@ -1,29 +1,39 @@
-# Resize Debug Notes
+# Resize Debug Guide
 
-## Current State Analysis
+## Issue
+Custom resize handles are not working - tracks don't resize when dragging the handles.
 
-### What's Implemented:
-1. **Grid Menu**: Already exists in InteractionToolbar with all snap options
-2. **Snap Logic**: Exists in both interaction manager and BaseTrackPreview
-3. **Group Resize**: Timeline tracks resize delta changes and passes to tracks
+## Debug Steps
 
-### Issues Found:
-1. **DOM Manipulation**: Timeline was directly manipulating DOM instead of using React state
-2. **Two Code Paths**: Resize has two paths - interaction manager (group) and fallback (individual)
-3. **Possible Snap Issue**: Need to verify actualSnapSize is being used correctly
+### 1. Check if resize is starting
+Look for console log: `[useKonvaInteractions] Starting resize:`
+- If not appearing, the mouse down event isn't reaching the interaction system
+- Check if `onResizeStart` is being called in KonvaTrack
 
-### Changes Made:
-1. Added resize delta state to Timeline
-2. Modified onResizeMove to store delta in state instead of DOM manipulation
-3. Added props to pass resize delta through Track -> TrackFactory -> BaseTrackPreview
-4. Added effect in BaseTrackPreview to handle resize delta from props
+### 2. Check if resize is updating
+Look for console log: `[useKonvaInteractions] Resize update:`
+- If not appearing, mouse move events aren't being captured during resize
+- Check if the stage event listeners are properly set up
 
-### To Test:
-1. Check if toolbar with grid menu is visible
-2. Test if changing grid size affects resize snapping
-3. Verify resize snaps during drag (not just on release)
-4. Test both individual and group resize
+### 3. Check if preview width is updating
+In KonvaTimeline, check if `resizePreviewWidths` state is being updated
+- Add console.log in `onResizeMove` callback
+- Verify the width calculations are correct
 
-### Potential Issues:
-- The fallback resize path might not be using actualSnapSize correctly
-- Need to ensure both resize paths use consistent snapping
+### 4. Check if preview width is passed to track
+Verify that `previewWidth` prop is being passed to KonvaTrack
+- Should see the track width change during resize
+
+## Potential Issues
+
+1. **Event propagation**: The resize handle mouseDown might be bubbling up
+2. **Stage event listeners**: The interaction system might not be capturing mouse move
+3. **Width calculation**: The logical to pixel conversion might be incorrect
+4. **State updates**: The preview widths might not be triggering re-renders
+
+## Test Procedure
+1. Open the Konva timeline
+2. Add or select a track
+3. Hover over the left or right edge - cursor should change
+4. Click and drag - track should resize with preview
+5. Release - track should update to new size

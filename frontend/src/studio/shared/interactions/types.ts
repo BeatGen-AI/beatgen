@@ -1,5 +1,13 @@
 export type Tool = 'select' | 'pen' | 'highlighter' | 'eraser';
 
+export interface DraggableResizableItem {
+  id: string | number;
+  x: number; // In logical units (ticks)
+  y: number; // In visual units (pixels)
+  width: number; // In logical units (ticks)
+  height?: number; // In visual units (pixels)
+}
+
 export interface Selectable {
   id: string;
   type: 'note' | 'track';

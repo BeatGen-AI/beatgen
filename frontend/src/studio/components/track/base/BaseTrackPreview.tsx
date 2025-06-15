@@ -118,33 +118,10 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   // Refs and state for drag functionality
   const trackRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startDragMousePosition, setStartDragMousePosition] = useState({ x: 0, y: 0 });
-  const [startDragTrackPosition, setStartDragTrackPosition] = useState({ x: 0, y: 0 });
-  const lastMovedPositionRef = useRef<Position>({ x: track.x_position, y: track.y_position });
   
   // Track the content transform during left-side resize
   const [contentTransform, setContentTransform] = useState(0);
   
-  // Store the trackWidth in a ref to ensure we maintain it during operations
-  const trackWidthRef = useRef(trackWidth);
-  useEffect(() => {
-    trackWidthRef.current = trackWidth;
-  }, [trackWidth]);
-
-  // Refs and state for resize functionality
-  const [isResizing, setIsResizing] = useState(false);
-  const [resizeDirection, setResizeDirection] = useState<'left' | 'right' | null>(null);
-  const [isInteractionManaged, setIsInteractionManaged] = useState(false); // Track if resize is managed by interaction manager
-  const [startResizeInfo, setStartResizeInfo] = useState<{ 
-    startMouseX: number, 
-    startTrackX: number, 
-    startTrackWidth: number,
-    startContentTransform?: number 
-  } | null>(null);
-  const lastResizeDataRef = useRef<{ newX: number, newWidth: number }>({ newX: track.x_position, newWidth: trackWidth });
-  const MIN_TRACK_WIDTH_SNAP_UNITS = 1; // Minimum width in terms of smallest grid subdivision
-
   // Calculate the normal content offset for trimming from the beginning
   const calculateContentOffset = () => {
     if (!track.duration_ticks || !track.trim_start_ticks) return 0;
@@ -166,7 +143,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     if (isSelected) {
       baseSelectionStyles.outline = '3px solid #2196f3';
       baseSelectionStyles.outlineOffset = '-2px';
-      baseSelectionStyles.zIndex = isDragging || isResizing ? 1001 : 1001; // Selected tracks have higher z-index
+      baseSelectionStyles.zIndex = 1001; // Selected tracks have higher z-index
       
       if (isGroupDrag) {
         baseSelectionStyles.transform = 'scale(1.02)';
@@ -199,11 +176,11 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     boxSizing: 'border-box',
     borderBottom: `1px solid ${GRID_CONSTANTS.borderColor}`,
     borderRadius: '6px',
-    left: `${track.x_position}px`,
+    left: `${ticksToPixels(track.x_position, bpm, timeSignature)}px`,
     top: `${track.y_position}px`,
-    cursor: isDragging ? 'grabbing' : (isResizing ? 'ew-resize' : isSelected ? 'grab' : getToolCursor()),
-    zIndex: isSelected ? 1001 : (isDragging || isResizing ? 1001 : 1000),
-    transition: isDragging || isResizing || isGroupDrag ? 'none' : 'width 0.2s ease, left 0.2s ease, top 0.2s ease, transform 0.2s ease',
+    cursor: isSelected ? 'grab' : getToolCursor(),
+    zIndex: isSelected ? 1001 : 1000,
+    transition: (interaction?.isDragging || interaction?.isResizing || isGroupDrag || isGroupResize) ? 'none' : 'width 0.2s ease, left 0.2s ease, top 0.2s ease, transform 0.2s ease',
     '&:hover': {
       boxShadow: `0 0 12px ${trackColor}`,
       zIndex: 9999
@@ -279,84 +256,38 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     }
 
     // Use interaction manager for coordinated drag operations
-    if (interaction && selectedTool === 'select') {
+    if (interaction && selectedTool === 'select' && interaction.startDrag) {
       console.log('[BaseTrackPreview] Starting interaction manager drag process');
       
       // Find container element for scroll offset
-      const container = 
-        trackRef.current.closest('.timeline-container') || 
-        trackRef.current.closest('.MuiBox-root') ||
-        trackRef.current.parentElement?.parentElement;
+      const container = trackRef.current.closest('.timeline-container');
         
       if (!container) {
-        console.log('[BaseTrackPreview] No container found for interaction manager');
+        console.log('[BaseTrackPreview] No timeline-container found for interaction manager');
         return;
       }
       
-      // Calculate mouse position with scroll offset
-      const mousePosition = {
-        x: e.clientX + (container.scrollLeft || 0),
-        y: e.clientY + (container.scrollTop || 0)
-      };
+      // Get the bounding rect to calculate proper position
+      const rect = trackRef.current.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
       
-      // Calculate mouse offset within the track
-      // This is where the user clicked relative to the track's top-left corner
-      const trackPixelX = ticksToPixels(track.x_position, bpm, timeSignature);
+      // Calculate mouse offset within the track (where the user clicked relative to track's top-left)
       const mouseOffset = {
-        x: mousePosition.x - trackPixelX,
-        y: mousePosition.y - track.y_position
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
       };
       
-      // Create initial positions map for the interaction manager
-      const initialPositions: Record<string, { x: number; y: number }> = {
-        [track.id]: {
-          x: track.x_position,
-          y: track.y_position
-        }
+      // Calculate absolute mouse position in the container's coordinate space
+      const mousePosition = {
+        x: e.clientX - containerRect.left + container.scrollLeft,
+        y: e.clientY - containerRect.top + container.scrollTop
       };
       
       console.log('[BaseTrackPreview] Calling interaction.startDrag with mouseOffset:', mouseOffset);
-      interaction.startDrag(track.id, mousePosition, initialPositions, mouseOffset);
+      interaction.startDrag(track.id, mousePosition, mouseOffset);
       
       e.preventDefault();
-      return;
     }
-    
-    console.log('[BaseTrackPreview] Using fallback drag logic');
-
-    // Fallback: original individual drag logic for cases without interaction manager
-    // Find container element for scroll offset
-    const container = 
-      trackRef.current.closest('.timeline-container') || 
-      trackRef.current.closest('.MuiBox-root') ||
-      trackRef.current.parentElement?.parentElement;
-      
-    if (!container) return;
-    
-    // Store initial positions
-    setStartDragMousePosition({
-      x: e.clientX + (container.scrollLeft || 0),
-      y: e.clientY + (container.scrollTop || 0)
-    });
-    
-    // Convert track position from ticks to pixels before storing
-    const positionXPixels = ticksToPixels(track.x_position, bpm, timeSignature);
-    setStartDragTrackPosition({
-      x: positionXPixels, // Store in pixels for consistent drag calculations
-      y: track.y_position
-    });
-    
-    lastMovedPositionRef.current = { x: track.x_position, y: track.y_position };
-
-    // Setup initial style for dragging
-    if (trackRef.current) {
-      trackRef.current.style.left = `${positionXPixels}px`; // Use pixels for visual position
-      trackRef.current.style.top = `${track.y_position}px`;
-      trackRef.current.style.transition = 'none';
-    }
-    
-    setIsDragging(true);
-    e.preventDefault();
   };
 
   const handleResizeMouseDown = (e: React.MouseEvent, direction: 'left' | 'right') => {
@@ -369,507 +300,43 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       isGroupResize
     });
     
-    const container = 
-      trackRef.current.closest('.timeline-container') || 
-      trackRef.current.closest('.MuiBox-root') ||
-      trackRef.current.parentElement?.parentElement;
+    const container = trackRef.current.closest('.timeline-container');
       
-    if (!container) return;
+    if (!container) {
+      console.log('[BaseTrackPreview] No timeline-container found for resize');
+      return;
+    }
 
-    // Use interaction manager for group resize if available and track is selected as part of multiple
-    const useInteractionManager = interaction && selectedTool === 'select' && isSelected && interaction.selectionState.selectedIds.length > 1;
-    
-    if (useInteractionManager) {
-      console.log('[BaseTrackPreview] Starting group resize through interaction manager');
+    // Use interaction manager for resize
+    if (interaction && selectedTool === 'select' && interaction.startResize) {
+      console.log('[BaseTrackPreview] Starting resize through interaction manager');
       
-      // Mark this resize as managed by interaction manager
-      setIsInteractionManaged(true);
+      // Get the container's bounding rect for proper coordinate calculation
+      const containerRect = container.getBoundingClientRect();
       
-      // Calculate mouse position with scroll offset
+      // Calculate mouse position in container's coordinate space
       const mousePosition = {
-        x: e.clientX + (container.scrollLeft || 0),
-        y: e.clientY + (container.scrollTop || 0)
+        x: e.clientX - containerRect.left + container.scrollLeft,
+        y: e.clientY - containerRect.top + container.scrollTop
       };
       
-      // Prepare initial dimensions for all selected tracks
-      const initialDimensions: Record<string, { x: number; width: number }> = {};
-      
-      // For the current track
-      const trackXPixels = ticksToPixels(track.x_position, bpm, timeSignature);
-      initialDimensions[track.id] = {
-        x: trackXPixels,
-        width: trackWidthRef.current
-      };
-      
-      // Note: Timeline will handle getting dimensions for other selected tracks
       console.log('[BaseTrackPreview] Calling interaction.startResize');
-      interaction.startResize(track.id, direction, mousePosition, initialDimensions);
+      interaction.startResize(track.id, direction, mousePosition);
       
       e.stopPropagation();
       e.preventDefault();
-      return;
     }
-    
-    console.log('[BaseTrackPreview] Using fallback resize logic');
-    setIsInteractionManaged(false); // Explicitly mark as not interaction managed
-
-    setIsResizing(true);
-    setResizeDirection(direction);
-    
-    // Capture current visual transform directly from the DOM
-    let initialTransform = contentOffsetX;
-    if (contentRef.current) {
-      const transformStyle = contentRef.current.style.transform;
-      if (transformStyle && transformStyle.includes('translateX(')) {
-        const match = transformStyle.match(/translateX\(([-\d.]+)px\)/);
-        if (match && match[1]) {
-          initialTransform = parseFloat(match[1]);
-        }
-      }
-    }
-    
-    // Store the actual current transform as our starting point
-    setContentTransform(initialTransform);
-    
-    // Convert track position x from ticks to pixels for visual operations
-    const trackXPixels = ticksToPixels(track.x_position, bpm, timeSignature);
-    
-    // Always use the current trackWidth for start information
-    setStartResizeInfo({
-      startMouseX: e.clientX + (container.scrollLeft || 0),
-      startTrackX: trackXPixels, // Store in pixels for visual resize
-      startTrackWidth: trackWidthRef.current,
-      startContentTransform: initialTransform // Store the initial transform
-    });
-    
-    lastResizeDataRef.current = { 
-      newX: trackXPixels, // Store in pixels
-      newWidth: trackWidthRef.current
-    };
-
-    // Disable transitions immediately
-    if (trackRef.current) {
-      trackRef.current.style.transition = 'none';
-      trackRef.current.style.width = `${trackWidthRef.current}px`;
-      trackRef.current.style.left = `${trackXPixels}px`; // Ensure left position is in pixels
-    }
-
-    // Also disable transitions on content wrapper
-    if (contentRef.current) {
-      contentRef.current.style.transition = 'none';
-      // No need to set transform here - already set correctly
-    }
-
-    e.stopPropagation(); // Prevent track drag
-    e.preventDefault();
   };
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!trackRef.current) return;
-
-    // If using interaction manager, let it handle the drag updates
-    if (interaction && interaction.isDragging) {
-      const container = 
-        trackRef.current.closest('.timeline-container') || 
-        trackRef.current.closest('.MuiBox-root') ||
-        trackRef.current.parentElement?.parentElement;
-        
-      if (!container) return;
-      
-      // Calculate current mouse position with scroll offset
-      const currentPosition = {
-        x: e.clientX + container.scrollLeft,
-        y: e.clientY + container.scrollTop
-      };
-      
-      // Update drag through interaction manager
-      // This will trigger Timeline's onDragMove callback which handles group logic
-      interaction.updateDrag(currentPosition);
-      
-      // Also update visual position for immediate feedback
-      // The Timeline will send back the snapped position via onPositionChange
-      return;
-    }
-
-    // If using interaction manager for resize, let it handle the resize updates
-    if (interaction && interaction.isResizing) {
-      const container = 
-        trackRef.current.closest('.timeline-container') || 
-        trackRef.current.closest('.MuiBox-root') ||
-        trackRef.current.parentElement?.parentElement;
-        
-      if (!container) return;
-      
-      // Calculate current mouse position with scroll offset
-      const currentPosition = {
-        x: e.clientX + container.scrollLeft,
-        y: e.clientY + container.scrollTop
-      };
-      
-      // Update resize through interaction manager
-      interaction.updateResize(currentPosition);
-      
-      // The interaction manager will handle the visual updates
-      return;
-    }
-
-    console.log('[BaseTrackPreview] handleMouseMove for track:', track.id, { isDragging, isResizing });
-
-    const container = 
-      trackRef.current.closest('.timeline-container') || 
-      trackRef.current.closest('.MuiBox-root') ||
-      trackRef.current.parentElement?.parentElement;
-      
-    if (!container) return;
-
-    // Calculate mouse position with scroll offset
-    const currentMouseX = e.clientX + container.scrollLeft;
-    const currentMouseY = e.clientY + container.scrollTop;
-
-    // --- Dragging Logic ---
-    if (isDragging) {
-      // Calculate position delta
-      const deltaX = currentMouseX - startDragMousePosition.x;
-      const deltaY = currentMouseY - startDragMousePosition.y;
-      const newX = startDragTrackPosition.x + deltaX;
-      const newY = startDragTrackPosition.y + deltaY;
-
-      // Snap to grid function
-      const snapToGrid = (value: number, gridSize: number) => {
-        return Math.round(value / gridSize) * gridSize;
-      };
-
-      // Calculate grid sizes for snapping
-      const beatsPerMeasure = timeSignature[0];
-      const subdivisionsPerBeat = timeSignature[1];
-      const subdivisionsPerMeasure = beatsPerMeasure * subdivisionsPerBeat;
-      const subdivisionWidth = GRID_CONSTANTS.measureWidth / subdivisionsPerMeasure;
-      
-      // Apply snapping to pixels first (for visual positioning)
-      const snappedX = snapToGrid(newX, subdivisionWidth);
-      const snappedY = snapToGrid(newY, GRID_CONSTANTS.trackHeight);
-      
-      // Create a position object with x in ticks for data storage
-      // For visual display, we still use pixels
-      const tickPositionX = pixelsToTicks(Math.max(0, snappedX), bpm, timeSignature);
-      const newPosition = {
-        x: tickPositionX, // Store in ticks
-        y: Math.max(0, snappedY)
-      };
-
-      // Update visual position during drag (still using pixels for visual display)
-      if (trackRef.current) {
-        trackRef.current.style.left = `${snappedX}px`; // Display in pixels
-        trackRef.current.style.top = `${newPosition.y}px`;
-      }
-      
-      // Store position for final update
-      lastMovedPositionRef.current = newPosition;
-    } 
-    // --- Resizing Logic ---
-    else if (isResizing && startResizeInfo) {
-      const deltaX = currentMouseX - startResizeInfo.startMouseX;
-      let snappedNewX = startResizeInfo.startTrackX;
-      let snappedNewWidth = startResizeInfo.startTrackWidth;
-      
-      // Calculate grid sizes for snapping
-      const beatsPerMeasure = timeSignature[0];
-      const subdivisionsPerBeat = timeSignature[1]; // Assuming beat unit maps directly
-      const subdivisionsPerMeasure = beatsPerMeasure * subdivisionsPerBeat;
-      const subdivisionWidth = GRID_CONSTANTS.measureWidth / subdivisionsPerMeasure;
-      const minPixelWidth = subdivisionWidth * MIN_TRACK_WIDTH_SNAP_UNITS;
-
-      // Snap function specific for resizing (ensures minimum width)
-      const snapResize = (value: number, gridSize: number, minValue: number = 0) => {
-          const snapped = Math.round(value / gridSize) * gridSize;
-          return Math.max(minValue, snapped);
-      };
-
-      if (resizeDirection === 'right') {
-          // Right resize - simply change the container width
-          const newWidth = startResizeInfo.startTrackWidth + deltaX;
-          snappedNewWidth = snapResize(newWidth, subdivisionWidth, minPixelWidth);
-          
-          if (trackRef.current) {
-            trackRef.current.style.width = `${snappedNewWidth}px`;
-          }
-          
-          // For right resize, we don't need to adjust content transform
-          // Content stays anchored to the left edge
-          
-      } else if (resizeDirection === 'left') {
-          // Left resize - change both container position and width
-          const newX = startResizeInfo.startTrackX + deltaX;
-          const newWidth = startResizeInfo.startTrackWidth - deltaX;
-          
-          // Snap to grid
-          snappedNewX = snapResize(Math.max(0, newX), subdivisionWidth); 
-          
-          // Calculate width based on the snapped X position to maintain right edge
-          const rightEdge = startResizeInfo.startTrackX + startResizeInfo.startTrackWidth;
-          let potentialSnappedWidth = rightEdge - snappedNewX;
-
-          // Ensure minimum width
-          snappedNewWidth = snapResize(potentialSnappedWidth, subdivisionWidth, minPixelWidth);
-
-          // Recalculate snappedNewX if minimum width constraint changed the width
-          snappedNewX = Math.max(0, rightEdge - snappedNewWidth);
-
-          // Update visual position and width during resize
-          if (trackRef.current) {
-            trackRef.current.style.left = `${snappedNewX}px`;
-            trackRef.current.style.width = `${snappedNewWidth}px`;
-            
-            // For left resize, we need to adjust content position to compensate for container movement
-            if (contentRef.current) {
-              // Calculate container movement from the start position
-              const containerDeltaX = snappedNewX - startResizeInfo.startTrackX;
-              
-              // Use captured initial transform as the base
-              const initialTransform = startResizeInfo.startContentTransform || contentOffsetX;
-              
-              // Content should move in opposite direction of container
-              const transform = initialTransform - containerDeltaX;
-              contentRef.current.style.transform = `translateX(${transform}px)`;
-            }
-          }
-      }
-      
-      // Store values for final update on mouse up (only if not interaction managed)
-      if (!isInteractionManaged) {
-        lastResizeDataRef.current = { newX: snappedNewX, newWidth: snappedNewWidth };
-      }
-    }
-  }, [
-    isDragging, 
-    isResizing,
-    resizeDirection,
-    startResizeInfo,
-    startDragMousePosition, 
-    startDragTrackPosition, 
-    timeSignature,
-    contentOffsetX,
-    bpm,
-    interaction,
-    isInteractionManaged
-  ]);
-
-  const handleMouseUp = useCallback(() => {
-    // If using interaction manager, let it handle the drag end
-    if (interaction && interaction.isDragging) {
-      // End drag through interaction manager
-      // This will trigger Timeline's onDragEnd callback which handles group logic
-      interaction.endDrag();
-      setIsDragging(false); // Reset our local state too
-      return;
-    }
-
-    // If using interaction manager for resize, let it handle the resize end
-    if (interaction && interaction.isResizing) {
-      console.log('[BaseTrackPreview] Ending resize through interaction manager');
-      // End resize through interaction manager
-      // This will trigger Timeline's onResizeEnd callback which handles group logic
-      interaction.endResize();
-      setIsResizing(false); // Reset our local state too
-      setIsInteractionManaged(false); // Reset the flag
-      return;
-    }
-
-    console.log('[BaseTrackPreview] handleMouseUp for track:', track.id, { isDragging, isResizing });
-
-    // --- Individual Drag End ---
-    if (isDragging && trackRef.current) {
-      const finalPosition = lastMovedPositionRef.current;
-      setIsDragging(false); // Reset state first
-
-      // Trigger position change with drag end flag
-      onPositionChange(track.id, finalPosition, true);
-      
-      // Restore transitions after state change
-      if (trackRef.current) {
-        // Convert tick position back to pixels for visual display
-        const pixelX = ticksToPixels(finalPosition.x, bpm, timeSignature);
-        
-        // Explicitly set final position/width before re-enabling transition
-        trackRef.current.style.left = `${pixelX}px`;
-        trackRef.current.style.top = `${finalPosition.y}px`;
-        // Ensure width is reset if needed (although drag shouldn't change it)
-        trackRef.current.style.width = `${trackWidth}px`;
-        trackRef.current.style.transition = 'left 0.2s ease, top 0.2s ease, width 0.2s ease'; 
-      }
-    } 
-    // --- Resize End ---
-    else if (isResizing && trackRef.current && !isInteractionManaged) {
-      const finalResizeData = lastResizeDataRef.current;
-      const currentDirection = resizeDirection;
-      
-      console.log('[BaseTrackPreview] Individual resize end:', {
-        trackId: track.id,
-        finalResizeData,
-        isInteractionManaged
-      });
-      
-      setIsResizing(false); // Reset state first
-      setResizeDirection(null);
-      setIsInteractionManaged(false); // Reset the flag
-      
-      // Enable transitions for smooth visual updates
-      if (contentRef.current) {
-        contentRef.current.style.transition = 'transform 0.2s ease';
-      }
-
-      if (currentDirection === 'left') {
-        // For left resize: calculate position change in pixels
-        const deltaXPixels = finalResizeData.newX - (startResizeInfo?.startTrackX || 0);
-        
-        console.log('[BaseTrackPreview] Left resize final calculation:', {
-          trackId: track.id,
-          startX: startResizeInfo?.startTrackX,
-          finalX: finalResizeData.newX,
-          deltaXPixels,
-          startWidth: startResizeInfo?.startTrackWidth,
-          finalWidth: finalResizeData.newWidth
-        });
-        
-        // Set final visual position and width
-        if (trackRef.current) {
-          trackRef.current.style.left = `${finalResizeData.newX}px`;
-          trackRef.current.style.width = `${finalResizeData.newWidth}px`;
-          
-          // Calculate the final transform for content
-          if (contentRef.current) {
-            const containerDeltaX = finalResizeData.newX - (startResizeInfo?.startTrackX || 0);
-            const initialTransform = startResizeInfo?.startContentTransform || contentOffsetX;
-            const finalTransform = initialTransform - containerDeltaX;
-            
-            // Apply the transform - we'll keep this until the state updates
-            contentRef.current.style.transform = `translateX(${finalTransform}px)`;
-            setContentTransform(finalTransform);
-          }
-        }
-        
-        // Pass the pixel delta directly to the callback
-        onResizeEnd(track.id, deltaXPixels, currentDirection);
-      } else if (currentDirection === 'right') {
-        // For right resize: calculate width change in pixels
-        const deltaWidthPixels = finalResizeData.newWidth - (startResizeInfo?.startTrackWidth || trackWidth);
-        
-        console.log('[BaseTrackPreview] Right resize final calculation:', {
-          trackId: track.id,
-          startWidth: startResizeInfo?.startTrackWidth,
-          finalWidth: finalResizeData.newWidth,
-          deltaWidthPixels,
-          trackWidth
-        });
-        
-        // No transform adjustments needed for right resize
-        
-        // Pass the pixel delta directly to the callback
-        onResizeEnd(track.id, deltaWidthPixels, currentDirection);
-      }
-      
-      // Clear the startResizeInfo after we're done with it
-      setStartResizeInfo(null);
-    }
-    
-  }, [isDragging, isResizing, resizeDirection, track.id, track.x_position, track.y_position, onPositionChange, onResizeEnd, trackWidth, bpm, timeSignature, startResizeInfo, contentOffsetX, interaction, isInteractionManaged]);
-
-  // Add/remove mouse event listeners
-  useEffect(() => {
-    // Only add listeners if we're using the fallback drag system
-    // Don't add if the interaction manager is being used for this track
-    const usingInteractionManager = interaction && selectedTool === 'select';
-    
-    if (!usingInteractionManager && (isDragging || isResizing)) {
-      console.log('[BaseTrackPreview] Adding mouse event listeners for track:', track.id);
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    } else if (usingInteractionManager && interaction.isDragging) {
-      // If using interaction manager, add global listeners that call the interaction manager
-      console.log('[BaseTrackPreview] Adding interaction manager listeners for drag');
-      
-      const handleInteractionMouseMove = (e: MouseEvent) => {
-        const container = document.querySelector('.timeline-container') || document.querySelector('.MuiBox-root');
-        if (container && container instanceof HTMLElement) {
-          const currentPosition = {
-            x: e.clientX + container.scrollLeft,
-            y: e.clientY + container.scrollTop
-          };
-          interaction.updateDrag(currentPosition);
-        }
-      };
-      
-      const handleInteractionMouseUp = () => {
-        interaction.endDrag();
-        setIsDragging(false); // Reset local state
-      };
-      
-      window.addEventListener('mousemove', handleInteractionMouseMove);
-      window.addEventListener('mouseup', handleInteractionMouseUp);
-      
-      return () => {
-        window.removeEventListener('mousemove', handleInteractionMouseMove);
-        window.removeEventListener('mouseup', handleInteractionMouseUp);
-      };
-    } else if (usingInteractionManager && interaction.isResizing) {
-      // If using interaction manager for resize, add global listeners
-      console.log('[BaseTrackPreview] Adding interaction manager listeners for resize');
-      
-      const handleInteractionMouseMove = (e: MouseEvent) => {
-        const container = document.querySelector('.timeline-container') || document.querySelector('.MuiBox-root');
-        if (container && container instanceof HTMLElement) {
-          const currentPosition = {
-            x: e.clientX + container.scrollLeft,
-            y: e.clientY + container.scrollTop
-          };
-          interaction.updateResize(currentPosition);
-        }
-      };
-      
-      const handleInteractionMouseUp = () => {
-        interaction.endResize();
-        setIsResizing(false); // Reset local state
-      };
-      
-      window.addEventListener('mousemove', handleInteractionMouseMove);
-      window.addEventListener('mouseup', handleInteractionMouseUp);
-      
-      return () => {
-        window.removeEventListener('mousemove', handleInteractionMouseMove);
-        window.removeEventListener('mouseup', handleInteractionMouseUp);
-      };
-    }
-  }, [isDragging, isResizing, handleMouseMove, handleMouseUp, interaction, interaction?.isDragging, interaction?.isResizing, selectedTool]);
   
-  // Sync position AND width from props to DOM (for undo/redo, or external changes)
+  // Sync position AND width from props to DOM
   useEffect(() => {
-    const usingInteractionManager = interaction && selectedTool === 'select' && interaction.isDragging;
-    const usingInteractionResize = interaction && interaction.isResizing;
-    
-    // Update position if:
-    // 1. Not using fallback drag/resize system OR
-    // 2. Using interaction manager (need real-time updates for snapping)
-    if (trackRef.current && (!isDragging && !isResizing && !isGroupResize || usingInteractionManager)) {
+    if (trackRef.current) {
       // Convert track position from ticks to pixels for display
       const pixelX = ticksToPixels(track.x_position, bpm, timeSignature);
       
       trackRef.current.style.left = `${pixelX}px`;
       trackRef.current.style.top = `${track.y_position}px`;
-      
-      // Important: Always update the width to match props
       trackRef.current.style.width = `${trackWidth}px`;
-      
-      // Remove transition during interaction manager drag for smooth movement
-      if (usingInteractionManager || usingInteractionResize) {
-        trackRef.current.style.transition = 'none';
-      } else {
-        trackRef.current.style.transition = 'left 0.2s ease, top 0.2s ease, width 0.2s ease';
-      }
       
       console.log('Syncing track DOM after state update:', { 
         id: track.id, 
@@ -878,33 +345,14 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         calculatedPixelX: pixelX,
         trimStart: track.trim_start_ticks,
         trimEnd: track.trim_end_ticks,
-        duration: track.duration_ticks,
-        usingInteractionManager,
-        isGroupResize 
+        duration: track.duration_ticks
       });
     }
-  }, [track.x_position, track.y_position, trackWidth, isDragging, isResizing, isGroupResize, track.id, bpm, timeSignature, interaction, selectedTool, track.trim_start_ticks, track.trim_end_ticks, track.duration_ticks]);
-
-  // Reset content transform after trim values change and component re-renders
-  // This ensures we switch back to using the calculated offset once state updates
-  useEffect(() => {
-    if (!isResizing && contentTransform !== 0) {
-      // We want to wait until the state has fully updated
-      const timer = setTimeout(() => {
-        setContentTransform(0);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [track.trim_start_ticks, track.trim_end_ticks, isResizing, contentTransform]);
+  }, [track.x_position, track.y_position, trackWidth, track.id, bpm, timeSignature, track.trim_start_ticks, track.trim_end_ticks, track.duration_ticks]);
   
   // Handle resize delta from parent (when using interaction manager for group resize)
   useEffect(() => {
     if (isGroupResize && resizeDelta && resizeInitialDimensions && propResizeDirection && trackRef.current) {
-      // Mark as interaction managed when we start receiving group resize updates
-      if (!isInteractionManaged && !isResizing) {
-        setIsInteractionManaged(true);
-      }
-      
       const delta = resizeDelta.x;
       const initialDim = resizeInitialDimensions;
       
@@ -916,8 +364,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         currentX: track.x_position,
         currentWidth: trackWidth,
         isGroupResize,
-        isPrimaryResize,
-        isInteractionManaged
+        isPrimaryResize
       });
       
       // Disable transitions during resize
@@ -949,16 +396,17 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
           const initialTransform = calculateContentOffset();
           const transform = initialTransform - containerDeltaX;
           contentRef.current.style.transform = `translateX(${transform}px)`;
+          setContentTransform(transform);
         }
       }
-      
-      // Don't update lastResizeDataRef during group resize - Timeline handles the end
-      // This prevents double-handling of the resize
-    } else if (isInteractionManaged && !isGroupResize) {
-      // Group resize ended, reset the flag
-      setIsInteractionManaged(false);
+    } else if (!isGroupResize && contentTransform !== 0) {
+      // Reset content transform when not resizing
+      setContentTransform(0);
+      if (contentRef.current) {
+        contentRef.current.style.transform = `translateX(${contentOffsetX}px)`;
+      }
     }
-  }, [isGroupResize, resizeDelta, resizeInitialDimensions, propResizeDirection, bpm, timeSignature, track.x_position, track.id, trackWidth, isInteractionManaged, isResizing]);
+  }, [isGroupResize, resizeDelta, resizeInitialDimensions, propResizeDirection, bpm, timeSignature, track.x_position, track.id, trackWidth, contentTransform, contentOffsetX]);
 
   // Calculate the transform to use for content position
   const getContentTransform = () => {
@@ -1128,7 +576,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
               opacity: 0.8,
               pointerEvents: 'none', // Ensure content doesn't interfere
               transform: `translateX(${getContentTransform()}px)`,
-              transition: isResizing ? 'none' : 'transform 0.2s ease',
+              transition: (isGroupResize || interaction?.isResizing) ? 'none' : 'transform 0.2s ease',
             }}
           >
             {renderTrackContent()}
