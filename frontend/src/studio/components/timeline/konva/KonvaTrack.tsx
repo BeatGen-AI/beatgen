@@ -21,13 +21,9 @@ export interface KonvaTrackProps {
   pixelsPerTick: number;
   bpm: number;
   timeSignature: [number, number];
-  onDragMove?: (id: string, x: number, y: number) => void;
-  onDragEnd?: (id: string, x: number, y: number) => void;
   onClick?: (id: string, e: any) => void;
   onMouseDown?: (id: string, e: any) => void;
   onResizeStart?: (id: string, direction: 'left' | 'right', mousePos: { x: number; y: number }) => void;
-  onResizeEnd?: (id: string, x: number, y: number, width: number) => void;
-  onGroupResize?: (id: string, scaleFactor: number, direction: 'left' | 'right') => void;
   selectedCount?: number;
   gridSnapEnabled?: boolean;
   snapSizeInPixels?: number;
@@ -52,13 +48,9 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   pixelsPerTick,
   bpm,
   timeSignature,
-  onDragMove,
-  onDragEnd,
   onClick,
   onMouseDown,
   onResizeStart,
-  onResizeEnd,
-  onGroupResize,
   selectedCount = 1,
   gridSnapEnabled = true,
   snapSizeInPixels = 12.5
