@@ -188,7 +188,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     items: konvaItems,
     stage: stage,
     pixelsPerUnit: pixelsPerTick,
-    zoom: internalZoom,
     tool,
     gridSize: gridSnapEnabled ? pixelsToTicks(actualSnapSize, bpm, timeSignature) : 0,
     snapToGrid: gridSnapEnabled,
@@ -263,14 +262,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
           if (onTrackResizeEnd) {
             const positionDeltaTicks = dim.start - track.x_position;
             const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
-            console.log('[KonvaTimeline] Left resize end:', { 
-              trackId, 
-              oldPosition: track.x_position,
-              newPosition: dim.start,
-              positionDeltaTicks,
-              deltaPixels,
-              direction: 'left'
-            });
             onTrackResizeEnd(trackId, deltaPixels, 'left');
           }
         } else if (dim.width !== undefined) {
@@ -280,14 +271,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             const newWidthTicks = dim.width; // dim.width is already in ticks
             const deltaTicks = newWidthTicks - currentWidthTicks;
             const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
-            console.log('[KonvaTimeline] Right resize end:', { 
-              trackId, 
-              currentWidthTicks,
-              newWidthTicks,
-              deltaTicks,
-              deltaPixels,
-              direction: 'right'
-            });
             onTrackResizeEnd(trackId, deltaPixels, 'right');
           }
         }
@@ -623,14 +606,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 gridSnapEnabled={gridSnapEnabled}
                 snapSizeInPixels={actualSnapSize}
                 selectedCount={interaction.selectedIds.length}
-                onDragMove={(id, x, y) => {
-                  // Drag moves are handled by the interaction system through onDragMove above
-                  // This callback is not needed anymore
-                }}
-                onDragEnd={(id, x, y) => {
-                  // Drag end is handled by the interaction system through onDragEnd above
-                  // This callback is not needed anymore
-                }}
                 onClick={(id, e) => {
                   // Handle track selection
                   const modifiers = {
@@ -667,39 +642,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   if (interaction.startResize) {
                     interaction.startResize(id, direction, mousePos);
                   }
-                }}
-                onResizeEnd={(id, newX, newY, newWidth) => {
-                  const track = tracks.find(t => t.id === id);
-                  if (!track) return;
-                  
-                  // Convert pixels to ticks
-                  const newXTicks = newX / pixelsPerTick;
-                  const newWidthTicks = newWidth / pixelsPerTick;
-                  
-                  // Don't update position for resize - tracks should grow/shrink in place
-                  
-                  // Update track dimensions
-                  if (onTrackResizeEnd) {
-                    const currentWidthPixels = ((track.trim_end_ticks || track.duration_ticks || 0) - (track.trim_start_ticks || 0)) * pixelsPerTick;
-                    const deltaPixels = newWidth - currentWidthPixels;
-                    const direction = Math.abs(newX - (track.x_position * pixelsPerTick)) > 1 ? 'left' : 'right';
-                    onTrackResizeEnd(id, deltaPixels, direction);
-                  }
-                }}
-                onGroupResize={(id, scaleFactor, direction) => {
-                  // Resize all selected tracks proportionally
-                  const selectedTracks = tracks.filter(t => interaction.selectedIds.includes(t.id));
-                  
-                  selectedTracks.forEach(track => {
-                    const currentWidthPixels = ((track.trim_end_ticks || track.duration_ticks || 0) - (track.trim_start_ticks || 0)) * pixelsPerTick;
-                    const newWidth = currentWidthPixels * scaleFactor;
-                    const deltaPixels = newWidth - currentWidthPixels;
-                    
-                    // Don't change position for any resize direction
-                    if (onTrackResizeEnd) {
-                      onTrackResizeEnd(track.id, deltaPixels, direction);
-                    }
-                  });
                 }}
               />
             );

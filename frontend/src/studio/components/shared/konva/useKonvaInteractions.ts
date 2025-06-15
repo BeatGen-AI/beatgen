@@ -49,8 +49,6 @@ export interface UseKonvaInteractionsOptions {
   /** Pixels per logical unit (e.g., pixels per tick) */
   pixelsPerUnit: number;
   
-  /** Current zoom level */
-  zoom: number;
   
   /** Current tool */
   tool: Tool;
@@ -90,7 +88,6 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     items,
     stage,
     pixelsPerUnit,
-    zoom,
     tool,
     gridSize = 1,
     snapToGrid = true,
@@ -143,13 +140,13 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Convert pixel coordinates to logical units
   const pixelsToLogical = useCallback((pixels: number) => {
-    return pixels / (pixelsPerUnit);
-  }, [pixelsPerUnit, zoom]);
+    return pixels / pixelsPerUnit;
+  }, [pixelsPerUnit]);
 
   // Convert logical units to pixels
   const logicalToPixels = useCallback((logical: number) => {
     return logical * pixelsPerUnit;
-  }, [pixelsPerUnit, zoom]);
+  }, [pixelsPerUnit]);
 
   // Snap value to grid
   const snapToGridValue = useCallback((value: number) => {
@@ -183,7 +180,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       }
     }
     return null;
-  }, [items, pixelsToLogical, pixelsPerUnit, zoom]);
+  }, [items, pixelsToLogical]);
 
   // Get items in rectangle
   const getItemsInRect = useCallback((start: Position, end: Position): KonvaItem[] => {
@@ -480,7 +477,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       start: logicalPos,
       end: logicalPos
     });
-  }, [pixelsToLogical, pixelsPerUnit, zoom]);
+  }, [pixelsToLogical]);
 
   // Update rectangle selection
   const updateRectSelection = useCallback((mousePos: Position) => {
