@@ -5,7 +5,7 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 
 // Import components
 import TrackControlsSidebar from './components/sidebar/TrackControlsSidebar';
-import { Timeline, TimelineRef } from './components/timeline/Timeline';
+import { KonvaTimeline, KonvaTimelineRef } from './components/timeline/KonvaTimeline';
 import { CombinedTrack } from '../platform/types/project';
 import AddTrackMenu from './components/sidebar/AddTrackMenu';
 import { GRID_CONSTANTS } from './constants/gridConstants';
@@ -126,7 +126,7 @@ function Studio({ projectId }: StudioProps) {
     replaceTrackAudioFile,
   } = useStudioStore();
   
-  const scrollRef = useRef<TimelineRef>(null);
+  const scrollRef = useRef<KonvaTimelineRef>(null);
   const animationFrameRef = useRef<number | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default to open
@@ -310,22 +310,17 @@ function Studio({ projectId }: StudioProps) {
   const handleScroll = React.useCallback(() => {
     if (!scrollRef.current) return;
 
-    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    // KonvaTimeline uses viewport-based scrolling
+    const viewport = scrollRef.current.getViewport();
+    const totalWidth = measureCount * GRID_CONSTANTS.measureWidth * zoomLevel;
 
-    if (scrollLeft + clientWidth >= scrollWidth - 100) {
+    if (viewport.x + viewport.width >= totalWidth - 100) {
       setMeasureCount(measureCount + 20);
     }
-  }, [measureCount, setMeasureCount]);
+  }, [measureCount, setMeasureCount, zoomLevel]);
 
-  useEffect(() => {
-    const scrollContainer = scrollRef.current;
-    if (!scrollContainer) return;
-
-    const debounceScroll = () => requestAnimationFrame(handleScroll);
-    scrollContainer.addEventListener("scroll", debounceScroll);
-
-    return () => scrollContainer.removeEventListener("scroll", debounceScroll);
-  }, [handleScroll]);
+  // Since KonvaTimeline handles its own scrolling, we don't need the scroll event listener
+  // The viewport changes are handled internally by KonvaTimeline
 
   // Clipboard operation handlers
   const handleCopyTracks = useCallback((tracks: CombinedTrack[]) => {
@@ -335,18 +330,36 @@ function Studio({ projectId }: StudioProps) {
 
   const handleCutTracks = useCallback((tracks: CombinedTrack[]) => {
     console.log('Cutting tracks:', tracks.map(t => t.name));
-    // Cut = copy + delete
-    const trackIds = tracks.map(t => t.id);
-    deleteMultipleTracks(trackIds);
-  }, [deleteMultipleTracks]);
+    // For cut operation, the interaction manager handles the clipboard state
+    // We don't delete here - deletion happens on paste if it's a cut operation
+    // The useClipboard hook manages this internally
+  }, []);
 
   const handlePasteTracks = useCallback((tracks: CombinedTrack[], position?: { x: number; y: number }) => {
     console.log('Pasting tracks:', tracks.map(t => t.name), 'at position:', position);
+    
+    // For paste operation, we need to directly update track positions
+    // without creating new tracks (tracks should keep their IDs)
     const trackIds = tracks.map(t => t.id);
-    // Calculate offset based on position or default to end of timeline
-    const offsetX = position?.x ?? 0;
-    duplicateMultipleTracks(trackIds, offsetX);
-  }, [duplicateMultipleTracks]);
+    
+    if (position) {
+      // Calculate the leftmost position of the tracks being pasted
+      const minX = Math.min(...tracks.map(t => t.x_position));
+      
+      // Calculate offset from the paste position
+      const offsetX = position.x - minX;
+      const offsetY = position.y - tracks[0].y_position;
+      
+      // Update positions for all tracks
+      updateMultipleTrackPositions(trackIds, offsetX, offsetY);
+    } else {
+      // No position provided (e.g., keyboard paste)
+      // Paste at current playhead position or offset from original positions
+      const offsetX = 0; // Could use currentTime here
+      const offsetY = 0;
+      updateMultipleTrackPositions(trackIds, offsetX, offsetY);
+    }
+  }, [updateMultipleTrackPositions]);
 
   const handleDeleteTracks = useCallback((trackIds: string[]) => {
     console.log('Deleting tracks:', trackIds);
@@ -576,7 +589,7 @@ function Studio({ projectId }: StudioProps) {
           }} />
 
           {/* Timeline Area */}
-          <Timeline
+          <KonvaTimeline
             tracks={tracks}
             currentTime={currentTime}
             isPlaying={isPlaying}
@@ -587,6 +600,7 @@ function Studio({ projectId }: StudioProps) {
             showToolbar={false}
             gridSnapSize={gridSnapSize}
             onTrackPositionChange={handleTrackPositionChange}
+            onZoomChange={setZoomLevel}
             onTimeChange={(newTime) => {
               // Update global state only when user explicitly changes time
               setCurrentTime(newTime);
@@ -600,9 +614,6 @@ function Studio({ projectId }: StudioProps) {
               if (scrollRef.current?.playbackCursor) {
                 scrollRef.current.playbackCursor.seek(newTime);
               }
-            }}
-            gridLineStyle={{
-              borderRight: `${GRID_CONSTANTS.borderWidth} solid ${GRID_CONSTANTS.borderColor}`
             }}
             selectedTrackIds={selectedTrackIds}
             onTrackSelect={setSelectedTrackIds}

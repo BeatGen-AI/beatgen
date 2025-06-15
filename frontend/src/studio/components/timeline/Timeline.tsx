@@ -1,4 +1,4 @@
-import React, { forwardRef, useRef, useImperativeHandle, useState } from 'react';
+import React, { forwardRef, useRef, useImperativeHandle, useState, useCallback, useMemo } from 'react';
 import { Box, useTheme } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { GRID_CONSTANTS, calculatePositionTime, ticksToPixels, pixelsToTicks, calculateTrackWidth } from '../../constants/gridConstants';
@@ -9,7 +9,7 @@ import { CombinedTrack } from 'src/platform/types/project';
 import { Position } from '../track/types';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import { cn } from '@/lib/utils';
-import { useInteractionManager, SelectionOverlay, InteractionToolbar, Tool } from '../../shared/interactions';
+import { SelectionOverlay, InteractionToolbar, Tool, DragGhost, useInteractions, DraggableResizableItem } from '../../shared/interactions';
 import { getSnapSizeInPixels, GridSnapOption } from '../piano-roll2/gridConstants';
 
 export interface TimelineProps {
@@ -93,6 +93,8 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   onDuplicateTracks
 }, ref) => {
   const theme = useTheme();
+  const { studioMode } = useAppTheme();
+  
   // Calculate the total width needed for the entire timeline
   const totalTimelineWidth = measureCount * GRID_CONSTANTS.measureWidth;
   
@@ -103,34 +105,8 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   // Track if we just completed a selection
   const [justCompletedSelection, setJustCompletedSelection] = useState(false);
   
-  // State for group drag operations
-  const [groupDragState, setGroupDragState] = useState<{
-    isDragging: boolean;
-    initialPositions: Record<string, { x: number; y: number }>;
-    draggedTrackId: string | null;
-  }>({
-    isDragging: false,
-    initialPositions: {},
-    draggedTrackId: null
-  });
-
-  // State for group resize operations
-  const [groupResizeState, setGroupResizeState] = useState<{
-    isResizing: boolean;
-    initialDimensions: Record<string, { x: number; width: number; trimStart: number; trimEnd: number }>;
-    resizedTrackId: string | null;
-    resizeDirection: 'left' | 'right' | null;
-    currentDelta: { x: number; y: number };
-  }>({
-    isResizing: false,
-    initialDimensions: {},
-    resizedTrackId: null,
-    resizeDirection: null,
-    currentDelta: { x: 0, y: 0 }
-  });
-
   // State for grid snap options
-  const [gridSnapSize, setGridSnapSize] = useState(propGridSnapSize || GridSnapOption.STEP); // Use prop or default to "Step" snap
+  const [gridSnapSize, setGridSnapSize] = useState(propGridSnapSize || GridSnapOption.STEP);
   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
   
   // Update gridSnapSize when prop changes
@@ -146,380 +122,141 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     return getSnapSizeInPixels(gridSnapSize, effectiveGridSize);
   }, [gridSnapSize, effectiveGridSize]);
   
-  // Initialize interaction manager for track selection
-  const interaction = useInteractionManager({
+  // Convert tracks to draggable items
+  const trackItems: DraggableResizableItem[] = React.useMemo(() => 
+    tracks.map(track => ({
+      id: track.id,
+      x: track.x_position, // Already in ticks
+      y: track.y_position, // In pixels
+      width: track.duration_ticks ? 
+        (track.trim_end_ticks || track.duration_ticks) - (track.trim_start_ticks || 0) : 
+        MUSIC_CONSTANTS.pulsesPerQuarterNote * 4, // Default to 1 bar
+      height: GRID_CONSTANTS.trackHeight
+    })),
+    [tracks]
+  );
+
+  // Calculate pixels per tick based on BPM and time signature
+  const pixelsPerTick = React.useMemo(() => {
+    const beatsPerMeasure = timeSignature[0];
+    const ticksPerBeat = MUSIC_CONSTANTS.pulsesPerQuarterNote;
+    const ticksPerMeasure = ticksPerBeat * beatsPerMeasure;
+    return GRID_CONSTANTS.measureWidth / ticksPerMeasure;
+  }, [timeSignature]);
+
+  // Use the new unified interaction system
+  const interaction = useInteractions({
+    items: trackItems,
+    pixelsPerTick,
+    zoom: zoomLevel,
     initialTool: selectedTool,
     snapToGrid: gridSnapEnabled,
-    gridSize: actualSnapSize,
-    onSelectionChange: (selectedIds) => {
-      onTrackSelect?.(selectedIds);
+    gridSize: pixelsToTicks(actualSnapSize, bpm, timeSignature),
+    onSelectionChange: (ids) => {
+      const trackIds = ids.filter(id => typeof id === 'string') as string[];
+      onTrackSelect?.(trackIds);
     },
-    onDragStart: (itemId, selectedIds) => {
-      console.log('[Timeline] onDragStart called:', { itemId, selectedIds });
-      
-      // Determine which tracks will be affected by the drag
-      const tracksToMove = selectedIds.length > 1 && selectedIds.includes(itemId) 
-        ? selectedIds 
-        : [itemId];
-      
-      console.log('[Timeline] Tracks to move:', tracksToMove);
-      
-      // Store initial positions for all tracks that will be moved
-      const initialPositions: Record<string, { x: number; y: number }> = {};
-      tracksToMove.forEach(trackId => {
+    onDragMove: (updates) => {
+      updates.forEach((pos, trackId) => {
+        onTrackPositionChange(trackId as string, {
+          x: pos.x, // Already in ticks from interaction
+          y: pos.y  // In pixels
+        }, false);
+      });
+    },
+    onDragEnd: (updates) => {
+      updates.forEach((pos, trackId) => {
+        onTrackPositionChange(trackId as string, {
+          x: pos.x,
+          y: pos.y
+        }, true);
+      });
+    },
+    onResizeEnd: (updates) => {
+      updates.forEach((dim, trackId) => {
         const track = tracks.find(t => t.id === trackId);
-        if (track) {
-          initialPositions[trackId] = {
-            x: track.x_position,
-            y: track.y_position
-          };
-          console.log('[Timeline] Storing initial position for track:', {
-            trackId,
-            x_position: track.x_position,
-            y_position: track.y_position
-          });
+        if (!track || !onTrackResizeEnd) return;
+        
+        if (dim.start !== undefined) {
+          // Left resize - position changed
+          const deltaPixels = ticksToPixels(dim.start - track.x_position, bpm, timeSignature);
+          onTrackResizeEnd(trackId as string, deltaPixels, 'left');
+        } else if (dim.width !== undefined) {
+          // Right resize - width changed
+          const currentWidth = (track.trim_end_ticks || track.duration_ticks || 0) - (track.trim_start_ticks || 0);
+          const deltaPixels = ticksToPixels(dim.width - currentWidth, bpm, timeSignature);
+          onTrackResizeEnd(trackId as string, deltaPixels, 'right');
         }
-      });
-      
-      console.log('[Timeline] Initial positions stored:', initialPositions);
-      
-      // Update group drag state
-      setGroupDragState({
-        isDragging: true,
-        initialPositions,
-        draggedTrackId: itemId
       });
     },
-    onDragMove: (itemId, delta, mousePosition, mouseOffset) => {
-      console.log('[Timeline] onDragMove called:', {
-        itemId,
-        delta,
-        mousePosition,
-        mouseOffset,
-        selectedIds: interaction.selectionState.selectedIds,
-        groupDragState: groupDragState.isDragging,
-        initialPositions: Object.keys(groupDragState.initialPositions)
-      });
-      
-      // The delta is already snapped by the interaction manager
-      // Convert the snapped pixel delta to ticks
-      const deltaTicks = pixelsToTicks(Math.abs(delta.x), bpm, timeSignature) * (delta.x >= 0 ? 1 : -1);
-      
-      // Determine if this is a group drag based on how many tracks we stored initial positions for
-      const tracksInGroup = Object.keys(groupDragState.initialPositions);
-      const isGroupDrag = tracksInGroup.length > 1 && tracksInGroup.includes(itemId);
-      
-      console.log('[Timeline] Drag mode:', { 
-        isGroupDrag, 
-        deltaTicks, 
-        deltaPixels: delta.x,
-        tracksInGroup,
-        itemId,
-        snapSize: actualSnapSize,
-        mouseY: mousePosition?.y,
-        mouseOffsetY: mouseOffset?.y
-      });
-      
-      // Calculate snap size in ticks for position snapping
-      const snapSizeTicks = pixelsToTicks(actualSnapSize, bpm, timeSignature);
-      
-      if (isGroupDrag) {
-        // For group drag, first calculate the new position of the dragged track
-        const draggedInitialPos = groupDragState.initialPositions[itemId];
-        if (!draggedInitialPos) return;
-        
-        // Calculate intended position for the dragged track
-        let draggedNewX = draggedInitialPos.x + deltaTicks;
-        
-        // For Y position, use absolute mouse position if available for more responsive dragging
-        let draggedNewY;
-        if (mousePosition && mouseOffset) {
-          // Calculate where the track should be based on mouse position
-          // The track should be positioned so the grabbed point stays under the mouse
-          const targetY = mousePosition.y - mouseOffset.y;
-          // Snap to track row height
-          draggedNewY = Math.round(targetY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
-        } else {
-          // Fallback to delta-based calculation
-          draggedNewY = draggedInitialPos.y + delta.y;
-          draggedNewY = Math.round(draggedNewY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
-        }
-        
-        // Snap X position if enabled
-        if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
-          draggedNewX = Math.floor(draggedNewX / snapSizeTicks) * snapSizeTicks;
-        }
-        
-        // Apply boundaries to dragged track
-        draggedNewX = Math.max(0, draggedNewX);
-        draggedNewY = Math.max(0, draggedNewY);
-        
-        // Calculate the actual delta from initial to bounded position
-        const actualDeltaX = draggedNewX - draggedInitialPos.x;
-        const actualDeltaY = draggedNewY - draggedInitialPos.y;
-        
-        // Apply the same delta to all tracks in the group to maintain relative positions
-        tracksInGroup.forEach(trackId => {
-          const initialPos = groupDragState.initialPositions[trackId];
-          if (initialPos) {
-            // Apply the same delta to maintain relative positions
-            const newX = Math.max(0, initialPos.x + actualDeltaX);
-            const newY = Math.max(0, initialPos.y + actualDeltaY);
-            
-            console.log('[Timeline] Moving track in group:', { 
-              trackId, 
-              initialX: initialPos.x, 
-              initialY: initialPos.y,
-              newX, 
-              newY,
-              actualDeltaX,
-              actualDeltaY
-            });
-            onTrackPositionChange?.(trackId, { x: newX, y: newY }, false);
-          }
-        });
-      } else {
-        // Single track drag
-        const initialPos = groupDragState.initialPositions[itemId];
-        if (initialPos) {
-          // Calculate new position by adding delta to initial position
-          let newX = initialPos.x + deltaTicks;
-          
-          // For Y position, use absolute mouse position if available for more responsive dragging
-          let newY;
-          if (mousePosition && mouseOffset) {
-            // Calculate where the track should be based on mouse position
-            const targetY = mousePosition.y - mouseOffset.y;
-            // Snap to track row height
-            newY = Math.round(targetY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
-          } else {
-            // Fallback to delta-based calculation
-            newY = initialPos.y + delta.y;
-            newY = Math.round(newY / GRID_CONSTANTS.trackHeight) * GRID_CONSTANTS.trackHeight;
-          }
-          
-          // Snap X position if grid snap is enabled
-          if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
-            newX = Math.floor(newX / snapSizeTicks) * snapSizeTicks;
-          }
-          
-          // Apply boundaries
-          newX = Math.max(0, newX);
-          newY = Math.max(0, newY);
-          
-          console.log('[Timeline] Moving single track:', { 
-            trackId: itemId, 
-            initialX: initialPos.x, 
-            initialY: initialPos.y,
-            newX, 
-            newY,
-            trackHeight: GRID_CONSTANTS.trackHeight
-          });
-          onTrackPositionChange?.(itemId, { x: newX, y: newY }, false);
-        } else {
-          console.warn('[Timeline] No initial position for single track:', itemId);
-        }
+    onItemClick: (trackId, tool) => {
+      if (tool === 'eraser') {
+        onTrackDelete?.(trackId as string);
+      } else if (tool === 'pen') {
+        onTrackDuplicate?.(trackId as string);
       }
     },
-    onDragEnd: (itemId, selectedIds) => {
-      console.log('Track drag ended:', itemId, selectedIds);
-      
-      // Determine if this was a group drag based on how many tracks we stored initial positions for
-      const tracksInGroup = Object.keys(groupDragState.initialPositions);
-      const isGroupDrag = tracksInGroup.length > 1 && tracksInGroup.includes(itemId);
-      
-      if (isGroupDrag) {
-        // Send final position updates for all tracks that were moved
-        tracksInGroup.forEach(trackId => {
-          const track = tracks.find(t => t.id === trackId);
-          if (track) {
-            onTrackPositionChange?.(trackId, {
-              x: track.x_position,
-              y: track.y_position
-            }, true);
-          }
-        });
-      } else {
-        // Single track drag end
-        const track = tracks.find(t => t.id === itemId);
-        if (track) {
-          onTrackPositionChange?.(itemId, {
-            x: track.x_position,
-            y: track.y_position
-          }, true);
-        }
-      }
-      
-      // Reset group drag state
-      setGroupDragState({
-        isDragging: false,
-        initialPositions: {},
-        draggedTrackId: null
-      });
-    },
-    onItemClick: (itemId, tool) => {
-      switch (tool) {
-        case 'eraser':
-          onTrackDelete?.(itemId);
-          break;
-        case 'pen':
-          onTrackDuplicate?.(itemId);
-          break;
-        default:
-          break;
-      }
-    },
-    onItemDoubleClick: (itemId) => {
-      console.log('Track double-clicked:', itemId);
-      // Could open track editor or piano roll
-    },
-    // Clipboard operations
     onCopy: (items) => {
-      const trackIds = items.map(item => item.id);
+      const trackIds = items.map(item => item.id as string);
       const fullTracks = tracks.filter(t => trackIds.includes(t.id));
       onCopyTracks?.(fullTracks);
     },
     onCut: (items) => {
-      const trackIds = items.map(item => item.id);
+      const trackIds = items.map(item => item.id as string);
       const fullTracks = tracks.filter(t => trackIds.includes(t.id));
       onCutTracks?.(fullTracks);
     },
     onPaste: (items, position) => {
-      const trackIds = items.map(item => item.id);
+      const trackIds = items.map(item => item.id as string);
       const fullTracks = tracks.filter(t => trackIds.includes(t.id));
       onPasteTracks?.(fullTracks, position);
     },
     onDelete: (itemIds) => {
-      onDeleteTracks?.(itemIds);
+      const trackIds = itemIds.filter(id => typeof id === 'string') as string[];
+      onDeleteTracks?.(trackIds);
     },
     onDuplicate: (itemIds) => {
-      onDuplicateTracks?.(itemIds);
-    },
-    // Resize operations
-    onResizeStart: (itemId, selectedIds, direction) => {
-      console.log('[Timeline] onResizeStart called:', { itemId, selectedIds, direction });
-      
-      // Determine which tracks will be affected by the resize
-      const tracksToResize = selectedIds.length > 1 && selectedIds.includes(itemId) 
-        ? selectedIds 
-        : [itemId];
-      
-      console.log('[Timeline] Tracks to resize:', tracksToResize);
-      
-      // Store initial dimensions for all tracks that will be resized
-      const initialDimensions: Record<string, { x: number; width: number; trimStart: number; trimEnd: number }> = {};
-      tracksToResize.forEach(trackId => {
-        const track = tracks.find(t => t.id === trackId);
-        if (track) {
-          // Calculate current width
-          const startTicks = track.trim_start_ticks || 0;
-          const endTicks = track.trim_end_ticks || track.duration_ticks || 0;
-          const visibleDurationTicks = Math.max(0, endTicks - startTicks);
-          const width = ticksToPixels(visibleDurationTicks, bpm, timeSignature);
-          
-          initialDimensions[trackId] = {
-            x: track.x_position,
-            width: width,
-            trimStart: track.trim_start_ticks || 0,
-            trimEnd: track.trim_end_ticks || track.duration_ticks || 0
-          };
-          console.log('[Timeline] Storing initial dimensions for track:', {
-            trackId,
-            x_position: track.x_position,
-            width: width,
-            trimStart: track.trim_start_ticks,
-            trimEnd: track.trim_end_ticks
-          });
-        }
-      });
-      
-      console.log('[Timeline] Initial dimensions stored:', initialDimensions);
-      
-      // Update group resize state
-      setGroupResizeState({
-        isResizing: true,
-        initialDimensions,
-        resizedTrackId: itemId,
-        resizeDirection: direction,
-        currentDelta: { x: 0, y: 0 }
-      });
-    },
-    onResizeMove: (itemId, delta, direction) => {
-      console.log('[Timeline] onResizeMove called:', {
-        itemId,
-        delta,
-        direction,
-        selectedIds: interaction.selectionState.selectedIds,
-        groupResizeState: groupResizeState.isResizing,
-        initialDimensions: Object.keys(groupResizeState.initialDimensions)
-      });
-      
-      // The delta is already snapped by the interaction manager
-      // Store the current delta in state so tracks can use it for visual updates
-      setGroupResizeState(prev => ({
-        ...prev,
-        currentDelta: delta
-      }));
-    },
-    onResizeEnd: (itemId, selectedIds) => {
-      console.log('Track resize ended:', itemId, selectedIds);
-      
-      // Determine if this was a group resize based on how many tracks we stored initial dimensions for
-      const tracksInGroup = Object.keys(groupResizeState.initialDimensions);
-      const isGroupResize = tracksInGroup.length > 1 && tracksInGroup.includes(itemId);
-      const direction = groupResizeState.resizeDirection;
-      
-      if (isGroupResize && direction) {
-        // For group resize, we need to calculate the correct delta based on the resize direction
-        // The currentDelta.x represents the pixel change in position/width
-        
-        console.log('[Timeline] Group resize final delta:', { 
-          currentDelta: groupResizeState.currentDelta, 
-          direction,
-          tracksInGroup 
-        });
-        
-        // Apply resize to all tracks in the group
-        tracksInGroup.forEach(trackId => {
-          const track = tracks.find(t => t.id === trackId);
-          const initialDim = groupResizeState.initialDimensions[trackId];
-          
-          if (track && initialDim && onTrackResizeEnd) {
-            if (direction === 'left') {
-              // For left resize: calculate position change
-              // The delta represents how much the left edge moved
-              const deltaPositionPixels = groupResizeState.currentDelta.x;
-              console.log('[Timeline] Left resize - position delta:', deltaPositionPixels);
-              onTrackResizeEnd(trackId, deltaPositionPixels, direction);
-            } else {
-              // For right resize: calculate width change
-              // The delta represents how much the width changed
-              const deltaWidthPixels = groupResizeState.currentDelta.x;
-              console.log('[Timeline] Right resize - width delta:', deltaWidthPixels);
-              onTrackResizeEnd(trackId, deltaWidthPixels, direction);
-            }
-          }
-        });
-      } else if (direction) {
-        // Single track resize end - BaseTrackPreview handles this entirely
-        // We don't need to do anything here
-      }
-      
-      // Reset group resize state
-      setGroupResizeState({
-        isResizing: false,
-        initialDimensions: {},
-        resizedTrackId: null,
-        resizeDirection: null,
-        currentDelta: { x: 0, y: 0 }
-      });
+      const trackIds = itemIds.filter(id => typeof id === 'string') as string[];
+      onDuplicateTracks?.(trackIds);
     }
   });
+
+  // Extract states we need from the interaction hook
+  const {
+    isDragging,
+    isResizing,
+    draggedItemId,
+    resizingItemId,
+    resizeDirection,
+    selectionState,
+    isSelecting,
+    handleBackgroundMouseDown,
+    handleItemClick,
+    updateSelection,
+    endSelection,
+    handleKeyDown,
+    setTool,
+    toggleSnapToGrid,
+    setGridSize: setInteractionGridSize,
+    selectedTool: interactionSelectedTool,
+    getItemAtPosition,
+    hasSelection,
+    selectedCount,
+    selectMultiple,
+    clearSelection,
+    pixelsToTicks: interactionPixelsToTicks,
+    ticksToPixels: interactionTicksToPixels
+  } = interaction;
+
+  // Sync grid size changes
+  React.useEffect(() => {
+    setInteractionGridSize(pixelsToTicks(actualSnapSize, bpm, timeSignature));
+  }, [actualSnapSize, bpm, timeSignature, setInteractionGridSize]);
 
   // Sync external selection state with interaction manager
   React.useEffect(() => {
     // Sync selectedTrackIds with interaction manager
-    const currentSelection = interaction.selectionState.selectedIds;
+    const currentSelection = selectionState.selectedIds.filter(id => typeof id === 'string') as string[];
     const isDifferent = selectedTrackIds.length !== currentSelection.length || 
                        !selectedTrackIds.every(id => currentSelection.includes(id));
     
@@ -532,44 +269,31 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       // Use a timeout to break the synchronous update cycle
       const timeoutId = setTimeout(() => {
         if (selectedTrackIds.length > 0) {
-          interaction.selectMultiple(selectedTrackIds, true);
+          selectMultiple(selectedTrackIds, true);
         } else {
-          interaction.clearSelection();
+          clearSelection();
         }
       }, 0);
       
       return () => clearTimeout(timeoutId);
     }
-  }, [selectedTrackIds, interaction]);
-  
-  // Update interaction manager grid size when snap size changes
-  React.useEffect(() => {
-    interaction.setGridSize(actualSnapSize);
-  }, [actualSnapSize]);
+  }, [selectedTrackIds, selectionState.selectedIds, selectMultiple, clearSelection]);
 
   // Keyboard event handling for clipboard operations
   React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Convert tracks to selectable items for the interaction manager
-      const selectableItems = tracks.map(track => ({
-        id: track.id,
-        type: 'track' as const,
-        x: track.x_position,
-        y: track.y_position
-      }));
-      
-      interaction.handleKeyDown(event, selectableItems);
+    const handleKeyDownEvent = (event: KeyboardEvent) => {
+      handleKeyDown(event);
     };
 
     // Add event listener to the container
     const container = containerRef.current;
     if (container) {
-      container.addEventListener('keydown', handleKeyDown);
+      container.addEventListener('keydown', handleKeyDownEvent);
       return () => {
-        container.removeEventListener('keydown', handleKeyDown);
+        container.removeEventListener('keydown', handleKeyDownEvent);
       };
     }
-  }, [tracks, interaction]);
+  }, [handleKeyDown]);
   
   // Use theme color for border if gridLineStyle is default
   const defaultGridLineStyle = {
@@ -601,6 +325,96 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       }
     };
   });
+
+  // Handle timeline click to set playback position
+  const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Don't handle clicks if we just completed a rectangle selection
+    if (justCompletedSelection) {
+      console.log('Click ignored - just completed rectangle selection');
+      return;
+    }
+    
+    // Only handle direct clicks on the background, not on tracks
+    if ((e.target as HTMLElement).closest('.track')) {
+      console.log('Click on track - ignoring for timeline click');
+      return;
+    }
+    
+    // Get click position relative to the content area
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    
+    // Adjust for zoom level
+    const adjustedX = clickX / zoomLevel;
+    
+    // Convert pixel position to time in seconds
+    const newTime = calculatePositionTime(adjustedX, bpm, timeSignature);
+    
+    console.log('Timeline content clicked!', {
+      clickX,
+      adjustedX,
+      newTime,
+      zoomLevel,
+      bpm,
+      timeSignature
+    });
+    
+    // Call the callback with the new time
+    onTimeChange(newTime);
+  }, [justCompletedSelection, zoomLevel, bpm, timeSignature, onTimeChange]);
+
+  // Handle mouse events on container
+  const handleContainerMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    console.log('Timeline onMouseDown');
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    
+    // Check if clicking on a track
+    const clickedItem = getItemAtPosition(position.x, position.y);
+
+    if (clickedItem) {
+      console.log('Timeline onMouseDown - calling handleItemClick');
+      handleItemClick(clickedItem.id, {
+        shiftKey: e.shiftKey,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey
+      });
+    } else {
+      console.log('Timeline onMouseDown - calling handleBackgroundMouseDown');
+      handleBackgroundMouseDown(position, {
+        shiftKey: e.shiftKey
+      });
+    }
+  }, [getItemAtPosition, handleItemClick, handleBackgroundMouseDown]);
+
+  const handleContainerMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+
+    if (isSelecting) {
+      console.log('Timeline onMouseMove - updating selection');
+      updateSelection(position);
+    }
+  }, [isSelecting, updateSelection]);
+
+  const handleContainerMouseUp = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    console.log('Timeline onMouseUp - isSelecting:', isSelecting);
+    if (isSelecting) {
+      console.log('Timeline onMouseUp - processing selection');
+      endSelection(e.shiftKey);
+      
+      // Set flag to prevent click handler from firing
+      setJustCompletedSelection(true);
+      // Reset the flag after a short delay
+      setTimeout(() => setJustCompletedSelection(false), 10);
+    }
+  }, [isSelecting, endSelection]);
   
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -608,15 +422,15 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
       {showToolbar && (
         <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
           <InteractionToolbar
-            selectedTool={interaction.toolState.selectedTool}
+            selectedTool={interactionSelectedTool}
             onToolChange={(tool) => {
-              interaction.setTool(tool);
+              setTool(tool);
               onToolChange?.(tool);
             }}
             snapToGrid={gridSnapEnabled}
             onToggleSnapToGrid={() => {
               setGridSnapEnabled(!gridSnapEnabled);
-              interaction.toggleSnapToGrid();
+              toggleSnapToGrid();
             }}
             gridSnapSize={gridSnapSize}
             onGridSnapSizeChange={(size) => {
@@ -624,11 +438,11 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
               // If setting to NONE, disable grid snapping
               if (size === GridSnapOption.NONE) {
                 setGridSnapEnabled(false);
-                interaction.toggleSnapToGrid();
+                toggleSnapToGrid();
               } else if (!gridSnapEnabled) {
                 // If selecting a size other than NONE, enable grid snapping
                 setGridSnapEnabled(true);
-                interaction.toggleSnapToGrid();
+                toggleSnapToGrid();
               }
             }}
             showGridToggle={true}
@@ -658,146 +472,14 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
           },
           ...sx
         }}
-        onMouseDown={(e) => {
-          console.log('Timeline onMouseDown');
-          const rect = e.currentTarget.getBoundingClientRect();
-          const position = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
-          };
-          
-          console.log('Timeline container bounds:', {
-            containerRect: rect,
-            clientX: e.clientX,
-            clientY: e.clientY,
-            calculatedPosition: position
-          });
-
-          // Check if clicking on a track with proper width calculation
-          const clickedTrack = tracks.find((track, index) => {
-            // Calculate actual track width using proper function
-            // Convert ticks to seconds: ticks / PPQ = beats, beats / (BPM/60) = seconds
-            const durationInSeconds = (track.duration_ticks || 0) / MUSIC_CONSTANTS.pulsesPerQuarterNote / (bpm / 60);
-            const actualTrackWidth = calculateTrackWidth(
-              durationInSeconds,
-              bpm,
-              timeSignature,
-              {
-                trimStartTicks: track.trim_start_ticks,
-                trimEndTicks: track.trim_end_ticks,
-                originalDurationTicks: track.duration_ticks
-              }
-            );
-            
-            // Calculate actual visual position in timeline
-            const visualY = GRID_CONSTANTS.headerHeight + (index * GRID_CONSTANTS.trackHeight);
-            // Convert track x_position from ticks to pixels using proper conversion function
-            const visualX = ticksToPixels(track.x_position, bpm, timeSignature);
-
-            return position.x >= visualX &&
-                   position.x <= visualX + actualTrackWidth &&
-                   position.y >= visualY &&
-                   position.y <= visualY + GRID_CONSTANTS.trackHeight;
-          });
-
-          console.log('Timeline onMouseDown - position:', position);
-          console.log('Timeline onMouseDown - clickedTrack:', clickedTrack?.id);
-          console.log('Timeline onMouseDown - selectedTool:', selectedTool);
-
-          if (clickedTrack) {
-            console.log('Timeline onMouseDown - calling handleItemClick');
-            interaction.handleItemClick(clickedTrack.id, {
-              shiftKey: e.shiftKey,
-              ctrlKey: e.ctrlKey,
-              metaKey: e.metaKey
-            });
-          } else {
-            console.log('Timeline onMouseDown - calling handleBackgroundMouseDown');
-            interaction.handleBackgroundMouseDown(position, {
-              shiftKey: e.shiftKey
-            });
-          }
-        }}
-        onMouseMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const position = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
-          };
-
-          if (interaction.isSelecting) {
-            console.log('Timeline onMouseMove - updating selection');
-            interaction.updateSelection(position);
-          }
-        }}
-        onMouseUp={(e) => {
-          console.log('Timeline onMouseUp - isSelecting:', interaction.isSelecting);
-          if (interaction.isSelecting) {
-            console.log('Timeline onMouseUp - processing selection');
-            
-            // Get Timeline container bounds for coordinate conversion
-            const timelineRect = e.currentTarget.getBoundingClientRect();
-            
-            // Get actual DOM positions of tracks
-            const selectableItems = tracks.map((track, index) => {
-              // Find the actual visual track element (with class "track" and proper dimensions)
-              const trackElement = document.querySelector(`[data-track-id="${track.id}"].track`);
-              if (!trackElement) {
-                console.warn(`Track element not found for ID: ${track.id}`);
-                return null;
-              }
-              
-              // Get actual rendered position
-              const trackRect = trackElement.getBoundingClientRect();
-              
-              // Convert to Timeline container coordinate system
-              const trackX = trackRect.left - timelineRect.left;
-              const trackY = trackRect.top - timelineRect.top;
-              
-              console.log('Track DOM position:', {
-                trackId: track.id,
-                trackRect: {
-                  left: trackRect.left,
-                  top: trackRect.top,
-                  width: trackRect.width,
-                  height: trackRect.height
-                },
-                timelineRect: {
-                  left: timelineRect.left,
-                  top: timelineRect.top
-                },
-                relativeToTimeline: {
-                  x: trackX,
-                  y: trackY,
-                  width: trackRect.width,
-                  height: trackRect.height
-                }
-              });
-              
-              return {
-                id: track.id,
-                type: 'track' as const,
-                x: trackX,
-                y: trackY,
-                width: trackRect.width,
-                height: trackRect.height
-              };
-            }).filter(Boolean); // Remove null entries
-            
-            console.log('Timeline onMouseUp - calling endSelection with', selectableItems.length, 'items');
-            interaction.endSelection(selectableItems, e.shiftKey);
-            
-            // Set flag to prevent click handler from firing
-            setJustCompletedSelection(true);
-            // Reset the flag after a short delay
-            setTimeout(() => setJustCompletedSelection(false), 10);
-          }
-        }}
+        onMouseDown={handleContainerMouseDown}
+        onMouseMove={handleContainerMouseMove}
+        onMouseUp={handleContainerMouseUp}
       >
         {/* Selection Overlay */}
         <SelectionOverlay
-          selectionRect={interaction.selectionState.selectionRect}
-          isActive={interaction.isSelecting}
+          selectionRect={selectionState.selectionRect}
+          isActive={isSelecting}
         />
 
         {/* Playback Cursor with ref for imperative control */}
@@ -832,14 +514,19 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
             onTrackPositionChange={onTrackPositionChange}
             onTimeChange={onTimeChange}
             totalWidth={totalTimelineWidth}
-            selectedTool={interaction.toolState.selectedTool}
+            selectedTool={interactionSelectedTool}
             selectedTrackIds={selectedTrackIds}
             interaction={interaction}
             justCompletedSelection={justCompletedSelection}
             gridSnapEnabled={gridSnapEnabled}
             gridSnapSize={gridSnapSize}
             actualSnapSize={actualSnapSize}
-            groupResizeState={groupResizeState}
+            isDragging={isDragging}
+            isResizing={isResizing}
+            draggedItemId={draggedItemId}
+            resizingItemId={resizingItemId}
+            resizeDirection={resizeDirection}
+            onClick={handleTimelineClick}
           />
         ) : (
           <EmptyTimelineDropZone onTimeChange={onTimeChange} bpm={bpm} timeSignature={timeSignature} />
@@ -858,48 +545,15 @@ interface TimelineRulerProps {
   totalWidth?: number;
 }
 
-// SIMPLIFIED TimelineRuler for testing
-// function TimelineRuler({ totalWidth }: TimelineRulerProps) {
-//   const theme = useTheme();
-//   return (
-//     <Box
-//       sx={{
-//         display: 'flex',
-//         position: 'sticky', // Keep sticky for now
-//         top: 0,
-//         bgcolor: 'background.paper',
-//         zIndex: 2,
-//         height: GRID_CONSTANTS.headerHeight,
-//         boxSizing: 'border-box',
-//         transformOrigin: "top left",
-//         borderBottom: `1px solid ${theme.palette.divider}`,
-//         boxShadow: theme.shadows[2],
-//         alignItems: 'center',
-//         justifyContent: 'center',
-//         fontSize: '14px',
-//         color: 'text.secondary',
-//       }}
-//       style={{
-//         width: totalWidth ? `${totalWidth}px` : '100%',
-//       }}
-//     >
-//       Simplified Ruler - Test
-//     </Box>
-//   );
-// }
-
-// --- START NEW TimelineRuler IMPLEMENTATION ---
 function TimelineRuler({
   measureCount,
-  zoomLevel = 1, // Keep zoomLevel if it might affect rendering density later
+  zoomLevel = 1,
   bpm = 120,
   timeSignature = [4, 4],
   onTimeChange = () => {},
-  // gridLineStyle, // No longer needed for ruler internal lines
   totalWidth
 }: TimelineRulerProps) {
-  // const theme = useTheme(); // MUI theme, not directly needed for these specific changes
-  const { studioMode } = useAppTheme(); // Get studioMode
+  const { studioMode } = useAppTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Define colors based on studioMode
@@ -918,7 +572,7 @@ function TimelineRuler({
   const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
-    const adjustedX = clickX / zoomLevel; // Assuming zoom affects ruler scale
+    const adjustedX = clickX / zoomLevel;
     const newTime = calculatePositionTime(adjustedX, bpm, timeSignature);
     onTimeChange(newTime);
   };
@@ -991,18 +645,17 @@ function TimelineRuler({
     beatsPerMeasure,
     timeSignature,
     zoomLevel, 
-    SUBDIVISION_LINE_COLOR, BEAT_LINE_COLOR, MEASURE_LINE_COLOR // Redraw if colors change
+    SUBDIVISION_LINE_COLOR, BEAT_LINE_COLOR, MEASURE_LINE_COLOR
   ]);
 
   return (
-    // Main sticky container - Apply Tailwind classes
     <div
       className={cn(
         "sticky top-0 z-[2] box-border overflow-hidden shadow-sm border-b",
-        isDark ? "bg-neutral-900 border-b-neutral-700" // Darker neutral gray for dark mode
-               : "bg-neutral-100 border-b-neutral-300" // Neutral light gray for light mode
+        isDark ? "bg-neutral-900 border-b-neutral-700"
+               : "bg-neutral-100 border-b-neutral-300"
         )}
-      style={{ // Height and dynamic width still via style prop
+      style={{
         height: `${GRID_CONSTANTS.headerHeight}px`,
         width: totalWidth ? `${totalWidth}px` : '100%',
       }}
@@ -1019,9 +672,9 @@ function TimelineRuler({
           key={`measure-num-${measureIndex}`}
           className={cn(
             "absolute top-1/2 -translate-y-1/2 text-sm select-none z-[1]",
-            isDark ? "text-neutral-200" : "text-neutral-700" // Text colors adjusted for contrast
+            isDark ? "text-neutral-200" : "text-neutral-700"
             )}
-          style={{ // Dynamic left positioning
+          style={{
             left: `${measureIndex * measureWidthPixels + 5}px`,
           }}
         >
@@ -1038,9 +691,9 @@ function TimelineRuler({
               key={`beat-num-${measureIndex}-${actualBeatNumber}`}
               className={cn(
                 "absolute top-1/2 -translate-y-1/2 text-[8px] select-none z-[1]",
-                isDark ? "text-neutral-400" : "text-neutral-500" // Muted text colors adjusted for contrast
+                isDark ? "text-neutral-400" : "text-neutral-500"
                 )}
-              style={{ // Dynamic left positioning, similar to measure numbers but offset from beat line
+              style={{
                 left: `${beatXPosition + 4}px`, 
               }}
             >
@@ -1052,7 +705,6 @@ function TimelineRuler({
     </div>
   );
 }
-// --- END NEW TimelineRuler IMPLEMENTATION ---
 
 interface TimelineContentProps extends TimelineRulerProps {
   tracks: CombinedTrack[];
@@ -1065,18 +717,17 @@ interface TimelineContentProps extends TimelineRulerProps {
   totalWidth?: number;
   selectedTool: Tool;
   selectedTrackIds: string[];
-  interaction: any; // Type from useInteractionManager
+  interaction: any; // Type from useTimelineInteractions
   justCompletedSelection: boolean;
-  groupResizeState?: {
-    isResizing: boolean;
-    initialDimensions: Record<string, { x: number; width: number; trimStart: number; trimEnd: number }>;
-    resizedTrackId: string | null;
-    resizeDirection: 'left' | 'right' | null;
-    currentDelta: { x: number; y: number };
-  };
   gridSnapEnabled?: boolean;
   gridSnapSize?: GridSnapOption;
   actualSnapSize?: number;
+  isDragging?: boolean;
+  isResizing?: boolean;
+  draggedItemId?: string | number | null;
+  resizingItemId?: string | number | null;
+  resizeDirection?: 'left' | 'right' | null;
+  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 function TimelineContent({
@@ -1097,49 +748,13 @@ function TimelineContent({
   gridSnapEnabled = true,
   gridSnapSize = GridSnapOption.STEP,
   actualSnapSize,
-  groupResizeState
+  isDragging = false,
+  isResizing = false,
+  draggedItemId,
+  resizingItemId,
+  resizeDirection,
+  onClick
 }: TimelineContentProps) {
-  // const theme = useTheme(); // No longer need theme for grid colors
-  
-  // Handler for timeline content clicks to set playback position
-  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Don't handle clicks if we just completed a rectangle selection
-    if (justCompletedSelection) {
-      console.log('Click ignored - just completed rectangle selection');
-      return;
-    }
-    
-    // Only handle direct clicks on the background, not on tracks
-    if ((e.target as HTMLElement).closest('.track')) {
-      console.log('Click on track - ignoring for timeline click');
-      return;
-    }
-    
-    // Get click position relative to the content area
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    
-    // Adjust for zoom level
-    const adjustedX = clickX / zoomLevel;
-    
-    // Convert pixel position to time in seconds
-    const newTime = calculatePositionTime(adjustedX, bpm, timeSignature);
-    
-    console.log('Timeline content clicked!', {
-      clickX,
-      adjustedX,
-      newTime,
-      zoomLevel,
-      bpm,
-      timeSignature,
-      target: e.target,
-      currentTarget: e.currentTarget
-    });
-    
-    // Call the callback with the new time
-    onTimeChange(newTime);
-  };
-  
   // Define fixed gray colors for grid lines
   const fixedMeasureColor = 'rgba(128, 128, 128, 0.8)'; // Medium Gray, strong alpha
   const fixedBeatColor = 'rgba(128, 128, 128, 0.5)';    // Medium Gray, medium alpha
@@ -1158,7 +773,7 @@ function TimelineContent({
       style={{
         width: totalWidth ? `${totalWidth}px` : '100%',
       }}
-      onClick={handleTimelineClick}
+      onClick={onClick}
     >
       {/* Pass fixed gray colors to GridOverlay */}
       <GridOverlay 
@@ -1176,13 +791,13 @@ function TimelineContent({
           index={index}
           isSelected={selectedTrackIds.includes(track.id)}
           selectedTool={selectedTool}
-          isGroupDrag={interaction.isDragging && selectedTrackIds.includes(track.id)}
-          isPrimaryDrag={interaction.dragState.draggedItemId === track.id}
-          isGroupResize={groupResizeState?.isResizing && selectedTrackIds.includes(track.id)}
-          isPrimaryResize={groupResizeState?.resizedTrackId === track.id}
-          resizeDelta={groupResizeState?.isResizing ? groupResizeState.currentDelta : undefined}
-          resizeDirection={groupResizeState?.resizeDirection}
-          resizeInitialDimensions={groupResizeState?.initialDimensions[track.id]}
+          isGroupDrag={isDragging && selectedTrackIds.includes(track.id) && selectedTrackIds.length > 1}
+          isPrimaryDrag={draggedItemId === track.id}
+          isGroupResize={isResizing && selectedTrackIds.includes(track.id) && selectedTrackIds.length > 1}
+          isPrimaryResize={resizingItemId === track.id}
+          resizeDelta={isResizing ? { x: 0, y: 0 } : undefined} // We'll handle this properly with the new system
+          resizeDirection={resizingItemId === track.id ? resizeDirection : null}
+          resizeInitialDimensions={undefined} // Not needed with new system
           onTrackClick={(trackId, event) => {
             interaction.handleItemClick(trackId, event);
           }}
@@ -1193,7 +808,6 @@ function TimelineContent({
           gridSnapEnabled={gridSnapEnabled}
           gridSnapSize={gridSnapSize}
           actualSnapSize={actualSnapSize}
-          // gridLineStyle={gridLineStyle} // Removed, GridOverlay handles this
         />
       ))}
     </Box>
@@ -1400,4 +1014,4 @@ function EmptyTimelineDropZone({ onTimeChange = () => {}, bpm = 120, timeSignatu
       <PlaybackCursor currentTime={0} isPlaying={false} bpm={bpm} timeSignature={timeSignature} />
     </Box>
   );
-} 
+}

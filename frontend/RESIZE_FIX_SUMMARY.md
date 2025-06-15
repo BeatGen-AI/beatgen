@@ -1,47 +1,64 @@
-# Individual Track Resize Fix Summary
+# Resize Fix Summary
 
-## Issues Fixed
+## Problems Fixed
 
-### 1. **Removed Undefined Variable Reference**
-- Fixed `isGroupResize` undefined error in console.log statement
-- Updated to use proper variable checks
+### 1. Track Snapping Back After Resize
+**Issue**: Tracks would return to original size when releasing the mouse
+**Solution**: 
+- Added proper state updates to persist the new width
+- Updated `onResizeEnd` to call `onTrackResizeEnd` with the correct delta
+- Ensured the track's actual duration is updated, not just the preview
 
-### 2. **Simplified Interaction Manager Usage**
-- Changed condition from requiring multiple selected tracks to always use interaction manager when available
-- Now both individual and group resize use the same code path
+### 2. Left Resize Behavior
+**Issue**: Resizing from the left was only changing width, making it resize from the right edge
+**Solution**:
+- Modified left resize logic to update both position and width
+- Track moves right as width decreases, keeping the right edge fixed
+- Added preview position tracking alongside preview width
 
-### 3. **Fixed Initial Dimensions Storage**
-- Store track dimensions in ticks (not pixels) for consistency
-- Use `track.width_ticks` when available
+## Implementation Changes
 
-### 4. **Removed Direct DOM Manipulation**
-- Eliminated Timeline's direct DOM style updates during resize
-- Let BaseTrackPreview handle all visual updates through React
+### 1. Added Position Tracking (KonvaTimeline.tsx)
+```typescript
+const [resizePreviewPositions, setResizePreviewPositions] = useState<Map<string, number>>(new Map());
+```
 
-### 5. **Fixed Resize State Flow**
-- Store resize delta during move for use in end callback
-- Apply actual state changes only on resize end
-- Properly handle both left and right resize
+### 2. Updated Resize Logic (useKonvaInteractions.ts)
+```typescript
+if (direction === 'left') {
+  // Calculate new position to keep right edge fixed
+  const deltaWidth = -deltaX;
+  const newWidth = Math.max(gridSize, snapToGridValue(item.width - deltaWidth));
+  const actualDeltaWidth = item.width - newWidth;
+  const newX = item.x + actualDeltaWidth;
+  
+  updates.set(item.id, {
+    start: newX,
+    width: newWidth,
+    height: item.height
+  });
+}
+```
 
-## How Individual Resize Works Now
+### 3. Position Update on Resize End (KonvaTimeline.tsx)
+```typescript
+// For left resize, update both position and width
+if (dim.start !== undefined && dim.width !== undefined) {
+  onTrackPositionChange(trackId, {
+    x: dim.start,
+    y: track.y_position || 0
+  }, true);
+  // Also update width...
+}
+```
 
-1. **User clicks resize handle** → BaseTrackPreview detects and calls `interaction.startResize()`
-2. **Mouse move** → Global event listeners call `interaction.updateResize()` 
-3. **Interaction manager** → Calls Timeline's `onResizeMove` callback (stores delta)
-4. **Visual feedback** → BaseTrackPreview updates its own DOM for smooth resize
-5. **Mouse up** → `interaction.endResize()` → Timeline's `onResizeEnd` → Updates store
+### 4. Visual Preview Updates
+- Track position updates during left resize preview
+- Both X position and width update in real-time
+- Preview clears on resize end
 
-## Testing Individual Resize
-
-1. Select a single track
-2. Hover over left or right resize handle
-3. Drag to resize - should see smooth visual feedback
-4. Release - track should update to new size
-5. Check console for proper flow of resize events
-
-## Key Changes Made
-
-- BaseTrackPreview now always uses interaction manager for resize when available
-- Timeline no longer manipulates DOM directly
-- Resize delta is properly tracked and applied at the end
-- Both individual and group resize share the same code path
+## Result
+- Left resize now properly trims from the start
+- Right resize extends/trims from the end
+- Both resize operations persist when released
+- Visual feedback shows accurate preview during resize
