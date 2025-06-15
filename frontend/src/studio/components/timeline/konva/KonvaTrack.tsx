@@ -214,8 +214,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         />
       )}
       
-      {/* Custom resize handles */}
-      {(isHovered || isSelected) && !isDragging && !isResizing && (
+      {/* Custom resize handles - show on hover for all tracks */}
+      {isHovered && !isDragging && !isResizing && (
         <>
           {/* Left resize handle */}
           <Rect

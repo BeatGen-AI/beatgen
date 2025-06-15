@@ -135,6 +135,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     mousePos: Position;
     item: KonvaItem;
     direction: 'left' | 'right';
+    allItems: Map<string, KonvaItem>;  // Snapshots of all items being resized
   } | null>(null);
 
   // Ref for throttling drag updates
@@ -346,11 +347,31 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     const item = items.find(i => i.id === itemId);
     if (!item) return;
 
+    // Check if the item is selected
+    const isItemSelected = selectedIds.has(itemId);
+    
+    // If resizing an unselected track, clear selection
+    if (!isItemSelected) {
+      clearSelection();
+    }
+
+    // Capture snapshots of all items that will be resized
+    const allItems = new Map<string, KonvaItem>();
+    if (isItemSelected) {
+      // Capture all selected items
+      items.filter(i => selectedIds.has(i.id)).forEach(i => {
+        allItems.set(i.id, { ...i });
+      });
+    } else {
+      // Just capture the single item
+      allItems.set(item.id, { ...item });
+    }
 
     resizeStartRef.current = {
       mousePos,
       item: { ...item },
-      direction
+      direction,
+      allItems
     };
 
     setIsResizing(true);
@@ -360,39 +381,41 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     if (onResizeStart) {
       onResizeStart(item, direction);
     }
-  }, [items, onResizeStart]);
+  }, [items, selectedIds, clearSelection, onResizeStart]);
 
   // Update resize
   const updateResize = useCallback((mousePos: Position) => {
     if (!isResizing || !resizeStartRef.current) return;
 
-    const { item, direction, mousePos: startMousePos } = resizeStartRef.current;
-    const deltaX = pixelsToLogical(mousePos.x - startMousePos.x);
+    const { direction, mousePos: startMousePos, allItems } = resizeStartRef.current;
+    const deltaXPixels = mousePos.x - startMousePos.x;
+    const deltaX = pixelsToLogical(deltaXPixels);
     
     const updates = new Map<string, Dimensions>();
     
-    if (direction === 'left') {
-      // Left resize: change both position and width to keep right edge fixed
-      // When dragging right (positive deltaX), we want to shrink the track
-      // When dragging left (negative deltaX), we want to grow the track
-      const newWidth = Math.max(gridSize, snapToGridValue(item.width - deltaX));
-      const widthDelta = item.width - newWidth; // How much the width changed
-      const newX = item.x + widthDelta; // Move position by the width change
-      
-      updates.set(item.id, {
-        start: newX,
-        width: newWidth,
-        height: item.height
-      });
-    } else {
-      // Right resize: only change width
-      const newWidth = Math.max(gridSize, snapToGridValue(item.width + deltaX));
-      
-      updates.set(item.id, {
-        width: newWidth,
-        height: item.height
-      });
-    }
+    // Apply resize to all items using their snapshots
+    allItems.forEach((originalItem) => {
+      if (direction === 'left') {
+        // Left resize: change both position and width
+        const newWidth = Math.max(gridSize, snapToGridValue(originalItem.width - deltaX));
+        const widthDelta = originalItem.width - newWidth;
+        const newX = originalItem.x + widthDelta;
+        
+        updates.set(originalItem.id, {
+          start: newX,
+          width: newWidth,
+          height: originalItem.height
+        });
+      } else {
+        // Right resize: only change width
+        const newWidth = Math.max(gridSize, snapToGridValue(originalItem.width + deltaX));
+        
+        updates.set(originalItem.id, {
+          width: newWidth,
+          height: originalItem.height
+        });
+      }
+    });
 
     if (onResizeMove) {
       onResizeMove(updates);
@@ -403,36 +426,46 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
   const endResize = useCallback(() => {
     if (!isResizing || !resizeStartRef.current) return;
 
-    const item = items.find(i => i.id === resizeStartRef.current!.item.id);
+    const { item } = resizeStartRef.current;
     const direction = resizeStartRef.current.direction;
     
-    if (item) {
-      const updates = new Map<string, Dimensions>();
+    // Get items that were resized - either selected items or just the single item
+    const isItemSelected = selectedIds.has(item.id);
+    const itemsToResize = isItemSelected 
+      ? items.filter(i => selectedIds.has(i.id))
+      : items.filter(i => i.id === item.id);
+    
+    const updates = new Map<string, Dimensions>();
+    
+    // Collect final dimensions for all resized items
+    for (const resizeItem of itemsToResize) {
+      const currentItem = items.find(i => i.id === resizeItem.id);
+      if (!currentItem) continue;
       
       // Include start position for left resize
       if (direction === 'left') {
-        updates.set(item.id, {
-          start: item.x,
-          width: item.width,
-          height: item.height
+        updates.set(currentItem.id, {
+          start: currentItem.x,
+          width: currentItem.width,
+          height: currentItem.height
         });
       } else {
-        updates.set(item.id, {
-          width: item.width,
-          height: item.height
+        updates.set(currentItem.id, {
+          width: currentItem.width,
+          height: currentItem.height
         });
       }
+    }
 
-      if (onResizeEnd) {
-        onResizeEnd(updates);
-      }
+    if (onResizeEnd && updates.size > 0) {
+      onResizeEnd(updates);
     }
 
     setIsResizing(false);
     setResizingItemId(null);
     setResizeDirection(null);
     resizeStartRef.current = null;
-  }, [isResizing, items, onResizeEnd]);
+  }, [isResizing, items, selectedIds, onResizeEnd]);
 
   // Start rectangle selection
   const startSelection = useCallback((mousePos: Position) => {

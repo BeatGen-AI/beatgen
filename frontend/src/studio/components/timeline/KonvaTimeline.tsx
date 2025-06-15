@@ -571,7 +571,15 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             const isSelected = interaction.selectedIds.includes(track.id);
             const isBeingDragged = interaction.isDragging && isSelected;
             const isPrimaryDrag = interaction.draggedItemId === track.id;
-            const isBeingResized = interaction.isResizing && interaction.resizingItemId === track.id;
+            // Check if this track is being resized
+            // If the resizing track is selected, all selected tracks are being resized
+            // Otherwise, only the specific track is being resized
+            const resizingTrackIsSelected = interaction.resizingItemId && interaction.selectedIds.includes(interaction.resizingItemId);
+            const isBeingResized = interaction.isResizing && (
+              resizingTrackIsSelected 
+                ? isSelected  // All selected tracks are being resized
+                : interaction.resizingItemId === track.id  // Only this specific track
+            );
             
             // Get the item from konvaItems to get drag position if available
             const konvaItem = konvaItems.find(item => item.id === track.id);
