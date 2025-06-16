@@ -156,17 +156,7 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
 
   // Drag management
   const startDrag = useCallback((itemId: string, startPosition: { x: number; y: number }, initialPositions: Record<string, { x: number; y: number }>, mouseOffset?: { x: number; y: number }) => {
-    console.log('[useInteractionManager] startDrag called:', {
-      itemId,
-      startPosition,
-      initialPositions,
-      mouseOffset,
-      selectedIds: selectionState.selectedIds
-    });
-    
     const isGroupDrag = selectionState.selectedIds.includes(itemId) && selectionState.selectedIds.length > 1;
-    
-    console.log('[useInteractionManager] startDrag - isGroupDrag:', isGroupDrag);
     
     setDragState({
       draggedItemId: itemId,
@@ -179,7 +169,6 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     // Store mouse offset for position-based dragging
     (dragStartPos.current as any).mouseOffset = mouseOffset || { x: 0, y: 0 };
     
-    console.log('[useInteractionManager] startDrag - calling onDragStart callback');
     onDragStart?.(itemId, selectionState.selectedIds);
   }, [selectionState.selectedIds, onDragStart]);
 
@@ -222,10 +211,7 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
 
   // Selection rectangle management
   const startSelection = useCallback((startPosition: { x: number; y: number }) => {
-    console.log('startSelection - tool:', toolState.selectedTool, 'position:', startPosition);
     if (toolState.selectedTool !== 'select') return;
-
-    console.log('startSelection - setting isSelecting to true');
     setSelectionState(prev => ({
       ...prev,
       isSelecting: true,
@@ -257,12 +243,9 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
   }, [selectionState.isSelecting, selectionState.selectionRect]);
 
   const endSelection = useCallback((items: Selectable[], multiSelect = false) => {
-    console.log('endSelection called with', items.length, 'items');
     if (!selectionState.isSelecting || !selectionState.selectionRect) {
-      console.log('endSelection - not selecting or no rect');
       return;
     }
-    console.log('endSelection - rect:', selectionState.selectionRect);
 
     // Try to use rectangle intersection if items have proper dimensions
     const itemsWithDimensions = items.filter((item): item is SelectableItem => {
@@ -280,13 +263,9 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
 
     let selectedItems: Selectable[];
 
-    console.log('endSelection - itemsWithDimensions:', itemsWithDimensions);
-    
     if (itemsWithDimensions.length > 0) {
       // Use rectangle intersection for items with proper dimensions
-      console.log('endSelection - using rectangle intersection');
       selectedItems = getItemsInRect(itemsWithDimensions, selectionState.selectionRect);
-      console.log('endSelection - selected items from intersection:', selectedItems);
     } else {
       // Fallback to point-in-rectangle for simple items
       const rect = selectionState.selectionRect;
@@ -304,8 +283,6 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
     }
 
     const newSelectedIds = selectedItems.map(item => item.id);
-    console.log('endSelection - final selected IDs:', newSelectedIds);
-    console.log('endSelection - calling selectMultiple with IDs:', newSelectedIds, 'multiSelect:', multiSelect);
     
     if (multiSelect) {
       selectMultiple(newSelectedIds, false);
@@ -313,8 +290,6 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
       selectMultiple(newSelectedIds, true);
     }
     
-    console.log('endSelection - selection should be updated');
-
     setSelectionState(prev => ({
       ...prev,
       isSelecting: false,
@@ -352,12 +327,10 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
   }, [toolState.selectedTool, clearSelection]);
 
   const handleBackgroundMouseDown = useCallback((position: { x: number; y: number }, event?: { shiftKey?: boolean }) => {
-    console.log('handleBackgroundMouseDown - tool:', toolState.selectedTool, 'position:', position);
     if (toolState.selectedTool === 'select') {
       if (!event?.shiftKey) {
         clearSelection();
       }
-      console.log('handleBackgroundMouseDown - starting selection');
       startSelection(position);
     }
   }, [toolState.selectedTool, clearSelection, startSelection]);
@@ -434,17 +407,7 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
 
   // Resize management
   const startResize = useCallback((itemId: string, direction: 'left' | 'right', startPosition: { x: number; y: number }, initialDimensions: Record<string, { x: number; width: number }>) => {
-    console.log('[useInteractionManager] startResize called:', {
-      itemId,
-      direction,
-      startPosition,
-      initialDimensions,
-      selectedIds: selectionState.selectedIds
-    });
-    
     const isGroupResize = selectionState.selectedIds.includes(itemId) && selectionState.selectedIds.length > 1;
-    
-    console.log('[useInteractionManager] startResize - isGroupResize:', isGroupResize);
     
     setResizeState({
       resizingItemId: itemId,
@@ -456,7 +419,6 @@ export function useInteractionManager(options: UseInteractionManagerOptions = {}
 
     resizeStartPos.current = startPosition;
     
-    console.log('[useInteractionManager] startResize - calling onResizeStart callback');
     onResizeStart?.(itemId, selectionState.selectedIds, direction);
   }, [selectionState.selectedIds, onResizeStart]);
 

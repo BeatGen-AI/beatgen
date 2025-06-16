@@ -492,10 +492,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
           try {
               if (trackToDelete.type === 'SAMPLER') {
-                  console.log(`Placeholder: Disconnect/cleanup sampler track ${trackId} subscription`);
               }
               if (trackToDelete.type === 'MIDI') {
-                  console.log(`Placeholder: Disconnect MIDI track ${trackId} from soundfont/manager`);
               }
           } catch (disconnectError) {
               console.error(`Error during track disconnection for ${trackId}:`, disconnectError);
@@ -519,14 +517,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         return;
     }
     const drumTrackId = (samplerTrack.track as SamplerTrackRead)?.drum_track_id;
-    console.log(`Attempting to remove sampler ${samplerTrackId}, associated drum track: ${drumTrackId}`);
 
     // 2. Delete the Sampler Track Itself (using the refactored handleTrackDelete)
     // Note: We call handleTrackDelete, NOT Actions.DeleteTrack directly, 
     // because handleTrackDelete includes engine removal and state updates.
     // The history action for deleting the sampler itself is handled within handleTrackDelete.
     await handleTrackDelete(samplerTrackId); 
-    console.log(`Deletion process initiated for sampler track ${samplerTrackId}`);
 
     // 3. Update Parent Drum Track (if applicable)
     if (drumTrackId) {
@@ -539,7 +535,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                 const newSamplerIds = oldSamplerIds.filter(id => id !== samplerTrackId);
 
                 if (oldSamplerIds.length !== newSamplerIds.length) {
-                    console.log(`Updating parent drum track ${drumTrackId} after removing sampler ${samplerTrackId}. New list:`, newSamplerIds);
                     
                     // Update parent state using Immer via _updateNestedTrackData
                     _updateNestedTrackData(drumTrackId, { sampler_track_ids: newSamplerIds } as Partial<DrumTrackRead>);
@@ -553,8 +548,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                     );
                     await executeHistoryAction(parentUpdateAction); 
                 } else {
-                    console.log(`Sampler ${samplerTrackId} was not found in parent ${drumTrackId}'s list.`);
-                }
+                    }
             } else {
                 console.warn(`Parent drum track ${drumTrackId} not found after deleting sampler ${samplerTrackId}. Cannot update parent.`);
             }
@@ -568,9 +562,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             await updateParentLogic(); // Attempt without handler
         }
     } else {
-        console.log(`Sampler ${samplerTrackId} was not associated with a drum track.`);
     }
-    console.log(`Finished removeSamplerTrack process for ${samplerTrackId}`);
   };
 
   // --- Parameter Change Handlers --- 
@@ -694,8 +686,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             return;
         }
         
-        console.log(`TracksSlice processing position change: trackId=${trackId}, isDragEnd=${isDragEnd}`, 
-            { newPosition, oldPosition });
         
         // Update track state
         updateTrackState(trackId, { 
@@ -867,44 +857,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             // Ensure position doesn't go negative
             newPositionX = Math.max(0, newPositionX);
             
-            console.log('[tracksSlice] Left resize calculation:', {
-                'oldTrimStart': oldTrimStartTicks,
-                'deltaTicks': deltaTicks,
-                'newTrimStart': newTrimStartTicks,
-                'oldPosition': oldPositionX,
-                'newPosition': newPositionX
-            });
         } else { 
             // For right resize, deltaTicks represents width change
             newTrimEndTicks = oldTrimEndTicks + deltaTicks;
             // Ensure trim end doesn't go below trim start
             newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
             
-            console.log('[tracksSlice] Right resize calculation:', {
-                'oldTrimEnd': oldTrimEndTicks,
-                'deltaTicks': deltaTicks,
-                'newTrimEnd': newTrimEndTicks,
-                'positionStaysSame': newPositionX === oldPositionX
-            });
         }
 
-        console.log('[tracksSlice] Calculated new values:', {
-            newPositionX,
-            newTrimStartTicks,
-            newTrimEndTicks,
-            positionChanged: newPositionX !== oldPositionX,
-            actualWidth: ticksToPixels(newTrimEndTicks - newTrimStartTicks, bpm, timeSignature)
-        });
 
-        console.log('[tracksSlice] Creating TrackResize action with values:', {
-            trackId,
-            oldTrimStartTicks,
-            oldTrimEndTicks,
-            oldPositionX,
-            newTrimStartTicks,
-            newTrimEndTicks,
-            newPositionX
-        });
 
         // Create the history action without width params
         const action = new Actions.TrackResize(
@@ -953,12 +914,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   return null; // Return null if main track creation fails
               }
               const mainDrumTrackId = mainDrumTrack.id;
-              console.log(`Created main drum track ${mainDrumTrackId}`);
 
               // 2. Check for samples payload and add corresponding Sampler Tracks
               if (payload && 'samples' in payload && Array.isArray(payload.samples)) {
                   const drumPayload = payload as DrumTrackPayload;
-                  console.log(`Adding ${drumPayload.samples.length} sampler tracks to drum track ${mainDrumTrackId}...`);
                   
                   // Sequentially add sampler tracks using the dedicated action
                   for (const sample of drumPayload.samples) {
@@ -977,9 +936,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                           // Decide whether to continue or stop if one sampler fails
                       }
                   }
-                  console.log(`Finished adding sampler tracks for ${mainDrumTrackId}.`);
               } else {
-                  console.log(`No initial samples provided for drum track ${mainDrumTrackId}.`);
               }
               
               // 3. Open UI (optional)
@@ -1068,21 +1025,17 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             // e.g., baseMidiNote might be derived or default
         };
         const samplerTrackName = sampleData.display_name; // Or generate a more unique name
-        console.log(`   Action Step 1: Prepared sampler options for ${samplerTrackName}`, samplerOptions);
 
 
         // 2. Create the Sampler Track (handles its own history for creation)
         const newSamplerTrack = await createTrackAndRegisterWithHistory('SAMPLER', samplerTrackName, samplerOptions);
-        console.log(`   Action Step 2: Calling createTrackAndRegisterWithHistory for sampler...`);
 
         if (!newSamplerTrack || !newSamplerTrack.id) {
             console.error(`Failed to create sampler track for sample ${sampleData.display_name}`);
             return null;
         }
         const newSamplerTrackId = newSamplerTrack.id;
-        console.log(`   Action Step 2: Sampler track CREATED with ID: ${newSamplerTrackId}`);
 
-        console.log(`Created sampler track ${newSamplerTrackId} linked to drum track ${drumTrackId}`);
 
         // 3. Update Parent Drum Track's State
         const parentDrumTrack = selectDrumTrackById(drumTrackId); // Use the selector
@@ -1095,12 +1048,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         const oldSamplerIds = parentDrumTrack.sampler_track_ids || [];
         // Ensure no duplicates (though unlikely with UUIDs)
         const newSamplerIds = [...new Set([...oldSamplerIds, newSamplerTrackId])];
-        console.log(`   Action Step 3: Updating parent ${drumTrackId} with new IDs:`, newSamplerIds);
 
 
-        console.log(`Updating parent drum track ${drumTrackId} sampler IDs from`, oldSamplerIds, `to`, newSamplerIds);
         _updateNestedTrackData(drumTrackId, { sampler_track_ids: newSamplerIds } as Partial<DrumTrackRead>);
-        console.log(`   Action Step 3: Called _updateNestedTrackData for parent.`);
 
 
         // 4. Add History Action for the Parent Update
@@ -1113,14 +1063,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                 newSamplerIds
             );
             await executeHistoryAction(parentUpdateAction);
-            console.log(`   Action Step 4: History action executed.`);
 
         } catch (historyError) {
             console.error("Error executing history action for parent drum track update:", historyError);
             // Consider if state needs rollback here
         }
 
-        console.log(`<<< addSamplerTrackToDrumTrack ACTION END for sample ${sampleData.display_name}`);
 
         return newSamplerTrack;
     };

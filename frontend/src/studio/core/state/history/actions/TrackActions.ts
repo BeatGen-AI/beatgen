@@ -47,7 +47,6 @@ export class TrackPositionAction extends TrackAction {
         const isCurrentlyPlaying = this.get().isPlaying;
         
         if (isCurrentlyPlaying && this.store.getTransport().handleTrackPositionChange) {
-            console.log(`Playback active during ${operation} - syncing track`);
             this.store.getTransport().handleTrackPositionChange(this.trackId, position.x);
         }
         
@@ -62,7 +61,6 @@ export class TrackPositionAction extends TrackAction {
             
             this.store.getSoundfontController()?.setTrackOffset?.(this.trackId, offsetMs);
             this.store.getSamplerController()?.setTrackOffset?.(this.trackId, offsetMs);
-            console.log(`Set track ${this.trackId} offset: ${position.x} ticks -> ${offsetMs}ms`);
         }
     }
     
@@ -102,13 +100,11 @@ export class AddTrackAction extends BaseAction {
     }
     
     async execute(): Promise<void> {
-        console.log('AddTrackAction: Execute started for', this.trackData.id);
         
         // Step 1: Update Zustand state FIRST
         let trackAddedToState = false;
         this.get()._updateState('tracks', (prevTracks) => {
             if (prevTracks.some(t => t.id === this.trackData.id)) {
-                console.warn(`AddTrackAction execute: Track ${this.trackData.id} already exists in state.`);
                 return prevTracks; 
             }
             trackAddedToState = true;
@@ -117,7 +113,6 @@ export class AddTrackAction extends BaseAction {
 
         if (!trackAddedToState) return; 
         this.get().updateTrackIndices(); 
-        console.log('AddTrackAction: State updated for', this.trackData.id);
 
         // Step 2: Initialize Engine Backend
         const typeConfig = TRACK_CONFIG[this.trackData.type];
@@ -131,10 +126,8 @@ export class AddTrackAction extends BaseAction {
         const trackSpecificData = this.trackData.track as any;
         const instrumentId = this.trackData.type === 'MIDI' ? trackSpecificData?.instrument_id as string | undefined : undefined;
 
-        console.log("instrumentId: ", instrumentId);
         
         try {
-            console.log(`AddTrackAction: Calling initEngine for ${this.trackData.id} (type: ${this.trackData.type})`);
             // Pass the stored file object (or undefined)
             let options: TrackOptions;
             switch (this.trackData.type) {
@@ -162,14 +155,12 @@ export class AddTrackAction extends BaseAction {
                     };
             }
             await typeConfig.initEngine(this.store, this.trackData.id, this.get, options); 
-            console.log(`AddTrackAction: initEngine completed for ${this.trackData.id}`);
         } catch (engineInitError) {
             console.error(`AddTrackAction: Error during initEngine for ${this.trackData.id}:`, engineInitError);
             // Consider potential rollback or error state update here?
         }
 
         // Step 3: Set other engine parameters (potentially redundant but ensures state)
-        console.log('AddTrackAction: Setting other engine params for', this.trackData.id);
         try {
             this.store.getAudioEngine().setTrackVolume(this.trackData.id, this.trackData.volume ?? 80);
             this.store.getAudioEngine().setTrackPan(this.trackData.id, this.trackData.pan ?? 0);
@@ -181,7 +172,6 @@ export class AddTrackAction extends BaseAction {
             );
             // Connect soundfont if applicable (might be handled by initEngine for midi? Check config)
             if ((this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') && instrumentId) {
-                 console.log('AddTrackAction: Re-connecting to soundfont during execute (check if redundant):', this.trackData.id);
                  await this.store.connectTrackToSoundfont(this.trackData.id, instrumentId);
             }
         } catch (paramError) {
@@ -192,21 +182,17 @@ export class AddTrackAction extends BaseAction {
     }
     
     async undo(): Promise<void> {
-        console.log('AddTrackAction: Undo started for', this.trackData.id);
         // Step 1: Remove from State
         this.get()._updateState('tracks', state => state.filter(t => t.id !== this.trackData.id));
         this.get().updateTrackIndices();
-        console.log('AddTrackAction: State updated for undo', this.trackData.id);
 
         // Step 2: Remove from Engine and Controllers
         try {
-             console.log('AddTrackAction: Removing from engine/controllers for undo', this.trackData.id);
              await this.store.getAudioEngine().removeTrack(this.trackData.id);
              if (this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') {
                  this.store.getSoundfontController()?.removeTrack?.(this.trackData.id);
              } else if (this.trackData.type === 'SAMPLER') {
                  this.store.getSamplerController()?.removeSampler?.(this.trackData.id);
-                 console.log('AddTrackAction: Cleaned up sampler track', this.trackData.id);
              }
         } catch (removeError) {
             console.error(`AddTrackAction: Error during engine/controller removal on undo for ${this.trackData.id}:`, removeError);
@@ -398,12 +384,6 @@ export class TrackResizeAction extends TrackAction {
         positionXTicks: number,
         operation: string
     ): void {
-        console.log(`[TrackResize.${operation}] Updating track with values:`, {
-            trackId: this.trackId,
-            trimStartTicks,
-            trimEndTicks,
-            positionXTicks
-        });
         
         const currentY = this.get().findTrackById(this.trackId)?.y_position ?? 0;
         this.get().updateTrackState(this.trackId, {
@@ -475,129 +455,7 @@ export class TrackResizeAction extends TrackAction {
     }
 }
 
-/**
- * Action for resizing multiple tracks as a group
- */
-export class GroupTrackResizeAction extends BaseAction {
-    readonly type = 'GROUP_TRACK_RESIZE';
-    private trackResizeData: Array<{
-        trackId: string;
-        oldTrimStartTicks: number;
-        oldTrimEndTicks: number;
-        oldPositionX: number;
-        newTrimStartTicks: number;
-        newTrimEndTicks: number;
-        newPositionX: number;
-    }>;
-    
-    constructor(
-        get: GetFn,
-        trackResizeData: Array<{
-            trackId: string;
-            oldTrimStartTicks: number;
-            oldTrimEndTicks: number;
-            oldPositionX: number;
-            newTrimStartTicks: number;
-            newTrimEndTicks: number;
-            newPositionX: number;
-        }>
-    ) {
-        super(get);
-        this.trackResizeData = trackResizeData.map(data => ({ ...data }));
-    }
-    
-    private updateTrackResize(
-        trackData: {
-            trackId: string;
-            trimStartTicks: number;
-            trimEndTicks: number;
-            positionXTicks: number;
-        },
-        operation: string
-    ): void {
-        const currentY = this.get().findTrackById(trackData.trackId)?.y_position ?? 0;
-        this.get().updateTrackState(trackData.trackId, {
-            trim_start_ticks: trackData.trimStartTicks,
-            trim_end_ticks: trackData.trimEndTicks,
-            x_position: trackData.positionXTicks, 
-            position: { x: trackData.positionXTicks, y: currentY }
-        });
-        
-        this.store.getAudioEngine().setTrackTrim(trackData.trackId, trackData.trimStartTicks, trackData.trimEndTicks);
-        this.store.getAudioEngine().setTrackPosition(
-            trackData.trackId, 
-            trackData.positionXTicks,
-            currentY
-        );
-        
-        const isCurrentlyPlaying = this.get().isPlaying;
-        if (isCurrentlyPlaying && this.store.getTransport().handleTrackPositionChange) {
-            this.store.getTransport().handleTrackPositionChange(trackData.trackId, trackData.positionXTicks);
-        }
-    }
-    
-    async execute(): Promise<void> {
-        // Apply resize to all tracks in the group
-        this.trackResizeData.forEach(data => {
-            this.updateTrackResize({
-                trackId: data.trackId,
-                trimStartTicks: data.newTrimStartTicks,
-                trimEndTicks: data.newTrimEndTicks,
-                positionXTicks: data.newPositionX
-            }, 'execute');
-        });
-        
-        this.log('Execute', { 
-            trackCount: this.trackResizeData.length,
-            tracks: this.trackResizeData.map(data => ({
-                trackId: data.trackId,
-                from: {
-                    trimStartTicks: data.oldTrimStartTicks,
-                    trimEndTicks: data.oldTrimEndTicks,
-                    positionX: data.oldPositionX
-                },
-                to: {
-                    trimStartTicks: data.newTrimStartTicks,
-                    trimEndTicks: data.newTrimEndTicks,
-                    positionX: data.newPositionX
-                }
-            })),
-            isCurrentlyPlaying: this.get().isPlaying
-        });
-    }
-    
-    async undo(): Promise<void> {
-        // Revert resize for all tracks in the group
-        this.trackResizeData.forEach(data => {
-            this.updateTrackResize({
-                trackId: data.trackId,
-                trimStartTicks: data.oldTrimStartTicks,
-                trimEndTicks: data.oldTrimEndTicks,
-                positionXTicks: data.oldPositionX
-            }, 'undo');
-        });
-        
-        this.log('Undo', { 
-            trackCount: this.trackResizeData.length,
-            tracks: this.trackResizeData.map(data => ({
-                trackId: data.trackId,
-                from: {
-                    trimStartTicks: data.newTrimStartTicks,
-                    trimEndTicks: data.newTrimEndTicks,
-                    positionX: data.newPositionX
-                },
-                to: {
-                    trimStartTicks: data.oldTrimStartTicks,
-                    trimEndTicks: data.oldTrimEndTicks,
-                    positionX: data.oldPositionX
-                }
-            })),
-            isCurrentlyPlaying: this.get().isPlaying
-        });
-    }
-}
-
-    // Example structure - adjust based on your ActionBase and state access needs
+// Example structure - adjust based on your ActionBase and state access needs
 export class UpdateDrumTrackSamplers extends BaseAction {
     readonly type = 'DRUM_TRACK_SAMPLER_UPDATE';
     drumTrackId: string;
@@ -617,7 +475,6 @@ export class UpdateDrumTrackSamplers extends BaseAction {
     }
 
     async execute() {
-        console.log(`Applying UpdateDrumTrackSamplers for ${this.drumTrackId}`);
         const { _updateNestedTrackData } = this.get();
         if (_updateNestedTrackData) {
             _updateNestedTrackData(this.drumTrackId, { sampler_track_ids: this.newSamplerIds } as Partial<DrumTrackRead>);
@@ -627,7 +484,6 @@ export class UpdateDrumTrackSamplers extends BaseAction {
     }
 
     async undo() {
-        console.log(`Reverting UpdateDrumTrackSamplers for ${this.drumTrackId}`);
         const { _updateNestedTrackData } = this.get();
         if (_updateNestedTrackData) {
             _updateNestedTrackData(this.drumTrackId, { sampler_track_ids: this.oldSamplerIds } as Partial<DrumTrackRead>);
@@ -646,6 +502,5 @@ export const TrackActions = {
     DeleteTrack: DeleteTrackAction,
     ParameterChange: ParameterChangeAction,
     TrackResize: TrackResizeAction,
-    GroupTrackResize: GroupTrackResizeAction,
     UpdateDrumTrackSamplers: UpdateDrumTrackSamplers
 };
