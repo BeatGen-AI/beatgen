@@ -336,8 +336,7 @@ function Studio({ projectId }: StudioProps) {
   }, []);
 
   const handlePasteTracks = useCallback((tracks: CombinedTrack[], position?: { x: number; y: number }) => {
-    console.log('[Studio] Pasting tracks:', tracks.map(t => t.name), 'at position:', position);
-    console.log('[Studio] Track IDs to duplicate:', tracks.map(t => t.id));
+    console.log('Pasting tracks:', tracks.map(t => t.name), 'at position:', position);
     
     // For paste operation, we need to duplicate the tracks
     const trackIds = tracks.map(t => t.id);
@@ -354,7 +353,6 @@ function Studio({ projectId }: StudioProps) {
       offsetX = 0;
     }
     
-    console.log('[Studio] Calling duplicateMultipleTracks with offset:', offsetX);
     // Use duplicateMultipleTracks which handles the GroupAction
     duplicateMultipleTracks(trackIds, offsetX);
   }, [duplicateMultipleTracks]);
@@ -624,6 +622,8 @@ function Studio({ projectId }: StudioProps) {
             onPasteTracks={handlePasteTracks}
             onDeleteTracks={handleDeleteTracks}
             onDuplicateTracks={handleDuplicateTracks}
+            updateMultipleTrackPositions={updateMultipleTrackPositions}
+            resizeMultipleTracks={resizeMultipleTracks}
             ref={scrollRef}
           />
           

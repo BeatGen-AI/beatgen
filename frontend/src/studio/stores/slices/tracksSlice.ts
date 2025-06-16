@@ -1314,15 +1314,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
       // Create and execute a single GroupAction
       if (actions.length > 0) {
-        console.log('[duplicateMultipleTracks] Creating GroupAction with', actions.length, 'actions');
         const groupAction = new Actions.GroupAction(
           get,
           actions,
           `Paste ${actions.length} track${actions.length > 1 ? 's' : ''}`
         );
-        console.log('[duplicateMultipleTracks] Executing GroupAction');
         await executeHistoryAction(groupAction);
-        console.log('[duplicateMultipleTracks] GroupAction executed');
       }
 
       return duplicatedTracksData;
@@ -1425,8 +1422,27 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       
       // Create and execute group resize action
       if (trackResizeData.length > 0) {
-        const action = new Actions.GroupTrackResize(get, trackResizeData);
-        await executeHistoryAction(action);
+        // Create individual resize actions
+        const actions: Action[] = trackResizeData.map(data => 
+          new Actions.TrackResize(
+            get,
+            data.trackId,
+            data.oldTrimStartTicks,
+            data.oldTrimEndTicks,
+            data.oldPositionX,
+            data.newTrimStartTicks,
+            data.newTrimEndTicks,
+            data.newPositionX
+          )
+        );
+        
+        // Execute as a single group action
+        const groupAction = new Actions.GroupAction(
+          get,
+          actions,
+          `Resize ${actions.length} track${actions.length > 1 ? 's' : ''}`
+        );
+        await executeHistoryAction(groupAction);
       }
     };
 
@@ -1434,26 +1450,44 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
 
   const updateMultipleTrackPositions = async (trackIds: string[], deltaX: number, deltaY: number): Promise<void> => {
-    const { tracks, _withErrorHandling } = rootGet();
+    const { tracks, executeHistoryAction, _withErrorHandling } = rootGet();
     if (!_withErrorHandling) {
       console.error("_withErrorHandling not available");
       return;
     }
 
     const updatePositionsLogic = async (): Promise<void> => {
-      console.log(`Updating positions for ${trackIds.length} tracks with delta: x=${deltaX}, y=${deltaY}`);
+      const actions: Action[] = [];
       
-      // Update positions for all specified tracks
+      // Create position change actions for all tracks
       trackIds.forEach(trackId => {
         const track = tracks.find(t => t.id === trackId);
         if (track) {
+          const oldPosition = { x: track.x_position, y: track.y_position };
           const newX = Math.max(0, track.x_position + deltaX);
           const newY = Math.max(0, track.y_position + deltaY);
+          const newPosition = { x: newX, y: newY };
           
-          // Use handleTrackPositionChange to properly update audio engine and history
-          handleTrackPositionChange(trackId, { x: newX, y: newY }, true);
+          // Create action but don't execute it
+          const action = new Actions.TrackPosition(
+            get,
+            trackId,
+            oldPosition,
+            newPosition
+          );
+          actions.push(action);
         }
       });
+      
+      // Execute all position changes as a single group action
+      if (actions.length > 0) {
+        const groupAction = new Actions.GroupAction(
+          get,
+          actions,
+          `Move ${actions.length} track${actions.length > 1 ? 's' : ''}`
+        );
+        await executeHistoryAction(groupAction);
+      }
     };
 
     return _withErrorHandling(updatePositionsLogic, `updateMultipleTrackPositions`)();
