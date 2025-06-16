@@ -336,30 +336,28 @@ function Studio({ projectId }: StudioProps) {
   }, []);
 
   const handlePasteTracks = useCallback((tracks: CombinedTrack[], position?: { x: number; y: number }) => {
-    console.log('Pasting tracks:', tracks.map(t => t.name), 'at position:', position);
+    console.log('[Studio] Pasting tracks:', tracks.map(t => t.name), 'at position:', position);
+    console.log('[Studio] Track IDs to duplicate:', tracks.map(t => t.id));
     
-    // For paste operation, we need to directly update track positions
-    // without creating new tracks (tracks should keep their IDs)
+    // For paste operation, we need to duplicate the tracks
     const trackIds = tracks.map(t => t.id);
     
+    // Calculate offset for pasting
+    let offsetX = 0;
     if (position) {
       // Calculate the leftmost position of the tracks being pasted
       const minX = Math.min(...tracks.map(t => t.x_position));
-      
-      // Calculate offset from the paste position
-      const offsetX = position.x - minX;
-      const offsetY = position.y - tracks[0].y_position;
-      
-      // Update positions for all tracks
-      updateMultipleTrackPositions(trackIds, offsetX, offsetY);
+      offsetX = position.x - minX;
     } else {
       // No position provided (e.g., keyboard paste)
-      // Paste at current playhead position or offset from original positions
-      const offsetX = 0; // Could use currentTime here
-      const offsetY = 0;
-      updateMultipleTrackPositions(trackIds, offsetX, offsetY);
+      // Default offset to place copies after the originals
+      offsetX = 0;
     }
-  }, [updateMultipleTrackPositions]);
+    
+    console.log('[Studio] Calling duplicateMultipleTracks with offset:', offsetX);
+    // Use duplicateMultipleTracks which handles the GroupAction
+    duplicateMultipleTracks(trackIds, offsetX);
+  }, [duplicateMultipleTracks]);
 
   const handleDeleteTracks = useCallback((trackIds: string[]) => {
     console.log('Deleting tracks:', trackIds);

@@ -98,6 +98,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
 }, ref) => {
   // State
   const [tool, setTool] = useState<Tool>(selectedTool);
+  const [clipboard, setClipboard] = useState<CombinedTrack[]>([]);
   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
   const [gridSnapSize, setGridSnapSize] = useState(propGridSnapSize || GridSnapOption.STEP);
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, width: 800, height: 600 });
@@ -296,19 +297,22 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     onCopy: (items) => {
       const trackIds = items.map(item => item.id);
       const fullTracks = tracks.filter(t => trackIds.includes(t.id));
+      setClipboard(fullTracks);
       onCopyTracks?.(fullTracks);
     },
     
     onCut: (items) => {
       const trackIds = items.map(item => item.id);
       const fullTracks = tracks.filter(t => trackIds.includes(t.id));
+      setClipboard(fullTracks);
       onCutTracks?.(fullTracks);
     },
     
     onPaste: (position) => {
-      // Note: The actual paste content comes from the parent component
-      // We just provide the position where to paste
-      onPasteTracks?.([], position);
+      // Pass the clipboard content
+      if (clipboard.length > 0) {
+        onPasteTracks?.(clipboard, position);
+      }
     },
     
     onDelete: (itemIds) => {
