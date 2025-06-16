@@ -7,6 +7,7 @@ export { GroupAction } from './GroupAction';
 export { ProjectActions } from './ProjectActions';
 export { TrackActions } from './TrackActions'; 
 export { NoteActions } from './NoteActions';
+export { InstanceActions } from './InstanceActions';
 
 // Re-export action types constants
 export const ACTION_TYPES = {
@@ -35,6 +36,12 @@ export const ACTION_TYPES = {
     // Drum Track actions
     DRUM_TRACK_SAMPLER_UPDATE: 'DRUM_TRACK_SAMPLER_UPDATE',
     
+    // Instance actions
+    INSTANCE_MOVE: 'INSTANCE_MOVE',
+    INSTANCE_RESIZE: 'INSTANCE_RESIZE',
+    INSTANCE_ADD: 'INSTANCE_ADD',
+    INSTANCE_DELETE: 'INSTANCE_DELETE',
+    
     // Group action
     GROUP_ACTION: 'GROUP_ACTION',
 } as const;
@@ -46,6 +53,7 @@ export type ActionType = typeof ACTION_TYPES[keyof typeof ACTION_TYPES];
 import { ProjectActions } from './ProjectActions';
 import { TrackActions } from './TrackActions';
 import { NoteActions } from './NoteActions';
+import { InstanceActions } from './InstanceActions';
 import { GroupAction } from './GroupAction';
 
 /**
@@ -60,6 +68,9 @@ export const Actions = {
     
     // Note actions
     ...NoteActions,
+    
+    // Instance actions
+    ...InstanceActions,
     
     // Group action
     GroupAction: GroupAction

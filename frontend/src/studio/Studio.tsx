@@ -124,6 +124,11 @@ function Studio({ projectId }: StudioProps) {
     removeMidiNote,
     updateMidiNote,
     replaceTrackAudioFile,
+    // Instance handlers
+    handleInstancePositionChange,
+    handleInstanceResizeEnd,
+    updateMultipleInstancePositions,
+    resizeMultipleInstances,
   } = useStudioStore();
   
   const scrollRef = useRef<KonvaTimelineRef>(null);
@@ -612,7 +617,16 @@ function Studio({ projectId }: StudioProps) {
               }
             }}
             selectedTrackIds={selectedTrackIds}
-            onTrackSelect={setSelectedTrackIds}
+            onTrackSelect={(instanceIds) => {
+              // Convert instance IDs to track IDs for the store
+              // Instance IDs follow the pattern: trackId_instance_timestamp
+              const trackIds = [...new Set(instanceIds.map(instanceId => {
+                // Extract track ID from instance ID
+                const parts = instanceId.split('_instance_');
+                return parts[0]; // The track ID is before '_instance_'
+              }))];
+              setSelectedTrackIds(trackIds);
+            }}
             onTrackDelete={handleTrackDelete}
             onTrackResizeEnd={handleTrackResize}
             selectedTool={selectedTool}
@@ -624,6 +638,10 @@ function Studio({ projectId }: StudioProps) {
             onDuplicateTracks={handleDuplicateTracks}
             updateMultipleTrackPositions={updateMultipleTrackPositions}
             resizeMultipleTracks={resizeMultipleTracks}
+            onInstancePositionChange={handleInstancePositionChange}
+            onInstanceResizeEnd={handleInstanceResizeEnd}
+            updateMultipleInstancePositions={updateMultipleInstancePositions}
+            resizeMultipleInstances={resizeMultipleInstances}
             ref={scrollRef}
           />
           

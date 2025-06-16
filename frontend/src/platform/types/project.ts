@@ -44,6 +44,18 @@ export interface CombinedTrack {
   track_number?: number | null;
   track: AudioTrackRead | MidiTrackRead | SamplerTrackRead | DrumTrackRead;
   dirty?: boolean; // Client-side only: true if track has unsaved changes
+  instances?: TrackInstance[]; // Client-side only: array of track instances on timeline
+}
+
+/**
+ * Represents an instance (clip) of a track on the timeline
+ */
+export interface TrackInstance {
+  id: string;
+  x_position: number;
+  y_position: number;
+  trim_start_ticks: number;
+  trim_end_ticks: number;
 }
 /**
  * API response model for MIDI track data

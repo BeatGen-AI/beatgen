@@ -1,4 +1,4 @@
-import { CombinedTrack } from 'src/platform/types/project';
+import { CombinedTrack, TrackInstance } from 'src/platform/types/project';
 import { Position } from '../../components/track';
 import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTrackPayload, DrumTrackPayload, MidiTrackPayload, AudioTrackOptions, SamplerTrackOptions, MidiTrackOptions, AnyTrackRead, MidiTrack, AudioTrack, SamplerTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, DrumTrackOptions } from '../types';
 import { Store } from '../../core/state/store';
@@ -79,6 +79,16 @@ export interface TracksSlice {
   
   // Group position operations for group moving
   updateMultipleTrackPositions: (trackIds: string[], deltaX: number, deltaY: number) => Promise<void>;
+  
+  // Track instance management
+  addTrackInstance: (trackId: string, position?: Position, sourceInstance?: Partial<TrackInstance>) => Promise<string | null>;
+  updateTrackInstance: (trackId: string, instanceId: string, updates: Partial<TrackInstance>) => void;
+  deleteTrackInstance: (trackId: string, instanceId: string) => void;
+  getTrackInstances: (trackId: string) => TrackInstance[];
+  handleInstancePositionChange: (trackId: string, instanceId: string, newPosition: Position, isDragEnd: boolean) => void;
+  handleInstanceResizeEnd: (trackId: string, instanceId: string, deltaPixels: number, resizeDirection: 'left' | 'right') => void;
+  updateMultipleInstancePositions: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
+  resizeMultipleInstances: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
 }
 
 // Remove local type alias if it causes confusion
@@ -130,7 +140,19 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   // Update all tracks and recalculate indices
   const updateTracks = (newTracks: CombinedTrack[]) => {
       set(produce((draft: RootState) => {
-          draft.tracks = newTracks; 
+          draft.tracks = newTracks;
+          // Ensure all tracks have instances
+          draft.tracks.forEach(track => {
+              if (!track.instances || track.instances.length === 0) {
+                  track.instances = [{
+                      id: `${track.id}_instance_1`,
+                      x_position: track.x_position || 0,
+                      y_position: track.y_position || 0,
+                      trim_start_ticks: track.trim_start_ticks || 0,
+                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
+                  }];
+              }
+          });
       }));
   };
 
@@ -166,6 +188,17 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               track.track_number = index;
               // Mark loaded tracks as clean (not dirty) since they come from database
               track.dirty = false;
+              
+              // Ensure track has instances - create default if none exist
+              if (!track.instances || track.instances.length === 0) {
+                  track.instances = [{
+                      id: `${track.id}_instance_1`,
+                      x_position: track.x_position || 0,
+                      y_position: track.y_position || 0,
+                      trim_start_ticks: track.trim_start_ticks || 0,
+                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
+                  }];
+              }
           });
       }), true);
   };
@@ -305,7 +338,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       
       const finalTrackData = { 
           ...trackData, 
-          track: nestedTrackDataObject as AnyTrackRead 
+          track: nestedTrackDataObject as AnyTrackRead,
+          // Initialize with a single instance
+          instances: [{
+              id: `${trackId}_instance_1`,
+              x_position: position.x,
+              y_position: position.y,
+              trim_start_ticks: options.trim_start_ticks ?? 0,
+              trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
+          }]
       } as CombinedTrack;
 
       // Create action, passing the serializable trackData AND the separate file object
@@ -432,7 +473,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       
       const finalTrackData = { 
           ...trackData, 
-          track: nestedTrackDataObject as AnyTrackRead 
+          track: nestedTrackDataObject as AnyTrackRead,
+          // Initialize with a single instance
+          instances: [{
+              id: `${trackId}_instance_1`,
+              x_position: position.x,
+              y_position: position.y,
+              trim_start_ticks: options.trim_start_ticks ?? 0,
+              trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
+          }]
       } as CombinedTrack;
 
       // Return the data without executing any action
@@ -1078,202 +1127,118 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
   // Group operations for copy/paste functionality
   const duplicateTrack = async (trackId: string, newPosition?: Position): Promise<CombinedTrack | null> => {
-    const { tracks, _withErrorHandling } = rootGet();
-    if (!_withErrorHandling) {
-      console.error("_withErrorHandling not available");
+    const { tracks } = rootGet();
+    const track = tracks.find(t => t.id === trackId);
+    
+    if (!track) {
+      console.error(`Track with id ${trackId} not found for duplication`);
       return null;
     }
-
-    const duplicateLogic = async (): Promise<CombinedTrack | null> => {
-      const originalTrack = tracks.find(t => t.id === trackId);
-      if (!originalTrack) {
-        console.error(`Track with id ${trackId} not found for duplication`);
-        return null;
-      }
-
-      // Calculate new position - offset to the right if not specified
-      const offsetX = newPosition?.x ?? (originalTrack.x_position + ticksToPixels(originalTrack.duration_ticks, 1) + 48); // 48px gap
-      const offsetY = newPosition?.y ?? (originalTrack.y_position + GRID_CONSTANTS.trackHeight);
-
-      // Create options from the original track
-      const options: TrackOptions = {
-        volume: originalTrack.volume,
-        pan: originalTrack.pan,
-        muted: originalTrack.mute,
-        soloed: false, // Don't duplicate solo state
-        position: { x: offsetX, y: offsetY },
-        duration: originalTrack.duration_ticks,
-        trim_start_ticks: originalTrack.trim_start_ticks,
-        trim_end_ticks: originalTrack.trim_end_ticks,
-      };
-
-      // Add type-specific options
-      if (originalTrack.type === 'MIDI' && originalTrack.track) {
-        const midiTrack = originalTrack.track as MidiTrackRead;
-        options.instrumentId = midiTrack.instrument_id;
-        options.instrumentName = midiTrack.instrument_name;
-        options.instrumentStorageKey = midiTrack.instrument_storage_key;
-      } else if (originalTrack.type === 'AUDIO' && originalTrack.track) {
-        const audioTrack = originalTrack.track as AudioTrackRead;
-        if (audioTrack.audio_file) {
-          // For audio tracks, we'll need to handle file duplication
-          // For now, use the same file reference
-          (options as AudioTrackOptions).audioFileId = audioTrack.audio_file.id;
-        }
-      } else if (originalTrack.type === 'SAMPLER' && originalTrack.track) {
-        const samplerTrack = originalTrack.track as SamplerTrackRead;
-        if (samplerTrack.sample_file) {
-          (options as SamplerTrackOptions).sampleFileId = samplerTrack.sample_file.id;
-        }
-      }
-
-      // Create the duplicate track
-      const duplicatedTrack = await createTrackAndRegisterWithHistory(
-        originalTrack.type,
-        `${originalTrack.name} (Copy)`,
-        options
-      );
-
-      // Copy MIDI notes if it's a MIDI track
-      if (duplicatedTrack && originalTrack.type === 'MIDI' && originalTrack.track) {
-        const originalMidiTrack = originalTrack.track as MidiTrackRead;
-        if (originalMidiTrack.notes && originalMidiTrack.notes.length > 0) {
-          // Update the duplicated track with the copied notes
-          _updateNestedTrackData(duplicatedTrack.id, {
-            notes: [...originalMidiTrack.notes]
-          });
-        }
-      }
-
-      return duplicatedTrack;
-    };
-
-    return _withErrorHandling(duplicateLogic, `duplicateTrack: ${trackId}`)();
+    
+    // Create a new instance instead of a new track
+    const instanceId = await addTrackInstance(trackId, newPosition);
+    
+    if (!instanceId) {
+      console.error(`Failed to create instance for track ${trackId}`);
+      return null;
+    }
+    
+    // Return the track with updated instances
+    return findTrackById(trackId) || null;
   };
 
   const duplicateMultipleTracks = async (trackIds: string[], offsetX = 0): Promise<CombinedTrack[]> => {
-    const { tracks, executeHistoryAction, bpm, timeSignature, _withErrorHandling } = rootGet();
-    if (!_withErrorHandling) {
-      console.error("_withErrorHandling not available");
-      return [];
+    const { tracks, bpm, timeSignature, executeHistoryAction } = rootGet();
+    const updatedTracks: CombinedTrack[] = [];
+    
+    // Calculate base offset if not provided
+    let baseOffsetX = offsetX;
+    if (baseOffsetX === 0) {
+      // Find the rightmost instance position among selected tracks
+      const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
+      let maxRightPosition = 0;
+      
+      selectedTracks.forEach(track => {
+        // Get instances (or create default instance data if none exist)
+        const instances = track.instances && track.instances.length > 0 
+          ? track.instances 
+          : [{
+              id: `${track.id}_instance_1`,
+              x_position: track.x_position || 0,
+              y_position: track.y_position || 0,
+              trim_start_ticks: track.trim_start_ticks || 0,
+              trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
+            }];
+        
+        // Find rightmost instance
+        instances.forEach(instance => {
+          const instanceEnd = instance.x_position + (instance.trim_end_ticks - instance.trim_start_ticks);
+          maxRightPosition = Math.max(maxRightPosition, instanceEnd);
+        });
+      });
+      
+      baseOffsetX = maxRightPosition + pixelsToTicks(96, bpm, timeSignature); // 96px gap in ticks
     }
 
-    const duplicateMultipleLogic = async (): Promise<CombinedTrack[]> => {
-      const duplicatedTracksData: CombinedTrack[] = [];
-      const actions: Action[] = [];
+    // Find the leftmost instance position to calculate relative positions
+    const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
+    let minX = Infinity;
+    
+    selectedTracks.forEach(track => {
+      const instances = getTrackInstancesOrDefault(track);
+      instances.forEach(instance => {
+        minX = Math.min(minX, instance.x_position);
+      });
+    });
+    
+    // Collect all instance add actions
+    const instanceAddActions: Actions.InstanceAdd[] = [];
+    
+    // Create instances for each track
+    for (const trackId of trackIds) {
+      const track = tracks.find(t => t.id === trackId);
+      if (!track) continue;
       
-      // Calculate base offset if not provided
-      let baseOffsetX = offsetX;
-      if (baseOffsetX === 0) {
-        // Find the rightmost track position
-        const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
-        const maxRightPosition = Math.max(...selectedTracks.map(t => 
-          t.x_position + ticksToPixels(t.duration_ticks, bpm, timeSignature)
-        ));
-        baseOffsetX = maxRightPosition + 96; // 96px gap
-      }
-
-      // Find the leftmost track to calculate relative positions
-      const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
-      const minX = Math.min(...selectedTracks.map(t => t.x_position));
-
-      // First pass: Create all track data and actions without executing
-      for (const trackId of trackIds) {
-        const originalTrack = tracks.find(t => t.id === trackId);
-        if (!originalTrack) continue;
-
+      // Get instances for this track
+      const originalInstances = getTrackInstancesOrDefault(track);
+      for (const originalInstance of originalInstances) {
         // Calculate relative position
-        const relativeX = originalTrack.x_position - minX;
+        const relativeX = originalInstance.x_position - minX;
         const newPosition = {
           x: baseOffsetX + relativeX,
-          y: originalTrack.y_position
+          y: originalInstance.y_position
         };
-
-        // Prepare track data for duplication
-        const newTrackId = crypto.randomUUID();
-        const trackName = `${originalTrack.name} (Copy)`;
         
-        // Build options
-        const options: TrackOptions = {
-          id: newTrackId,
-          volume: originalTrack.volume,
-          pan: originalTrack.pan,
-          muted: originalTrack.mute,
-          soloed: false,
-          position: newPosition,
-          duration: originalTrack.duration_ticks,
-          trim_start_ticks: originalTrack.trim_start_ticks,
-          trim_end_ticks: originalTrack.trim_end_ticks,
+        // Create new instance object
+        const instanceId = `${trackId}_instance_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const newInstance: TrackInstance = {
+          id: instanceId,
+          x_position: newPosition.x,
+          y_position: newPosition.y,
+          trim_start_ticks: originalInstance.trim_start_ticks,
+          trim_end_ticks: originalInstance.trim_end_ticks
         };
-
-        // Add type-specific options
-        if (originalTrack.type === 'MIDI' && originalTrack.track) {
-          const midiTrack = originalTrack.track as MidiTrackRead;
-          options.instrumentId = midiTrack.instrument_id;
-          options.instrumentName = midiTrack.instrument_name;
-          options.instrumentStorageKey = midiTrack.instrument_storage_key;
-        } else if (originalTrack.type === 'AUDIO' && originalTrack.track) {
-          const audioTrack = originalTrack.track as AudioTrackRead;
-          if (audioTrack.audio_file_storage_key) {
-            (options as AudioTrackOptions).storage_key = audioTrack.audio_file_storage_key;
-            (options as AudioTrackOptions).audio_file_name = audioTrack.audio_file_name;
-            (options as AudioTrackOptions).audio_file_format = audioTrack.audio_file_format;
-            (options as AudioTrackOptions).audio_file_size = audioTrack.audio_file_size;
-            (options as AudioTrackOptions).audio_file_duration = audioTrack.audio_file_duration;
-            (options as AudioTrackOptions).audio_file_sample_rate = audioTrack.audio_file_sample_rate;
-            (options as AudioTrackOptions).waveform_data = audioTrack.waveform_data;
-          }
-        } else if (originalTrack.type === 'SAMPLER' && originalTrack.track) {
-          const samplerTrack = originalTrack.track as SamplerTrackRead;
-          if (samplerTrack.storage_key) {
-            (options as SamplerTrackOptions).storage_key = samplerTrack.storage_key;
-            (options as SamplerTrackOptions).baseMidiNote = samplerTrack.baseMidiNote;
-            (options as SamplerTrackOptions).grainSize = samplerTrack.grainSize;
-            (options as SamplerTrackOptions).overlap = samplerTrack.overlap;
-            (options as SamplerTrackOptions).drum_track_id = samplerTrack.drum_track_id;
-            (options as SamplerTrackOptions).waveform_data = samplerTrack.waveform_data;
-          }
-        }
-
-        // Create track data without history
-        const result = await createTrackWithoutHistory(
-          originalTrack.type,
-          trackName,
-          options
-        );
         
-        if (result) {
-          const { trackData, file } = result;
-          
-          // Copy MIDI notes if applicable
-          if (originalTrack.type === 'MIDI' && originalTrack.track) {
-            const originalMidiTrack = originalTrack.track as MidiTrackRead;
-            if (originalMidiTrack.notes && originalMidiTrack.notes.length > 0) {
-              (trackData.track as MidiTrackRead).notes = [...originalMidiTrack.notes];
-            }
-          }
-          
-          // Create the action but don't execute it
-          const action = new Actions.AddTrack(get, trackData, file);
-          actions.push(action);
-          duplicatedTracksData.push(trackData);
-        }
+        // Create the action but don't execute it yet
+        instanceAddActions.push(new Actions.InstanceAdd(get, trackId, newInstance));
       }
-
-      // Create and execute a single GroupAction
-      if (actions.length > 0) {
-        const groupAction = new Actions.GroupAction(
-          get,
-          actions,
-          `Paste ${actions.length} track${actions.length > 1 ? 's' : ''}`
-        );
-        await executeHistoryAction(groupAction);
-      }
-
-      return duplicatedTracksData;
-    };
-
-    return _withErrorHandling(duplicateMultipleLogic, `duplicateMultipleTracks`)() || [];
+      
+      // Track will be updated when the group action executes
+      updatedTracks.push(track);
+    }
+    
+    // Execute all instance adds as a single group action
+    if (instanceAddActions.length > 0) {
+      const groupAction = new Actions.GroupAction(
+        get,
+        instanceAddActions,
+        `Duplicate ${trackIds.length} track${trackIds.length > 1 ? 's' : ''}`
+      );
+      await executeHistoryAction(groupAction);
+    }
+    
+    // Return the updated tracks
+    return trackIds.map(id => findTrackById(id)).filter(Boolean) as CombinedTrack[];
   };
 
   const deleteMultipleTracks = async (trackIds: string[]): Promise<void> => {
@@ -1440,6 +1405,334 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     return _withErrorHandling(updatePositionsLogic, `updateMultipleTrackPositions`)();
   };
+  
+  // Track instance management functions
+  const getTrackInstancesOrDefault = (track: CombinedTrack): TrackInstance[] => {
+    if (track.instances && track.instances.length > 0) {
+      return track.instances;
+    }
+    // Return default instance based on track data
+    return [{
+      id: `${track.id}_instance_1`,
+      x_position: track.x_position || 0,
+      y_position: track.y_position || 0,
+      trim_start_ticks: track.trim_start_ticks || 0,
+      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
+    }];
+  };
+  
+  const addTrackInstance = async (trackId: string, position?: Position, sourceInstance?: Partial<TrackInstance>): Promise<string | null> => {
+    const { tracks, bpm, timeSignature, executeHistoryAction } = rootGet();
+    const track = tracks.find(t => t.id === trackId);
+    
+    if (!track) {
+      console.error(`Track ${trackId} not found`);
+      return null;
+    }
+    
+    // Get instances or create default
+    const instances = getTrackInstancesOrDefault(track);
+    
+    // Generate new instance ID
+    const instanceId = `${trackId}_instance_${Date.now()}`;
+    
+    // Calculate position for new instance
+    let newPosition = position;
+    if (!newPosition && instances.length > 0) {
+      // Place new instance after the last one
+      const lastInstance = instances[instances.length - 1];
+      const lastEndTicks = lastInstance.x_position + (lastInstance.trim_end_ticks - lastInstance.trim_start_ticks);
+      const gapTicks = pixelsToTicks(48, bpm, timeSignature); // 48px gap
+      newPosition = {
+        x: lastEndTicks + gapTicks,
+        y: lastInstance.y_position
+      };
+    } else if (!newPosition) {
+      newPosition = { x: 0, y: track.y_position || 0 };
+    }
+    
+    // Create new instance - use source instance data if provided
+    const newInstance: TrackInstance = {
+      id: instanceId,
+      x_position: newPosition.x,
+      y_position: newPosition.y,
+      trim_start_ticks: sourceInstance?.trim_start_ticks ?? 0,
+      trim_end_ticks: sourceInstance?.trim_end_ticks ?? (track.duration_ticks || 0)
+    };
+    
+    // Create history action for adding instance
+    const action = new Actions.InstanceAdd(get, trackId, newInstance);
+    await executeHistoryAction(action);
+    
+    return instanceId;
+  };
+  
+  const updateTrackInstance = (trackId: string, instanceId: string, updates: Partial<TrackInstance>): void => {
+    const track = findTrackById(trackId);
+    if (!track || !track.instances) return;
+    
+    const updatedInstances = track.instances.map(instance => 
+      instance.id === instanceId 
+        ? { ...instance, ...updates }
+        : instance
+    );
+    
+    updateTrackState(trackId, { instances: updatedInstances });
+  };
+  
+  const deleteTrackInstance = (trackId: string, instanceId: string): void => {
+    const track = findTrackById(trackId);
+    if (!track || !track.instances) return;
+    
+    // Don't delete if it's the only instance
+    if (track.instances.length <= 1) {
+      console.warn("Cannot delete the last instance of a track");
+      return;
+    }
+    
+    const updatedInstances = track.instances.filter(instance => instance.id !== instanceId);
+    updateTrackState(trackId, { instances: updatedInstances });
+  };
+  
+  const getTrackInstances = (trackId: string): TrackInstance[] => {
+    const track = findTrackById(trackId);
+    if (!track) return [];
+    
+    return getTrackInstancesOrDefault(track);
+  };
+  
+  const handleInstancePositionChange = (trackId: string, instanceId: string, newPosition: Position, isDragEnd: boolean): void => {
+    const { bpm, timeSignature, isPlaying, executeHistoryAction, _withErrorHandling } = rootGet();
+    const storeInstance = rootGet().store;
+
+    if (!storeInstance || !_withErrorHandling) {
+        console.error("Store or _withErrorHandling is not available in handleInstancePositionChange");
+        return;
+    }
+
+    const changeLogic = async () => {
+        const track = findTrackById(trackId);
+        if (!track || !track.instances) {
+            console.error(`Track ${trackId} not found or has no instances`);
+            return;
+        }
+        
+        const instance = track.instances.find(inst => inst.id === instanceId);
+        if (!instance) {
+            console.error(`Instance ${instanceId} not found in track ${trackId}`);
+            return;
+        }
+        
+        const oldPosition = { x: instance.x_position, y: instance.y_position };
+
+        // Skip if nothing changed at drag end
+        if (isDragEnd && 
+            oldPosition.x === newPosition.x && 
+            oldPosition.y === newPosition.y) {
+            return;
+        }
+        
+        if (isDragEnd) {
+            // Create instance-specific position action for history
+            const action = new Actions.InstanceMove(
+                get,
+                trackId,
+                instanceId,
+                oldPosition.x,
+                oldPosition.y,
+                newPosition.x,
+                newPosition.y
+            );
+            await executeHistoryAction(action);
+            
+            if (isPlaying && storeInstance.getTransport()?.handleTrackPositionChange) {
+              storeInstance.getTransport().handleTrackPositionChange(trackId, newPosition.x);
+            }
+        } else {
+            // During drag, update position directly without history
+            updateTrackInstance(trackId, instanceId, { 
+                x_position: newPosition.x, 
+                y_position: newPosition.y
+            });
+            
+            // Update audio engine for this specific instance
+            // TODO: Audio engine needs to support instance-based positioning
+            storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
+        }
+    };
+    
+    _withErrorHandling(changeLogic, 'handleInstancePositionChange')();
+  };
+  
+  const handleInstanceResizeEnd = (trackId: string, instanceId: string, deltaPixels: number, resizeDirection: 'left' | 'right'): void => {
+    const { bpm, timeSignature, executeHistoryAction, _withErrorHandling } = rootGet();
+    const track = findTrackById(trackId);
+    if (!track || !track.instances || !_withErrorHandling) { return; }
+
+    const resizeLogic = async () => {
+        const instance = track.instances?.find(inst => inst.id === instanceId);
+        if (!instance) {
+            console.error(`Instance ${instanceId} not found in track ${trackId}`);
+            return;
+        }
+        
+        const oldTrimStartTicks = instance.trim_start_ticks;
+        const oldTrimEndTicks = instance.trim_end_ticks;
+        const oldPositionX = instance.x_position;
+        const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
+
+        let newTrimStartTicks = oldTrimStartTicks;
+        let newTrimEndTicks = oldTrimEndTicks;
+        let newPositionX = oldPositionX;
+
+        if (resizeDirection === 'left') {
+            // For left resize, deltaTicks represents position change
+            newTrimStartTicks = oldTrimStartTicks + deltaTicks;
+            newPositionX = oldPositionX + deltaTicks;
+            // Ensure trim start doesn't exceed trim end
+            newTrimStartTicks = Math.max(0, Math.min(newTrimStartTicks, oldTrimEndTicks));
+            // Ensure position doesn't go negative
+            newPositionX = Math.max(0, newPositionX);
+        } else { 
+            // For right resize, deltaTicks represents width change
+            newTrimEndTicks = oldTrimEndTicks + deltaTicks;
+            // Ensure trim end doesn't go below trim start
+            newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
+        }
+
+        // Create instance-specific resize action for history
+        const action = new Actions.InstanceResize(
+            get,
+            trackId,
+            instanceId,
+            oldTrimStartTicks,
+            oldTrimEndTicks,
+            oldPositionX,
+            newTrimStartTicks,
+            newTrimEndTicks,
+            newPositionX
+        );
+        await executeHistoryAction(action);
+    };
+    
+    _withErrorHandling(resizeLogic, 'handleInstanceResizeEnd')();
+  };
+  
+  const updateMultipleInstancePositions = (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>): void => {
+    const { _withErrorHandling, executeHistoryAction } = rootGet();
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available");
+      return;
+    }
+
+    const updateLogic = async () => {
+      // Create individual instance move actions
+      const actions: Actions.InstanceMove[] = [];
+      
+      instanceUpdates.forEach(update => {
+        const track = findTrackById(update.trackId);
+        if (!track || !track.instances) return;
+        
+        const instance = track.instances.find(inst => inst.id === update.instanceId);
+        if (!instance) return;
+        
+        const oldX = instance.x_position;
+        const oldY = instance.y_position;
+        const newX = Math.max(0, oldX + update.deltaX);
+        const newY = Math.max(0, oldY + update.deltaY);
+        
+        actions.push(new Actions.InstanceMove(
+          get,
+          update.trackId,
+          update.instanceId,
+          oldX,
+          oldY,
+          newX,
+          newY
+        ));
+      });
+      
+      if (actions.length > 0) {
+        // Create group action for all instance moves
+        const groupAction = new Actions.GroupAction(
+          get,
+          actions,
+          `Move ${actions.length} instance${actions.length > 1 ? 's' : ''}`
+        );
+        await executeHistoryAction(groupAction);
+      }
+    };
+    
+    _withErrorHandling(updateLogic, 'updateMultipleInstancePositions')();
+  };
+  
+  const resizeMultipleInstances = (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>): void => {
+    const { bpm, timeSignature, _withErrorHandling, executeHistoryAction } = rootGet();
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available");
+      return;
+    }
+
+    const resizeLogic = async () => {
+      // Create individual instance resize actions
+      const actions: Actions.InstanceResize[] = [];
+      
+      instanceUpdates.forEach(update => {
+        const track = findTrackById(update.trackId);
+        if (!track || !track.instances) return;
+        
+        const instance = track.instances.find(inst => inst.id === update.instanceId);
+        if (!instance) return;
+        
+        const deltaTicks = pixelsToTicks(update.widthDelta, bpm, timeSignature);
+        const oldTrimStartTicks = instance.trim_start_ticks;
+        const oldTrimEndTicks = instance.trim_end_ticks;
+        const oldPositionX = instance.x_position;
+        
+        let newTrimStartTicks = oldTrimStartTicks;
+        let newTrimEndTicks = oldTrimEndTicks;
+        let newPositionX = oldPositionX;
+        
+        if (update.anchor === 'left') {
+          // For left resize, adjust trim start and position
+          newTrimStartTicks = oldTrimStartTicks + deltaTicks;
+          newPositionX = oldPositionX + deltaTicks;
+          // Ensure trim start doesn't exceed trim end
+          newTrimStartTicks = Math.max(0, Math.min(newTrimStartTicks, oldTrimEndTicks));
+          newPositionX = Math.max(0, newPositionX);
+        } else {
+          // For right resize, adjust trim end
+          newTrimEndTicks = oldTrimEndTicks + deltaTicks;
+          // Ensure trim end doesn't go below trim start
+          newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
+        }
+        
+        actions.push(new Actions.InstanceResize(
+          get,
+          update.trackId,
+          update.instanceId,
+          oldTrimStartTicks,
+          oldTrimEndTicks,
+          oldPositionX,
+          newTrimStartTicks,
+          newTrimEndTicks,
+          newPositionX
+        ));
+      });
+      
+      if (actions.length > 0) {
+        // Create group action for all instance resizes
+        const groupAction = new Actions.GroupAction(
+          get,
+          actions,
+          `Resize ${actions.length} instance${actions.length > 1 ? 's' : ''}`
+        );
+        await executeHistoryAction(groupAction);
+      }
+    };
+    
+    _withErrorHandling(resizeLogic, 'resizeMultipleInstances')();
+  };
 
   // --- Initial State & Return --- 
   return {
@@ -1496,5 +1789,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     
     // Group position operations for group moving
     updateMultipleTrackPositions,
+    
+    // Track instance management
+    addTrackInstance,
+    updateTrackInstance,
+    deleteTrackInstance,
+    getTrackInstances,
+    handleInstancePositionChange,
+    handleInstanceResizeEnd,
+    updateMultipleInstancePositions,
+    resizeMultipleInstances,
   };
 };
