@@ -8,6 +8,7 @@ import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 
 export interface KonvaTrackProps {
   track: CombinedTrack;
+  instanceId?: string; // Add instance ID prop
   x: number;
   y: number;
   width: number;
@@ -35,6 +36,7 @@ export interface KonvaTrackProps {
  */
 export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   track,
+  instanceId,
   x,
   y,
   width,
@@ -127,7 +129,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       onClick={(e) => {
         e.cancelBubble = true; // Prevent stage from deselecting
         if (onClick) {
-          onClick(track.id, e);
+          // Use instance ID if provided, otherwise fall back to track ID
+          onClick(instanceId || track.id, e);
         }
       }}
       onMouseDown={(e) => {
@@ -138,7 +141,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         
         e.cancelBubble = true;
         if (onMouseDown) {
-          onMouseDown(track.id, e);
+          // Use instance ID if provided, otherwise fall back to track ID
+          onMouseDown(instanceId || track.id, e);
         }
       }}
     >
@@ -239,7 +243,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
                 const stage = e.target.getStage();
                 const pos = stage?.getPointerPosition();
                 if (pos) {
-                  onResizeStart(track.id, 'left', pos);
+                  // Use instance ID if provided, otherwise fall back to track ID
+                  onResizeStart(instanceId || track.id, 'left', pos);
                 }
               }
             }}
@@ -275,7 +280,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
                 const stage = e.target.getStage();
                 const pos = stage?.getPointerPosition();
                 if (pos) {
-                  onResizeStart(track.id, 'right', pos);
+                  // Use instance ID if provided, otherwise fall back to track ID
+                  onResizeStart(instanceId || track.id, 'right', pos);
                 }
               }
             }}
@@ -305,6 +311,7 @@ export default React.memo(KonvaTrack, (prevProps, nextProps) => {
   // Custom comparison function - only re-render if important props change
   return (
     prevProps.track.id === nextProps.track.id &&
+    prevProps.instanceId === nextProps.instanceId &&
     prevProps.x === nextProps.x &&
     prevProps.y === nextProps.y &&
     prevProps.width === nextProps.width &&

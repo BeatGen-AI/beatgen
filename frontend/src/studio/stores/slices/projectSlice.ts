@@ -315,6 +315,12 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           }
           
           const finalCombinedTrack = { ...combinedTrackData, track: nestedTrackData } as CombinedTrack;
+          
+          // 2.5. Migrate track to instances model
+          const { migrateTrackToInstances } = rootGet();
+          if (migrateTrackToInstances) {
+              migrateTrackToInstances(finalCombinedTrack);
+          }
 
           // 3. Perform necessary ENGINE setup (NO HISTORY)
           const audioEngine = store.getAudioEngine();
