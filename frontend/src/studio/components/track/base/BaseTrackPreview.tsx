@@ -212,28 +212,17 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
 
   // Mouse event handlers for dragging and selection
   const handleMouseDown = (e: React.MouseEvent) => {
-    console.log('[BaseTrackPreview] handleMouseDown called for track:', track.id, {
-      selectedTool,
-      hasInteraction: !!interaction,
-      trackRef: !!trackRef.current,
-      target: e.target,
-      currentTarget: e.currentTarget
-    });
-    
     if (!trackRef.current) {
-      console.log('[BaseTrackPreview] No trackRef.current, returning early');
       return;
     }
     
     // Prevent dragging when clicking on controls or resize handles
     if ((e.target as HTMLElement).closest('.track-control') || (e.target as HTMLElement).closest('.resize-handle')) {
-      console.log('[BaseTrackPreview] Clicked on control or resize handle, returning early');
       return;
     }
 
     // Handle tool-specific interactions first
     if (selectedTool !== 'select') {
-      console.log('[BaseTrackPreview] Tool is not select, tool:', selectedTool);
       e.stopPropagation();
       if (onTrackClick) {
         onTrackClick(track.id, {
@@ -247,7 +236,6 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
 
     // For select tool, handle selection logic
     if (selectedTool === 'select' && onTrackClick) {
-      console.log('[BaseTrackPreview] Calling onTrackClick for selection');
       onTrackClick(track.id, {
         shiftKey: e.shiftKey,
         ctrlKey: e.ctrlKey,
@@ -257,13 +245,10 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
 
     // Use interaction manager for coordinated drag operations
     if (interaction && selectedTool === 'select' && interaction.startDrag) {
-      console.log('[BaseTrackPreview] Starting interaction manager drag process');
-      
       // Find container element for scroll offset
       const container = trackRef.current.closest('.timeline-container');
         
       if (!container) {
-        console.log('[BaseTrackPreview] No timeline-container found for interaction manager');
         return;
       }
       
@@ -283,7 +268,6 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         y: e.clientY - containerRect.top + container.scrollTop
       };
       
-      console.log('[BaseTrackPreview] Calling interaction.startDrag with mouseOffset:', mouseOffset);
       interaction.startDrag(track.id, mousePosition, mouseOffset);
       
       e.preventDefault();
@@ -293,24 +277,14 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   const handleResizeMouseDown = (e: React.MouseEvent, direction: 'left' | 'right') => {
     if (!trackRef.current) return;
     
-    console.log('[BaseTrackPreview] handleResizeMouseDown called for track:', track.id, {
-      direction,
-      isSelected,
-      hasInteraction: !!interaction,
-      isGroupResize
-    });
-    
     const container = trackRef.current.closest('.timeline-container');
       
     if (!container) {
-      console.log('[BaseTrackPreview] No timeline-container found for resize');
       return;
     }
 
     // Use interaction manager for resize
     if (interaction && selectedTool === 'select' && interaction.startResize) {
-      console.log('[BaseTrackPreview] Starting resize through interaction manager');
-      
       // Get the container's bounding rect for proper coordinate calculation
       const containerRect = container.getBoundingClientRect();
       
@@ -320,7 +294,6 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         y: e.clientY - containerRect.top + container.scrollTop
       };
       
-      console.log('[BaseTrackPreview] Calling interaction.startResize');
       interaction.startResize(track.id, direction, mousePosition);
       
       e.stopPropagation();
@@ -338,15 +311,6 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       trackRef.current.style.top = `${track.y_position}px`;
       trackRef.current.style.width = `${trackWidth}px`;
       
-      console.log('Syncing track DOM after state update:', { 
-        id: track.id, 
-        propWidth: trackWidth, 
-        propXTicks: track.x_position, 
-        calculatedPixelX: pixelX,
-        trimStart: track.trim_start_ticks,
-        trimEnd: track.trim_end_ticks,
-        duration: track.duration_ticks
-      });
     }
   }, [track.x_position, track.y_position, trackWidth, track.id, bpm, timeSignature, track.trim_start_ticks, track.trim_end_ticks, track.duration_ticks]);
   
@@ -356,16 +320,6 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       const delta = resizeDelta.x;
       const initialDim = resizeInitialDimensions;
       
-      console.log('[BaseTrackPreview] Applying group resize delta:', {
-        trackId: track.id,
-        delta,
-        direction: propResizeDirection,
-        initialDim,
-        currentX: track.x_position,
-        currentWidth: trackWidth,
-        isGroupResize,
-        isPrimaryResize
-      });
       
       // Disable transitions during resize
       trackRef.current.style.transition = 'none';

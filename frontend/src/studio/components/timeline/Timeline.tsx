@@ -261,10 +261,6 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
                        !selectedTrackIds.every(id => currentSelection.includes(id));
     
     if (isDifferent) {
-      console.log('[Timeline] Syncing selection state with interaction manager:', {
-        selectedTrackIds,
-        currentSelection
-      });
       
       // Use a timeout to break the synchronous update cycle
       const timeoutId = setTimeout(() => {
@@ -330,13 +326,11 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     // Don't handle clicks if we just completed a rectangle selection
     if (justCompletedSelection) {
-      console.log('Click ignored - just completed rectangle selection');
       return;
     }
     
     // Only handle direct clicks on the background, not on tracks
     if ((e.target as HTMLElement).closest('.track')) {
-      console.log('Click on track - ignoring for timeline click');
       return;
     }
     
@@ -350,14 +344,6 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     // Convert pixel position to time in seconds
     const newTime = calculatePositionTime(adjustedX, bpm, timeSignature);
     
-    console.log('Timeline content clicked!', {
-      clickX,
-      adjustedX,
-      newTime,
-      zoomLevel,
-      bpm,
-      timeSignature
-    });
     
     // Call the callback with the new time
     onTimeChange(newTime);
@@ -365,7 +351,6 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
 
   // Handle mouse events on container
   const handleContainerMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    console.log('Timeline onMouseDown');
     const rect = e.currentTarget.getBoundingClientRect();
     const position = {
       x: e.clientX - rect.left,
@@ -376,14 +361,12 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     const clickedItem = getItemAtPosition(position.x, position.y);
 
     if (clickedItem) {
-      console.log('Timeline onMouseDown - calling handleItemClick');
       handleItemClick(clickedItem.id, {
         shiftKey: e.shiftKey,
         ctrlKey: e.ctrlKey,
         metaKey: e.metaKey
       });
     } else {
-      console.log('Timeline onMouseDown - calling handleBackgroundMouseDown');
       handleBackgroundMouseDown(position, {
         shiftKey: e.shiftKey
       });
@@ -398,15 +381,12 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     };
 
     if (isSelecting) {
-      console.log('Timeline onMouseMove - updating selection');
       updateSelection(position);
     }
   }, [isSelecting, updateSelection]);
 
   const handleContainerMouseUp = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    console.log('Timeline onMouseUp - isSelecting:', isSelecting);
     if (isSelecting) {
-      console.log('Timeline onMouseUp - processing selection');
       endSelection(e.shiftKey);
       
       // Set flag to prevent click handler from firing
@@ -895,7 +875,6 @@ function GridOverlay({
       // IMPORTANT: For time signatures, denominator tells us the type of note that gets one beat
       // 4 = quarter note gets one beat, 8 = eighth note gets one beat
       // This means we need to adjust how we interpret subdivisions based on the denominator
-      console.log(`Drawing grid with time signature ${timeSignature[0]}/${timeSignature[1]}`);
       
       const subdivisionsPerBeat = timeSignature[1]; // Use the denominator directly
       const totalBeats = measureCount * beatsPerMeasure;
@@ -905,16 +884,6 @@ function GridOverlay({
       // Calculate the width of each subdivision
       const subdivisionWidth = beatWidth / subdivisionsPerBeat;
       
-      // Debug output
-      console.log('Grid subdivision calculation:', {
-        measureWidth: GRID_CONSTANTS.measureWidth,
-        beatsPerMeasure,
-        beatWidth,
-        denominator: timeSignature[1],
-        subdivisionsPerBeat,
-        subdivisionWidth,
-        expectedSubdivisionsPerMeasure: beatsPerMeasure * subdivisionsPerBeat
-      });
 
       // For each beat in our timeline
       for (let beatIndex = 0; beatIndex < totalBeats; beatIndex++) {
