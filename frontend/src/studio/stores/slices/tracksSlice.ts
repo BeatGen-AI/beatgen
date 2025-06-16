@@ -2,7 +2,8 @@ import { CombinedTrack } from 'src/platform/types/project';
 import { Position } from '../../components/track';
 import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTrackPayload, DrumTrackPayload, MidiTrackPayload, AudioTrackOptions, SamplerTrackOptions, MidiTrackOptions, AnyTrackRead, MidiTrack, AudioTrack, SamplerTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, DrumTrackOptions } from '../types';
 import { Store } from '../../core/state/store';
-import { Actions } from '../../core/state/history/actions'; 
+import { Actions } from '../../core/state/history/actions';
+import type { Action } from '../../core/state/history/actions'; 
 import { TRACK_CONFIG, DEFAULT_SAMPLER_CONFIG } from '../config';
 import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
@@ -317,6 +318,128 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     };
 
     return _withErrorHandling(async () => _withStore(createLogic)(), `createTrackAndRegisterWithHistory: ${type}`)();
+  };
+
+  // Creates a track without registering it in history - used for batch operations
+  const createTrackWithoutHistory = async (
+    type: TrackType,
+    name: string,
+    options: TrackOptions = {}
+  ): Promise<{ trackData: CombinedTrack, file?: File } | null> => {
+    const { timeSignature, bpm, tracks, _withStore, _withErrorHandling } = rootGet();
+
+    if (!_withStore || !_withErrorHandling) {
+        console.error("_withStore or _withErrorHandling not available");
+        return null;
+    }
+
+    const createLogic = async (passedStore: Store): Promise<{ trackData: CombinedTrack, file?: File } | null> => {
+      const trackId = (options.id || options.trackId) ?? crypto.randomUUID(); 
+      const tracksLength = rootGet().tracks.length;
+      const position = options.position as Position || { x: 0, y: tracksLength * GRID_CONSTANTS.trackHeight };
+      
+      const trackProps = {
+        id: trackId,
+        volume: options.volume ?? 80,
+        pan: options.pan ?? 0,
+        muted: options.muted ?? false,
+        soloed: options.soloed ?? false,
+        instrumentId: (options as any).instrumentId,
+        instrumentName: (options as any).instrumentName,
+        instrumentStorageKey: (options as any).instrumentStorageKey,
+      };
+      
+      const typeConfig = TRACK_CONFIG[type];
+      if (!typeConfig) throw new Error(`Invalid track type: ${type}`);
+      
+      // Extract the file object early
+      const file = type === 'AUDIO' ? (options as AudioTrackOptions).audioFile : 
+                   type === 'SAMPLER' ? (options as SamplerTrackOptions).sampleFile : 
+                   undefined;
+
+      // Don't create in audio engine yet - that will be done by the action
+      
+      // Calculate defaults
+      const beatsPerBar = timeSignature[0]; 
+      const defaultBars = 4;
+      const totalBeats = defaultBars * beatsPerBar;
+      const defaultDurationTicks = totalBeats * PULSES_PER_QUARTER_NOTE; 
+      
+      // Build base trackData (serializable)
+      const trackData: Omit<CombinedTrack, 'track'> & { track?: any } = {
+        id: trackId,
+        name: name, 
+        type: type,
+        volume: trackProps.volume,
+        pan: trackProps.pan,
+        mute: trackProps.muted, 
+        x_position: position.x,
+        y_position: position.y,
+        trim_start_ticks: options.trim_start_ticks ?? 0,
+        trim_end_ticks: options.trim_end_ticks ?? null,
+        duration_ticks: options.duration ?? defaultDurationTicks,
+        dirty: true, // New tracks are dirty by default (need to be saved)
+      };
+      
+      // Get initial *serializable* nested track properties
+      const typeSpecificProps = typeConfig.initTrack(trackId, undefined); // Pass undefined for file here
+      Object.assign(trackData, typeSpecificProps); // Assign top-level props like baseMidiNote
+      let nestedTrackDataObject: any = { ...typeSpecificProps, type, id: trackId, name: name };
+      
+      // Add only *serializable* type-specific data available at creation
+      if (type === 'MIDI') {
+          const midiOptions = options as MidiTrackOptions;
+          nestedTrackDataObject = {
+              ...nestedTrackDataObject,
+              instrument_id: midiOptions.instrumentId,
+              instrument_name: midiOptions.instrumentName,
+              instrument_storage_key: midiOptions.instrumentStorageKey,
+              notes: [], 
+              // Construct instrument_file object
+              instrument_file: midiOptions.instrumentId ? { 
+                  id: midiOptions.instrumentId, 
+                  name: midiOptions.instrumentName || '', 
+                  storage_key: midiOptions.instrumentStorageKey || '' 
+              } : undefined
+          } as MidiTrack;
+      } 
+      else if (type === 'AUDIO') {
+          const audioOptions = options as AudioTrackOptions;
+          nestedTrackDataObject = {
+              ...nestedTrackDataObject,
+              audio_file_storage_key: audioOptions.storage_key,
+              audio_file_name: audioOptions.audio_file_name,
+              audio_file_format: audioOptions.audio_file_format,
+              audio_file_size: audioOptions.audio_file_size,
+              audio_file_duration: audioOptions.audio_file_duration,
+              audio_file_sample_rate: audioOptions.audio_file_sample_rate,
+              waveform_data: audioOptions.waveform_data,
+          };
+      }
+      else if (type === 'SAMPLER') {
+           const samplerOptions = options as SamplerTrackOptions;
+           nestedTrackDataObject = {
+              ...nestedTrackDataObject,
+              baseMidiNote: samplerOptions.baseMidiNote ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote,
+              grainSize: samplerOptions.grainSize ?? DEFAULT_SAMPLER_CONFIG.grainSize,
+              overlap: samplerOptions.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap,
+              audio_file_name: file?.name,
+              storage_key: samplerOptions.storage_key,
+              drum_track_id: samplerOptions.drum_track_id || null,
+              waveform_data: samplerOptions.waveform_data,
+           };
+      }
+      
+      const finalTrackData = { 
+          ...trackData, 
+          track: nestedTrackDataObject as AnyTrackRead 
+      } as CombinedTrack;
+
+      // Return the data without executing any action
+      return { trackData: finalTrackData, file };
+    };
+
+    return _withErrorHandling(async () => _withStore(createLogic)(), `createTrackWithoutHistory: ${type}`)();
   };
 
   const handleTrackDelete = async (trackId: string) => {
@@ -1081,21 +1204,24 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
 
   const duplicateMultipleTracks = async (trackIds: string[], offsetX = 0): Promise<CombinedTrack[]> => {
-    const { tracks, _withErrorHandling } = rootGet();
+    const { tracks, executeHistoryAction, bpm, timeSignature, _withErrorHandling } = rootGet();
     if (!_withErrorHandling) {
       console.error("_withErrorHandling not available");
       return [];
     }
 
     const duplicateMultipleLogic = async (): Promise<CombinedTrack[]> => {
-      const duplicatedTracks: CombinedTrack[] = [];
+      const duplicatedTracksData: CombinedTrack[] = [];
+      const actions: Action[] = [];
       
       // Calculate base offset if not provided
       let baseOffsetX = offsetX;
       if (baseOffsetX === 0) {
         // Find the rightmost track position
         const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
-        const maxRightPosition = Math.max(...selectedTracks.map(t => t.x_position + ticksToPixels(t.duration_ticks, 1)));
+        const maxRightPosition = Math.max(...selectedTracks.map(t => 
+          t.x_position + ticksToPixels(t.duration_ticks, bpm, timeSignature)
+        ));
         baseOffsetX = maxRightPosition + 96; // 96px gap
       }
 
@@ -1103,6 +1229,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
       const minX = Math.min(...selectedTracks.map(t => t.x_position));
 
+      // First pass: Create all track data and actions without executing
       for (const trackId of trackIds) {
         const originalTrack = tracks.find(t => t.id === trackId);
         if (!originalTrack) continue;
@@ -1111,32 +1238,126 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         const relativeX = originalTrack.x_position - minX;
         const newPosition = {
           x: baseOffsetX + relativeX,
-          y: originalTrack.y_position + GRID_CONSTANTS.trackHeight * trackIds.length // Offset Y to avoid overlap
+          y: originalTrack.y_position
         };
 
-        const duplicatedTrack = await duplicateTrack(trackId, newPosition);
-        if (duplicatedTrack) {
-          duplicatedTracks.push(duplicatedTrack);
+        // Prepare track data for duplication
+        const newTrackId = crypto.randomUUID();
+        const trackName = `${originalTrack.name} (Copy)`;
+        
+        // Build options
+        const options: TrackOptions = {
+          id: newTrackId,
+          volume: originalTrack.volume,
+          pan: originalTrack.pan,
+          muted: originalTrack.mute,
+          soloed: false,
+          position: newPosition,
+          duration: originalTrack.duration_ticks,
+          trim_start_ticks: originalTrack.trim_start_ticks,
+          trim_end_ticks: originalTrack.trim_end_ticks,
+        };
+
+        // Add type-specific options
+        if (originalTrack.type === 'MIDI' && originalTrack.track) {
+          const midiTrack = originalTrack.track as MidiTrackRead;
+          options.instrumentId = midiTrack.instrument_id;
+          options.instrumentName = midiTrack.instrument_name;
+          options.instrumentStorageKey = midiTrack.instrument_storage_key;
+        } else if (originalTrack.type === 'AUDIO' && originalTrack.track) {
+          const audioTrack = originalTrack.track as AudioTrackRead;
+          if (audioTrack.audio_file_storage_key) {
+            (options as AudioTrackOptions).storage_key = audioTrack.audio_file_storage_key;
+            (options as AudioTrackOptions).audio_file_name = audioTrack.audio_file_name;
+            (options as AudioTrackOptions).audio_file_format = audioTrack.audio_file_format;
+            (options as AudioTrackOptions).audio_file_size = audioTrack.audio_file_size;
+            (options as AudioTrackOptions).audio_file_duration = audioTrack.audio_file_duration;
+            (options as AudioTrackOptions).audio_file_sample_rate = audioTrack.audio_file_sample_rate;
+            (options as AudioTrackOptions).waveform_data = audioTrack.waveform_data;
+          }
+        } else if (originalTrack.type === 'SAMPLER' && originalTrack.track) {
+          const samplerTrack = originalTrack.track as SamplerTrackRead;
+          if (samplerTrack.storage_key) {
+            (options as SamplerTrackOptions).storage_key = samplerTrack.storage_key;
+            (options as SamplerTrackOptions).baseMidiNote = samplerTrack.baseMidiNote;
+            (options as SamplerTrackOptions).grainSize = samplerTrack.grainSize;
+            (options as SamplerTrackOptions).overlap = samplerTrack.overlap;
+            (options as SamplerTrackOptions).drum_track_id = samplerTrack.drum_track_id;
+            (options as SamplerTrackOptions).waveform_data = samplerTrack.waveform_data;
+          }
+        }
+
+        // Create track data without history
+        const result = await createTrackWithoutHistory(
+          originalTrack.type,
+          trackName,
+          options
+        );
+        
+        if (result) {
+          const { trackData, file } = result;
+          
+          // Copy MIDI notes if applicable
+          if (originalTrack.type === 'MIDI' && originalTrack.track) {
+            const originalMidiTrack = originalTrack.track as MidiTrackRead;
+            if (originalMidiTrack.notes && originalMidiTrack.notes.length > 0) {
+              (trackData.track as MidiTrackRead).notes = [...originalMidiTrack.notes];
+            }
+          }
+          
+          // Create the action but don't execute it
+          const action = new Actions.AddTrack(get, trackData, file);
+          actions.push(action);
+          duplicatedTracksData.push(trackData);
         }
       }
 
-      return duplicatedTracks;
+      // Create and execute a single GroupAction
+      if (actions.length > 0) {
+        console.log('[duplicateMultipleTracks] Creating GroupAction with', actions.length, 'actions');
+        const groupAction = new Actions.GroupAction(
+          get,
+          actions,
+          `Paste ${actions.length} track${actions.length > 1 ? 's' : ''}`
+        );
+        console.log('[duplicateMultipleTracks] Executing GroupAction');
+        await executeHistoryAction(groupAction);
+        console.log('[duplicateMultipleTracks] GroupAction executed');
+      }
+
+      return duplicatedTracksData;
     };
 
     return _withErrorHandling(duplicateMultipleLogic, `duplicateMultipleTracks`)() || [];
   };
 
   const deleteMultipleTracks = async (trackIds: string[]): Promise<void> => {
-    const { _withErrorHandling } = rootGet();
+    const { tracks, executeHistoryAction, _withErrorHandling } = rootGet();
     if (!_withErrorHandling) {
       console.error("_withErrorHandling not available");
       return;
     }
 
     const deleteMultipleLogic = async (): Promise<void> => {
-      // Delete tracks in sequence to avoid issues with concurrent operations
+      const actions: Action[] = [];
+      
+      // Create delete actions for all tracks
       for (const trackId of trackIds) {
-        await handleTrackDelete(trackId);
+        const track = tracks.find(t => t.id === trackId);
+        if (track) {
+          const action = new Actions.DeleteTrack(get, { ...track });
+          actions.push(action);
+        }
+      }
+      
+      // Execute as a single group action
+      if (actions.length > 0) {
+        const groupAction = new Actions.GroupAction(
+          get,
+          actions,
+          `Delete ${actions.length} track${actions.length > 1 ? 's' : ''}`
+        );
+        await executeHistoryAction(groupAction);
       }
     };
 

@@ -1,5 +1,7 @@
 // Re-export base action classes
 export { BaseAction, TrackAction, NoteAction } from './BaseAction';
+export type { Action } from './BaseAction';
+export { GroupAction } from './GroupAction';
 
 // Re-export all action modules
 export { ProjectActions } from './ProjectActions';
@@ -33,6 +35,9 @@ export const ACTION_TYPES = {
 
     // Drum Track actions
     DRUM_TRACK_SAMPLER_UPDATE: 'DRUM_TRACK_SAMPLER_UPDATE',
+    
+    // Group action
+    GROUP_ACTION: 'GROUP_ACTION',
 } as const;
 
 // Export action type for type checking
@@ -42,6 +47,7 @@ export type ActionType = typeof ACTION_TYPES[keyof typeof ACTION_TYPES];
 import { ProjectActions } from './ProjectActions';
 import { TrackActions } from './TrackActions';
 import { NoteActions } from './NoteActions';
+import { GroupAction } from './GroupAction';
 
 /**
  * Unified actions object for easy access to all action types
@@ -54,7 +60,10 @@ export const Actions = {
     ...TrackActions,
     
     // Note actions
-    ...NoteActions
+    ...NoteActions,
+    
+    // Group action
+    GroupAction: GroupAction
 };
 
 // Maintain backwards compatibility
