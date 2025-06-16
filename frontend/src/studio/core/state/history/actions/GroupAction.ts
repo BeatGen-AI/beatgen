@@ -19,15 +19,10 @@ export class GroupAction extends BaseAction {
             actionTypes: this.actions.map(a => a.type)
         });
         
-        console.log('[GroupAction] Starting execution of', this.actions.length, 'actions');
-        
         // Execute all actions in order
-        for (let i = 0; i < this.actions.length; i++) {
-            console.log('[GroupAction] Executing action', i + 1, 'of', this.actions.length);
-            await this.actions[i].execute();
+        for (const action of this.actions) {
+            await action.execute();
         }
-        
-        console.log('[GroupAction] All actions executed');
     }
     
     async undo(): Promise<void> {

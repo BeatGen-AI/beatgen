@@ -53,6 +53,10 @@ export interface KonvaTimelineProps {
   onDeleteTracks?: (trackIds: string[]) => void;
   onDuplicateTracks?: (trackIds: string[]) => void;
   
+  // Group operations for position/resize
+  updateMultipleTrackPositions?: (trackIds: string[], deltaX: number, deltaY: number) => void;
+  resizeMultipleTracks?: (trackIds: string[], widthDelta: number, anchor: 'left' | 'right') => void;
+  
   // Zoom control
   onZoomChange?: (newZoom: number) => void;
 }
@@ -94,6 +98,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   onPasteTracks,
   onDeleteTracks,
   onDuplicateTracks,
+  updateMultipleTrackPositions,
+  resizeMultipleTracks,
   onZoomChange
 }, ref) => {
   // State
@@ -217,13 +223,38 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       // Clear drag preview
       setDragPreviewPositions(new Map());
       
-      // Update actual positions
-      updates.forEach((pos, trackId) => {
-        onTrackPositionChange(trackId, {
-          x: pos.x,
-          y: pos.y
-        }, true);
-      });
+      // Check if this is a group drag
+      if (updates.size > 1) {
+        // Group drag - calculate deltas and use group update
+        const trackIds: string[] = [];
+        let deltaX = 0;
+        let deltaY = 0;
+        let firstTrack = true;
+        
+        updates.forEach((pos, trackId) => {
+          trackIds.push(trackId);
+          const track = tracks.find(t => t.id === trackId);
+          if (track && firstTrack) {
+            // Calculate delta from the first track
+            deltaX = pos.x - track.x_position;
+            deltaY = pos.y - track.y_position;
+            firstTrack = false;
+          }
+        });
+        
+        // Use the group position update function
+        if (updateMultipleTrackPositions) {
+          updateMultipleTrackPositions(trackIds, deltaX, deltaY);
+        }
+      } else {
+        // Single track drag
+        updates.forEach((pos, trackId) => {
+          onTrackPositionChange(trackId, {
+            x: pos.x,
+            y: pos.y
+          }, true);
+        });
+      }
     },
     
     onResizeMove: (updates) => {
@@ -253,29 +284,64 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       setResizePreviewWidths(new Map());
       setResizePreviewPositions(new Map());
       
-      updates.forEach((dim, trackId) => {
-        const track = tracks.find(t => t.id === trackId);
-        if (!track) return;
+      // Check if this is a group resize
+      if (updates.size > 1 && resizeMultipleTracks) {
+        // Group resize - find the common resize parameters
+        let resizeDirection: 'left' | 'right' = 'right';
+        let deltaPixels = 0;
+        const trackIds: string[] = [];
         
-        // For left resize, we need to update the trim
-        if (dim.start !== undefined && dim.width !== undefined) {
-          // Left resize - onTrackResizeEnd expects the position change in pixels
-          if (onTrackResizeEnd) {
-            const positionDeltaTicks = dim.start - track.x_position;
-            const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
-            onTrackResizeEnd(trackId, deltaPixels, 'left');
+        updates.forEach((dim, trackId) => {
+          trackIds.push(trackId);
+          const track = tracks.find(t => t.id === trackId);
+          if (!track) return;
+          
+          // Determine resize direction and delta from the first track
+          if (trackIds.length === 1) {
+            if (dim.start !== undefined && dim.width !== undefined) {
+              // Left resize
+              resizeDirection = 'left';
+              const positionDeltaTicks = dim.start - track.x_position;
+              deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
+            } else if (dim.width !== undefined) {
+              // Right resize
+              resizeDirection = 'right';
+              const currentWidthTicks = (track.trim_end_ticks || track.duration_ticks || 0) - (track.trim_start_ticks || 0);
+              const newWidthTicks = dim.width;
+              const deltaTicks = newWidthTicks - currentWidthTicks;
+              deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
+            }
           }
-        } else if (dim.width !== undefined) {
-          // Right resize - only width changed
-          if (onTrackResizeEnd) {
-            const currentWidthTicks = (track.trim_end_ticks || track.duration_ticks || 0) - (track.trim_start_ticks || 0);
-            const newWidthTicks = dim.width; // dim.width is already in ticks
-            const deltaTicks = newWidthTicks - currentWidthTicks;
-            const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
-            onTrackResizeEnd(trackId, deltaPixels, 'right');
+        });
+        
+        // Use the group resize function
+        resizeMultipleTracks(trackIds, deltaPixels, resizeDirection);
+      } else {
+        // Single track resize
+        updates.forEach((dim, trackId) => {
+          const track = tracks.find(t => t.id === trackId);
+          if (!track) return;
+          
+          // For left resize, we need to update the trim
+          if (dim.start !== undefined && dim.width !== undefined) {
+            // Left resize - onTrackResizeEnd expects the position change in pixels
+            if (onTrackResizeEnd) {
+              const positionDeltaTicks = dim.start - track.x_position;
+              const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
+              onTrackResizeEnd(trackId, deltaPixels, 'left');
+            }
+          } else if (dim.width !== undefined) {
+            // Right resize - only width changed
+            if (onTrackResizeEnd) {
+              const currentWidthTicks = (track.trim_end_ticks || track.duration_ticks || 0) - (track.trim_start_ticks || 0);
+              const newWidthTicks = dim.width; // dim.width is already in ticks
+              const deltaTicks = newWidthTicks - currentWidthTicks;
+              const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
+              onTrackResizeEnd(trackId, deltaPixels, 'right');
+            }
           }
-        }
-      });
+        });
+      }
     },
     
     onItemClick: (item, clickTool) => {
