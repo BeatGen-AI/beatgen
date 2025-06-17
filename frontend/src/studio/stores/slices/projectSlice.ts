@@ -261,11 +261,9 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
               volume: apiTrack.volume ?? 80,
               pan: apiTrack.pan ?? 0,
               mute: apiTrack.mute ?? false,
-              x_position: position.x,
-              y_position: position.y,
-              trim_start_ticks: apiTrack.trim_start_ticks ?? 0,
-              trim_end_ticks: apiTrack.trim_end_ticks ?? 0, 
               duration_ticks: apiTrack.duration_ticks ?? 0,
+              // Map instance_metadata to instances
+              instances: apiTrack.instance_metadata || [],
               dirty: false, // Loaded tracks are clean (already saved)
           };
 
@@ -322,7 +320,11 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           audioEngine.setTrackVolume(finalCombinedTrack.id, finalCombinedTrack.volume);
           audioEngine.setTrackPan(finalCombinedTrack.id, finalCombinedTrack.pan);
           audioEngine.setTrackMute(finalCombinedTrack.id, finalCombinedTrack.mute);
-          audioEngine.setTrackPosition(finalCombinedTrack.id, finalCombinedTrack.x_position, finalCombinedTrack.y_position);
+          // Set position based on first instance if available
+          const firstInstance = finalCombinedTrack.instances?.[0];
+          if (firstInstance) {
+              audioEngine.setTrackPosition(finalCombinedTrack.id, firstInstance.x_position, firstInstance.y_position);
+          }
           
           // Load audio file specifically for audio tracks during initial processing
           if (trackType === 'AUDIO' && finalCombinedTrack.track && 'audio_file_storage_key' in finalCombinedTrack.track) {

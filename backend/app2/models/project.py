@@ -69,6 +69,7 @@ class CombinedTrack(SQLModel):
     trim_end_ticks: Optional[int] = 0
     duration_ticks: Optional[int] = 0
     track_number: Optional[int] = 0
+    instance_metadata: Optional[List[dict]] = None
 
     # Track data based on type
     track: Union[AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead]

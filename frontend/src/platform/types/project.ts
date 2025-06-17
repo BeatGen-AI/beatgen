@@ -45,6 +45,7 @@ export interface CombinedTrack {
   track: AudioTrackRead | MidiTrackRead | SamplerTrackRead | DrumTrackRead;
   dirty?: boolean; // Client-side only: true if track has unsaved changes
   instances?: TrackInstance[]; // Client-side only: array of track instances on timeline
+  instance_metadata?: TrackInstance[]; // From backend: array of track instances
 }
 
 /**

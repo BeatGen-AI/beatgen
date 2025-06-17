@@ -141,6 +141,44 @@ class ProjectService:
             combined_tracks = []
             for track_data in tracks_with_settings:
                 if "track" in track_data and track_data["track"]:
+                    # Handle instance_metadata - ensure it's a list
+                    instance_metadata = track_data.get("instance_metadata")
+                    
+                    # Create default instance if none exist (for backwards compatibility)
+                    if instance_metadata is None or \
+                       (isinstance(instance_metadata, dict) and not instance_metadata) or \
+                       (isinstance(instance_metadata, list) and len(instance_metadata) == 0):
+                        # Create default instance based on track position data
+                        instance_metadata = [{
+                            "id": f"{track_data['track_id']}_instance_1",
+                            "x_position": track_data.get("x_position", 0),
+                            "y_position": track_data.get("y_position", 0),
+                            "trim_start_ticks": track_data.get("trim_start_ticks", 0),
+                            "trim_end_ticks": track_data.get("trim_end_ticks", track_data.get("duration_ticks", 0))
+                        }]
+                        logger.info(f"Created default instance for track {track_data['track_id']}: {instance_metadata}")
+                    elif isinstance(instance_metadata, dict):
+                        # If it's a non-empty dict, it might be in wrong format
+                        logger.warning(f"instance_metadata is dict, expected list: {instance_metadata}")
+                        # Try to convert or create default
+                        instance_metadata = [{
+                            "id": f"{track_data['track_id']}_instance_1",
+                            "x_position": track_data.get("x_position", 0),
+                            "y_position": track_data.get("y_position", 0),
+                            "trim_start_ticks": track_data.get("trim_start_ticks", 0),
+                            "trim_end_ticks": track_data.get("trim_end_ticks", track_data.get("duration_ticks", 0))
+                        }]
+                    elif not isinstance(instance_metadata, list):
+                        # If it's not a list, log and create default
+                        logger.warning(f"instance_metadata has unexpected type {type(instance_metadata)}: {instance_metadata}")
+                        instance_metadata = [{
+                            "id": f"{track_data['track_id']}_instance_1",
+                            "x_position": track_data.get("x_position", 0),
+                            "y_position": track_data.get("y_position", 0),
+                            "trim_start_ticks": track_data.get("trim_start_ticks", 0),
+                            "trim_end_ticks": track_data.get("trim_end_ticks", track_data.get("duration_ticks", 0))
+                        }]
+                    
                     # Create a combined track with all data
                     combined_track = CombinedTrack(
                         id=track_data["track_id"],
@@ -156,6 +194,7 @@ class ProjectService:
                         trim_end_ticks=track_data["trim_end_ticks"],
                         duration_ticks=track_data["duration_ticks"],
                         track_number=track_data["track_number"],
+                        instance_metadata=instance_metadata,
                         # Specialized track data
                         track=track_data["track"],
                     )
@@ -317,7 +356,12 @@ class ProjectService:
             # Extract tracks data if present
             tracks_data = project_data.pop("tracks", None)
 
-            logger.info(f"Tracks data: {tracks_data}")
+            if tracks_data:
+                logger.info(f"Received {len(tracks_data)} tracks for update")
+                for idx, track in enumerate(tracks_data):
+                    logger.info(f"Track {idx}: id={track.get('id')}, instance_metadata={track.get('instance_metadata')}")
+            else:
+                logger.info("No tracks data in update request")
 
             # Filter out fields that cannot be updated
             safe_data = {
@@ -389,6 +433,10 @@ class ProjectService:
                     track_id = uuid.UUID(track_data["id"])
                     new_track_ids.add(str(track_id))
                     
+                    # Log instance_metadata for debugging
+                    instance_metadata = track_data.get("instance_metadata")
+                    logger.info(f"Track {track_id} instance_metadata: {instance_metadata}")
+                    
                     # Prepare project-track settings
                     project_track_settings = {
                         "project_id": project_id,
@@ -404,6 +452,7 @@ class ProjectService:
                         "trim_end_ticks": track_data.get("trim_end_ticks", 0),
                         "duration_ticks": track_data.get("duration_ticks", 0),
                         "track_number": track_idx,
+                        "instance_metadata": instance_metadata,
                     }
                     
                     # Use upsert to safely create or update the project-track association

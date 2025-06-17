@@ -1,5 +1,5 @@
 import { Position } from '../components/track';
-import { CombinedTrack } from 'src/platform/types/project';
+import { CombinedTrack, TrackInstance } from 'src/platform/types/project';
 import { Note } from '../../types/note';
 import { Store } from '../core/state/store';
 import { Action } from '../core/state/history/actions/BaseAction';
@@ -233,6 +233,25 @@ export interface RootState {
   addEmptySamplerToDrumTrack: (drumTrackId: string, newSamplerName?: string) => Promise<string | null>;
   downloadSamplerTrack: (trackId: string) => Promise<{audioBlob?: Blob, trackName: string} | null>;
 
+  // Group operations for copy/paste functionality
+  duplicateTrack: (trackId: string, newPosition?: Position) => Promise<CombinedTrack | null>;
+  duplicateMultipleTracks: (trackIds: string[], offsetX?: number) => Promise<CombinedTrack[]>;
+  deleteMultipleTracks: (trackIds: string[]) => Promise<void>;
+  resizeMultipleTracks: (trackIds: string[], widthDelta: number, anchor: 'left' | 'right') => Promise<void>;
+  
+  // Group position operations for group moving
+  updateMultipleTrackPositions: (trackIds: string[], deltaX: number, deltaY: number) => Promise<void>;
+  
+  // Track instance management
+  addTrackInstance: (trackId: string, position?: Position, sourceInstance?: Partial<TrackInstance>) => Promise<string | null>;
+  updateTrackInstance: (trackId: string, instanceId: string, updates: Partial<TrackInstance>) => void;
+  deleteTrackInstance: (trackId: string, instanceId: string) => void;
+  getTrackInstances: (trackId: string) => TrackInstance[];
+  handleInstancePositionChange: (trackId: string, instanceId: string, newPosition: Position, isDragEnd: boolean) => void;
+  handleInstanceResizeEnd: (trackId: string, instanceId: string, deltaPixels: number, resizeDirection: 'left' | 'right') => void;
+  updateMultipleInstancePositions: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
+  resizeMultipleInstances: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
+
   // Playback / Transport
   isPlaying: boolean;
   currentTime: number;
@@ -260,12 +279,14 @@ export interface RootState {
   openDrumMachines: Record<string, boolean>;
   autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   autoSaveMessage?: string;
+  selectedTrackIds: string[];
   setZoomLevel: (zoomLevel: number) => void;
   setMeasureCount: (measureCount: number) => void;
   setAddMenuAnchor: (el: HTMLElement | null) => void;
   openDrumMachine: (drumTrackId: string) => void;
   closeDrumMachine: (trackId: string) => void;
   setAutoSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', message?: string) => void;
+  setSelectedTrackIds: (trackIds: string[]) => void;
 
   // Tool State
   selectedTool: Tool;

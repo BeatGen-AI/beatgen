@@ -142,18 +142,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   const updateTracks = (newTracks: CombinedTrack[]) => {
       set(produce((draft: RootState) => {
           draft.tracks = newTracks;
-          // Ensure all tracks have instances
-          draft.tracks.forEach(track => {
-              if (!track.instances || track.instances.length === 0) {
-                  track.instances = [{
-                      id: `${track.id}_instance_1`,
-                      x_position: track.x_position || 0,
-                      y_position: track.y_position || 0,
-                      trim_start_ticks: track.trim_start_ticks || 0,
-                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
-                  }];
-              }
-          });
       }));
   };
 
@@ -189,17 +177,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               track.track_number = index;
               // Mark loaded tracks as clean (not dirty) since they come from database
               track.dirty = false;
-              
-              // Ensure track has instances - create default if none exist
-              if (!track.instances || track.instances.length === 0) {
-                  track.instances = [{
-                      id: `${track.id}_instance_1`,
-                      x_position: track.x_position || 0,
-                      y_position: track.y_position || 0,
-                      trim_start_ticks: track.trim_start_ticks || 0,
-                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
-                  }];
-              }
           });
       }), true);
   };
@@ -337,18 +314,27 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
            }
       }
       
+      const initialInstance = {
+          id: `${trackId}_instance_1`,
+          x_position: position.x,
+          y_position: position.y,
+          trim_start_ticks: options.trim_start_ticks ?? 0,
+          trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
+      };
+      
       const finalTrackData = { 
           ...trackData, 
           track: nestedTrackDataObject as AnyTrackRead,
           // Initialize with a single instance
-          instances: [{
-              id: `${trackId}_instance_1`,
-              x_position: position.x,
-              y_position: position.y,
-              trim_start_ticks: options.trim_start_ticks ?? 0,
-              trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
-          }]
+          instances: [initialInstance]
       } as CombinedTrack;
+      
+      console.log('[Track Creation] New track with instance:', {
+          trackId,
+          trackName: name,
+          trackType: type,
+          instance: initialInstance
+      });
 
       // Create action, passing the serializable trackData AND the separate file object
       const action = new Actions.AddTrack(get, finalTrackData, file); 
@@ -726,7 +712,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             return;
         }
         
-        const oldPosition = { x: track.x_position, y: track.y_position }; // Get old position from track state
+        // Get the first instance (for now we're working with single instances)
+        const instances = track.instances || [];
+        if (instances.length === 0) {
+            console.error(`Track ${trackId} has no instances`);
+            return;
+        }
+        
+        const firstInstance = instances[0];
+        const oldPosition = { x: firstInstance.x_position, y: firstInstance.y_position };
 
         // Skip if nothing changed at drag end
         if (isDragEnd && 
@@ -736,19 +730,36 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             return;
         }
         
+        // Update the instance position
+        const updatedInstances = instances.map((instance, idx) => 
+            idx === 0 
+                ? { ...instance, x_position: newPosition.x, y_position: newPosition.y }
+                : instance
+        );
         
-        // Update track state
+        console.log('[Instance Update] Position change:', {
+            trackId,
+            instanceId: firstInstance.id,
+            oldPosition,
+            newPosition,
+            updatedInstance: updatedInstances[0]
+        });
+        
+        // Update track state with new instances array
         updateTrackState(trackId, { 
+            instances: updatedInstances,
+            // Also update track position for compatibility
             x_position: newPosition.x, 
             y_position: newPosition.y, 
-            position: { ...newPosition }
+            position: { ...newPosition },
+            dirty: true
         });
         
         // Update audio engine
         storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
         
         if (isDragEnd) {
-            // Use Actions.TrackPosition
+            // Use Actions.TrackPosition (will need to update this to use instances later)
             const action = new Actions.TrackPosition(
                 get,
                 trackId,
@@ -875,9 +886,17 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     if (!fullTrack || !_withErrorHandling) { return; }
 
     const resizeLogic = async () => {
-        const oldTrimStartTicks = fullTrack.trim_start_ticks || 0;
-        const oldTrimEndTicks = fullTrack.trim_end_ticks || fullTrack.duration_ticks || 0; 
-        const oldPositionX = fullTrack.x_position || 0;
+        // Get the first instance (for now we're working with single instances)
+        const instances = fullTrack.instances || [];
+        if (instances.length === 0) {
+            console.error(`Track ${trackId} has no instances for resize`);
+            return;
+        }
+        
+        const firstInstance = instances[0];
+        const oldTrimStartTicks = firstInstance.trim_start_ticks || 0;
+        const oldTrimEndTicks = firstInstance.trim_end_ticks || fullTrack.duration_ticks || 0; 
+        const oldPositionX = firstInstance.x_position || 0;
         const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
 
         console.log('[tracksSlice] handleTrackResizeEnd:', {
@@ -889,6 +908,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             oldTrimStartTicks,
             oldTrimEndTicks,
             trackDuration: fullTrack.duration_ticks,
+            instanceId: firstInstance.id,
             bpm,
             timeSignature,
             ppq: MUSIC_CONSTANTS.pulsesPerQuarterNote
@@ -915,7 +935,38 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             
         }
 
-
+        // Update the instance with new trim values
+        const updatedInstances = instances.map((instance, idx) => 
+            idx === 0 
+                ? { 
+                    ...instance, 
+                    trim_start_ticks: newTrimStartTicks,
+                    trim_end_ticks: newTrimEndTicks,
+                    x_position: newPositionX
+                  }
+                : instance
+        );
+        
+        console.log('[Instance Update] Resize:', {
+            trackId,
+            instanceId: firstInstance.id,
+            resizeDirection,
+            oldTrim: { start: oldTrimStartTicks, end: oldTrimEndTicks },
+            newTrim: { start: newTrimStartTicks, end: newTrimEndTicks },
+            oldPositionX,
+            newPositionX,
+            updatedInstance: updatedInstances[0]
+        });
+        
+        // Update track state with new instances array
+        updateTrackState(trackId, { 
+            instances: updatedInstances,
+            // Also update track values for compatibility
+            trim_start_ticks: newTrimStartTicks,
+            trim_end_ticks: newTrimEndTicks,
+            x_position: newPositionX,
+            dirty: true
+        });
 
         // Create the history action without width params
         const action = new Actions.TrackResize(
@@ -1426,17 +1477,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   
   // Track instance management functions
   const getTrackInstancesOrDefault = (track: CombinedTrack): TrackInstance[] => {
-    if (track.instances && track.instances.length > 0) {
-      return track.instances;
-    }
-    // Return default instance based on track data
-    return [{
-      id: `${track.id}_instance_1`,
-      x_position: track.x_position || 0,
-      y_position: track.y_position || 0,
-      trim_start_ticks: track.trim_start_ticks || 0,
-      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
-    }];
+    return track.instances || [];
   };
   
   const addTrackInstance = async (trackId: string, position?: Position, sourceInstance?: Partial<TrackInstance>): Promise<string | null> => {

@@ -38,7 +38,19 @@ export const createProject = async (project: ProjectCreate): Promise<Project> =>
 
 export const updateProject = async (id: string, updates: ProjectWithTracks): Promise<Project> => {
   try {
-    const response = await apiClient.patch(`/projects/${id}`, updates);
+    // Map instances to instance_metadata if tracks are present
+    const updatesForBackend = { ...updates };
+    if (updates.tracks) {
+      updatesForBackend.tracks = updates.tracks.map(track => {
+        const { instances, ...trackData } = track;
+        return {
+          ...trackData,
+          instance_metadata: instances || []
+        };
+      });
+    }
+    
+    const response = await apiClient.patch(`/projects/${id}`, updatesForBackend);
     return response.data;
   } catch (error: any) {
     // Handle specific conflict errors with more detail
@@ -194,9 +206,18 @@ export const saveProjectWithSounds = async (
   
   // 4. Update the project with all tracks
   try {
+    // Map instances to instance_metadata for backend
+    const tracksForBackend = tracks.map(track => {
+      const { instances, ...trackData } = track;
+      return {
+        ...trackData,
+        instance_metadata: instances || []
+      };
+    });
+    
     const response = await apiClient.patch(`/projects/${projectId}`, {
       ...projectData,
-      tracks: tracks
+      tracks: tracksForBackend
     });
     
     return response.data;

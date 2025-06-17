@@ -172,22 +172,28 @@ export class AutoSaveService {
 
       // Prepare tracks with MIDI notes (similar to SaveProjectButton logic)
       const preparedTracks = dirtyTracks.map(track => {
-        const { dirty, ...trackWithoutDirty } = track;
+        const { dirty, instances, ...trackWithoutDirty } = track;
+        
+        // Map instances to instance_metadata for backend
+        const trackForBackend = {
+          ...trackWithoutDirty,
+          instance_metadata: instances || []
+        };
         
         // For MIDI and sampler tracks, add current notes from the manager
         if (track.type === 'MIDI' || track.type === 'SAMPLER') {
           const midiNotes = this.callbacks.getTrackNotes(track.id) || [];
           
           // Add MIDI notes JSON to the track data (create new object to avoid mutation)
-          if (trackWithoutDirty.track) {
-            trackWithoutDirty.track = {
-              ...trackWithoutDirty.track,
+          if (trackForBackend.track) {
+            trackForBackend.track = {
+              ...trackForBackend.track,
               midi_notes_json: { notes: midiNotes }
             };
           }
         }
         
-        return trackWithoutDirty;
+        return trackForBackend;
       });
 
       console.log(`AutoSaveService: Saving ${preparedTracks.length} dirty tracks`);

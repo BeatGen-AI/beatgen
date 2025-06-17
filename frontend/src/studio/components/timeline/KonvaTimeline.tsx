@@ -161,43 +161,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     const items: KonvaItem[] = [];
     
     tracks.forEach((track, trackIndex) => {
-      // Ensure track has instances
-      if (!track.instances || track.instances.length === 0) {
-        // Fallback: create a single instance from track data
-        const resizePreviewX = resizePreviewPositions.get(track.id);
-        const resizePreviewWidth = resizePreviewWidths.get(track.id);
-        const dragPreview = dragPreviewPositions.get(track.id);
-        
-        let x = track.x_position || 0;
-        if (resizePreviewX !== undefined) {
-          x = resizePreviewX / pixelsPerTick;
-        }
-        if (dragPreview) {
-          x = dragPreview.x / pixelsPerTick;
-        }
-        
-        let y = track.y_position !== null && track.y_position !== undefined 
-          ? track.y_position 
-          : trackIndex * GRID_CONSTANTS.trackHeight;
-        if (dragPreview) {
-          y = dragPreview.y;
-        }
-        
-        items.push({
-          id: `${track.id}_instance_default`,
-          x,
-          y,
-          width: resizePreviewWidth !== undefined 
-            ? resizePreviewWidth / pixelsPerTick
-            : (track.duration_ticks ? 
-              (track.trim_end_ticks || track.duration_ticks) - (track.trim_start_ticks || 0) : 
-              MUSIC_CONSTANTS.pulsesPerQuarterNote * 4),
-          height: GRID_CONSTANTS.trackHeight,
-          type: 'track' as const,
-          data: { ...track, instanceId: `${track.id}_instance_default` }
-        });
-      } else {
-        // Create items for each instance
+      // Create items for each instance. If no instances, nothing is rendered for this track.
+      if (track.instances) {
         track.instances.forEach(instance => {
           const resizePreviewX = resizePreviewPositions.get(instance.id);
           const resizePreviewWidth = resizePreviewWidths.get(instance.id);
@@ -715,7 +680,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               <KonvaTrack
                 key={item.id}
                 track={item.data}
-                instanceId={item.id} // Pass the instance ID
+                instance={item.data.instance}
+                instanceId={item.id}
                 x={itemX}
                 y={itemDisplayY}
                 width={itemWidth}

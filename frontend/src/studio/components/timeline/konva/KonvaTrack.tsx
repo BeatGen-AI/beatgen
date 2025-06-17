@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Group, Rect, Text, Label, Tag } from 'react-konva';
-import { CombinedTrack } from 'src/platform/types/project';
+import { CombinedTrack, TrackInstance } from 'src/platform/types/project';
 import { AudioTrackRenderer } from './tracks/AudioTrackRenderer';
 import { MidiTrackRenderer } from './tracks/MidiTrackRenderer';
 import { DrumTrackRenderer } from './tracks/DrumTrackRenderer';
@@ -10,7 +10,8 @@ const SYSTEM_FONT_STACK = 'Sen';
 
 export interface KonvaTrackProps {
   track: CombinedTrack;
-  instanceId?: string; // Add instance ID prop
+  instance?: TrackInstance;
+  instanceId?: string;
   x: number;
   y: number;
   width: number;
@@ -38,6 +39,7 @@ export interface KonvaTrackProps {
  */
 export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   track,
+  instance,
   instanceId,
   x,
   y,
@@ -85,11 +87,13 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   
   // Calculate content offset for trimmed tracks
   const contentOffset = useMemo(() => {
-    if (!track.trim_start_ticks || !track.duration_ticks) return 0;
-    const trimRatio = track.trim_start_ticks / track.duration_ticks;
-    const fullWidth = track.duration_ticks * pixelsPerTick;
+    const trimStart = instance?.trim_start_ticks ?? track.trim_start_ticks ?? 0;
+    const duration = track.duration_ticks ?? 0;
+    if (!trimStart || !duration) return 0;
+    const trimRatio = trimStart / duration;
+    const fullWidth = duration * pixelsPerTick;
     return -(trimRatio * fullWidth);
-  }, [track.trim_start_ticks, track.duration_ticks, pixelsPerTick]);
+  }, [instance, track.trim_start_ticks, track.duration_ticks, pixelsPerTick]);
   
   
   // Render track content based on type
@@ -316,6 +320,7 @@ export default React.memo(KonvaTrack, (prevProps, nextProps) => {
   return (
     prevProps.track.id === nextProps.track.id &&
     prevProps.instanceId === nextProps.instanceId &&
+    JSON.stringify(prevProps.instance) === JSON.stringify(nextProps.instance) &&
     prevProps.x === nextProps.x &&
     prevProps.y === nextProps.y &&
     prevProps.width === nextProps.width &&

@@ -129,6 +129,7 @@ class ProjectTrackBase(TimestampMixin):
     trim_end_ticks: int
     duration_ticks: int
     track_number: int
+    instance_metadata: Optional[List[dict]] = Field(default=None, sa_column=Column(JSONB))
 
 
 class InstrumentFileBase(FileBase):
