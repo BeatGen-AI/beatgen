@@ -4,6 +4,7 @@ import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTr
 import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions';
 import type { Action } from '../../core/state/history/actions'; 
+import { InstanceAdd, InstanceMove, InstanceResize } from '../../core/state/history/actions/InstanceActions';
 import { TRACK_CONFIG, DEFAULT_SAMPLER_CONFIG } from '../config';
 import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
@@ -1192,7 +1193,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     });
     
     // Collect all instance add actions
-    const instanceAddActions: Actions.InstanceAdd[] = [];
+    const instanceAddActions: InstanceAdd[] = [];
     
     // Create instances for each track
     for (const trackId of trackIds) {
@@ -1201,6 +1202,21 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       
       // Get instances for this track
       const originalInstances = getTrackInstancesOrDefault(track);
+      
+      // Determine the starting number for new instances of this track
+      const allInstances = getTrackInstancesOrDefault(track);
+      let maxInstanceNum = 0;
+      allInstances.forEach(instance => {
+        const match = instance.id.match(/_instance_(\d+)$/);
+        if (match && match[1]) {
+          const num = parseInt(match[1], 10);
+          if (num > maxInstanceNum) {
+            maxInstanceNum = num;
+          }
+        }
+      });
+      let nextInstanceNum = maxInstanceNum + 1;
+      
       for (const originalInstance of originalInstances) {
         // Calculate relative position
         const relativeX = originalInstance.x_position - minX;
@@ -1209,8 +1225,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           y: originalInstance.y_position
         };
         
-        // Create new instance object
-        const instanceId = `${trackId}_instance_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Create new instance object with a sequential ID
+        const instanceId = `${trackId}_instance_${nextInstanceNum}`;
+        nextInstanceNum++; // Increment for the next instance of this track
+
         const newInstance: TrackInstance = {
           id: instanceId,
           x_position: newPosition.x,
@@ -1220,7 +1238,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         };
         
         // Create the action but don't execute it yet
-        instanceAddActions.push(new Actions.InstanceAdd(get, trackId, newInstance));
+        instanceAddActions.push(new InstanceAdd(get, trackId, newInstance));
       }
       
       // Track will be updated when the group action executes
@@ -1433,8 +1451,18 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     // Get instances or create default
     const instances = getTrackInstancesOrDefault(track);
     
-    // Generate new instance ID
-    const instanceId = `${trackId}_instance_${Date.now()}`;
+    // Generate new instance ID with a monotonically increasing number
+    let maxInstanceNum = 0;
+    instances.forEach(instance => {
+      const match = instance.id.match(/_instance_(\d+)$/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxInstanceNum) {
+          maxInstanceNum = num;
+        }
+      }
+    });
+    const instanceId = `${trackId}_instance_${maxInstanceNum + 1}`;
     
     // Calculate position for new instance
     let newPosition = position;
@@ -1627,7 +1655,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const updateLogic = async () => {
       // Create individual instance move actions
-      const actions: Actions.InstanceMove[] = [];
+      const actions: InstanceMove[] = [];
       
       instanceUpdates.forEach(update => {
         const track = findTrackById(update.trackId);
@@ -1641,7 +1669,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         const newX = Math.max(0, oldX + update.deltaX);
         const newY = Math.max(0, oldY + update.deltaY);
         
-        actions.push(new Actions.InstanceMove(
+        actions.push(new InstanceMove(
           get,
           update.trackId,
           update.instanceId,
@@ -1675,7 +1703,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const resizeLogic = async () => {
       // Create individual instance resize actions
-      const actions: Actions.InstanceResize[] = [];
+      const actions: InstanceResize[] = [];
       
       instanceUpdates.forEach(update => {
         const track = findTrackById(update.trackId);
@@ -1707,7 +1735,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
         }
         
-        actions.push(new Actions.InstanceResize(
+        actions.push(new InstanceResize(
           get,
           update.trackId,
           update.instanceId,

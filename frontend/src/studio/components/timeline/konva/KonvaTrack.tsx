@@ -6,6 +6,8 @@ import { MidiTrackRenderer } from './tracks/MidiTrackRenderer';
 import { DrumTrackRenderer } from './tracks/DrumTrackRenderer';
 import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 
+const SYSTEM_FONT_STACK = 'Sen';
+
 export interface KonvaTrackProps {
   track: CombinedTrack;
   instanceId?: string; // Add instance ID prop
@@ -192,6 +194,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           fontSize={12}
           fill="white"
           padding={4}
+          fontFamily={SYSTEM_FONT_STACK}
         />
       </Label>
       
@@ -298,6 +301,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
               align="center"
               width={previewWidth || width}
               listening={false}
+              fontFamily={SYSTEM_FONT_STACK}
             />
           )}
         </>
