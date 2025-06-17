@@ -1,0 +1,616 @@
+diff --git a/backend/app2/models/base.py b/backend/app2/models/base.py
+index 1d620d8..b978860 100644
+--- a/backend/app2/models/base.py
++++ b/backend/app2/models/base.py
+@@ -3,7 +3,7 @@ Base models for SQL database entities
+ """
+ 
+ from datetime import datetime
+-from typing import Optional, Type, List
++from typing import Optional, Type, List, Dict, Any
+ from sqlmodel import SQLModel, Field
+ from sqlalchemy import TIMESTAMP, Column
+ from sqlalchemy.dialects.postgresql import JSONB
+@@ -129,6 +129,7 @@ class ProjectTrackBase(TimestampMixin):
+     trim_end_ticks: int
+     duration_ticks: int
+     track_number: int
++    instance_metadata: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSONB))
+ 
+ 
+ class InstrumentFileBase(FileBase):
+diff --git a/backend/app2/models/project.py b/backend/app2/models/project.py
+index 204d3fd..ccdfbe7 100644
+--- a/backend/app2/models/project.py
++++ b/backend/app2/models/project.py
+@@ -2,7 +2,7 @@
+ Project models for SQL database
+ """
+ 
+-from typing import Optional, List, TYPE_CHECKING, Union
++from typing import Optional, List, TYPE_CHECKING, Union, Dict, Any
+ from sqlmodel import SQLModel, Field, Relationship
+ import uuid
+ 
+@@ -69,6 +69,8 @@ class CombinedTrack(SQLModel):
+     trim_end_ticks: Optional[int] = 0
+     duration_ticks: Optional[int] = 0
+     track_number: Optional[int] = 0
++    # Instance metadata from JSONB
++    instance_metadata: Optional[Dict[str, Any]] = None
+ 
+     # Track data based on type
+     track: Union[AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead]
+diff --git a/backend/app2/services/project_service.py b/backend/app2/services/project_service.py
+index 594d4fe..2e9bad9 100644
+--- a/backend/app2/services/project_service.py
++++ b/backend/app2/services/project_service.py
+@@ -156,6 +156,8 @@ class ProjectService:
+                         trim_end_ticks=track_data["trim_end_ticks"],
+                         duration_ticks=track_data["duration_ticks"],
+                         track_number=track_data["track_number"],
++                        # Instance metadata from JSONB
++                        instance_metadata=track_data.get("instance_metadata"),
+                         # Specialized track data
+                         track=track_data["track"],
+                     )
+diff --git a/frontend/src/platform/types/project.ts b/frontend/src/platform/types/project.ts
+index 3235c87..86bb0f2 100644
+--- a/frontend/src/platform/types/project.ts
++++ b/frontend/src/platform/types/project.ts
+@@ -42,20 +42,21 @@ export interface CombinedTrack {
+   trim_end_ticks?: number | null;
+   duration_ticks?: number | null;
+   track_number?: number | null;
++  instance_metadata?: {
++    instances: TrackInstance[];
++  };
+   track: AudioTrackRead | MidiTrackRead | SamplerTrackRead | DrumTrackRead;
+   dirty?: boolean; // Client-side only: true if track has unsaved changes
+-  instances?: TrackInstance[]; // Client-side only: array of track instances on timeline
+ }
+ 
+ /**
+  * Represents an instance (clip) of a track on the timeline
+  */
+ export interface TrackInstance {
+-  id: string;
+-  x_position: number;
+-  y_position: number;
+-  trim_start_ticks: number;
+-  trim_end_ticks: number;
++  id: number;      // Simple incrementing integer
++  x: number;       // Position in ticks
++  width: number;   // Duration in ticks
++  name?: string;   // Optional user-defined name
+ }
+ /**
+  * API response model for MIDI track data
+diff --git a/frontend/src/studio/Studio.tsx b/frontend/src/studio/Studio.tsx
+index 6a3261e..e7ee639 100644
+--- a/frontend/src/studio/Studio.tsx
++++ b/frontend/src/studio/Studio.tsx
+@@ -8,8 +8,15 @@ import TrackControlsSidebar from './components/sidebar/TrackControlsSidebar';
+ import { KonvaTimeline, KonvaTimelineRef } from './components/timeline/KonvaTimeline';
+ import { CombinedTrack } from '../platform/types/project';
+ import AddTrackMenu from './components/sidebar/AddTrackMenu';
+-import { GRID_CONSTANTS } from './constants/gridConstants';
++import { GRID_CONSTANTS, pixelsToTicks } from './constants/gridConstants';
+ import { useStudioStore } from './stores/studioStore';
++import { 
++  createInstance, 
++  updateInstance, 
++  deleteInstance, 
++  updateMultipleInstances,
++  splitInstance 
++} from './utils/trackInstanceUtils';
+ 
+ // Import piano roll components
+ import PianoRollWindows from './components/piano-roll-new/PianoRollWindows';
+@@ -129,9 +136,71 @@ function Studio({ projectId }: StudioProps) {
+     handleInstanceResizeEnd,
+     updateMultipleInstancePositions,
+     resizeMultipleInstances,
++    // Track update function
++    updateTrack,
+   } = useStudioStore();
+   
+   const scrollRef = useRef<KonvaTimelineRef>(null);
++  
++  // Custom instance handlers that work with instance_metadata
++  const handleInstanceCreate = useCallback((
++    trackId: string, 
++    x: number, 
++    width: number
++  ) => {
++    const track = tracks.find(t => t.id === trackId);
++    if (!track) return;
++    
++    const updatedTrack = createInstance(track, x, width);
++    updateTrack(trackId, updatedTrack);
++  }, [tracks, updateTrack]);
++
++  const handleInstanceUpdate = useCallback((
++    trackId: string,
++    instanceId: number,
++    updates: Partial<{ x: number; width: number; name: string }>
++  ) => {
++    const track = tracks.find(t => t.id === trackId);
++    if (!track) return;
++    
++    const updatedTrack = updateInstance(track, instanceId, updates);
++    updateTrack(trackId, updatedTrack);
++  }, [tracks, updateTrack]);
++
++  const handleInstanceDelete = useCallback((
++    trackId: string,
++    instanceId: number
++  ) => {
++    const track = tracks.find(t => t.id === trackId);
++    if (!track) return;
++    
++    const updatedTrack = deleteInstance(track, instanceId);
++    updateTrack(trackId, updatedTrack);
++  }, [tracks, updateTrack]);
++
++  const handleBatchInstanceUpdate = useCallback((
++    updates: Map<string, Array<{ id: number; changes: Partial<{ x: number; width: number; name: string }> }>>
++  ) => {
++    updates.forEach((instanceUpdates, trackId) => {
++      const track = tracks.find(t => t.id === trackId);
++      if (!track) return;
++      
++      const updatedTrack = updateMultipleInstances(track, instanceUpdates);
++      updateTrack(trackId, updatedTrack);
++    });
++  }, [tracks, updateTrack]);
++
++  const handleInstanceSplit = useCallback((
++    trackId: string,
++    instanceId: number,
++    splitPosition: number
++  ) => {
++    const track = tracks.find(t => t.id === trackId);
++    if (!track) return;
++    
++    const updatedTrack = splitInstance(track, instanceId, splitPosition);
++    updateTrack(trackId, updatedTrack);
++  }, [tracks, updateTrack]);
+   const animationFrameRef = useRef<number | null>(null);
+   const [isChatOpen, setIsChatOpen] = useState(false);
+   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default to open
+@@ -619,11 +688,15 @@ function Studio({ projectId }: StudioProps) {
+             selectedTrackIds={selectedTrackIds}
+             onTrackSelect={(instanceIds) => {
+               // Convert instance IDs to track IDs for the store
+-              // Instance IDs follow the pattern: trackId_instance_timestamp
++              // Instance IDs follow the pattern: trackId_instanceNumber
+               const trackIds = [...new Set(instanceIds.map(instanceId => {
++                // Handle both string and number types
++                const idStr = String(instanceId);
+                 // Extract track ID from instance ID
+-                const parts = instanceId.split('_instance_');
+-                return parts[0]; // The track ID is before '_instance_'
++                const parts = idStr.split('_');
++                // Remove the last part (instance number) and join the rest
++                parts.pop();
++                return parts.join('_'); // The track ID is everything before the last underscore
+               }))];
+               setSelectedTrackIds(trackIds);
+             }}
+@@ -638,10 +711,42 @@ function Studio({ projectId }: StudioProps) {
+             onDuplicateTracks={handleDuplicateTracks}
+             updateMultipleTrackPositions={updateMultipleTrackPositions}
+             resizeMultipleTracks={resizeMultipleTracks}
+-            onInstancePositionChange={handleInstancePositionChange}
+-            onInstanceResizeEnd={handleInstanceResizeEnd}
++            onInstancePositionChange={(trackId, instanceId, position, isDragEnd) => {
++              // Convert string instanceId to number
++              const instanceIdNum = typeof instanceId === 'string' ? parseInt(instanceId.split('_').pop() || '0') : instanceId;
++              handleInstanceUpdate(trackId, instanceIdNum, { x: position.x });
++            }}
++            onInstanceResizeEnd={(trackId, instanceId, deltaPixels, direction) => {
++              // Convert string instanceId to number
++              const instanceIdNum = typeof instanceId === 'string' ? parseInt(instanceId.split('_').pop() || '0') : instanceId;
++              const track = tracks.find(t => t.id === trackId);
++              if (!track) return;
++              
++              const instance = track.instance_metadata?.instances.find(i => i.id === instanceIdNum);
++              if (!instance) return;
++              
++              // Convert deltaPixels to ticks
++              const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
++              
++              // Calculate new width or position based on resize direction
++              if (direction === 'right') {
++                const newWidth = instance.width + deltaTicks;
++                handleInstanceUpdate(trackId, instanceIdNum, { width: Math.max(960, newWidth) }); // Min 1/2 bar
++              } else {
++                const newX = instance.x + deltaTicks;
++                const newWidth = instance.width - deltaTicks;
++                handleInstanceUpdate(trackId, instanceIdNum, { 
++                  x: newX, 
++                  width: Math.max(960, newWidth) 
++                });
++              }
++            }}
+             updateMultipleInstancePositions={updateMultipleInstancePositions}
+             resizeMultipleInstances={resizeMultipleInstances}
++            onInstanceCreate={handleInstanceCreate}
++            onInstanceDelete={handleInstanceDelete}
++            onBatchInstanceUpdate={handleBatchInstanceUpdate}
++            onInstanceSplit={handleInstanceSplit}
+             ref={scrollRef}
+           />
+           
+diff --git a/frontend/src/studio/components/timeline/KonvaTimeline.tsx b/frontend/src/studio/components/timeline/KonvaTimeline.tsx
+index 4720eb5..b4b7d5a 100644
+--- a/frontend/src/studio/components/timeline/KonvaTimeline.tsx
++++ b/frontend/src/studio/components/timeline/KonvaTimeline.tsx
+@@ -19,9 +19,10 @@ import { PlaybackCursor } from './konva/PlaybackCursor';
+ import { TimeRuler } from './konva/TimeRuler';
+ import { CombinedTrack } from 'src/platform/types/project';
+ import { Position as TrackPosition } from '../track/types';
+-import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
++import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks, getTrackColor } from '../../constants/gridConstants';
+ import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
+ import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
++import { getDefaultInstance, updateMultipleInstances } from '../../utils/trackInstanceUtils';
+ import Konva from 'konva';
+ 
+ export interface KonvaTimelineProps {
+@@ -63,6 +64,12 @@ export interface KonvaTimelineProps {
+   updateMultipleInstancePositions?: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
+   resizeMultipleInstances?: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
+   
++  // New instance operations
++  onInstanceCreate?: (trackId: string, x: number, width: number) => void;
++  onInstanceDelete?: (trackId: string, instanceId: number) => void;
++  onBatchInstanceUpdate?: (updates: Map<string, Array<{ id: number; changes: Partial<{ x: number; width: number; name: string }> }>>) => void;
++  onInstanceSplit?: (trackId: string, instanceId: number, splitPosition: number) => void;
++  
+   // Zoom control
+   onZoomChange?: (newZoom: number) => void;
+ }
+@@ -110,6 +117,10 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+   onInstanceResizeEnd,
+   updateMultipleInstancePositions,
+   resizeMultipleInstances,
++  onInstanceCreate,
++  onInstanceDelete,
++  onBatchInstanceUpdate,
++  onInstanceSplit,
+   onZoomChange
+ }, ref) => {
+   // State
+@@ -161,14 +172,28 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+     const items: KonvaItem[] = [];
+     
+     tracks.forEach((track, trackIndex) => {
+-      // Ensure track has instances
+-      if (!track.instances || track.instances.length === 0) {
+-        // Fallback: create a single instance from track data
+-        const resizePreviewX = resizePreviewPositions.get(track.id);
+-        const resizePreviewWidth = resizePreviewWidths.get(track.id);
+-        const dragPreview = dragPreviewPositions.get(track.id);
++      // Get instances from metadata or create default
++      let instances = track.instance_metadata?.instances || [];
++      
++      // Backward compatibility: create default instance if none exist
++      if (instances.length === 0 && track.duration_ticks > 0) {
++        instances = [getDefaultInstance(track)];
++      }
++      
++      // Get track color based on its index
++      const trackColor = getTrackColor(trackIndex);
++      
++      instances.forEach(instance => {
++        // Create unique ID combining track and instance
++        const itemId = `${track.id}_${instance.id}`;
+         
+-        let x = track.x_position || 0;
++        // Check for preview positions (during drag/resize)
++        const resizePreviewX = resizePreviewPositions.get(itemId);
++        const resizePreviewWidth = resizePreviewWidths.get(itemId);
++        const dragPreview = dragPreviewPositions.get(itemId);
++        
++        // Calculate position
++        let x = instance.x;
+         if (resizePreviewX !== undefined) {
+           x = resizePreviewX / pixelsPerTick;
+         }
+@@ -176,61 +201,34 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+           x = dragPreview.x / pixelsPerTick;
+         }
+         
+-        let y = track.y_position !== null && track.y_position !== undefined 
+-          ? track.y_position 
+-          : trackIndex * GRID_CONSTANTS.trackHeight;
++        // Calculate Y position
++        let y = track.y_position || (trackIndex * GRID_CONSTANTS.trackHeight);
+         if (dragPreview) {
+           y = dragPreview.y;
+         }
+         
++        // Calculate width
++        let width = instance.width;
++        if (resizePreviewWidth !== undefined) {
++          width = resizePreviewWidth / pixelsPerTick;
++        }
++        
+         items.push({
+-          id: `${track.id}_instance_default`,
++          id: itemId,
+           x,
+           y,
+-          width: resizePreviewWidth !== undefined 
+-            ? resizePreviewWidth / pixelsPerTick
+-            : (track.duration_ticks ? 
+-              (track.trim_end_ticks || track.duration_ticks) - (track.trim_start_ticks || 0) : 
+-              MUSIC_CONSTANTS.pulsesPerQuarterNote * 4),
++          width,
+           height: GRID_CONSTANTS.trackHeight,
+           type: 'track' as const,
+-          data: { ...track, instanceId: `${track.id}_instance_default` }
+-        });
+-      } else {
+-        // Create items for each instance
+-        track.instances.forEach(instance => {
+-          const resizePreviewX = resizePreviewPositions.get(instance.id);
+-          const resizePreviewWidth = resizePreviewWidths.get(instance.id);
+-          const dragPreview = dragPreviewPositions.get(instance.id);
+-          
+-          let x = instance.x_position;
+-          if (resizePreviewX !== undefined) {
+-            x = resizePreviewX / pixelsPerTick;
+-          }
+-          if (dragPreview) {
+-            x = dragPreview.x / pixelsPerTick;
++          data: {
++            trackId: track.id,
++            track,
++            instanceId: instance.id,
++            instance,
++            color: trackColor // Pass color from track
+           }
+-          
+-          let y = instance.y_position;
+-          if (dragPreview) {
+-            y = dragPreview.y;
+-          }
+-          
+-          const width = instance.trim_end_ticks - instance.trim_start_ticks;
+-          
+-          items.push({
+-            id: instance.id,
+-            x,
+-            y,
+-            width: resizePreviewWidth !== undefined 
+-              ? resizePreviewWidth / pixelsPerTick
+-              : width,
+-            height: GRID_CONSTANTS.trackHeight,
+-            type: 'track' as const,
+-            data: { ...track, instanceId: instance.id, instance }
+-          });
+         });
+-      }
++      });
+     });
+     
+     return items;
+@@ -272,44 +270,49 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+       // Clear drag preview
+       setDragPreviewPositions(new Map());
+       
+-      // Check if this is a group drag
+-      if (updates.size > 1) {
+-        // Group drag - prepare instance updates
+-        const instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}> = [];
++      // Group updates by track
++      const trackUpdates = new Map<string, Array<{ id: number; changes: { x: number } }>>();
++      
++      updates.forEach((pos, itemId) => {
++        // Parse composite ID
++        const [trackId, instanceIdStr] = itemId.split('_');
++        const instanceId = Number(instanceIdStr);
++        const track = tracks.find(t => t.id === trackId);
++        if (!track) return;
+         
+-        updates.forEach((pos, instanceId) => {
+-          // Find the track and instance
+-          const item = konvaItems.find(item => item.id === instanceId);
+-          if (item && item.data) {
+-            const trackId = item.data.id;
+-            const instance = item.data.instance;
+-            if (instance) {
+-              const deltaX = pos.x - instance.x_position;
+-              const deltaY = pos.y - instance.y_position;
+-              instanceUpdates.push({ trackId, instanceId, deltaX, deltaY });
+-            }
++        const instance = track.instance_metadata?.instances.find(i => i.id === instanceId);
++        if (!instance) return;
++        
++        // Calculate new position
++        const newX = pos.x;
++        if (newX !== instance.x) {
++          // Add to batch updates
++          if (!trackUpdates.has(trackId)) {
++            trackUpdates.set(trackId, []);
+           }
+-        });
++          trackUpdates.get(trackId)!.push({
++            id: instanceId,
++            changes: { x: newX }
++          });
++        }
++      });
++      
++      // Apply updates to each track
++      trackUpdates.forEach((instanceUpdates, trackId) => {
++        const track = tracks.find(t => t.id === trackId);
++        if (!track) return;
+         
+-        // Use the group instance update function
+-        if (updateMultipleInstancePositions) {
+-          updateMultipleInstancePositions(instanceUpdates);
++        const updatedTrack = updateMultipleInstances(track, instanceUpdates);
++        // Trigger the batch update callback if available
++        if (onBatchInstanceUpdate) {
++          onBatchInstanceUpdate(trackUpdates);
++        } else if (onInstancePositionChange) {
++          // Fallback to individual updates
++          instanceUpdates.forEach(update => {
++            onInstancePositionChange(trackId, String(update.id), { x: update.changes.x || 0, y: track.y_position || 0 }, true);
++          });
+         }
+-      } else {
+-        // Single instance drag
+-        updates.forEach((pos, instanceId) => {
+-          const item = konvaItems.find(item => item.id === instanceId);
+-          if (item && item.data) {
+-            const trackId = item.data.id;
+-            if (onInstancePositionChange) {
+-              onInstancePositionChange(trackId, instanceId, {
+-                x: pos.x,
+-                y: pos.y
+-              }, true);
+-            }
+-          }
+-        });
+-      }
++      });
+     },
+     
+     onResizeMove: (updates) => {
+@@ -344,25 +347,25 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+         // Group resize - prepare instance updates
+         const instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}> = [];
+         
+-        updates.forEach((dim, instanceId) => {
+-          const item = konvaItems.find(item => item.id === instanceId);
++        updates.forEach((dim, itemId) => {
++          const item = konvaItems.find(item => item.id === itemId);
+           if (item && item.data) {
+-            const trackId = item.data.id;
++            const trackId = item.data.trackId;
+             const instance = item.data.instance;
+             if (instance) {
+               // Determine resize direction and delta
+               if (dim.start !== undefined && dim.width !== undefined) {
+                 // Left resize
+-                const positionDeltaTicks = dim.start - instance.x_position;
++                const positionDeltaTicks = dim.start - instance.x;
+                 const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
+-                instanceUpdates.push({ trackId, instanceId, widthDelta: deltaPixels, anchor: 'left' });
++                instanceUpdates.push({ trackId, instanceId: itemId, widthDelta: deltaPixels, anchor: 'left' });
+               } else if (dim.width !== undefined) {
+                 // Right resize
+-                const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
++                const currentWidthTicks = instance.width;
+                 const newWidthTicks = dim.width;
+                 const deltaTicks = newWidthTicks - currentWidthTicks;
+                 const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
+-                instanceUpdates.push({ trackId, instanceId, widthDelta: deltaPixels, anchor: 'right' });
++                instanceUpdates.push({ trackId, instanceId: itemId, widthDelta: deltaPixels, anchor: 'right' });
+               }
+             }
+           }
+@@ -372,25 +375,25 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+         resizeMultipleInstances(instanceUpdates);
+       } else {
+         // Single instance resize
+-        updates.forEach((dim, instanceId) => {
+-          const item = konvaItems.find(item => item.id === instanceId);
++        updates.forEach((dim, itemId) => {
++          const item = konvaItems.find(item => item.id === itemId);
+           if (item && item.data) {
+-            const trackId = item.data.id;
++            const trackId = item.data.trackId;
+             const instance = item.data.instance;
+             if (instance && onInstanceResizeEnd) {
+               // For left resize, we need to update the trim
+               if (dim.start !== undefined && dim.width !== undefined) {
+                 // Left resize
+-                const positionDeltaTicks = dim.start - instance.x_position;
++                const positionDeltaTicks = dim.start - instance.x;
+                 const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
+-                onInstanceResizeEnd(trackId, instanceId, deltaPixels, 'left');
++                onInstanceResizeEnd(trackId, itemId, deltaPixels, 'left');
+               } else if (dim.width !== undefined) {
+                 // Right resize - only width changed
+-                const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
++                const currentWidthTicks = instance.width;
+                 const newWidthTicks = dim.width;
+                 const deltaTicks = newWidthTicks - currentWidthTicks;
+                 const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
+-                onInstanceResizeEnd(trackId, instanceId, deltaPixels, 'right');
++                onInstanceResizeEnd(trackId, itemId, deltaPixels, 'right');
+               }
+             }
+           }
+@@ -714,8 +717,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+             return (
+               <KonvaTrack
+                 key={item.id}
+-                track={item.data}
+-                instanceId={item.id} // Pass the instance ID
++                track={item.data.track}
++                instanceId={item.data.instanceId}
+                 x={itemX}
+                 y={itemDisplayY}
+                 width={itemWidth}
+@@ -732,6 +735,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+                 gridSnapEnabled={gridSnapEnabled}
+                 snapSizeInPixels={actualSnapSize}
+                 selectedCount={interaction.selectedIds.length}
++                data={item.data} // Pass the full data for color and other props
+                 onClick={(id, e) => {
+                   // Handle instance selection
+                   const modifiers = {
+diff --git a/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx b/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
+index 82f39c5..32be8f3 100644
+--- a/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
++++ b/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
+@@ -28,6 +28,7 @@ export interface KonvaTrackProps {
+   selectedCount?: number;
+   gridSnapEnabled?: boolean;
+   snapSizeInPixels?: number;
++  data?: any; // Additional data for color etc
+ }
+ 
+ /**
+@@ -55,7 +56,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+   onResizeStart,
+   selectedCount = 1,
+   gridSnapEnabled = true,
+-  snapSizeInPixels = 12.5
++  snapSizeInPixels = 12.5,
++  data
+ }) => {
+   const groupRef = useRef<any>(null);
+   const backgroundRef = useRef<any>(null);
+@@ -66,8 +68,14 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+   // Use prop preview width if provided (during resize), otherwise use internal state
+   const previewWidth = propPreviewWidth || null;
+   
+-  // Get track color based on type
++  // Get track color from props (passed from parent)
+   const trackColor = useMemo(() => {
++    // If color is explicitly passed in data, use it
++    if (data?.color) {
++      return data.color;
++    }
++    
++    // Otherwise fall back to type-based colors
+     switch (track.type) {
+       case 'AUDIO':
+         return '#4caf50';
+@@ -79,7 +87,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+       default:
+         return '#9c27b0';
+     }
+-  }, [track.type]);
++  }, [track.type, data?.color]);
+   
+   // Calculate content offset for trimmed tracks
+   const contentOffset = useMemo(() => {

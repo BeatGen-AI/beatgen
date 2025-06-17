@@ -14,6 +14,7 @@ import { StoreApi } from 'zustand';
 import SampleManager from '../../core/samples/sampleManager';
 import { db } from '../../core/db/dexie-client';
 import { processAudioFile } from '../../utils/audioProcessing';
+import { getNextInstanceId, getInstanceWidth } from '../../utils/trackInstanceUtils';
 
 // Define the state properties and actions for this slice
 export interface TracksSlice {
@@ -128,10 +129,28 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     set(produce((draft: RootState) => {
         const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
         if (trackIndex !== -1) {
-            Object.assign(draft.tracks[trackIndex], updates);
+            // Remove any 'instances' field from updates to prevent old system interference
+            const { instances, ...cleanUpdates } = updates as any;
+            if (instances) {
+                console.warn('Attempted to update track.instances - this is deprecated. Use instance_metadata instead.');
+            }
+            
+            // Log updates for debugging
+            if (cleanUpdates.instance_metadata) {
+                console.log('[updateTrackState] Updating instance_metadata for track:', trackId);
+                console.log('[updateTrackState] Current instances:', draft.tracks[trackIndex].instance_metadata?.instances);
+                console.log('[updateTrackState] New instances:', cleanUpdates.instance_metadata.instances);
+            }
+            
+            Object.assign(draft.tracks[trackIndex], cleanUpdates);
             // Mark track as dirty when modified, unless explicitly setting dirty to false
-            if (updates.dirty !== false) {
+            if (cleanUpdates.dirty !== false) {
                 draft.tracks[trackIndex].dirty = true;
+            }
+            
+            // Verify update
+            if (cleanUpdates.instance_metadata) {
+                console.log('[updateTrackState] After update - instances:', draft.tracks[trackIndex].instance_metadata?.instances);
             }
         }
     }));
@@ -141,18 +160,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   const updateTracks = (newTracks: CombinedTrack[]) => {
       set(produce((draft: RootState) => {
           draft.tracks = newTracks;
-          // Ensure all tracks have instances
-          draft.tracks.forEach(track => {
-              if (!track.instances || track.instances.length === 0) {
-                  track.instances = [{
-                      id: `${track.id}_instance_1`,
-                      x_position: track.x_position || 0,
-                      y_position: track.y_position || 0,
-                      trim_start_ticks: track.trim_start_ticks || 0,
-                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
-                  }];
-              }
-          });
       }));
   };
 
@@ -190,15 +197,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               track.dirty = false;
               
               // Ensure track has instances - create default if none exist
-              if (!track.instances || track.instances.length === 0) {
-                  track.instances = [{
-                      id: `${track.id}_instance_1`,
-                      x_position: track.x_position || 0,
-                      y_position: track.y_position || 0,
-                      trim_start_ticks: track.trim_start_ticks || 0,
-                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
-                  }];
-              }
+              // Removed old instance system - instances are now in instance_metadata
           });
       }), true);
   };
@@ -339,14 +338,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const finalTrackData = { 
           ...trackData, 
           track: nestedTrackDataObject as AnyTrackRead,
-          // Initialize with a single instance
-          instances: [{
-              id: `${trackId}_instance_1`,
-              x_position: position.x,
-              y_position: position.y,
-              trim_start_ticks: options.trim_start_ticks ?? 0,
-              trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
-          }]
+          // Initialize with instance_metadata for the new instance system
+          instance_metadata: {
+              instances: [{
+                  id: 1,
+                  x: position.x,
+                  y: position.y,
+                  trim_start_ticks: 0,
+                  trim_end_ticks: 0
+              }]
+          }
       } as CombinedTrack;
 
       // Create action, passing the serializable trackData AND the separate file object
@@ -474,14 +475,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const finalTrackData = { 
           ...trackData, 
           track: nestedTrackDataObject as AnyTrackRead,
-          // Initialize with a single instance
-          instances: [{
-              id: `${trackId}_instance_1`,
-              x_position: position.x,
-              y_position: position.y,
-              trim_start_ticks: options.trim_start_ticks ?? 0,
-              trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
-          }]
+          // Initialize with instance_metadata for the new instance system
+          instance_metadata: {
+              instances: [{
+                  id: 1,
+                  x: position.x,
+                  y: position.y,
+                  trim_start_ticks: 0,
+                  trim_end_ticks: 0
+              }]
+          }
       } as CombinedTrack;
 
       // Return the data without executing any action
@@ -1127,7 +1130,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
   // Group operations for copy/paste functionality
   const duplicateTrack = async (trackId: string, newPosition?: Position): Promise<CombinedTrack | null> => {
-    const { tracks } = rootGet();
+    const { tracks, executeHistoryAction } = rootGet();
     const track = tracks.find(t => t.id === trackId);
     
     if (!track) {
@@ -1135,12 +1138,37 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       return null;
     }
     
-    // Create a new instance instead of a new track
-    const instanceId = await addTrackInstance(trackId, newPosition);
+    // Get instances from instance_metadata
+    const instances = track.instance_metadata?.instances || [];
     
-    if (!instanceId) {
-      console.error(`Failed to create instance for track ${trackId}`);
+    // If no instances exist, create one from track data
+    if (instances.length === 0) {
+      console.error(`Track ${trackId} has no instances to duplicate`);
       return null;
+    }
+    
+    // Duplicate the first instance (or could duplicate all instances)
+    const sourceInstance = instances[0];
+    const newInstanceId = getNextInstanceId(track);
+    
+    // Calculate position for new instance
+    const instancePosition = newPosition || {
+      x: sourceInstance.x + getInstanceWidth(track, sourceInstance) + 96, // 96 ticks gap
+      y: sourceInstance.y
+    };
+    
+    const newInstance: TrackInstance = {
+      id: newInstanceId,
+      x: instancePosition.x,
+      y: instancePosition.y,
+      trim_start_ticks: sourceInstance.trim_start_ticks,
+      trim_end_ticks: sourceInstance.trim_end_ticks
+    };
+    
+    // Create history action for adding instance
+    const action = new Actions.InstanceAdd(get, trackId, newInstance);
+    if (executeHistoryAction) {
+      await executeHistoryAction(action);
     }
     
     // Return the track with updated instances
@@ -1159,22 +1187,22 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       let maxRightPosition = 0;
       
       selectedTracks.forEach(track => {
-        // Get instances (or create default instance data if none exist)
-        const instances = track.instances && track.instances.length > 0 
-          ? track.instances 
-          : [{
-              id: `${track.id}_instance_1`,
-              x_position: track.x_position || 0,
-              y_position: track.y_position || 0,
-              trim_start_ticks: track.trim_start_ticks || 0,
-              trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
-            }];
+        // Get instances from the new instance_metadata system
+        const instances = track.instance_metadata?.instances || [];
         
-        // Find rightmost instance
-        instances.forEach(instance => {
-          const instanceEnd = instance.x_position + (instance.trim_end_ticks - instance.trim_start_ticks);
+        // If no instances, use track position as fallback
+        if (instances.length === 0 && track.duration_ticks > 0) {
+          const instanceEnd = (track.x_position || 0) + (track.duration_ticks || 0);
           maxRightPosition = Math.max(maxRightPosition, instanceEnd);
-        });
+        } else {
+          // Find rightmost instance
+          instances.forEach(instance => {
+            // Calculate width using getInstanceWidth helper
+            const instanceWidth = getInstanceWidth(track, instance);
+            const instanceEnd = instance.x + instanceWidth;
+            maxRightPosition = Math.max(maxRightPosition, instanceEnd);
+          });
+        }
       });
       
       baseOffsetX = maxRightPosition + pixelsToTicks(96, bpm, timeSignature); // 96px gap in ticks
@@ -1185,10 +1213,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     let minX = Infinity;
     
     selectedTracks.forEach(track => {
-      const instances = getTrackInstancesOrDefault(track);
-      instances.forEach(instance => {
-        minX = Math.min(minX, instance.x_position);
-      });
+      const instances = track.instance_metadata?.instances || [];
+      if (instances.length === 0 && track.duration_ticks > 0) {
+        minX = Math.min(minX, track.x_position || 0);
+      } else {
+        instances.forEach(instance => {
+          minX = Math.min(minX, instance.x);
+        });
+      }
     });
     
     // Collect all instance add actions
@@ -1199,22 +1231,35 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const track = tracks.find(t => t.id === trackId);
       if (!track) continue;
       
-      // Get instances for this track
-      const originalInstances = getTrackInstancesOrDefault(track);
+      // Get instances from instance_metadata
+      const originalInstances = track.instance_metadata?.instances || [];
+      
+      // If no instances exist, create one from track data for backward compatibility
+      if (originalInstances.length === 0 && track.duration_ticks > 0) {
+        const defaultInstance: TrackInstance = {
+          id: 1,
+          x: track.x_position || 0,
+          y: track.y_position || 0,
+          trim_start_ticks: 0,
+          trim_end_ticks: 0
+        };
+        originalInstances.push(defaultInstance);
+      }
+      
       for (const originalInstance of originalInstances) {
         // Calculate relative position
-        const relativeX = originalInstance.x_position - minX;
+        const relativeX = originalInstance.x - minX;
         const newPosition = {
           x: baseOffsetX + relativeX,
-          y: originalInstance.y_position
+          y: originalInstance.y
         };
         
-        // Create new instance object
-        const instanceId = `${trackId}_instance_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Get next instance ID
+        const instanceId = getNextInstanceId(track);
         const newInstance: TrackInstance = {
           id: instanceId,
-          x_position: newPosition.x,
-          y_position: newPosition.y,
+          x: newPosition.x,
+          y: newPosition.y,
           trim_start_ticks: originalInstance.trim_start_ticks,
           trim_end_ticks: originalInstance.trim_end_ticks
         };
@@ -1363,6 +1408,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
 
   const updateMultipleTrackPositions = async (trackIds: string[], deltaX: number, deltaY: number): Promise<void> => {
+    console.log('[updateMultipleTrackPositions] Called with:', { trackIds, deltaX, deltaY });
     const { tracks, executeHistoryAction, _withErrorHandling } = rootGet();
     if (!_withErrorHandling) {
       console.error("_withErrorHandling not available");
@@ -1380,6 +1426,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           const newX = Math.max(0, track.x_position + deltaX);
           const newY = Math.max(0, track.y_position + deltaY);
           const newPosition = { x: newX, y: newY };
+          
+          console.log('[updateMultipleTrackPositions] Track position update:', {
+            trackId,
+            oldPosition,
+            newPosition,
+            deltaX,
+            deltaY
+          });
           
           // Create action but don't execute it
           const action = new Actions.TrackPosition(
@@ -1406,19 +1460,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     return _withErrorHandling(updatePositionsLogic, `updateMultipleTrackPositions`)();
   };
   
-  // Track instance management functions
+  // Track instance management functions - DEPRECATED
+  // These functions use the old instance system and should not be used
+  // Use trackInstanceUtils.ts functions instead
   const getTrackInstancesOrDefault = (track: CombinedTrack): TrackInstance[] => {
-    if (track.instances && track.instances.length > 0) {
-      return track.instances;
-    }
-    // Return default instance based on track data
-    return [{
-      id: `${track.id}_instance_1`,
-      x_position: track.x_position || 0,
-      y_position: track.y_position || 0,
-      trim_start_ticks: track.trim_start_ticks || 0,
-      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
-    }];
+    // This function is deprecated - instances are now in instance_metadata
+    return [];
   };
   
   const addTrackInstance = async (trackId: string, position?: Position, sourceInstance?: Partial<TrackInstance>): Promise<string | null> => {
@@ -1468,37 +1515,76 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
   
   const updateTrackInstance = (trackId: string, instanceId: string, updates: Partial<TrackInstance>): void => {
+    console.log('[updateTrackInstance] Called with:', { trackId, instanceId, updates });
     const track = findTrackById(trackId);
-    if (!track || !track.instances) return;
+    if (!track) {
+      console.error('[updateTrackInstance] Track not found:', trackId);
+      return;
+    }
+    if (!track.instance_metadata?.instances) {
+      console.error('[updateTrackInstance] No instance_metadata for track:', trackId);
+      return;
+    }
     
-    const updatedInstances = track.instances.map(instance => 
-      instance.id === instanceId 
+    // Convert string instanceId to number for comparison
+    const numericId = parseInt(instanceId);
+    console.log('[updateTrackInstance] Looking for instance with numeric ID:', numericId);
+    
+    const instance = track.instance_metadata.instances.find(inst => inst.id === numericId);
+    if (!instance) {
+      console.error('[updateTrackInstance] Instance not found:', numericId, 'in instances:', track.instance_metadata.instances);
+      return;
+    }
+    
+    const updatedInstances = track.instance_metadata.instances.map(instance => 
+      instance.id === numericId 
         ? { ...instance, ...updates }
         : instance
     );
     
-    updateTrackState(trackId, { instances: updatedInstances });
+    console.log('[updateTrackInstance] Updating instance:', numericId, 'with:', updates);
+    console.log('[updateTrackInstance] Updated instances array:', updatedInstances);
+    
+    updateTrackState(trackId, { 
+      instance_metadata: {
+        instances: updatedInstances
+      }
+    });
+    
+    // Verify the update
+    setTimeout(() => {
+      const verifyTrack = findTrackById(trackId);
+      const verifyInstance = verifyTrack?.instance_metadata?.instances.find(inst => inst.id === numericId);
+      console.log('[updateTrackInstance] After update - instance position:', verifyInstance);
+    }, 0);
   };
   
   const deleteTrackInstance = (trackId: string, instanceId: string): void => {
     const track = findTrackById(trackId);
-    if (!track || !track.instances) return;
+    if (!track || !track.instance_metadata?.instances) return;
     
     // Don't delete if it's the only instance
-    if (track.instances.length <= 1) {
+    if (track.instance_metadata.instances.length <= 1) {
       console.warn("Cannot delete the last instance of a track");
       return;
     }
     
-    const updatedInstances = track.instances.filter(instance => instance.id !== instanceId);
-    updateTrackState(trackId, { instances: updatedInstances });
+    // Convert string instanceId to number for comparison
+    const numericId = parseInt(instanceId);
+    
+    const updatedInstances = track.instance_metadata.instances.filter(instance => instance.id !== numericId);
+    updateTrackState(trackId, { 
+      instance_metadata: {
+        instances: updatedInstances
+      }
+    });
   };
   
   const getTrackInstances = (trackId: string): TrackInstance[] => {
     const track = findTrackById(trackId);
     if (!track) return [];
     
-    return getTrackInstancesOrDefault(track);
+    return track.instance_metadata?.instances || [];
   };
   
   const handleInstancePositionChange = (trackId: string, instanceId: string, newPosition: Position, isDragEnd: boolean): void => {
@@ -1512,18 +1598,20 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const changeLogic = async () => {
         const track = findTrackById(trackId);
-        if (!track || !track.instances) {
+        if (!track || !track.instance_metadata?.instances) {
             console.error(`Track ${trackId} not found or has no instances`);
             return;
         }
         
-        const instance = track.instances.find(inst => inst.id === instanceId);
+        // Convert string instanceId to number for comparison
+        const numericId = parseInt(instanceId);
+        const instance = track.instance_metadata.instances.find(inst => inst.id === numericId);
         if (!instance) {
             console.error(`Instance ${instanceId} not found in track ${trackId}`);
             return;
         }
         
-        const oldPosition = { x: instance.x_position, y: instance.y_position };
+        const oldPosition = { x: instance.x, y: instance.y };
 
         // Skip if nothing changed at drag end
         if (isDragEnd && 
@@ -1533,6 +1621,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         }
         
         if (isDragEnd) {
+            console.log('[handleInstancePositionChange] Drag end - creating history action');
+            console.log('[handleInstancePositionChange] Old position:', oldPosition);
+            console.log('[handleInstancePositionChange] New position:', newPosition);
+            
             // Create instance-specific position action for history
             const action = new Actions.InstanceMove(
                 get,
@@ -1549,10 +1641,13 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               storeInstance.getTransport().handleTrackPositionChange(trackId, newPosition.x);
             }
         } else {
+            console.log('[handleInstancePositionChange] During drag - updating position directly');
+            console.log('[handleInstancePositionChange] Instance:', instanceId, 'New position:', newPosition);
+            
             // During drag, update position directly without history
             updateTrackInstance(trackId, instanceId, { 
-                x_position: newPosition.x, 
-                y_position: newPosition.y
+                x: newPosition.x, 
+                y: newPosition.y
             });
             
             // Update audio engine for this specific instance
@@ -1567,10 +1662,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   const handleInstanceResizeEnd = (trackId: string, instanceId: string, deltaPixels: number, resizeDirection: 'left' | 'right'): void => {
     const { bpm, timeSignature, executeHistoryAction, _withErrorHandling } = rootGet();
     const track = findTrackById(trackId);
-    if (!track || !track.instances || !_withErrorHandling) { return; }
+    if (!track || !track.instance_metadata?.instances || !_withErrorHandling) { return; }
 
     const resizeLogic = async () => {
-        const instance = track.instances?.find(inst => inst.id === instanceId);
+        // Convert string instanceId to number for comparison
+        const numericId = parseInt(instanceId);
+        const instance = track.instance_metadata?.instances.find(inst => inst.id === numericId);
         if (!instance) {
             console.error(`Instance ${instanceId} not found in track ${trackId}`);
             return;
@@ -1578,7 +1675,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         
         const oldTrimStartTicks = instance.trim_start_ticks;
         const oldTrimEndTicks = instance.trim_end_ticks;
-        const oldPositionX = instance.x_position;
+        const oldPositionX = instance.x;
         const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
 
         let newTrimStartTicks = oldTrimStartTicks;
@@ -1631,13 +1728,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       
       instanceUpdates.forEach(update => {
         const track = findTrackById(update.trackId);
-        if (!track || !track.instances) return;
+        if (!track || !track.instance_metadata?.instances) return;
         
-        const instance = track.instances.find(inst => inst.id === update.instanceId);
+        // Convert string instanceId to number for comparison
+        const numericId = parseInt(update.instanceId);
+        const instance = track.instance_metadata.instances.find(inst => inst.id === numericId);
         if (!instance) return;
         
-        const oldX = instance.x_position;
-        const oldY = instance.y_position;
+        const oldX = instance.x;
+        const oldY = instance.y;
         const newX = Math.max(0, oldX + update.deltaX);
         const newY = Math.max(0, oldY + update.deltaY);
         
@@ -1679,15 +1778,17 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       
       instanceUpdates.forEach(update => {
         const track = findTrackById(update.trackId);
-        if (!track || !track.instances) return;
+        if (!track || !track.instance_metadata?.instances) return;
         
-        const instance = track.instances.find(inst => inst.id === update.instanceId);
+        // Convert string instanceId to number for comparison
+        const numericId = parseInt(update.instanceId);
+        const instance = track.instance_metadata.instances.find(inst => inst.id === numericId);
         if (!instance) return;
         
         const deltaTicks = pixelsToTicks(update.widthDelta, bpm, timeSignature);
         const oldTrimStartTicks = instance.trim_start_ticks;
         const oldTrimEndTicks = instance.trim_end_ticks;
-        const oldPositionX = instance.x_position;
+        const oldPositionX = instance.x;
         
         let newTrimStartTicks = oldTrimStartTicks;
         let newTrimEndTicks = oldTrimEndTicks;
@@ -1702,9 +1803,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           newPositionX = Math.max(0, newPositionX);
         } else {
           // For right resize, adjust trim end
-          newTrimEndTicks = oldTrimEndTicks + deltaTicks;
-          // Ensure trim end doesn't go below trim start
-          newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
+          // When dragging right (positive delta), we want to decrease trim_end (show more)
+          // When dragging left (negative delta), we want to increase trim_end (show less)
+          newTrimEndTicks = oldTrimEndTicks - deltaTicks;
+          // Ensure constraints
+          const maxTrimEnd = track.duration_ticks - oldTrimStartTicks - 1;
+          newTrimEndTicks = Math.min(Math.max(0, newTrimEndTicks), maxTrimEnd);
         }
         
         actions.push(new Actions.InstanceResize(

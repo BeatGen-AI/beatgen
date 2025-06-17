@@ -28,6 +28,7 @@ export interface KonvaTrackProps {
   selectedCount?: number;
   gridSnapEnabled?: boolean;
   snapSizeInPixels?: number;
+  data?: any; // Additional data for color etc
 }
 
 /**
@@ -55,7 +56,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   onResizeStart,
   selectedCount = 1,
   gridSnapEnabled = true,
-  snapSizeInPixels = 12.5
+  snapSizeInPixels = 12.5,
+  data
 }) => {
   const groupRef = useRef<any>(null);
   const backgroundRef = useRef<any>(null);
@@ -66,8 +68,14 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   // Use prop preview width if provided (during resize), otherwise use internal state
   const previewWidth = propPreviewWidth || null;
   
-  // Get track color based on type
+  // Get track color from props (passed from parent)
   const trackColor = useMemo(() => {
+    // If color is explicitly passed in data, use it
+    if (data?.color) {
+      return data.color;
+    }
+    
+    // Otherwise fall back to type-based colors
     switch (track.type) {
       case 'AUDIO':
         return '#4caf50';
@@ -79,7 +87,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       default:
         return '#9c27b0';
     }
-  }, [track.type]);
+  }, [track.type, data?.color]);
   
   // Calculate content offset for trimmed tracks
   const contentOffset = useMemo(() => {
@@ -129,8 +137,9 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       onClick={(e) => {
         e.cancelBubble = true; // Prevent stage from deselecting
         if (onClick) {
-          // Use instance ID if provided, otherwise fall back to track ID
-          onClick(instanceId || track.id, e);
+          // Create composite ID for consistency
+          const compositeId = instanceId ? `${track.id}_${instanceId}` : track.id;
+          onClick(compositeId, e);
         }
       }}
       onMouseDown={(e) => {
@@ -141,8 +150,9 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         
         e.cancelBubble = true;
         if (onMouseDown) {
-          // Use instance ID if provided, otherwise fall back to track ID
-          onMouseDown(instanceId || track.id, e);
+          // Create composite ID for consistency
+          const compositeId = instanceId ? `${track.id}_${instanceId}` : track.id;
+          onMouseDown(compositeId, e);
         }
       }}
     >
@@ -238,13 +248,32 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
               setIsResizingLeft(false);
             }}
             onMouseDown={(e) => {
+              console.log('🔧 KonvaTrack - LEFT resize handle mouseDown', {
+                trackId: track.id,
+                instanceId,
+                idUsed: instanceId || track.id,
+                onResizeStart: !!onResizeStart,
+                event: e
+              });
               e.cancelBubble = true;
               if (onResizeStart) {
                 const stage = e.target.getStage();
                 const pos = stage?.getPointerPosition();
+                console.log('🔧 KonvaTrack - LEFT resize getting position', {
+                  stage: !!stage,
+                  pos
+                });
                 if (pos) {
-                  // Use instance ID if provided, otherwise fall back to track ID
-                  onResizeStart(instanceId || track.id, 'left', pos);
+                  // Create composite ID for resize system
+                  const compositeId = instanceId ? `${track.id}_${instanceId}` : track.id;
+                  console.log('🔧 KonvaTrack - LEFT resize calling onResizeStart', {
+                    instanceId,
+                    trackId: track.id,
+                    compositeId,
+                    direction: 'left',
+                    pos
+                  });
+                  onResizeStart(compositeId, 'left', pos);
                 }
               }
             }}
@@ -275,13 +304,33 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
               setIsResizingRight(false);
             }}
             onMouseDown={(e) => {
+              console.log('🔧 KonvaTrack - RIGHT resize handle mouseDown', {
+                trackId: track.id,
+                instanceId,
+                idUsed: instanceId || track.id,
+                onResizeStart: !!onResizeStart,
+                event: e
+              });
               e.cancelBubble = true;
               if (onResizeStart) {
                 const stage = e.target.getStage();
                 const pos = stage?.getPointerPosition();
+                console.log('🔧 KonvaTrack - RIGHT resize getting position', {
+                  stage: !!stage,
+                  pos
+                });
                 if (pos) {
                   // Use instance ID if provided, otherwise fall back to track ID
-                  onResizeStart(instanceId || track.id, 'right', pos);
+                  // Create composite ID for resize system
+                  const compositeId = instanceId ? `${track.id}_${instanceId}` : track.id;
+                  console.log('🔧 KonvaTrack - RIGHT resize calling onResizeStart', {
+                    instanceId,
+                    trackId: track.id,
+                    compositeId,
+                    direction: 'right',
+                    pos
+                  });
+                  onResizeStart(compositeId, 'right', pos);
                 }
               }
             }}

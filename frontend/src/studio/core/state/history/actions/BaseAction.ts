@@ -1,6 +1,7 @@
 import { Store } from '../../store';
 import { GetFn, RootState } from '../../../../stores/types';
 import { ActionType } from '.';
+import { useStudioStore } from '../../../../stores/studioStore';
 
 export interface Action {
     execute(): Promise<void>;
@@ -13,12 +14,19 @@ export interface Action {
  */
 export abstract class BaseAction implements Action {
     abstract type: ActionType;
-    protected get: GetFn;
     protected store: Store;
     
+    /**
+     * Always get fresh state from the Zustand store
+     * This prevents stale closure issues during undo/redo
+     */
+    protected get get(): GetFn {
+        return useStudioStore.getState;
+    }
+    
     constructor(get: GetFn) {
-        this.get = get;
-        const storeInstance = this.get().store;
+        // We no longer store the get function, but still validate store availability
+        const storeInstance = useStudioStore.getState().store;
         if (!storeInstance) {
             throw new Error("Store instance not available when creating action!");
         }

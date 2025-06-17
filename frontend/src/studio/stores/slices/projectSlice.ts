@@ -266,6 +266,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
               trim_start_ticks: apiTrack.trim_start_ticks ?? 0,
               trim_end_ticks: apiTrack.trim_end_ticks ?? 0, 
               duration_ticks: apiTrack.duration_ticks ?? 0,
+              instance_metadata: apiTrack.instance_metadata, // Preserve instance metadata from API
               dirty: false, // Loaded tracks are clean (already saved)
           };
 
@@ -316,10 +317,18 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           
           const finalCombinedTrack = { ...combinedTrackData, track: nestedTrackData } as CombinedTrack;
           
-          // 2.5. Migrate track to instances model
-          const { migrateTrackToInstances } = rootGet();
-          if (migrateTrackToInstances) {
-              migrateTrackToInstances(finalCombinedTrack);
+          // 2.5. Ensure track has instance_metadata - create default if missing
+          if (!finalCombinedTrack.instance_metadata || !finalCombinedTrack.instance_metadata.instances) {
+              console.log(`[processTrack] Track ${finalCombinedTrack.id} missing instance_metadata, adding default`);
+              finalCombinedTrack.instance_metadata = {
+                  instances: [{
+                      id: 1,
+                      x: finalCombinedTrack.x_position || 0,
+                      y: finalCombinedTrack.y_position || 0,
+                      trim_start_ticks: 0,
+                      trim_end_ticks: 0
+                  }]
+              };
           }
 
           // 3. Perform necessary ENGINE setup (NO HISTORY)

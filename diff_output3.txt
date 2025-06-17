@@ -1,0 +1,2128 @@
+diff --git a/backend/app2/models/base.py b/backend/app2/models/base.py
+index 1d620d8..b978860 100644
+--- a/backend/app2/models/base.py
++++ b/backend/app2/models/base.py
+@@ -3,7 +3,7 @@ Base models for SQL database entities
+ """
+ 
+ from datetime import datetime
+-from typing import Optional, Type, List
++from typing import Optional, Type, List, Dict, Any
+ from sqlmodel import SQLModel, Field
+ from sqlalchemy import TIMESTAMP, Column
+ from sqlalchemy.dialects.postgresql import JSONB
+@@ -129,6 +129,7 @@ class ProjectTrackBase(TimestampMixin):
+     trim_end_ticks: int
+     duration_ticks: int
+     track_number: int
++    instance_metadata: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSONB))
+ 
+ 
+ class InstrumentFileBase(FileBase):
+diff --git a/backend/app2/models/project.py b/backend/app2/models/project.py
+index 204d3fd..ccdfbe7 100644
+--- a/backend/app2/models/project.py
++++ b/backend/app2/models/project.py
+@@ -2,7 +2,7 @@
+ Project models for SQL database
+ """
+ 
+-from typing import Optional, List, TYPE_CHECKING, Union
++from typing import Optional, List, TYPE_CHECKING, Union, Dict, Any
+ from sqlmodel import SQLModel, Field, Relationship
+ import uuid
+ 
+@@ -69,6 +69,8 @@ class CombinedTrack(SQLModel):
+     trim_end_ticks: Optional[int] = 0
+     duration_ticks: Optional[int] = 0
+     track_number: Optional[int] = 0
++    # Instance metadata from JSONB
++    instance_metadata: Optional[Dict[str, Any]] = None
+ 
+     # Track data based on type
+     track: Union[AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead]
+diff --git a/backend/app2/services/project_service.py b/backend/app2/services/project_service.py
+index 594d4fe..2e9bad9 100644
+--- a/backend/app2/services/project_service.py
++++ b/backend/app2/services/project_service.py
+@@ -156,6 +156,8 @@ class ProjectService:
+                         trim_end_ticks=track_data["trim_end_ticks"],
+                         duration_ticks=track_data["duration_ticks"],
+                         track_number=track_data["track_number"],
++                        # Instance metadata from JSONB
++                        instance_metadata=track_data.get("instance_metadata"),
+                         # Specialized track data
+                         track=track_data["track"],
+                     )
+diff --git a/frontend/src/platform/types/project.ts b/frontend/src/platform/types/project.ts
+index 3235c87..3f96427 100644
+--- a/frontend/src/platform/types/project.ts
++++ b/frontend/src/platform/types/project.ts
+@@ -42,20 +42,22 @@ export interface CombinedTrack {
+   trim_end_ticks?: number | null;
+   duration_ticks?: number | null;
+   track_number?: number | null;
++  instance_metadata?: {
++    instances: TrackInstance[];
++  };
+   track: AudioTrackRead | MidiTrackRead | SamplerTrackRead | DrumTrackRead;
+   dirty?: boolean; // Client-side only: true if track has unsaved changes
+-  instances?: TrackInstance[]; // Client-side only: array of track instances on timeline
+ }
+ 
+ /**
+  * Represents an instance (clip) of a track on the timeline
+  */
+ export interface TrackInstance {
+-  id: string;
+-  x_position: number;
+-  y_position: number;
+-  trim_start_ticks: number;
+-  trim_end_ticks: number;
++  id: number;              // Simple incrementing integer
++  x: number;               // Horizontal position in ticks
++  y: number;               // Vertical position in pixels
++  trim_start_ticks: number; // How many ticks from source start to skip
++  trim_end_ticks: number;   // How many ticks from source end to skip
+ }
+ /**
+  * API response model for MIDI track data
+diff --git a/frontend/src/studio/Studio.tsx b/frontend/src/studio/Studio.tsx
+index 6a3261e..055bce3 100644
+--- a/frontend/src/studio/Studio.tsx
++++ b/frontend/src/studio/Studio.tsx
+@@ -8,8 +8,16 @@ import TrackControlsSidebar from './components/sidebar/TrackControlsSidebar';
+ import { KonvaTimeline, KonvaTimelineRef } from './components/timeline/KonvaTimeline';
+ import { CombinedTrack } from '../platform/types/project';
+ import AddTrackMenu from './components/sidebar/AddTrackMenu';
+-import { GRID_CONSTANTS } from './constants/gridConstants';
++import { GRID_CONSTANTS, pixelsToTicks, ticksToPixels } from './constants/gridConstants';
+ import { useStudioStore } from './stores/studioStore';
++import { 
++  createInstance, 
++  updateInstance, 
++  deleteInstance, 
++  updateMultipleInstances,
++  splitInstance,
++  getInstanceWidth 
++} from './utils/trackInstanceUtils';
+ 
+ // Import piano roll components
+ import PianoRollWindows from './components/piano-roll-new/PianoRollWindows';
+@@ -129,9 +137,139 @@ function Studio({ projectId }: StudioProps) {
+     handleInstanceResizeEnd,
+     updateMultipleInstancePositions,
+     resizeMultipleInstances,
++    // Track update function
++    updateTrack,
+   } = useStudioStore();
+   
+   const scrollRef = useRef<KonvaTimelineRef>(null);
++  
++  // Custom instance handlers that work with instance_metadata
++  const handleInstanceCreate = useCallback((
++    trackId: string, 
++    x: number, 
++    y: number,
++    trim_start_ticks = 0,
++    trim_end_ticks = 0
++  ) => {
++    const track = tracks.find(t => t.id === trackId);
++    if (!track) return;
++    
++    const updatedTrack = createInstance(track, x, y, trim_start_ticks, trim_end_ticks);
++    // Only update instance_metadata to avoid overwriting other fields
++    updateTrack(trackId, {
++      instance_metadata: updatedTrack.instance_metadata
++    });
++  }, [tracks, updateTrack]);
++
++  const handleInstanceUpdate = useCallback((
++    trackId: string,
++    instanceId: number,
++    updates: Partial<{ x: number; y: number; trim_start_ticks: number; trim_end_ticks: number }>
++  ) => {
++    console.log('[Studio] handleInstanceUpdate called:', { trackId, instanceId, updates });
++    const track = tracks.find(t => t.id === trackId);
++    if (!track) {
++      console.error('[Studio] Track not found:', trackId);
++      return;
++    }
++    
++    const updatedTrack = updateInstance(track, instanceId, updates);
++    console.log('[Studio] Updated track with new instance data:', updatedTrack);
++    
++    // Only update instance_metadata to avoid overwriting other fields
++    updateTrack(trackId, {
++      instance_metadata: updatedTrack.instance_metadata
++    });
++  }, [tracks, updateTrack]);
++
++  const handleInstanceDelete = useCallback((
++    trackId: string,
++    instanceId: number
++  ) => {
++    const track = tracks.find(t => t.id === trackId);
++    if (!track) return;
++    
++    const updatedTrack = deleteInstance(track, instanceId);
++    // Only update instance_metadata to avoid overwriting other fields
++    updateTrack(trackId, {
++      instance_metadata: updatedTrack.instance_metadata
++    });
++  }, [tracks, updateTrack]);
++
++  const handleBatchInstanceUpdate = useCallback((
++    updates: Map<string, Array<{ id: number; changes: Partial<{ x: number; y: number; trim_start_ticks: number; trim_end_ticks: number }> }>>
++  ) => {
++    console.log('[Studio] handleBatchInstanceUpdate called with:', updates);
++    
++    // Check if this is a resize operation (has trim changes)
++    let isResize = false;
++    updates.forEach((instanceUpdates) => {
++      instanceUpdates.forEach(update => {
++        if (update.changes.trim_start_ticks !== undefined || update.changes.trim_end_ticks !== undefined) {
++          isResize = true;
++        }
++      });
++    });
++    
++    if (isResize) {
++      // For resize operations, update all instances at once
++      // This maintains the simplicity and ensures proper state updates
++      updates.forEach((instanceUpdates, trackId) => {
++        const track = tracks.find(t => t.id === trackId);
++        if (!track || !track.instance_metadata) return;
++        
++        console.log('[Studio] Resize update for track:', trackId, 'updates:', instanceUpdates);
++        
++        const updatedTrack = updateMultipleInstances(track, instanceUpdates);
++        
++        // Update only the instance_metadata
++        updateTrack(trackId, {
++          instance_metadata: updatedTrack.instance_metadata
++        });
++      });
++    } else {
++      // For non-resize operations (drag), update directly
++      updates.forEach((instanceUpdates, trackId) => {
++        const track = tracks.find(t => t.id === trackId);
++        if (!track) {
++          console.error('[Studio] Track not found:', trackId);
++          return;
++        }
++        
++        // Check if track has instance_metadata
++        if (!track.instance_metadata) {
++          console.error('[Studio] Track has no instance_metadata:', track);
++          return;
++        }
++        
++        console.log('[Studio] Updating track:', trackId, 'with instance updates:', instanceUpdates);
++        console.log('[Studio] Current track state:', track);
++        
++        const updatedTrack = updateMultipleInstances(track, instanceUpdates);
++        console.log('[Studio] Updated track data:', updatedTrack);
++        
++        // Update only the instance_metadata to avoid overwriting other fields
++        updateTrack(trackId, {
++          instance_metadata: updatedTrack.instance_metadata
++        });
++      });
++    }
++  }, [tracks, updateTrack, handleInstanceResizeEnd, resizeMultipleInstances, bpm, timeSignature]);
++
++  const handleInstanceSplit = useCallback((
++    trackId: string,
++    instanceId: number,
++    splitPosition: number
++  ) => {
++    const track = tracks.find(t => t.id === trackId);
++    if (!track) return;
++    
++    const updatedTrack = splitInstance(track, instanceId, splitPosition);
++    // Only update instance_metadata to avoid overwriting other fields
++    updateTrack(trackId, {
++      instance_metadata: updatedTrack.instance_metadata
++    });
++  }, [tracks, updateTrack]);
+   const animationFrameRef = useRef<number | null>(null);
+   const [isChatOpen, setIsChatOpen] = useState(false);
+   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default to open
+@@ -149,6 +287,94 @@ function Studio({ projectId }: StudioProps) {
+     setIsSettingsModalOpen(prev => !prev);
+   };
+ 
++  // Note: instance_metadata is now ensured in processTrack during project loading
++  // This prevents race conditions and unnecessary re-renders
++
++  // Test function for debugging undo/redo
++  useEffect(() => {
++    // @ts-ignore - for debugging
++    window.testUndoRedo = async () => {
++      console.log('=== Testing Undo/Redo with Fixed State References ===');
++      const state = useStudioStore.getState();
++      console.log('Initial state:', { 
++        canUndo: state.canUndo, 
++        canRedo: state.canRedo, 
++        tracks: state.tracks.length,
++        trackNames: state.tracks.map(t => t.name)
++      });
++      
++      // Test 1: Simple track duplication
++      if (state.tracks.length > 0) {
++        const firstTrack = state.tracks[0];
++        console.log(`\n--- Test 1: Duplicating track "${firstTrack.name}" ---`);
++        
++        await state.duplicateTrack(firstTrack.id);
++        
++        // Check state after duplication
++        await new Promise(resolve => setTimeout(resolve, 100));
++        const afterDup = useStudioStore.getState();
++        console.log('After duplicate:', { 
++          canUndo: afterDup.canUndo, 
++          canRedo: afterDup.canRedo, 
++          tracks: afterDup.tracks.length,
++          trackNames: afterDup.tracks.map(t => t.name)
++        });
++        
++        // Test undo
++        console.log('\nCalling undo...');
++        await afterDup.undo();
++        
++        await new Promise(resolve => setTimeout(resolve, 100));
++        const afterUndo = useStudioStore.getState();
++        console.log('After undo:', { 
++          canUndo: afterUndo.canUndo, 
++          canRedo: afterUndo.canRedo, 
++          tracks: afterUndo.tracks.length,
++          trackNames: afterUndo.tracks.map(t => t.name)
++        });
++        
++        // Test redo
++        console.log('\nCalling redo...');
++        await afterUndo.redo();
++        
++        await new Promise(resolve => setTimeout(resolve, 100));
++        const afterRedo = useStudioStore.getState();
++        console.log('After redo:', { 
++          canUndo: afterRedo.canUndo, 
++          canRedo: afterRedo.canRedo, 
++          tracks: afterRedo.tracks.length,
++          trackNames: afterRedo.tracks.map(t => t.name)
++        });
++      }
++      
++      // Test 2: Track instance operations
++      const currentState = useStudioStore.getState();
++      if (currentState.tracks.length > 0) {
++        const track = currentState.tracks[0];
++        console.log(`\n--- Test 2: Adding instance to track "${track.name}" ---`);
++        
++        const instanceId = await currentState.addTrackInstance(track.id, { x: 500, y: 0 });
++        console.log('Added instance:', instanceId);
++        
++        await new Promise(resolve => setTimeout(resolve, 100));
++        const afterAdd = useStudioStore.getState();
++        const trackAfterAdd = afterAdd.tracks.find(t => t.id === track.id);
++        console.log('Instances after add:', trackAfterAdd?.instance_metadata?.instances.length);
++        
++        // Test undo instance add
++        console.log('\nUndoing instance add...');
++        await afterAdd.undo();
++        
++        await new Promise(resolve => setTimeout(resolve, 100));
++        const afterInstanceUndo = useStudioStore.getState();
++        const trackAfterUndo = afterInstanceUndo.tracks.find(t => t.id === track.id);
++        console.log('Instances after undo:', trackAfterUndo?.instance_metadata?.instances.length);
++      }
++      
++      console.log('\n=== Test Complete ===');
++    };
++  }, []);
++
+   // Initialize auto-save
+   const autoSave = useAutoSave({
+     projectId: existingProjectId || undefined,
+@@ -174,6 +400,40 @@ function Studio({ projectId }: StudioProps) {
+     }
+   });
+ 
++  // Add keyboard shortcuts for undo/redo
++  useEffect(() => {
++    const handleKeyDown = (event: KeyboardEvent) => {
++      // Check if we're in an input field
++      const target = event.target as HTMLElement;
++      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
++        return;
++      }
++
++      // Cmd/Ctrl + Z for undo
++      if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
++        event.preventDefault();
++        if (canUndo) {
++          console.log('Keyboard shortcut: Undo');
++          undo();
++        }
++      }
++      // Cmd/Ctrl + Shift + Z for redo
++      else if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key === 'z') {
++        event.preventDefault();
++        if (canRedo) {
++          console.log('Keyboard shortcut: Redo');
++          redo();
++        }
++      }
++    };
++
++    document.addEventListener('keydown', handleKeyDown);
++
++    return () => {
++      document.removeEventListener('keydown', handleKeyDown);
++    };
++  }, [canUndo, canRedo, undo, redo]);
++
+   // Effect to measure control bar height
+   useLayoutEffect(() => {
+     if (controlBarRef.current) {
+@@ -619,11 +879,15 @@ function Studio({ projectId }: StudioProps) {
+             selectedTrackIds={selectedTrackIds}
+             onTrackSelect={(instanceIds) => {
+               // Convert instance IDs to track IDs for the store
+-              // Instance IDs follow the pattern: trackId_instance_timestamp
++              // Instance IDs follow the pattern: trackId_instanceNumber
+               const trackIds = [...new Set(instanceIds.map(instanceId => {
++                // Handle both string and number types
++                const idStr = String(instanceId);
+                 // Extract track ID from instance ID
+-                const parts = instanceId.split('_instance_');
+-                return parts[0]; // The track ID is before '_instance_'
++                const parts = idStr.split('_');
++                // Remove the last part (instance number) and join the rest
++                parts.pop();
++                return parts.join('_'); // The track ID is everything before the last underscore
+               }))];
+               setSelectedTrackIds(trackIds);
+             }}
+@@ -638,10 +902,71 @@ function Studio({ projectId }: StudioProps) {
+             onDuplicateTracks={handleDuplicateTracks}
+             updateMultipleTrackPositions={updateMultipleTrackPositions}
+             resizeMultipleTracks={resizeMultipleTracks}
+-            onInstancePositionChange={handleInstancePositionChange}
+-            onInstanceResizeEnd={handleInstanceResizeEnd}
++            onInstancePositionChange={(trackId, instanceId, position, isDragEnd) => {
++              // Convert string instanceId to number
++              const instanceIdNum = typeof instanceId === 'string' ? parseInt(instanceId.split('_').pop() || '0') : instanceId;
++              handleInstanceUpdate(trackId, instanceIdNum, { x: position.x, y: position.y });
++            }}
++            onInstanceResizeEnd={(trackId, instanceId, deltaPixels, direction) => {
++              console.log('[Studio] onInstanceResizeEnd called:', { trackId, instanceId, deltaPixels, direction });
++              
++              // Convert string instanceId to number
++              const instanceIdNum = typeof instanceId === 'string' ? parseInt(instanceId.split('_').pop() || '0') : instanceId;
++              const track = tracks.find(t => t.id === trackId);
++              if (!track) {
++                console.error('[Studio] Track not found:', trackId);
++                return;
++              }
++              
++              const instance = track.instance_metadata?.instances.find(i => i.id === instanceIdNum);
++              if (!instance) {
++                console.error('[Studio] Instance not found:', instanceIdNum, 'in track:', track);
++                return;
++              }
++              
++              // Convert deltaPixels to ticks
++              const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
++              console.log('[Studio] Delta pixels:', deltaPixels, 'Delta ticks:', deltaTicks);
++              
++              // Calculate new trim values based on resize direction
++              if (direction === 'right') {
++                // Right resize: adjust trim_end_ticks
++                // When dragging right (positive delta), we want to decrease trim_end (show more)
++                // When dragging left (negative delta), we want to increase trim_end (show less)
++                const newTrimEnd = Math.max(0, instance.trim_end_ticks - deltaTicks);
++                const maxTrimEnd = track.duration_ticks - instance.trim_start_ticks - 1; // Ensure at least 1 tick width
++                const clampedTrimEnd = Math.min(Math.max(0, newTrimEnd), maxTrimEnd);
++                
++                console.log('[Studio] Right resize debug:', {
++                  deltaPixels,
++                  deltaTicks,
++                  oldTrimEnd: instance.trim_end_ticks,
++                  newTrimEnd,
++                  clampedTrimEnd,
++                  trackDuration: track.duration_ticks,
++                  trimStart: instance.trim_start_ticks,
++                  maxTrimEnd,
++                  resultingWidth: track.duration_ticks - instance.trim_start_ticks - clampedTrimEnd
++                });
++                
++                handleInstanceUpdate(trackId, instanceIdNum, { trim_end_ticks: clampedTrimEnd });
++              } else {
++                // Left resize: adjust x position and trim_start_ticks
++                const newX = instance.x + deltaTicks;
++                const newTrimStart = instance.trim_start_ticks + deltaTicks;
++                console.log('[Studio] Left resize - old x:', instance.x, 'new x:', newX, 'old trim_start:', instance.trim_start_ticks, 'new trim_start:', newTrimStart);
++                handleInstanceUpdate(trackId, instanceIdNum, { 
++                  x: newX, 
++                  trim_start_ticks: Math.max(0, newTrimStart)
++                });
++              }
++            }}
+             updateMultipleInstancePositions={updateMultipleInstancePositions}
+             resizeMultipleInstances={resizeMultipleInstances}
++            onInstanceCreate={handleInstanceCreate}
++            onInstanceDelete={handleInstanceDelete}
++            onBatchInstanceUpdate={handleBatchInstanceUpdate}
++            onInstanceSplit={handleInstanceSplit}
+             ref={scrollRef}
+           />
+           
+diff --git a/frontend/src/studio/components/shared/konva/useKonvaInteractions.ts b/frontend/src/studio/components/shared/konva/useKonvaInteractions.ts
+index 3486fa9..019f298 100644
+--- a/frontend/src/studio/components/shared/konva/useKonvaInteractions.ts
++++ b/frontend/src/studio/components/shared/konva/useKonvaInteractions.ts
+@@ -341,8 +341,20 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
+ 
+   // Start resize operation
+   const startResize = useCallback((itemId: string, direction: 'left' | 'right', mousePos: Position) => {
++    console.log('🔨 useKonvaInteractions - startResize called', {
++      itemId,
++      direction,
++      mousePos,
++      itemsCount: items.length,
++      selectedIds: Array.from(selectedIds)
++    });
++    
+     const item = items.find(i => i.id === itemId);
+-    if (!item) return;
++    if (!item) {
++      console.error('🔨 useKonvaInteractions - Item not found for resize:', itemId);
++      console.log('Available items:', items.map(i => i.id));
++      return;
++    }
+ 
+     // Check if the item is selected
+     const isItemSelected = selectedIds.has(itemId);
+@@ -420,39 +432,58 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
+   }, [isResizing, pixelsToLogical, snapToGridValue, gridSize, onResizeMove]);
+ 
+   // End resize
+-  const endResize = useCallback(() => {
++  const endResize = useCallback((mousePos?: Position) => {
+     if (!isResizing || !resizeStartRef.current) return;
+ 
+-    const { item } = resizeStartRef.current;
+-    const direction = resizeStartRef.current.direction;
++    const { direction, mousePos: startMousePos, allItems } = resizeStartRef.current;
+     
+-    // Get items that were resized - either selected items or just the single item
+-    const isItemSelected = selectedIds.has(item.id);
+-    const itemsToResize = isItemSelected 
+-      ? items.filter(i => selectedIds.has(i.id))
+-      : items.filter(i => i.id === item.id);
++    // Get final mouse position - use provided position or get from stage
++    let finalMousePos = mousePos;
++    if (!finalMousePos && stage) {
++      const stagePos = stage.getPointerPosition();
++      if (stagePos) {
++        finalMousePos = stagePos;
++      }
++    }
++    
++    if (!finalMousePos) {
++      // If we can't get mouse position, cancel the resize
++      setIsResizing(false);
++      setResizingItemId(null);
++      setResizeDirection(null);
++      resizeStartRef.current = null;
++      return;
++    }
++    
++    // Calculate the final delta
++    const deltaXPixels = finalMousePos.x - startMousePos.x;
++    const deltaX = pixelsToLogical(deltaXPixels);
+     
+     const updates = new Map<string, Dimensions>();
+     
+-    // Collect final dimensions for all resized items
+-    for (const resizeItem of itemsToResize) {
+-      const currentItem = items.find(i => i.id === resizeItem.id);
+-      if (!currentItem) continue;
+-      
+-      // Include start position for left resize
++    // Apply resize to all items using their snapshots
++    allItems.forEach((originalItem) => {
+       if (direction === 'left') {
+-        updates.set(currentItem.id, {
+-          start: currentItem.x,
+-          width: currentItem.width,
+-          height: currentItem.height
++        // Left resize: change both position and width
++        const newWidth = Math.max(gridSize, snapToGridValue(originalItem.width - deltaX));
++        const widthDelta = originalItem.width - newWidth;
++        const newX = originalItem.x + widthDelta;
++        
++        updates.set(originalItem.id, {
++          start: newX,
++          width: newWidth,
++          height: originalItem.height
+         });
+       } else {
+-        updates.set(currentItem.id, {
+-          width: currentItem.width,
+-          height: currentItem.height
++        // Right resize: only change width
++        const newWidth = Math.max(gridSize, snapToGridValue(originalItem.width + deltaX));
++        
++        updates.set(originalItem.id, {
++          width: newWidth,
++          height: originalItem.height
+         });
+       }
+-    }
++    });
+ 
+     if (onResizeEnd && updates.size > 0) {
+       onResizeEnd(updates);
+@@ -462,7 +493,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
+     setResizingItemId(null);
+     setResizeDirection(null);
+     resizeStartRef.current = null;
+-  }, [isResizing, items, selectedIds, onResizeEnd]);
++  }, [isResizing, stage, pixelsToLogical, snapToGridValue, gridSize, onResizeEnd]);
+ 
+   // Start rectangle selection
+   const startSelection = useCallback((mousePos: Position) => {
+@@ -579,15 +610,20 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
+   }, [stage, isDragging, isResizing, isSelecting, updateDrag, updateResize, updateRectSelection]);
+ 
+   // Handle mouse up
+-  const handleMouseUp = useCallback(() => {
++  const handleMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
++    if (!stage) return;
++    
++    const pos = stage.getPointerPosition();
++    if (!pos) return;
++    
+     if (isDragging) {
+       endDrag();
+     } else if (isResizing) {
+-      endResize();
++      endResize(pos);
+     } else if (isSelecting) {
+       endSelection();
+     }
+-  }, [isDragging, isResizing, isSelecting, endDrag, endResize, endSelection]);
++  }, [stage, isDragging, isResizing, isSelecting, endDrag, endResize, endSelection]);
+ 
+   // Keyboard shortcuts
+   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+@@ -656,7 +692,11 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
+       if (isDragging) {
+         endDrag();
+       } else if (isResizing) {
+-        endResize();
++        // Cancel resize without applying changes
++        setIsResizing(false);
++        setResizingItemId(null);
++        setResizeDirection(null);
++        resizeStartRef.current = null;
+       } else if (isSelecting) {
+         setIsSelecting(false);
+         setSelectionRect(null);
+@@ -667,7 +707,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
+   }, [
+     selectedIds, items, stage, isDragging, isResizing, isSelecting,
+     onCopy, onCut, onPaste, onDelete, onDuplicate,
+-    selectMultiple, clearSelection, endDrag, endResize,
++    selectMultiple, clearSelection, endDrag,
+     pixelsToLogical
+   ]);
+ 
+@@ -699,13 +739,22 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
+       }
+     };
+ 
+-    const handleWindowMouseUp = () => {
+-      if (isDragging) {
+-        endDrag();
+-      } else if (isResizing) {
+-        endResize();
+-      } else if (isSelecting) {
+-        endSelection();
++    const handleWindowMouseUp = (e: MouseEvent) => {
++      if (isDragging || isResizing || isSelecting) {
++        const container = stage.container();
++        const rect = container.getBoundingClientRect();
++        const pos = {
++          x: e.clientX - rect.left,
++          y: e.clientY - rect.top
++        };
++        
++        if (isDragging) {
++          endDrag();
++        } else if (isResizing) {
++          endResize(pos);
++        } else if (isSelecting) {
++          endSelection();
++        }
+       }
+     };
+ 
+diff --git a/frontend/src/studio/components/timeline/KonvaTimeline.tsx b/frontend/src/studio/components/timeline/KonvaTimeline.tsx
+index 4720eb5..a06225a 100644
+--- a/frontend/src/studio/components/timeline/KonvaTimeline.tsx
++++ b/frontend/src/studio/components/timeline/KonvaTimeline.tsx
+@@ -19,9 +19,10 @@ import { PlaybackCursor } from './konva/PlaybackCursor';
+ import { TimeRuler } from './konva/TimeRuler';
+ import { CombinedTrack } from 'src/platform/types/project';
+ import { Position as TrackPosition } from '../track/types';
+-import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
++import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks, getTrackColor } from '../../constants/gridConstants';
+ import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
+ import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
++import { getDefaultInstance, updateMultipleInstances, getInstanceWidth } from '../../utils/trackInstanceUtils';
+ import Konva from 'konva';
+ 
+ export interface KonvaTimelineProps {
+@@ -34,6 +35,7 @@ export interface KonvaTimelineProps {
+   timeSignature?: [number, number];
+   onTrackPositionChange?: (trackId: string, newPosition: TrackPosition, isDragEnd: boolean) => void;
+   onTimeChange?: (newTime: number) => void;
++  updateTrack?: (trackId: string, updates: Partial<CombinedTrack>) => void;
+   
+   // Selection and tool integration
+   selectedTool?: Tool;
+@@ -63,6 +65,12 @@ export interface KonvaTimelineProps {
+   updateMultipleInstancePositions?: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
+   resizeMultipleInstances?: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
+   
++  // New instance operations
++  onInstanceCreate?: (trackId: string, x: number, width: number) => void;
++  onInstanceDelete?: (trackId: string, instanceId: number) => void;
++  onBatchInstanceUpdate?: (updates: Map<string, Array<{ id: number; changes: Partial<{ x: number; width: number; name: string }> }>>) => void;
++  onInstanceSplit?: (trackId: string, instanceId: number, splitPosition: number) => void;
++  
+   // Zoom control
+   onZoomChange?: (newZoom: number) => void;
+ }
+@@ -90,6 +98,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+   timeSignature = [4, 4],
+   onTrackPositionChange = () => {},
+   onTimeChange = () => {},
++  updateTrack,
+   selectedTool = 'select',
+   onToolChange,
+   showToolbar = false,
+@@ -110,6 +119,10 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+   onInstanceResizeEnd,
+   updateMultipleInstancePositions,
+   resizeMultipleInstances,
++  onInstanceCreate,
++  onInstanceDelete,
++  onBatchInstanceUpdate,
++  onInstanceSplit,
+   onZoomChange
+ }, ref) => {
+   // State
+@@ -161,14 +174,34 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+     const items: KonvaItem[] = [];
+     
+     tracks.forEach((track, trackIndex) => {
+-      // Ensure track has instances
+-      if (!track.instances || track.instances.length === 0) {
+-        // Fallback: create a single instance from track data
+-        const resizePreviewX = resizePreviewPositions.get(track.id);
+-        const resizePreviewWidth = resizePreviewWidths.get(track.id);
+-        const dragPreview = dragPreviewPositions.get(track.id);
++      // Get instances from metadata or create default
++      let instances = track.instance_metadata?.instances || [];
++      
++      // Backward compatibility: create default instance if none exist
++      if (instances.length === 0 && track.duration_ticks > 0) {
++        instances = [getDefaultInstance(track)];
++        console.log('[KonvaTimeline] Created default instance for track:', track.id, instances);
++        console.log('[KonvaTimeline] Track instance_metadata:', track.instance_metadata);
++        
++        // Important: We need to update the track with instance_metadata
++        // But we can't do it here in the render function - it would cause infinite loops
++        // Instead, the track should be updated when it's first created or loaded
++      }
++      
++      // Get track color based on its index
++      const trackColor = getTrackColor(trackIndex);
++      
++      instances.forEach(instance => {
++        // Create unique ID combining track and instance
++        const itemId = `${track.id}_${instance.id}`;
+         
+-        let x = track.x_position || 0;
++        // Check for preview positions (during drag/resize)
++        const resizePreviewX = resizePreviewPositions.get(itemId);
++        const resizePreviewWidth = resizePreviewWidths.get(itemId);
++        const dragPreview = dragPreviewPositions.get(itemId);
++        
++        // Calculate position
++        let x = instance.x;
+         if (resizePreviewX !== undefined) {
+           x = resizePreviewX / pixelsPerTick;
+         }
+@@ -176,61 +209,34 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+           x = dragPreview.x / pixelsPerTick;
+         }
+         
+-        let y = track.y_position !== null && track.y_position !== undefined 
+-          ? track.y_position 
+-          : trackIndex * GRID_CONSTANTS.trackHeight;
++        // Calculate Y position - use instance Y
++        let y = instance.y;
+         if (dragPreview) {
+           y = dragPreview.y;
+         }
+         
++        // Calculate width from track duration and trims
++        let width = getInstanceWidth(track, instance);
++        if (resizePreviewWidth !== undefined) {
++          width = resizePreviewWidth / pixelsPerTick;
++        }
++        
+         items.push({
+-          id: `${track.id}_instance_default`,
++          id: itemId,
+           x,
+           y,
+-          width: resizePreviewWidth !== undefined 
+-            ? resizePreviewWidth / pixelsPerTick
+-            : (track.duration_ticks ? 
+-              (track.trim_end_ticks || track.duration_ticks) - (track.trim_start_ticks || 0) : 
+-              MUSIC_CONSTANTS.pulsesPerQuarterNote * 4),
++          width,
+           height: GRID_CONSTANTS.trackHeight,
+           type: 'track' as const,
+-          data: { ...track, instanceId: `${track.id}_instance_default` }
+-        });
+-      } else {
+-        // Create items for each instance
+-        track.instances.forEach(instance => {
+-          const resizePreviewX = resizePreviewPositions.get(instance.id);
+-          const resizePreviewWidth = resizePreviewWidths.get(instance.id);
+-          const dragPreview = dragPreviewPositions.get(instance.id);
+-          
+-          let x = instance.x_position;
+-          if (resizePreviewX !== undefined) {
+-            x = resizePreviewX / pixelsPerTick;
+-          }
+-          if (dragPreview) {
+-            x = dragPreview.x / pixelsPerTick;
+-          }
+-          
+-          let y = instance.y_position;
+-          if (dragPreview) {
+-            y = dragPreview.y;
++          data: {
++            trackId: track.id,
++            track,
++            instanceId: instance.id,
++            instance,
++            color: trackColor // Pass color from track
+           }
+-          
+-          const width = instance.trim_end_ticks - instance.trim_start_ticks;
+-          
+-          items.push({
+-            id: instance.id,
+-            x,
+-            y,
+-            width: resizePreviewWidth !== undefined 
+-              ? resizePreviewWidth / pixelsPerTick
+-              : width,
+-            height: GRID_CONSTANTS.trackHeight,
+-            type: 'track' as const,
+-            data: { ...track, instanceId: instance.id, instance }
+-          });
+         });
+-      }
++      });
+     });
+     
+     return items;
+@@ -272,43 +278,129 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+       // Clear drag preview
+       setDragPreviewPositions(new Map());
+       
+-      // Check if this is a group drag
+-      if (updates.size > 1) {
+-        // Group drag - prepare instance updates
+-        const instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}> = [];
++      // First, check if this is a track move or instance move
++      // Collect all updates by track to analyze the operation
++      const updatesByTrack = new Map<string, { instances: Map<number, { x: number; y: number }>, track: CombinedTrack }>();
++      const trackMovements = new Map<string, { deltaX: number; deltaY: number }>();
++      
++      updates.forEach((pos, itemId) => {
++        // Parse composite ID
++        const lastUnderscoreIndex = itemId.lastIndexOf('_');
++        if (lastUnderscoreIndex === -1) {
++          console.error('[KonvaTimeline] Invalid item ID format:', itemId);
++          return;
++        }
++        const trackId = itemId.substring(0, lastUnderscoreIndex);
++        const instanceIdStr = itemId.substring(lastUnderscoreIndex + 1);
++        const instanceId = Number(instanceIdStr);
+         
+-        updates.forEach((pos, instanceId) => {
+-          // Find the track and instance
+-          const item = konvaItems.find(item => item.id === instanceId);
+-          if (item && item.data) {
+-            const trackId = item.data.id;
+-            const instance = item.data.instance;
+-            if (instance) {
+-              const deltaX = pos.x - instance.x_position;
+-              const deltaY = pos.y - instance.y_position;
+-              instanceUpdates.push({ trackId, instanceId, deltaX, deltaY });
+-            }
++        const track = tracks.find(t => t.id === trackId);
++        if (!track) {
++          console.error('[KonvaTimeline] Track not found for ID:', trackId);
++          return;
++        }
++        
++        const instance = track.instance_metadata?.instances.find(i => i.id === instanceId);
++        if (!instance) {
++          console.error('[KonvaTimeline] Instance not found:', instanceId, 'in track:', track);
++          return;
++        }
++        
++        // Store update info
++        if (!updatesByTrack.has(trackId)) {
++          updatesByTrack.set(trackId, { instances: new Map(), track });
++        }
++        updatesByTrack.get(trackId)!.instances.set(instanceId, { x: pos.x, y: pos.y });
++        
++        // Calculate movement delta for this instance
++        const deltaX = pos.x - instance.x;
++        const deltaY = pos.y - instance.y;
++        
++        // Check if all instances of this track are moving by the same delta
++        if (!trackMovements.has(trackId)) {
++          trackMovements.set(trackId, { deltaX, deltaY });
++        } else {
++          const trackDelta = trackMovements.get(trackId)!;
++          if (trackDelta.deltaX !== deltaX || trackDelta.deltaY !== deltaY) {
++            // Different deltas mean instances are moving independently
++            trackMovements.delete(trackId);
+           }
+-        });
++        }
++      });
++      
++      // Determine if this is a track move (all instances moving together)
++      const isTrackMove = trackMovements.size > 0 && Array.from(updatesByTrack.entries()).every(([trackId, data]) => {
++        const track = data.track;
++        const allInstances = track.instance_metadata?.instances || [];
++        const updatedInstances = data.instances;
+         
+-        // Use the group instance update function
+-        if (updateMultipleInstancePositions) {
+-          updateMultipleInstancePositions(instanceUpdates);
++        // Check if all instances of the track are being moved
++        return allInstances.length === updatedInstances.size && trackMovements.has(trackId);
++      });
++      
++      if (isTrackMove && updateMultipleTrackPositions) {
++        // This is a track move - use track position update with history
++        console.log('[KonvaTimeline] Detected track move operation');
++        const trackIds = Array.from(trackMovements.keys());
++        const firstDelta = trackMovements.values().next().value;
++        
++        if (firstDelta) {
++          // Call the track position update which creates history
++          updateMultipleTrackPositions(trackIds, firstDelta.deltaX, firstDelta.deltaY);
+         }
+       } else {
+-        // Single instance drag
+-        updates.forEach((pos, instanceId) => {
+-          const item = konvaItems.find(item => item.id === instanceId);
+-          if (item && item.data) {
+-            const trackId = item.data.id;
+-            if (onInstancePositionChange) {
+-              onInstancePositionChange(trackId, instanceId, {
+-                x: pos.x,
+-                y: pos.y
+-              }, true);
++        // This is an instance move - use instance update
++        console.log('[KonvaTimeline] Detected instance move operation');
++        
++        // Group updates by track for instances
++        const trackUpdates = new Map<string, Array<{ id: number; changes: { x: number; y: number } }>>();
++        
++        updates.forEach((pos, itemId) => {
++          // Parse composite ID
++          const lastUnderscoreIndex = itemId.lastIndexOf('_');
++          if (lastUnderscoreIndex === -1) return;
++          
++          const trackId = itemId.substring(0, lastUnderscoreIndex);
++          const instanceIdStr = itemId.substring(lastUnderscoreIndex + 1);
++          const instanceId = Number(instanceIdStr);
++          
++          const track = tracks.find(t => t.id === trackId);
++          if (!track) return;
++          
++          const instance = track.instance_metadata?.instances.find(i => i.id === instanceId);
++          if (!instance) return;
++          
++          const newX = pos.x;
++          const newY = pos.y;
++          
++          if (newX !== instance.x || newY !== instance.y) {
++            if (!trackUpdates.has(trackId)) {
++              trackUpdates.set(trackId, []);
+             }
++            trackUpdates.get(trackId)!.push({
++              id: instanceId,
++              changes: { x: newX, y: newY }
++            });
+           }
+         });
++        
++        // Update instance positions
++        if (trackUpdates.size > 0) {
++          console.log('[KonvaTimeline] Updating instance positions:', trackUpdates);
++          if (onBatchInstanceUpdate) {
++            onBatchInstanceUpdate(trackUpdates);
++          } else {
++            // Fallback to individual updates
++            trackUpdates.forEach((instanceUpdates, trackId) => {
++              const track = tracks.find(t => t.id === trackId);
++              if (!track) return;
++            
++              instanceUpdates.forEach(update => {
++                onInstancePositionChange?.(trackId, String(update.id), { x: update.changes.x || 0, y: track.y_position || 0 }, true);
++              });
++            });
++          }
++        }
+       }
+     },
+     
+@@ -340,57 +432,84 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+       setResizePreviewPositions(new Map());
+       
+       // Check if this is a group resize
+-      if (updates.size > 1 && resizeMultipleInstances) {
+-        // Group resize - prepare instance updates
+-        const instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}> = [];
++      if (updates.size > 1 && onBatchInstanceUpdate) {
++        // Group resize - collect all updates and batch them
++        const trackUpdates = new Map<string, Array<{ id: number; changes: Partial<{ x: number; y: number; trim_start_ticks: number; trim_end_ticks: number }> }>>();
+         
+-        updates.forEach((dim, instanceId) => {
+-          const item = konvaItems.find(item => item.id === instanceId);
++        updates.forEach((dim, itemId) => {
++          const item = konvaItems.find(item => item.id === itemId);
+           if (item && item.data) {
+-            const trackId = item.data.id;
++            const trackId = item.data.trackId;
+             const instance = item.data.instance;
++            const track = item.data.track;
+             if (instance) {
+-              // Determine resize direction and delta
++              // Extract instance ID from composite itemId
++              const instanceIdNum = parseInt(itemId.split('_').pop() || '0');
++              
++              let changes: Partial<{ x: number; y: number; trim_start_ticks: number; trim_end_ticks: number }> = {};
++              
++              // For left resize, we need to update position and trim_start
+               if (dim.start !== undefined && dim.width !== undefined) {
+                 // Left resize
+-                const positionDeltaTicks = dim.start - instance.x_position;
+-                const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
+-                instanceUpdates.push({ trackId, instanceId, widthDelta: deltaPixels, anchor: 'left' });
++                const positionDeltaTicks = dim.start - instance.x;
++                const deltaTicks = positionDeltaTicks;
++                
++                changes.x = instance.x + deltaTicks;
++                changes.trim_start_ticks = Math.max(0, instance.trim_start_ticks + deltaTicks);
+               } else if (dim.width !== undefined) {
+-                // Right resize
+-                const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
++                // Right resize - only width changed, update trim_end
++                const currentWidthTicks = getInstanceWidth(track, instance);
+                 const newWidthTicks = dim.width;
+                 const deltaTicks = newWidthTicks - currentWidthTicks;
+-                const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
+-                instanceUpdates.push({ trackId, instanceId, widthDelta: deltaPixels, anchor: 'right' });
++                
++                // When width increases (positive delta), trim_end should decrease
++                const newTrimEnd = Math.max(0, instance.trim_end_ticks - deltaTicks);
++                const maxTrimEnd = track.duration_ticks - instance.trim_start_ticks - 1;
++                changes.trim_end_ticks = Math.min(newTrimEnd, maxTrimEnd);
+               }
++              
++              // Add to batch updates
++              if (!trackUpdates.has(trackId)) {
++                trackUpdates.set(trackId, []);
++              }
++              trackUpdates.get(trackId)!.push({
++                id: instanceIdNum,
++                changes
++              });
+             }
+           }
+         });
+         
+-        // Use the group resize function
+-        resizeMultipleInstances(instanceUpdates);
++        // Execute batch update
++        if (trackUpdates.size > 0) {
++          onBatchInstanceUpdate(trackUpdates);
++        }
+       } else {
+         // Single instance resize
+-        updates.forEach((dim, instanceId) => {
+-          const item = konvaItems.find(item => item.id === instanceId);
++        updates.forEach((dim, itemId) => {
++          const item = konvaItems.find(item => item.id === itemId);
+           if (item && item.data) {
+-            const trackId = item.data.id;
++            const trackId = item.data.trackId;
+             const instance = item.data.instance;
+             if (instance && onInstanceResizeEnd) {
+               // For left resize, we need to update the trim
+               if (dim.start !== undefined && dim.width !== undefined) {
+                 // Left resize
+-                const positionDeltaTicks = dim.start - instance.x_position;
++                const positionDeltaTicks = dim.start - instance.x;
+                 const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
+-                onInstanceResizeEnd(trackId, instanceId, deltaPixels, 'left');
++                // Extract instance ID from composite itemId
++                const instanceIdNum = parseInt(itemId.split('_').pop() || '0');
++                onInstanceResizeEnd(trackId, String(instanceIdNum), deltaPixels, 'left');
+               } else if (dim.width !== undefined) {
+                 // Right resize - only width changed
+-                const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
++                const track = item.data.track;
++                const currentWidthTicks = getInstanceWidth(track, instance);
+                 const newWidthTicks = dim.width;
+                 const deltaTicks = newWidthTicks - currentWidthTicks;
+                 const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
+-                onInstanceResizeEnd(trackId, instanceId, deltaPixels, 'right');
++                // Extract instance ID from composite itemId
++                const instanceIdNum = parseInt(itemId.split('_').pop() || '0');
++                onInstanceResizeEnd(trackId, String(instanceIdNum), deltaPixels, 'right');
+               }
+             }
+           }
+@@ -416,7 +535,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+     
+     onCopy: (items) => {
+       // Extract unique track IDs from instance items
+-      const trackIds = [...new Set(items.map(item => item.data?.id).filter(Boolean))];
++      const trackIds = [...new Set(items.map(item => item.data?.trackId).filter(Boolean))];
+       const fullTracks = tracks.filter(t => trackIds.includes(t.id));
+       setClipboard(fullTracks);
+       onCopyTracks?.(fullTracks);
+@@ -424,7 +543,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+     
+     onCut: (items) => {
+       // Extract unique track IDs from instance items
+-      const trackIds = [...new Set(items.map(item => item.data?.id).filter(Boolean))];
++      const trackIds = [...new Set(items.map(item => item.data?.trackId).filter(Boolean))];
+       const fullTracks = tracks.filter(t => trackIds.includes(t.id));
+       setClipboard(fullTracks);
+       onCutTracks?.(fullTracks);
+@@ -443,7 +562,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+       // For now, extract track IDs and delete entire tracks
+       const trackIds = [...new Set(konvaItems
+         .filter(item => itemIds.includes(item.id))
+-        .map(item => item.data?.id)
++        .map(item => item.data?.trackId)
+         .filter(Boolean))];
+       onDeleteTracks?.(trackIds);
+     },
+@@ -452,7 +571,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+       // Extract unique track IDs from instance IDs
+       const trackIds = [...new Set(konvaItems
+         .filter(item => itemIds.includes(item.id))
+-        .map(item => item.data?.id)
++        .map(item => item.data?.trackId)
+         .filter(Boolean))];
+       onDuplicateTracks?.(trackIds);
+     }
+@@ -714,8 +833,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+             return (
+               <KonvaTrack
+                 key={item.id}
+-                track={item.data}
+-                instanceId={item.id} // Pass the instance ID
++                track={item.data.track}
++                instanceId={item.data.instanceId}
+                 x={itemX}
+                 y={itemDisplayY}
+                 width={itemWidth}
+@@ -732,6 +851,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+                 gridSnapEnabled={gridSnapEnabled}
+                 snapSizeInPixels={actualSnapSize}
+                 selectedCount={interaction.selectedIds.length}
++                data={item.data} // Pass the full data for color and other props
+                 onClick={(id, e) => {
+                   // Handle instance selection
+                   const modifiers = {
+diff --git a/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx b/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
+index 82f39c5..c8beb8e 100644
+--- a/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
++++ b/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
+@@ -28,6 +28,7 @@ export interface KonvaTrackProps {
+   selectedCount?: number;
+   gridSnapEnabled?: boolean;
+   snapSizeInPixels?: number;
++  data?: any; // Additional data for color etc
+ }
+ 
+ /**
+@@ -55,7 +56,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+   onResizeStart,
+   selectedCount = 1,
+   gridSnapEnabled = true,
+-  snapSizeInPixels = 12.5
++  snapSizeInPixels = 12.5,
++  data
+ }) => {
+   const groupRef = useRef<any>(null);
+   const backgroundRef = useRef<any>(null);
+@@ -66,8 +68,14 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+   // Use prop preview width if provided (during resize), otherwise use internal state
+   const previewWidth = propPreviewWidth || null;
+   
+-  // Get track color based on type
++  // Get track color from props (passed from parent)
+   const trackColor = useMemo(() => {
++    // If color is explicitly passed in data, use it
++    if (data?.color) {
++      return data.color;
++    }
++    
++    // Otherwise fall back to type-based colors
+     switch (track.type) {
+       case 'AUDIO':
+         return '#4caf50';
+@@ -79,7 +87,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+       default:
+         return '#9c27b0';
+     }
+-  }, [track.type]);
++  }, [track.type, data?.color]);
+   
+   // Calculate content offset for trimmed tracks
+   const contentOffset = useMemo(() => {
+@@ -129,8 +137,9 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+       onClick={(e) => {
+         e.cancelBubble = true; // Prevent stage from deselecting
+         if (onClick) {
+-          // Use instance ID if provided, otherwise fall back to track ID
+-          onClick(instanceId || track.id, e);
++          // Create composite ID for consistency
++          const compositeId = instanceId ? `${track.id}_${instanceId}` : track.id;
++          onClick(compositeId, e);
+         }
+       }}
+       onMouseDown={(e) => {
+@@ -141,8 +150,9 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+         
+         e.cancelBubble = true;
+         if (onMouseDown) {
+-          // Use instance ID if provided, otherwise fall back to track ID
+-          onMouseDown(instanceId || track.id, e);
++          // Create composite ID for consistency
++          const compositeId = instanceId ? `${track.id}_${instanceId}` : track.id;
++          onMouseDown(compositeId, e);
+         }
+       }}
+     >
+@@ -238,13 +248,32 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+               setIsResizingLeft(false);
+             }}
+             onMouseDown={(e) => {
++              console.log('🔧 KonvaTrack - LEFT resize handle mouseDown', {
++                trackId: track.id,
++                instanceId,
++                idUsed: instanceId || track.id,
++                onResizeStart: !!onResizeStart,
++                event: e
++              });
+               e.cancelBubble = true;
+               if (onResizeStart) {
+                 const stage = e.target.getStage();
+                 const pos = stage?.getPointerPosition();
++                console.log('🔧 KonvaTrack - LEFT resize getting position', {
++                  stage: !!stage,
++                  pos
++                });
+                 if (pos) {
+-                  // Use instance ID if provided, otherwise fall back to track ID
+-                  onResizeStart(instanceId || track.id, 'left', pos);
++                  // Create composite ID for resize system
++                  const compositeId = instanceId ? `${track.id}_${instanceId}` : track.id;
++                  console.log('🔧 KonvaTrack - LEFT resize calling onResizeStart', {
++                    instanceId,
++                    trackId: track.id,
++                    compositeId,
++                    direction: 'left',
++                    pos
++                  });
++                  onResizeStart(compositeId, 'left', pos);
+                 }
+               }
+             }}
+@@ -275,13 +304,33 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+               setIsResizingRight(false);
+             }}
+             onMouseDown={(e) => {
++              console.log('🔧 KonvaTrack - RIGHT resize handle mouseDown', {
++                trackId: track.id,
++                instanceId,
++                idUsed: instanceId || track.id,
++                onResizeStart: !!onResizeStart,
++                event: e
++              });
+               e.cancelBubble = true;
+               if (onResizeStart) {
+                 const stage = e.target.getStage();
+                 const pos = stage?.getPointerPosition();
++                console.log('🔧 KonvaTrack - RIGHT resize getting position', {
++                  stage: !!stage,
++                  pos
++                });
+                 if (pos) {
+                   // Use instance ID if provided, otherwise fall back to track ID
+-                  onResizeStart(instanceId || track.id, 'right', pos);
++                  // Create composite ID for resize system
++                  const compositeId = instanceId ? `${track.id}_${instanceId}` : track.id;
++                  console.log('🔧 KonvaTrack - RIGHT resize calling onResizeStart', {
++                    instanceId,
++                    trackId: track.id,
++                    compositeId,
++                    direction: 'right',
++                    pos
++                  });
++                  onResizeStart(compositeId, 'right', pos);
+                 }
+               }
+             }}
+diff --git a/frontend/src/studio/core/state/history/HistoryManager.ts b/frontend/src/studio/core/state/history/HistoryManager.ts
+index 6bfce51..8322f35 100644
+--- a/frontend/src/studio/core/state/history/HistoryManager.ts
++++ b/frontend/src/studio/core/state/history/HistoryManager.ts
+@@ -30,22 +30,46 @@ export class HistoryManager {
+   }
+ 
+   async undo(): Promise<void> {
++    console.log('[HistoryManager] Undo called, stack length:', this.undoStack.length);
+     const action = this.undoStack.pop();
+     if (action) {
+-      await action.undo();
+-      this.redoStack.push(action);
++      console.log('[HistoryManager] Undoing action:', action.type);
++      try {
++        await action.undo();
++        this.redoStack.push(action);
++        console.log('[HistoryManager] Undo completed successfully');
++      } catch (error) {
++        console.error('[HistoryManager] Undo failed:', error);
++        // Re-add action to undo stack since it failed
++        this.undoStack.push(action);
++        throw error;
++      }
+       this.logState();
+       this.notifyListeners();
++    } else {
++      console.warn('[HistoryManager] No actions to undo');
+     }
+   }
+ 
+   async redo(): Promise<void> {
++    console.log('[HistoryManager] Redo called, stack length:', this.redoStack.length);
+     const action = this.redoStack.pop();
+     if (action) {
+-      await action.execute();
+-      this.undoStack.push(action);
++      console.log('[HistoryManager] Redoing action:', action.type);
++      try {
++        await action.execute();
++        this.undoStack.push(action);
++        console.log('[HistoryManager] Redo completed successfully');
++      } catch (error) {
++        console.error('[HistoryManager] Redo failed:', error);
++        // Re-add action to redo stack since it failed
++        this.redoStack.push(action);
++        throw error;
++      }
+       this.logState();
+       this.notifyListeners();
++    } else {
++      console.warn('[HistoryManager] No actions to redo');
+     }
+   }
+ 
+diff --git a/frontend/src/studio/core/state/history/actions/BaseAction.ts b/frontend/src/studio/core/state/history/actions/BaseAction.ts
+index 7422375..39305b9 100644
+--- a/frontend/src/studio/core/state/history/actions/BaseAction.ts
++++ b/frontend/src/studio/core/state/history/actions/BaseAction.ts
+@@ -1,6 +1,7 @@
+ import { Store } from '../../store';
+ import { GetFn, RootState } from '../../../../stores/types';
+ import { ActionType } from '.';
++import { useStudioStore } from '../../../../stores/studioStore';
+ 
+ export interface Action {
+     execute(): Promise<void>;
+@@ -13,12 +14,19 @@ export interface Action {
+  */
+ export abstract class BaseAction implements Action {
+     abstract type: ActionType;
+-    protected get: GetFn;
+     protected store: Store;
+     
++    /**
++     * Always get fresh state from the Zustand store
++     * This prevents stale closure issues during undo/redo
++     */
++    protected get get(): GetFn {
++        return useStudioStore.getState;
++    }
++    
+     constructor(get: GetFn) {
+-        this.get = get;
+-        const storeInstance = this.get().store;
++        // We no longer store the get function, but still validate store availability
++        const storeInstance = useStudioStore.getState().store;
+         if (!storeInstance) {
+             throw new Error("Store instance not available when creating action!");
+         }
+diff --git a/frontend/src/studio/core/state/history/actions/InstanceActions.ts b/frontend/src/studio/core/state/history/actions/InstanceActions.ts
+index 87c4b5f..ee226cf 100644
+--- a/frontend/src/studio/core/state/history/actions/InstanceActions.ts
++++ b/frontend/src/studio/core/state/history/actions/InstanceActions.ts
+@@ -36,8 +36,8 @@ export class InstanceMove extends BaseAction {
+     async execute(): Promise<void> {
+         const { updateTrackInstance } = this.get();
+         updateTrackInstance(this.trackId, this.instanceId, {
+-            x_position: this.newX,
+-            y_position: this.newY
++            x: this.newX,
++            y: this.newY
+         });
+         this.log('Execute', { trackId: this.trackId, instanceId: this.instanceId, newX: this.newX, newY: this.newY });
+     }
+@@ -45,8 +45,8 @@ export class InstanceMove extends BaseAction {
+     async undo(): Promise<void> {
+         const { updateTrackInstance } = this.get();
+         updateTrackInstance(this.trackId, this.instanceId, {
+-            x_position: this.oldX,
+-            y_position: this.oldY
++            x: this.oldX,
++            y: this.oldY
+         });
+         this.log('Undo', { trackId: this.trackId, instanceId: this.instanceId, oldX: this.oldX, oldY: this.oldY });
+     }
+@@ -93,7 +93,7 @@ export class InstanceResize extends BaseAction {
+         updateTrackInstance(this.trackId, this.instanceId, {
+             trim_start_ticks: this.newTrimStart,
+             trim_end_ticks: this.newTrimEnd,
+-            x_position: this.newX
++            x: this.newX
+         });
+         this.log('Execute', { 
+             trackId: this.trackId, 
+@@ -109,7 +109,7 @@ export class InstanceResize extends BaseAction {
+         updateTrackInstance(this.trackId, this.instanceId, {
+             trim_start_ticks: this.oldTrimStart,
+             trim_end_ticks: this.oldTrimEnd,
+-            x_position: this.oldX
++            x: this.oldX
+         });
+         this.log('Undo', { 
+             trackId: this.trackId, 
+@@ -140,24 +140,50 @@ export class InstanceAdd extends BaseAction {
+     }
+ 
+     async execute(): Promise<void> {
+-        const { updateTrackState } = this.get();
+-        const track = this.get().tracks.find(t => t.id === this.trackId);
+-        if (!track) return;
++        const { updateTrackState, tracks } = this.get();
++        const track = tracks.find(t => t.id === this.trackId);
++        if (!track) {
++            console.error(`[InstanceAdd] Execute failed: Track ${this.trackId} not found`);
++            return;
++        }
++
++        const instances = track.instance_metadata?.instances || [];
++        // Check if instance already exists
++        const exists = instances.some(inst => inst.id === this.instance.id);
++        if (exists) {
++            console.warn(`[InstanceAdd] Instance ${this.instance.id} already exists in track ${this.trackId}`);
++            return;
++        }
+ 
+-        const instances = track.instances || [];
+         updateTrackState(this.trackId, {
+-            instances: [...instances, this.instance]
++            instance_metadata: {
++                instances: [...instances, this.instance]
++            }
+         });
+         this.log('Execute', { trackId: this.trackId, instanceId: this.instance.id });
+     }
+ 
+     async undo(): Promise<void> {
+-        const { updateTrackState } = this.get();
+-        const track = this.get().tracks.find(t => t.id === this.trackId);
+-        if (!track) return;
++        const { updateTrackState, tracks } = this.get();
++        const track = tracks.find(t => t.id === this.trackId);
++        if (!track) {
++            console.error(`[InstanceAdd] Undo failed: Track ${this.trackId} not found`);
++            return;
++        }
++
++        const instances = track.instance_metadata?.instances || [];
++        const filtered = instances.filter(inst => inst.id !== this.instance.id);
++        
++        if (filtered.length === instances.length) {
++            console.warn(`[InstanceAdd] Undo: Instance ${this.instance.id} not found in track ${this.trackId}`);
++            return;
++        }
+ 
+-        const instances = (track.instances || []).filter(inst => inst.id !== this.instance.id);
+-        updateTrackState(this.trackId, { instances });
++        updateTrackState(this.trackId, { 
++            instance_metadata: {
++                instances: filtered
++            }
++        });
+         this.log('Undo', { trackId: this.trackId, instanceId: this.instance.id });
+     }
+ }
+@@ -185,18 +211,39 @@ export class InstanceDelete extends BaseAction {
+ 
+     async execute(): Promise<void> {
+         const { deleteTrackInstance } = this.get();
+-        deleteTrackInstance(this.trackId, this.instance.id);
++        deleteTrackInstance(this.trackId, String(this.instance.id));
+         this.log('Execute', { trackId: this.trackId, instanceId: this.instance.id });
+     }
+ 
+     async undo(): Promise<void> {
+-        const { updateTrackState } = this.get();
+-        const track = this.get().tracks.find(t => t.id === this.trackId);
+-        if (!track) return;
++        const { updateTrackState, tracks } = this.get();
++        const track = tracks.find(t => t.id === this.trackId);
++        if (!track) {
++            console.error(`[InstanceDelete] Undo failed: Track ${this.trackId} not found`);
++            return;
++        }
+ 
+-        const instances = [...(track.instances || [])];
++        const instances = [...(track.instance_metadata?.instances || [])];
++        
++        // Validate instance index
++        if (this.instanceIndex < 0 || this.instanceIndex > instances.length) {
++            console.error(`[InstanceDelete] Undo failed: Invalid instance index ${this.instanceIndex}`);
++            return;
++        }
++        
++        // Check if instance already exists (shouldn't happen, but be safe)
++        const exists = instances.some(inst => inst.id === this.instance.id);
++        if (exists) {
++            console.warn(`[InstanceDelete] Undo: Instance ${this.instance.id} already exists in track ${this.trackId}`);
++            return;
++        }
++        
+         instances.splice(this.instanceIndex, 0, this.instance);
+-        updateTrackState(this.trackId, { instances });
++        updateTrackState(this.trackId, { 
++            instance_metadata: {
++                instances
++            }
++        });
+         this.log('Undo', { trackId: this.trackId, instanceId: this.instance.id });
+     }
+ }
+diff --git a/frontend/src/studio/stores/slices/historySlice.ts b/frontend/src/studio/stores/slices/historySlice.ts
+index b271ee2..48d9d04 100644
+--- a/frontend/src/studio/stores/slices/historySlice.ts
++++ b/frontend/src/studio/stores/slices/historySlice.ts
+@@ -57,6 +57,7 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
+   };
+ 
+   const undo = async () => {
++    console.log('[HistorySlice] Undo called');
+     const { _withErrorHandling } = rootGet();
+ 
+      if (!historyManager) {
+@@ -69,9 +70,12 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
+     }
+ 
+     const undoAction = async () => {
++        console.log('[HistorySlice] canUndo:', historyManager.canUndo());
+         if (historyManager.canUndo()) {
+-             await historyManager.undo();
++            console.log('[HistorySlice] Executing undo...');
++            await historyManager.undo();
+             _updateHistoryState();
++            console.log('[HistorySlice] Undo completed');
+         } else {
+             console.warn("Undo called but nothing to undo.");
+         }
+@@ -81,6 +85,7 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
+   };
+ 
+   const redo = async () => {
++    console.log('[HistorySlice] Redo called');
+     const { _withErrorHandling } = rootGet();
+ 
+      if (!historyManager) {
+@@ -93,9 +98,12 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
+     }
+ 
+     const redoAction = async () => {
++        console.log('[HistorySlice] canRedo:', historyManager.canRedo());
+         if (historyManager.canRedo()) {
++            console.log('[HistorySlice] Executing redo...');
+             await historyManager.redo();
+             _updateHistoryState();
++            console.log('[HistorySlice] Redo completed');
+         } else {
+              console.warn("Redo called but nothing to redo.");
+         }
+diff --git a/frontend/src/studio/stores/slices/projectSlice.ts b/frontend/src/studio/stores/slices/projectSlice.ts
+index 50f8ec8..e196503 100644
+--- a/frontend/src/studio/stores/slices/projectSlice.ts
++++ b/frontend/src/studio/stores/slices/projectSlice.ts
+@@ -266,6 +266,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
+               trim_start_ticks: apiTrack.trim_start_ticks ?? 0,
+               trim_end_ticks: apiTrack.trim_end_ticks ?? 0, 
+               duration_ticks: apiTrack.duration_ticks ?? 0,
++              instance_metadata: apiTrack.instance_metadata, // Preserve instance metadata from API
+               dirty: false, // Loaded tracks are clean (already saved)
+           };
+ 
+@@ -316,10 +317,18 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
+           
+           const finalCombinedTrack = { ...combinedTrackData, track: nestedTrackData } as CombinedTrack;
+           
+-          // 2.5. Migrate track to instances model
+-          const { migrateTrackToInstances } = rootGet();
+-          if (migrateTrackToInstances) {
+-              migrateTrackToInstances(finalCombinedTrack);
++          // 2.5. Ensure track has instance_metadata - create default if missing
++          if (!finalCombinedTrack.instance_metadata || !finalCombinedTrack.instance_metadata.instances) {
++              console.log(`[processTrack] Track ${finalCombinedTrack.id} missing instance_metadata, adding default`);
++              finalCombinedTrack.instance_metadata = {
++                  instances: [{
++                      id: 1,
++                      x: finalCombinedTrack.x_position || 0,
++                      y: finalCombinedTrack.y_position || 0,
++                      trim_start_ticks: 0,
++                      trim_end_ticks: 0
++                  }]
++              };
+           }
+ 
+           // 3. Perform necessary ENGINE setup (NO HISTORY)
+diff --git a/frontend/src/studio/stores/slices/tracksSlice.ts b/frontend/src/studio/stores/slices/tracksSlice.ts
+index 540e012..7855fa3 100644
+--- a/frontend/src/studio/stores/slices/tracksSlice.ts
++++ b/frontend/src/studio/stores/slices/tracksSlice.ts
+@@ -14,6 +14,7 @@ import { StoreApi } from 'zustand';
+ import SampleManager from '../../core/samples/sampleManager';
+ import { db } from '../../core/db/dexie-client';
+ import { processAudioFile } from '../../utils/audioProcessing';
++import { getNextInstanceId, getInstanceWidth } from '../../utils/trackInstanceUtils';
+ 
+ // Define the state properties and actions for this slice
+ export interface TracksSlice {
+@@ -128,9 +129,20 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+     set(produce((draft: RootState) => {
+         const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
+         if (trackIndex !== -1) {
+-            Object.assign(draft.tracks[trackIndex], updates);
++            // Remove any 'instances' field from updates to prevent old system interference
++            const { instances, ...cleanUpdates } = updates as any;
++            if (instances) {
++                console.warn('Attempted to update track.instances - this is deprecated. Use instance_metadata instead.');
++            }
++            
++            // Log updates for debugging
++            if (cleanUpdates.instance_metadata) {
++                console.log('[updateTrackState] Updating instance_metadata for track:', trackId, cleanUpdates.instance_metadata);
++            }
++            
++            Object.assign(draft.tracks[trackIndex], cleanUpdates);
+             // Mark track as dirty when modified, unless explicitly setting dirty to false
+-            if (updates.dirty !== false) {
++            if (cleanUpdates.dirty !== false) {
+                 draft.tracks[trackIndex].dirty = true;
+             }
+         }
+@@ -141,18 +153,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+   const updateTracks = (newTracks: CombinedTrack[]) => {
+       set(produce((draft: RootState) => {
+           draft.tracks = newTracks;
+-          // Ensure all tracks have instances
+-          draft.tracks.forEach(track => {
+-              if (!track.instances || track.instances.length === 0) {
+-                  track.instances = [{
+-                      id: `${track.id}_instance_1`,
+-                      x_position: track.x_position || 0,
+-                      y_position: track.y_position || 0,
+-                      trim_start_ticks: track.trim_start_ticks || 0,
+-                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
+-                  }];
+-              }
+-          });
+       }));
+   };
+ 
+@@ -190,15 +190,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+               track.dirty = false;
+               
+               // Ensure track has instances - create default if none exist
+-              if (!track.instances || track.instances.length === 0) {
+-                  track.instances = [{
+-                      id: `${track.id}_instance_1`,
+-                      x_position: track.x_position || 0,
+-                      y_position: track.y_position || 0,
+-                      trim_start_ticks: track.trim_start_ticks || 0,
+-                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
+-                  }];
+-              }
++              // Removed old instance system - instances are now in instance_metadata
+           });
+       }), true);
+   };
+@@ -339,14 +331,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+       const finalTrackData = { 
+           ...trackData, 
+           track: nestedTrackDataObject as AnyTrackRead,
+-          // Initialize with a single instance
+-          instances: [{
+-              id: `${trackId}_instance_1`,
+-              x_position: position.x,
+-              y_position: position.y,
+-              trim_start_ticks: options.trim_start_ticks ?? 0,
+-              trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
+-          }]
++          // Initialize with instance_metadata for the new instance system
++          instance_metadata: {
++              instances: [{
++                  id: 1,
++                  x: position.x,
++                  y: position.y,
++                  trim_start_ticks: 0,
++                  trim_end_ticks: 0
++              }]
++          }
+       } as CombinedTrack;
+ 
+       // Create action, passing the serializable trackData AND the separate file object
+@@ -474,14 +468,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+       const finalTrackData = { 
+           ...trackData, 
+           track: nestedTrackDataObject as AnyTrackRead,
+-          // Initialize with a single instance
+-          instances: [{
+-              id: `${trackId}_instance_1`,
+-              x_position: position.x,
+-              y_position: position.y,
+-              trim_start_ticks: options.trim_start_ticks ?? 0,
+-              trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
+-          }]
++          // Initialize with instance_metadata for the new instance system
++          instance_metadata: {
++              instances: [{
++                  id: 1,
++                  x: position.x,
++                  y: position.y,
++                  trim_start_ticks: 0,
++                  trim_end_ticks: 0
++              }]
++          }
+       } as CombinedTrack;
+ 
+       // Return the data without executing any action
+@@ -1127,7 +1123,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+ 
+   // Group operations for copy/paste functionality
+   const duplicateTrack = async (trackId: string, newPosition?: Position): Promise<CombinedTrack | null> => {
+-    const { tracks } = rootGet();
++    const { tracks, executeHistoryAction } = rootGet();
+     const track = tracks.find(t => t.id === trackId);
+     
+     if (!track) {
+@@ -1135,14 +1131,39 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+       return null;
+     }
+     
+-    // Create a new instance instead of a new track
+-    const instanceId = await addTrackInstance(trackId, newPosition);
++    // Get instances from instance_metadata
++    const instances = track.instance_metadata?.instances || [];
+     
+-    if (!instanceId) {
+-      console.error(`Failed to create instance for track ${trackId}`);
++    // If no instances exist, create one from track data
++    if (instances.length === 0) {
++      console.error(`Track ${trackId} has no instances to duplicate`);
+       return null;
+     }
+     
++    // Duplicate the first instance (or could duplicate all instances)
++    const sourceInstance = instances[0];
++    const newInstanceId = getNextInstanceId(track);
++    
++    // Calculate position for new instance
++    const instancePosition = newPosition || {
++      x: sourceInstance.x + getInstanceWidth(track, sourceInstance) + 96, // 96 ticks gap
++      y: sourceInstance.y
++    };
++    
++    const newInstance: TrackInstance = {
++      id: newInstanceId,
++      x: instancePosition.x,
++      y: instancePosition.y,
++      trim_start_ticks: sourceInstance.trim_start_ticks,
++      trim_end_ticks: sourceInstance.trim_end_ticks
++    };
++    
++    // Create history action for adding instance
++    const action = new Actions.InstanceAdd(get, trackId, newInstance);
++    if (executeHistoryAction) {
++      await executeHistoryAction(action);
++    }
++    
+     // Return the track with updated instances
+     return findTrackById(trackId) || null;
+   };
+@@ -1159,22 +1180,22 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+       let maxRightPosition = 0;
+       
+       selectedTracks.forEach(track => {
+-        // Get instances (or create default instance data if none exist)
+-        const instances = track.instances && track.instances.length > 0 
+-          ? track.instances 
+-          : [{
+-              id: `${track.id}_instance_1`,
+-              x_position: track.x_position || 0,
+-              y_position: track.y_position || 0,
+-              trim_start_ticks: track.trim_start_ticks || 0,
+-              trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
+-            }];
++        // Get instances from the new instance_metadata system
++        const instances = track.instance_metadata?.instances || [];
+         
+-        // Find rightmost instance
+-        instances.forEach(instance => {
+-          const instanceEnd = instance.x_position + (instance.trim_end_ticks - instance.trim_start_ticks);
++        // If no instances, use track position as fallback
++        if (instances.length === 0 && track.duration_ticks > 0) {
++          const instanceEnd = (track.x_position || 0) + (track.duration_ticks || 0);
+           maxRightPosition = Math.max(maxRightPosition, instanceEnd);
+-        });
++        } else {
++          // Find rightmost instance
++          instances.forEach(instance => {
++            // Calculate width using getInstanceWidth helper
++            const instanceWidth = getInstanceWidth(track, instance);
++            const instanceEnd = instance.x + instanceWidth;
++            maxRightPosition = Math.max(maxRightPosition, instanceEnd);
++          });
++        }
+       });
+       
+       baseOffsetX = maxRightPosition + pixelsToTicks(96, bpm, timeSignature); // 96px gap in ticks
+@@ -1185,10 +1206,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+     let minX = Infinity;
+     
+     selectedTracks.forEach(track => {
+-      const instances = getTrackInstancesOrDefault(track);
+-      instances.forEach(instance => {
+-        minX = Math.min(minX, instance.x_position);
+-      });
++      const instances = track.instance_metadata?.instances || [];
++      if (instances.length === 0 && track.duration_ticks > 0) {
++        minX = Math.min(minX, track.x_position || 0);
++      } else {
++        instances.forEach(instance => {
++          minX = Math.min(minX, instance.x);
++        });
++      }
+     });
+     
+     // Collect all instance add actions
+@@ -1199,22 +1224,35 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+       const track = tracks.find(t => t.id === trackId);
+       if (!track) continue;
+       
+-      // Get instances for this track
+-      const originalInstances = getTrackInstancesOrDefault(track);
++      // Get instances from instance_metadata
++      const originalInstances = track.instance_metadata?.instances || [];
++      
++      // If no instances exist, create one from track data for backward compatibility
++      if (originalInstances.length === 0 && track.duration_ticks > 0) {
++        const defaultInstance: TrackInstance = {
++          id: 1,
++          x: track.x_position || 0,
++          y: track.y_position || 0,
++          trim_start_ticks: 0,
++          trim_end_ticks: 0
++        };
++        originalInstances.push(defaultInstance);
++      }
++      
+       for (const originalInstance of originalInstances) {
+         // Calculate relative position
+-        const relativeX = originalInstance.x_position - minX;
++        const relativeX = originalInstance.x - minX;
+         const newPosition = {
+           x: baseOffsetX + relativeX,
+-          y: originalInstance.y_position
++          y: originalInstance.y
+         };
+         
+-        // Create new instance object
+-        const instanceId = `${trackId}_instance_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
++        // Get next instance ID
++        const instanceId = getNextInstanceId(track);
+         const newInstance: TrackInstance = {
+           id: instanceId,
+-          x_position: newPosition.x,
+-          y_position: newPosition.y,
++          x: newPosition.x,
++          y: newPosition.y,
+           trim_start_ticks: originalInstance.trim_start_ticks,
+           trim_end_ticks: originalInstance.trim_end_ticks
+         };
+@@ -1406,19 +1444,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+     return _withErrorHandling(updatePositionsLogic, `updateMultipleTrackPositions`)();
+   };
+   
+-  // Track instance management functions
++  // Track instance management functions - DEPRECATED
++  // These functions use the old instance system and should not be used
++  // Use trackInstanceUtils.ts functions instead
+   const getTrackInstancesOrDefault = (track: CombinedTrack): TrackInstance[] => {
+-    if (track.instances && track.instances.length > 0) {
+-      return track.instances;
+-    }
+-    // Return default instance based on track data
+-    return [{
+-      id: `${track.id}_instance_1`,
+-      x_position: track.x_position || 0,
+-      y_position: track.y_position || 0,
+-      trim_start_ticks: track.trim_start_ticks || 0,
+-      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
+-    }];
++    // This function is deprecated - instances are now in instance_metadata
++    return [];
+   };
+   
+   const addTrackInstance = async (trackId: string, position?: Position, sourceInstance?: Partial<TrackInstance>): Promise<string | null> => {
+@@ -1468,37 +1499,68 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+   };
+   
+   const updateTrackInstance = (trackId: string, instanceId: string, updates: Partial<TrackInstance>): void => {
++    console.log('[updateTrackInstance] Called with:', { trackId, instanceId, updates });
+     const track = findTrackById(trackId);
+-    if (!track || !track.instances) return;
++    if (!track) {
++      console.error('[updateTrackInstance] Track not found:', trackId);
++      return;
++    }
++    if (!track.instance_metadata?.instances) {
++      console.error('[updateTrackInstance] No instance_metadata for track:', trackId);
++      return;
++    }
++    
++    // Convert string instanceId to number for comparison
++    const numericId = parseInt(instanceId);
++    console.log('[updateTrackInstance] Looking for instance with numeric ID:', numericId);
++    
++    const instance = track.instance_metadata.instances.find(inst => inst.id === numericId);
++    if (!instance) {
++      console.error('[updateTrackInstance] Instance not found:', numericId, 'in instances:', track.instance_metadata.instances);
++      return;
++    }
+     
+-    const updatedInstances = track.instances.map(instance => 
+-      instance.id === instanceId 
++    const updatedInstances = track.instance_metadata.instances.map(instance => 
++      instance.id === numericId 
+         ? { ...instance, ...updates }
+         : instance
+     );
+     
+-    updateTrackState(trackId, { instances: updatedInstances });
++    console.log('[updateTrackInstance] Updating instance:', numericId, 'with:', updates);
++    
++    updateTrackState(trackId, { 
++      instance_metadata: {
++        instances: updatedInstances
++      }
++    });
+   };
+   
+   const deleteTrackInstance = (trackId: string, instanceId: string): void => {
+     const track = findTrackById(trackId);
+-    if (!track || !track.instances) return;
++    if (!track || !track.instance_metadata?.instances) return;
+     
+     // Don't delete if it's the only instance
+-    if (track.instances.length <= 1) {
++    if (track.instance_metadata.instances.length <= 1) {
+       console.warn("Cannot delete the last instance of a track");
+       return;
+     }
+     
+-    const updatedInstances = track.instances.filter(instance => instance.id !== instanceId);
+-    updateTrackState(trackId, { instances: updatedInstances });
++    // Convert string instanceId to number for comparison
++    const numericId = parseInt(instanceId);
++    
++    const updatedInstances = track.instance_metadata.instances.filter(instance => instance.id !== numericId);
++    updateTrackState(trackId, { 
++      instance_metadata: {
++        instances: updatedInstances
++      }
++    });
+   };
+   
+   const getTrackInstances = (trackId: string): TrackInstance[] => {
+     const track = findTrackById(trackId);
+     if (!track) return [];
+     
+-    return getTrackInstancesOrDefault(track);
++    return track.instance_metadata?.instances || [];
+   };
+   
+   const handleInstancePositionChange = (trackId: string, instanceId: string, newPosition: Position, isDragEnd: boolean): void => {
+@@ -1512,18 +1574,20 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+ 
+     const changeLogic = async () => {
+         const track = findTrackById(trackId);
+-        if (!track || !track.instances) {
++        if (!track || !track.instance_metadata?.instances) {
+             console.error(`Track ${trackId} not found or has no instances`);
+             return;
+         }
+         
+-        const instance = track.instances.find(inst => inst.id === instanceId);
++        // Convert string instanceId to number for comparison
++        const numericId = parseInt(instanceId);
++        const instance = track.instance_metadata.instances.find(inst => inst.id === numericId);
+         if (!instance) {
+             console.error(`Instance ${instanceId} not found in track ${trackId}`);
+             return;
+         }
+         
+-        const oldPosition = { x: instance.x_position, y: instance.y_position };
++        const oldPosition = { x: instance.x, y: instance.y };
+ 
+         // Skip if nothing changed at drag end
+         if (isDragEnd && 
+@@ -1551,8 +1615,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+         } else {
+             // During drag, update position directly without history
+             updateTrackInstance(trackId, instanceId, { 
+-                x_position: newPosition.x, 
+-                y_position: newPosition.y
++                x: newPosition.x, 
++                y: newPosition.y
+             });
+             
+             // Update audio engine for this specific instance
+@@ -1567,10 +1631,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+   const handleInstanceResizeEnd = (trackId: string, instanceId: string, deltaPixels: number, resizeDirection: 'left' | 'right'): void => {
+     const { bpm, timeSignature, executeHistoryAction, _withErrorHandling } = rootGet();
+     const track = findTrackById(trackId);
+-    if (!track || !track.instances || !_withErrorHandling) { return; }
++    if (!track || !track.instance_metadata?.instances || !_withErrorHandling) { return; }
+ 
+     const resizeLogic = async () => {
+-        const instance = track.instances?.find(inst => inst.id === instanceId);
++        // Convert string instanceId to number for comparison
++        const numericId = parseInt(instanceId);
++        const instance = track.instance_metadata?.instances.find(inst => inst.id === numericId);
+         if (!instance) {
+             console.error(`Instance ${instanceId} not found in track ${trackId}`);
+             return;
+@@ -1578,7 +1644,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+         
+         const oldTrimStartTicks = instance.trim_start_ticks;
+         const oldTrimEndTicks = instance.trim_end_ticks;
+-        const oldPositionX = instance.x_position;
++        const oldPositionX = instance.x;
+         const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
+ 
+         let newTrimStartTicks = oldTrimStartTicks;
+@@ -1631,13 +1697,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+       
+       instanceUpdates.forEach(update => {
+         const track = findTrackById(update.trackId);
+-        if (!track || !track.instances) return;
++        if (!track || !track.instance_metadata?.instances) return;
+         
+-        const instance = track.instances.find(inst => inst.id === update.instanceId);
++        // Convert string instanceId to number for comparison
++        const numericId = parseInt(update.instanceId);
++        const instance = track.instance_metadata.instances.find(inst => inst.id === numericId);
+         if (!instance) return;
+         
+-        const oldX = instance.x_position;
+-        const oldY = instance.y_position;
++        const oldX = instance.x;
++        const oldY = instance.y;
+         const newX = Math.max(0, oldX + update.deltaX);
+         const newY = Math.max(0, oldY + update.deltaY);
+         
+@@ -1679,15 +1747,17 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+       
+       instanceUpdates.forEach(update => {
+         const track = findTrackById(update.trackId);
+-        if (!track || !track.instances) return;
++        if (!track || !track.instance_metadata?.instances) return;
+         
+-        const instance = track.instances.find(inst => inst.id === update.instanceId);
++        // Convert string instanceId to number for comparison
++        const numericId = parseInt(update.instanceId);
++        const instance = track.instance_metadata.instances.find(inst => inst.id === numericId);
+         if (!instance) return;
+         
+         const deltaTicks = pixelsToTicks(update.widthDelta, bpm, timeSignature);
+         const oldTrimStartTicks = instance.trim_start_ticks;
+         const oldTrimEndTicks = instance.trim_end_ticks;
+-        const oldPositionX = instance.x_position;
++        const oldPositionX = instance.x;
+         
+         let newTrimStartTicks = oldTrimStartTicks;
+         let newTrimEndTicks = oldTrimEndTicks;
+@@ -1702,9 +1772,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+           newPositionX = Math.max(0, newPositionX);
+         } else {
+           // For right resize, adjust trim end
+-          newTrimEndTicks = oldTrimEndTicks + deltaTicks;
+-          // Ensure trim end doesn't go below trim start
+-          newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
++          // When dragging right (positive delta), we want to decrease trim_end (show more)
++          // When dragging left (negative delta), we want to increase trim_end (show less)
++          newTrimEndTicks = oldTrimEndTicks - deltaTicks;
++          // Ensure constraints
++          const maxTrimEnd = track.duration_ticks - oldTrimStartTicks - 1;
++          newTrimEndTicks = Math.min(Math.max(0, newTrimEndTicks), maxTrimEnd);
+         }
+         
+         actions.push(new Actions.InstanceResize(

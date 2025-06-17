@@ -42,20 +42,22 @@ export interface CombinedTrack {
   trim_end_ticks?: number | null;
   duration_ticks?: number | null;
   track_number?: number | null;
+  instance_metadata?: {
+    instances: TrackInstance[];
+  };
   track: AudioTrackRead | MidiTrackRead | SamplerTrackRead | DrumTrackRead;
   dirty?: boolean; // Client-side only: true if track has unsaved changes
-  instances?: TrackInstance[]; // Client-side only: array of track instances on timeline
 }
 
 /**
  * Represents an instance (clip) of a track on the timeline
  */
 export interface TrackInstance {
-  id: string;
-  x_position: number;
-  y_position: number;
-  trim_start_ticks: number;
-  trim_end_ticks: number;
+  id: number;              // Simple incrementing integer
+  x: number;               // Horizontal position in ticks
+  y: number;               // Vertical position in pixels
+  trim_start_ticks: number; // How many ticks from source start to skip
+  trim_end_ticks: number;   // How many ticks from source end to skip
 }
 /**
  * API response model for MIDI track data

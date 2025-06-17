@@ -57,6 +57,7 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
   };
 
   const undo = async () => {
+    console.log('[HistorySlice] Undo called');
     const { _withErrorHandling } = rootGet();
 
      if (!historyManager) {
@@ -69,9 +70,12 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
     }
 
     const undoAction = async () => {
+        console.log('[HistorySlice] canUndo:', historyManager.canUndo());
         if (historyManager.canUndo()) {
-             await historyManager.undo();
+            console.log('[HistorySlice] Executing undo...');
+            await historyManager.undo();
             _updateHistoryState();
+            console.log('[HistorySlice] Undo completed');
         } else {
             console.warn("Undo called but nothing to undo.");
         }
@@ -81,6 +85,7 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
   };
 
   const redo = async () => {
+    console.log('[HistorySlice] Redo called');
     const { _withErrorHandling } = rootGet();
 
      if (!historyManager) {
@@ -93,9 +98,12 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
     }
 
     const redoAction = async () => {
+        console.log('[HistorySlice] canRedo:', historyManager.canRedo());
         if (historyManager.canRedo()) {
+            console.log('[HistorySlice] Executing redo...');
             await historyManager.redo();
             _updateHistoryState();
+            console.log('[HistorySlice] Redo completed');
         } else {
              console.warn("Redo called but nothing to redo.");
         }

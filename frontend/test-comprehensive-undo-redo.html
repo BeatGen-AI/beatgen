@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Comprehensive Undo/Redo Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+        #status {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+        .test-group {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background: #f5f5f5;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Comprehensive Undo/Redo Test Suite</h1>
+    
+    <div class="test-group">
+        <h2>Test 1: Single Track Operations</h2>
+        <button onclick="runTest1()">Run Test 1</button>
+        <p>Tests: Duplicate track → Undo → Redo</p>
+    </div>
+    
+    <div class="test-group">
+        <h2>Test 2: Multiple Instance Operations</h2>
+        <button onclick="runTest2()">Run Test 2</button>
+        <p>Tests: Add multiple instances to a track → Undo each → Redo all</p>
+    </div>
+    
+    <div class="test-group">
+        <h2>Test 3: Multiple Track Operations</h2>
+        <button onclick="runTest3()">Run Test 3</button>
+        <p>Tests: Duplicate multiple tracks → Undo → Redo</p>
+    </div>
+    
+    <div class="test-group">
+        <h2>Test 4: Combined Track & Instance Operations</h2>
+        <button onclick="runTest4()">Run Test 4</button>
+        <p>Tests: Multiple tracks with multiple instances → Group move → Undo → Redo</p>
+    </div>
+    
+    <div class="test-group">
+        <h2>Test 5: Complex Undo/Redo Chain</h2>
+        <button onclick="runTest5()">Run Test 5</button>
+        <p>Tests: Multiple operations → Undo several → Redo some → Add more → Undo all</p>
+    </div>
+    
+    <button onclick="clearStatus()">Clear Log</button>
+    
+    <div id="status"></div>
+    
+    <script>
+        function log(message, type = 'info') {
+            const status = document.getElementById('status');
+            const timestamp = new Date().toLocaleTimeString();
+            const colorClass = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            status.innerHTML += `<span class="${colorClass}">[${timestamp}] ${message}</span>\n`;
+            status.scrollTop = status.scrollHeight;
+        }
+        
+        function clearStatus() {
+            document.getElementById('status').innerHTML = '';
+        }
+        
+        async function waitForStore() {
+            while (!window.studioStore) {
+                log('Waiting for store...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            return window.studioStore;
+        }
+        
+        async function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        // Test 1: Single Track Operations
+        async function runTest1() {
+            log('\n=== TEST 1: SINGLE TRACK OPERATIONS ===\n', 'info');
+            
+            try {
+                const store = await waitForStore();
+                const state = store.getState();
+                
+                if (state.tracks.length === 0) {
+                    log('No tracks available. Please create at least one track first.', 'error');
+                    return;
+                }
+                
+                const track = state.tracks[0];
+                log(`Starting with track: "${track.name}" (${track.id})`);
+                log(`Initial track count: ${state.tracks.length}`);
+                
+                // Duplicate track
+                log('\nDuplicating track...');
+                await state.duplicateTrack(track.id);
+                await delay(100);
+                
+                let currentState = store.getState();
+                log(`After duplicate: ${currentState.tracks.length} tracks`);
+                log(`Can undo: ${currentState.canUndo}, Can redo: ${currentState.canRedo}`);
+                
+                // Undo
+                log('\nUndoing...');
+                await currentState.undo();
+                await delay(100);
+                
+                currentState = store.getState();
+                log(`After undo: ${currentState.tracks.length} tracks`);
+                log(`Can undo: ${currentState.canUndo}, Can redo: ${currentState.canRedo}`);
+                
+                // Redo
+                log('\nRedoing...');
+                await currentState.redo();
+                await delay(100);
+                
+                currentState = store.getState();
+                log(`After redo: ${currentState.tracks.length} tracks`);
+                log(`Can undo: ${currentState.canUndo}, Can redo: ${currentState.canRedo}`);
+                
+                log('\nTest 1 completed successfully!', 'success');
+                
+            } catch (error) {
+                log(`Test 1 failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        // Test 2: Multiple Instance Operations
+        async function runTest2() {
+            log('\n=== TEST 2: MULTIPLE INSTANCE OPERATIONS ===\n', 'info');
+            
+            try {
+                const store = await waitForStore();
+                const state = store.getState();
+                
+                if (state.tracks.length === 0) {
+                    log('No tracks available. Please create at least one track first.', 'error');
+                    return;
+                }
+                
+                const track = state.tracks[0];
+                log(`Working with track: "${track.name}" (${track.id})`);
+                
+                const initialInstances = track.instance_metadata?.instances?.length || 0;
+                log(`Initial instances: ${initialInstances}`);
+                
+                // Add 3 instances
+                const instanceIds = [];
+                for (let i = 0; i < 3; i++) {
+                    log(`\nAdding instance ${i + 1}...`);
+                    const instanceId = await state.addTrackInstance(track.id, { x: 200 + (i * 300), y: 0 });
+                    instanceIds.push(instanceId);
+                    await delay(100);
+                    
+                    const currentTrack = store.getState().tracks.find(t => t.id === track.id);
+                    log(`Instances after add: ${currentTrack?.instance_metadata?.instances?.length || 0}`);
+                }
+                
+                // Undo each instance addition
+                for (let i = 2; i >= 0; i--) {
+                    log(`\nUndoing instance ${i + 1} addition...`);
+                    await store.getState().undo();
+                    await delay(100);
+                    
+                    const currentTrack = store.getState().tracks.find(t => t.id === track.id);
+                    log(`Instances after undo: ${currentTrack?.instance_metadata?.instances?.length || 0}`);
+                }
+                
+                // Redo all
+                for (let i = 0; i < 3; i++) {
+                    log(`\nRedoing instance ${i + 1} addition...`);
+                    await store.getState().redo();
+                    await delay(100);
+                    
+                    const currentTrack = store.getState().tracks.find(t => t.id === track.id);
+                    log(`Instances after redo: ${currentTrack?.instance_metadata?.instances?.length || 0}`);
+                }
+                
+                log('\nTest 2 completed successfully!', 'success');
+                
+            } catch (error) {
+                log(`Test 2 failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        // Test 3: Multiple Track Operations
+        async function runTest3() {
+            log('\n=== TEST 3: MULTIPLE TRACK OPERATIONS ===\n', 'info');
+            
+            try {
+                const store = await waitForStore();
+                const state = store.getState();
+                
+                if (state.tracks.length < 2) {
+                    log('Need at least 2 tracks. Please create more tracks first.', 'error');
+                    return;
+                }
+                
+                const trackIds = state.tracks.slice(0, 2).map(t => t.id);
+                log(`Working with tracks: ${trackIds.join(', ')}`);
+                log(`Initial track count: ${state.tracks.length}`);
+                
+                // Duplicate multiple tracks
+                log('\nDuplicating multiple tracks...');
+                const duplicatedTracks = await state.duplicateMultipleTracks(trackIds);
+                await delay(100);
+                
+                let currentState = store.getState();
+                log(`After duplicate: ${currentState.tracks.length} tracks`);
+                log(`Duplicated ${duplicatedTracks.length} tracks`);
+                
+                // Undo
+                log('\nUndoing multiple track duplication...');
+                await currentState.undo();
+                await delay(100);
+                
+                currentState = store.getState();
+                log(`After undo: ${currentState.tracks.length} tracks`);
+                
+                // Redo
+                log('\nRedoing multiple track duplication...');
+                await currentState.redo();
+                await delay(100);
+                
+                currentState = store.getState();
+                log(`After redo: ${currentState.tracks.length} tracks`);
+                
+                log('\nTest 3 completed successfully!', 'success');
+                
+            } catch (error) {
+                log(`Test 3 failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        // Test 4: Combined Track & Instance Operations
+        async function runTest4() {
+            log('\n=== TEST 4: COMBINED TRACK & INSTANCE OPERATIONS ===\n', 'info');
+            
+            try {
+                const store = await waitForStore();
+                const state = store.getState();
+                
+                if (state.tracks.length < 2) {
+                    log('Need at least 2 tracks. Please create more tracks first.', 'error');
+                    return;
+                }
+                
+                // Add instances to multiple tracks
+                const tracksToUse = state.tracks.slice(0, 2);
+                const instanceUpdates = [];
+                
+                for (const track of tracksToUse) {
+                    log(`\nAdding instance to track "${track.name}"...`);
+                    const instanceId = await state.addTrackInstance(track.id, { x: 400, y: 0 });
+                    await delay(100);
+                    
+                    if (instanceId) {
+                        instanceUpdates.push({
+                            trackId: track.id,
+                            instanceId: instanceId,
+                            deltaX: 200,
+                            deltaY: 0
+                        });
+                    }
+                }
+                
+                // Group move instances
+                log('\nMoving multiple instances...');
+                await state.updateMultipleInstancePositions(instanceUpdates);
+                await delay(100);
+                
+                // Check positions
+                let currentState = store.getState();
+                for (const update of instanceUpdates) {
+                    const track = currentState.tracks.find(t => t.id === update.trackId);
+                    const instance = track?.instance_metadata?.instances?.find(i => i.id === parseInt(update.instanceId));
+                    log(`Instance ${update.instanceId} position: x=${instance?.x}, y=${instance?.y}`);
+                }
+                
+                // Undo group move
+                log('\nUndoing group move...');
+                await currentState.undo();
+                await delay(100);
+                
+                // Check positions after undo
+                currentState = store.getState();
+                for (const update of instanceUpdates) {
+                    const track = currentState.tracks.find(t => t.id === update.trackId);
+                    const instance = track?.instance_metadata?.instances?.find(i => i.id === parseInt(update.instanceId));
+                    log(`Instance ${update.instanceId} position after undo: x=${instance?.x}, y=${instance?.y}`);
+                }
+                
+                // Redo group move
+                log('\nRedoing group move...');
+                await currentState.redo();
+                await delay(100);
+                
+                // Check positions after redo
+                currentState = store.getState();
+                for (const update of instanceUpdates) {
+                    const track = currentState.tracks.find(t => t.id === update.trackId);
+                    const instance = track?.instance_metadata?.instances?.find(i => i.id === parseInt(update.instanceId));
+                    log(`Instance ${update.instanceId} position after redo: x=${instance?.x}, y=${instance?.y}`);
+                }
+                
+                log('\nTest 4 completed successfully!', 'success');
+                
+            } catch (error) {
+                log(`Test 4 failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        // Test 5: Complex Undo/Redo Chain
+        async function runTest5() {
+            log('\n=== TEST 5: COMPLEX UNDO/REDO CHAIN ===\n', 'info');
+            
+            try {
+                const store = await waitForStore();
+                const state = store.getState();
+                
+                if (state.tracks.length === 0) {
+                    log('No tracks available. Please create at least one track first.', 'error');
+                    return;
+                }
+                
+                const track = state.tracks[0];
+                const operations = [];
+                
+                // Operation 1: Add instance
+                log('\nOperation 1: Adding instance...');
+                const instance1 = await state.addTrackInstance(track.id, { x: 100, y: 0 });
+                operations.push('add_instance_1');
+                await delay(100);
+                
+                // Operation 2: Duplicate track
+                log('Operation 2: Duplicating track...');
+                await state.duplicateTrack(track.id);
+                operations.push('duplicate_track');
+                await delay(100);
+                
+                // Operation 3: Add another instance
+                log('Operation 3: Adding another instance...');
+                const instance2 = await state.addTrackInstance(track.id, { x: 300, y: 0 });
+                operations.push('add_instance_2');
+                await delay(100);
+                
+                // Show current state
+                let currentState = store.getState();
+                log(`\nCurrent state: ${currentState.tracks.length} tracks, can undo: ${currentState.canUndo}`);
+                
+                // Undo 2 operations
+                log('\nUndoing 2 operations...');
+                await currentState.undo();
+                await delay(100);
+                await store.getState().undo();
+                await delay(100);
+                
+                currentState = store.getState();
+                log(`After 2 undos: ${currentState.tracks.length} tracks, can redo: ${currentState.canRedo}`);
+                
+                // Redo 1 operation
+                log('\nRedoing 1 operation...');
+                await currentState.redo();
+                await delay(100);
+                
+                currentState = store.getState();
+                log(`After 1 redo: ${currentState.tracks.length} tracks`);
+                
+                // Add new operation
+                log('\nAdding new operation (this should clear redo stack)...');
+                const instance3 = await currentState.addTrackInstance(track.id, { x: 500, y: 0 });
+                await delay(100);
+                
+                currentState = store.getState();
+                log(`After new operation: can redo: ${currentState.canRedo} (should be false)`);
+                
+                // Undo all the way
+                log('\nUndoing all operations...');
+                while (store.getState().canUndo) {
+                    await store.getState().undo();
+                    await delay(50);
+                }
+                
+                currentState = store.getState();
+                log(`Final state: ${currentState.tracks.length} tracks, can undo: ${currentState.canUndo}`);
+                
+                log('\nTest 5 completed successfully!', 'success');
+                
+            } catch (error) {
+                log(`Test 5 failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        // Make store accessible
+        window.addEventListener('load', async () => {
+            // Try to get the store from the Studio component
+            const checkForStore = setInterval(() => {
+                if (window.useStudioStore) {
+                    window.studioStore = window.useStudioStore;
+                    clearInterval(checkForStore);
+                    log('Store is ready for testing!', 'success');
+                }
+            }, 500);
+        });
+    </script>
+</body>
+</html>

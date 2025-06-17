@@ -34,19 +34,54 @@ export class InstanceMove extends BaseAction {
     }
 
     async execute(): Promise<void> {
-        const { updateTrackInstance } = this.get();
-        updateTrackInstance(this.trackId, this.instanceId, {
-            x_position: this.newX,
-            y_position: this.newY
+        console.log('[InstanceMove] Execute called with:', {
+            trackId: this.trackId,
+            instanceId: this.instanceId,
+            oldX: this.oldX,
+            oldY: this.oldY,
+            newX: this.newX,
+            newY: this.newY
         });
+        
+        const { updateTrackInstance, tracks } = this.get();
+        
+        // Verify track exists before update
+        const track = tracks.find(t => t.id === this.trackId);
+        if (!track) {
+            console.error('[InstanceMove] Track not found:', this.trackId);
+            return;
+        }
+        
+        // Verify instance exists
+        const numericId = parseInt(this.instanceId);
+        const instance = track.instance_metadata?.instances?.find(inst => inst.id === numericId);
+        if (!instance) {
+            console.error('[InstanceMove] Instance not found:', this.instanceId, 'in track:', this.trackId);
+            return;
+        }
+        
+        console.log('[InstanceMove] Current instance position:', { x: instance.x, y: instance.y });
+        console.log('[InstanceMove] Updating to new position:', { x: this.newX, y: this.newY });
+        
+        updateTrackInstance(this.trackId, this.instanceId, {
+            x: this.newX,
+            y: this.newY
+        });
+        
+        // Verify the update worked
+        const updatedState = this.get();
+        const updatedTrack = updatedState.tracks.find(t => t.id === this.trackId);
+        const updatedInstance = updatedTrack?.instance_metadata?.instances?.find(inst => inst.id === numericId);
+        console.log('[InstanceMove] After update - instance position:', updatedInstance);
+        
         this.log('Execute', { trackId: this.trackId, instanceId: this.instanceId, newX: this.newX, newY: this.newY });
     }
 
     async undo(): Promise<void> {
         const { updateTrackInstance } = this.get();
         updateTrackInstance(this.trackId, this.instanceId, {
-            x_position: this.oldX,
-            y_position: this.oldY
+            x: this.oldX,
+            y: this.oldY
         });
         this.log('Undo', { trackId: this.trackId, instanceId: this.instanceId, oldX: this.oldX, oldY: this.oldY });
     }
@@ -93,7 +128,7 @@ export class InstanceResize extends BaseAction {
         updateTrackInstance(this.trackId, this.instanceId, {
             trim_start_ticks: this.newTrimStart,
             trim_end_ticks: this.newTrimEnd,
-            x_position: this.newX
+            x: this.newX
         });
         this.log('Execute', { 
             trackId: this.trackId, 
@@ -109,7 +144,7 @@ export class InstanceResize extends BaseAction {
         updateTrackInstance(this.trackId, this.instanceId, {
             trim_start_ticks: this.oldTrimStart,
             trim_end_ticks: this.oldTrimEnd,
-            x_position: this.oldX
+            x: this.oldX
         });
         this.log('Undo', { 
             trackId: this.trackId, 
@@ -140,24 +175,50 @@ export class InstanceAdd extends BaseAction {
     }
 
     async execute(): Promise<void> {
-        const { updateTrackState } = this.get();
-        const track = this.get().tracks.find(t => t.id === this.trackId);
-        if (!track) return;
+        const { updateTrackState, tracks } = this.get();
+        const track = tracks.find(t => t.id === this.trackId);
+        if (!track) {
+            console.error(`[InstanceAdd] Execute failed: Track ${this.trackId} not found`);
+            return;
+        }
 
-        const instances = track.instances || [];
+        const instances = track.instance_metadata?.instances || [];
+        // Check if instance already exists
+        const exists = instances.some(inst => inst.id === this.instance.id);
+        if (exists) {
+            console.warn(`[InstanceAdd] Instance ${this.instance.id} already exists in track ${this.trackId}`);
+            return;
+        }
+
         updateTrackState(this.trackId, {
-            instances: [...instances, this.instance]
+            instance_metadata: {
+                instances: [...instances, this.instance]
+            }
         });
         this.log('Execute', { trackId: this.trackId, instanceId: this.instance.id });
     }
 
     async undo(): Promise<void> {
-        const { updateTrackState } = this.get();
-        const track = this.get().tracks.find(t => t.id === this.trackId);
-        if (!track) return;
+        const { updateTrackState, tracks } = this.get();
+        const track = tracks.find(t => t.id === this.trackId);
+        if (!track) {
+            console.error(`[InstanceAdd] Undo failed: Track ${this.trackId} not found`);
+            return;
+        }
 
-        const instances = (track.instances || []).filter(inst => inst.id !== this.instance.id);
-        updateTrackState(this.trackId, { instances });
+        const instances = track.instance_metadata?.instances || [];
+        const filtered = instances.filter(inst => inst.id !== this.instance.id);
+        
+        if (filtered.length === instances.length) {
+            console.warn(`[InstanceAdd] Undo: Instance ${this.instance.id} not found in track ${this.trackId}`);
+            return;
+        }
+
+        updateTrackState(this.trackId, { 
+            instance_metadata: {
+                instances: filtered
+            }
+        });
         this.log('Undo', { trackId: this.trackId, instanceId: this.instance.id });
     }
 }
@@ -185,18 +246,39 @@ export class InstanceDelete extends BaseAction {
 
     async execute(): Promise<void> {
         const { deleteTrackInstance } = this.get();
-        deleteTrackInstance(this.trackId, this.instance.id);
+        deleteTrackInstance(this.trackId, String(this.instance.id));
         this.log('Execute', { trackId: this.trackId, instanceId: this.instance.id });
     }
 
     async undo(): Promise<void> {
-        const { updateTrackState } = this.get();
-        const track = this.get().tracks.find(t => t.id === this.trackId);
-        if (!track) return;
+        const { updateTrackState, tracks } = this.get();
+        const track = tracks.find(t => t.id === this.trackId);
+        if (!track) {
+            console.error(`[InstanceDelete] Undo failed: Track ${this.trackId} not found`);
+            return;
+        }
 
-        const instances = [...(track.instances || [])];
+        const instances = [...(track.instance_metadata?.instances || [])];
+        
+        // Validate instance index
+        if (this.instanceIndex < 0 || this.instanceIndex > instances.length) {
+            console.error(`[InstanceDelete] Undo failed: Invalid instance index ${this.instanceIndex}`);
+            return;
+        }
+        
+        // Check if instance already exists (shouldn't happen, but be safe)
+        const exists = instances.some(inst => inst.id === this.instance.id);
+        if (exists) {
+            console.warn(`[InstanceDelete] Undo: Instance ${this.instance.id} already exists in track ${this.trackId}`);
+            return;
+        }
+        
         instances.splice(this.instanceIndex, 0, this.instance);
-        updateTrackState(this.trackId, { instances });
+        updateTrackState(this.trackId, { 
+            instance_metadata: {
+                instances
+            }
+        });
         this.log('Undo', { trackId: this.trackId, instanceId: this.instance.id });
     }
 }

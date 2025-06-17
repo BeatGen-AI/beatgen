@@ -1,0 +1,218 @@
+diff --git a/frontend/src/studio/components/shared/konva/useKonvaInteractions.ts b/frontend/src/studio/components/shared/konva/useKonvaInteractions.ts
+index ad56ed1..2e0a3e9 100644
+--- a/frontend/src/studio/components/shared/konva/useKonvaInteractions.ts
++++ b/frontend/src/studio/components/shared/konva/useKonvaInteractions.ts
+@@ -346,6 +346,13 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
+     const item = items.find(i => i.id === itemId);
+     if (!item) return;
+ 
++    // Check if the item is selected
++    const isItemSelected = selectedIds.has(itemId);
++    
++    // If resizing an unselected track, clear selection
++    if (!isItemSelected) {
++      clearSelection();
++    }
+ 
+     resizeStartRef.current = {
+       mousePos,
+@@ -360,79 +367,127 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
+     if (onResizeStart) {
+       onResizeStart(item, direction);
+     }
+-  }, [items, onResizeStart]);
++  }, [items, selectedIds, clearSelection, onResizeStart]);
+ 
+   // Update resize
+   const updateResize = useCallback((mousePos: Position) => {
+     if (!isResizing || !resizeStartRef.current) return;
+ 
+     const { item, direction, mousePos: startMousePos } = resizeStartRef.current;
+-    const deltaX = pixelsToLogical(mousePos.x - startMousePos.x);
++    const deltaXPixels = mousePos.x - startMousePos.x;
++    const deltaX = pixelsToLogical(deltaXPixels);
++    
++    // Get items to resize - either selected items or just the single item
++    const isItemSelected = selectedIds.has(item.id);
++    const itemsToResize = isItemSelected 
++      ? items.filter(i => selectedIds.has(i.id))
++      : [item];
+     
+     const updates = new Map<string, Dimensions>();
+     
++    // Calculate the resize amount (snapped)
++    let resizeDelta: number;
+     if (direction === 'left') {
+-      // Left resize: change both position and width to keep right edge fixed
+-      // When dragging right (positive deltaX), we want to shrink the track
+-      // When dragging left (negative deltaX), we want to grow the track
+-      const newWidth = Math.max(gridSize, snapToGridValue(item.width - deltaX));
+-      const widthDelta = item.width - newWidth; // How much the width changed
+-      const newX = item.x + widthDelta; // Move position by the width change
+-      
+-      updates.set(item.id, {
+-        start: newX,
+-        width: newWidth,
+-        height: item.height
+-      });
++      // For left resize, we invert the delta
++      resizeDelta = -deltaX;
+     } else {
+-      // Right resize: only change width
+-      const newWidth = Math.max(gridSize, snapToGridValue(item.width + deltaX));
+-      
+-      updates.set(item.id, {
+-        width: newWidth,
+-        height: item.height
+-      });
++      // For right resize, use delta as is
++      resizeDelta = deltaX;
++    }
++    
++    // Snap the resize delta to grid
++    const snappedResizeDelta = snapToGridValue(resizeDelta) - resizeDelta;
++    const finalDelta = resizeDelta + snappedResizeDelta;
++    
++    // Check if any track would go below minimum width
++    let wouldViolateMinimum = false;
++    for (const resizeItem of itemsToResize) {
++      const newWidth = direction === 'left' 
++        ? resizeItem.width - finalDelta 
++        : resizeItem.width + finalDelta;
++      if (newWidth < gridSize) {
++        wouldViolateMinimum = true;
++        break;
++      }
++    }
++    
++    // If any track would violate minimum, don't resize any
++    if (wouldViolateMinimum) {
++      return;
++    }
++    
++    // Apply resize to all items
++    for (const resizeItem of itemsToResize) {
++      if (direction === 'left') {
++        // Left resize: change both position and width
++        const newWidth = resizeItem.width - finalDelta;
++        const newX = resizeItem.x + finalDelta;
++        
++        updates.set(resizeItem.id, {
++          start: newX,
++          width: newWidth,
++          height: resizeItem.height
++        });
++      } else {
++        // Right resize: only change width
++        const newWidth = resizeItem.width + finalDelta;
++        
++        updates.set(resizeItem.id, {
++          width: newWidth,
++          height: resizeItem.height
++        });
++      }
+     }
+ 
+     if (onResizeMove) {
+       onResizeMove(updates);
+     }
+-  }, [isResizing, pixelsToLogical, snapToGridValue, gridSize, onResizeMove]);
++  }, [isResizing, pixelsToLogical, snapToGridValue, gridSize, selectedIds, items, onResizeMove]);
+ 
+   // End resize
+   const endResize = useCallback(() => {
+     if (!isResizing || !resizeStartRef.current) return;
+ 
+-    const item = items.find(i => i.id === resizeStartRef.current!.item.id);
++    const { item } = resizeStartRef.current;
+     const direction = resizeStartRef.current.direction;
+     
+-    if (item) {
+-      const updates = new Map<string, Dimensions>();
++    // Get items that were resized - either selected items or just the single item
++    const isItemSelected = selectedIds.has(item.id);
++    const itemsToResize = isItemSelected 
++      ? items.filter(i => selectedIds.has(i.id))
++      : items.filter(i => i.id === item.id);
++    
++    const updates = new Map<string, Dimensions>();
++    
++    // Collect final dimensions for all resized items
++    for (const resizeItem of itemsToResize) {
++      const currentItem = items.find(i => i.id === resizeItem.id);
++      if (!currentItem) continue;
+       
+       // Include start position for left resize
+       if (direction === 'left') {
+-        updates.set(item.id, {
+-          start: item.x,
+-          width: item.width,
+-          height: item.height
++        updates.set(currentItem.id, {
++          start: currentItem.x,
++          width: currentItem.width,
++          height: currentItem.height
+         });
+       } else {
+-        updates.set(item.id, {
+-          width: item.width,
+-          height: item.height
++        updates.set(currentItem.id, {
++          width: currentItem.width,
++          height: currentItem.height
+         });
+       }
++    }
+ 
+-      if (onResizeEnd) {
+-        onResizeEnd(updates);
+-      }
++    if (onResizeEnd && updates.size > 0) {
++      onResizeEnd(updates);
+     }
+ 
+     setIsResizing(false);
+     setResizingItemId(null);
+     setResizeDirection(null);
+     resizeStartRef.current = null;
+-  }, [isResizing, items, onResizeEnd]);
++  }, [isResizing, items, selectedIds, onResizeEnd]);
+ 
+   // Start rectangle selection
+   const startSelection = useCallback((mousePos: Position) => {
+diff --git a/frontend/src/studio/components/timeline/KonvaTimeline.tsx b/frontend/src/studio/components/timeline/KonvaTimeline.tsx
+index 5868eaf..35e4e94 100644
+--- a/frontend/src/studio/components/timeline/KonvaTimeline.tsx
++++ b/frontend/src/studio/components/timeline/KonvaTimeline.tsx
+@@ -571,7 +571,15 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+             const isSelected = interaction.selectedIds.includes(track.id);
+             const isBeingDragged = interaction.isDragging && isSelected;
+             const isPrimaryDrag = interaction.draggedItemId === track.id;
+-            const isBeingResized = interaction.isResizing && interaction.resizingItemId === track.id;
++            // Check if this track is being resized
++            // If the resizing track is selected, all selected tracks are being resized
++            // Otherwise, only the specific track is being resized
++            const resizingTrackIsSelected = interaction.resizingItemId && interaction.selectedIds.includes(interaction.resizingItemId);
++            const isBeingResized = interaction.isResizing && (
++              resizingTrackIsSelected 
++                ? isSelected  // All selected tracks are being resized
++                : interaction.resizingItemId === track.id  // Only this specific track
++            );
+             
+             // Get the item from konvaItems to get drag position if available
+             const konvaItem = konvaItems.find(item => item.id === track.id);
+diff --git a/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx b/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
+index 61a35db..b5459a4 100644
+--- a/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
++++ b/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
+@@ -214,8 +214,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+         />
+       )}
+       
+-      {/* Custom resize handles */}
+-      {(isHovered || isSelected) && !isDragging && !isResizing && (
++      {/* Custom resize handles - show on hover for all tracks */}
++      {isHovered && !isDragging && !isResizing && (
+         <>
+           {/* Left resize handle */}
+           <Rect

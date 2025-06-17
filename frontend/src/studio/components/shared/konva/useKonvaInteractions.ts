@@ -323,9 +323,10 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     // Get final positions
     const updates = new Map<string, Position>();
     
-    dragStartRef.current.initialOffsets.forEach((offset, itemId) => {
+    dragStartRef.current.itemPositions.forEach((startPos, itemId) => {
       const item = items.find(i => i.id === itemId);
       if (item) {
+        // Return the final position
         updates.set(itemId, { x: item.x, y: item.y });
       }
     });
@@ -336,13 +337,31 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
     setIsDragging(false);
     setDraggedItemId(null);
+    
+    // Store the start positions before clearing
+    const startPositions = dragStartRef.current.itemPositions;
     dragStartRef.current = null;
+    
+    // Make start positions available for delta calculations
+    return startPositions;
   }, [isDragging, items, onDragEnd]);
 
   // Start resize operation
   const startResize = useCallback((itemId: string, direction: 'left' | 'right', mousePos: Position) => {
+    console.log('🔨 useKonvaInteractions - startResize called', {
+      itemId,
+      direction,
+      mousePos,
+      itemsCount: items.length,
+      selectedIds: Array.from(selectedIds)
+    });
+    
     const item = items.find(i => i.id === itemId);
-    if (!item) return;
+    if (!item) {
+      console.error('🔨 useKonvaInteractions - Item not found for resize:', itemId);
+      console.log('Available items:', items.map(i => i.id));
+      return;
+    }
 
     // Check if the item is selected
     const isItemSelected = selectedIds.has(itemId);
@@ -420,39 +439,58 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
   }, [isResizing, pixelsToLogical, snapToGridValue, gridSize, onResizeMove]);
 
   // End resize
-  const endResize = useCallback(() => {
+  const endResize = useCallback((mousePos?: Position) => {
     if (!isResizing || !resizeStartRef.current) return;
 
-    const { item } = resizeStartRef.current;
-    const direction = resizeStartRef.current.direction;
+    const { direction, mousePos: startMousePos, allItems } = resizeStartRef.current;
     
-    // Get items that were resized - either selected items or just the single item
-    const isItemSelected = selectedIds.has(item.id);
-    const itemsToResize = isItemSelected 
-      ? items.filter(i => selectedIds.has(i.id))
-      : items.filter(i => i.id === item.id);
+    // Get final mouse position - use provided position or get from stage
+    let finalMousePos = mousePos;
+    if (!finalMousePos && stage) {
+      const stagePos = stage.getPointerPosition();
+      if (stagePos) {
+        finalMousePos = stagePos;
+      }
+    }
+    
+    if (!finalMousePos) {
+      // If we can't get mouse position, cancel the resize
+      setIsResizing(false);
+      setResizingItemId(null);
+      setResizeDirection(null);
+      resizeStartRef.current = null;
+      return;
+    }
+    
+    // Calculate the final delta
+    const deltaXPixels = finalMousePos.x - startMousePos.x;
+    const deltaX = pixelsToLogical(deltaXPixels);
     
     const updates = new Map<string, Dimensions>();
     
-    // Collect final dimensions for all resized items
-    for (const resizeItem of itemsToResize) {
-      const currentItem = items.find(i => i.id === resizeItem.id);
-      if (!currentItem) continue;
-      
-      // Include start position for left resize
+    // Apply resize to all items using their snapshots
+    allItems.forEach((originalItem) => {
       if (direction === 'left') {
-        updates.set(currentItem.id, {
-          start: currentItem.x,
-          width: currentItem.width,
-          height: currentItem.height
+        // Left resize: change both position and width
+        const newWidth = Math.max(gridSize, snapToGridValue(originalItem.width - deltaX));
+        const widthDelta = originalItem.width - newWidth;
+        const newX = originalItem.x + widthDelta;
+        
+        updates.set(originalItem.id, {
+          start: newX,
+          width: newWidth,
+          height: originalItem.height
         });
       } else {
-        updates.set(currentItem.id, {
-          width: currentItem.width,
-          height: currentItem.height
+        // Right resize: only change width
+        const newWidth = Math.max(gridSize, snapToGridValue(originalItem.width + deltaX));
+        
+        updates.set(originalItem.id, {
+          width: newWidth,
+          height: originalItem.height
         });
       }
-    }
+    });
 
     if (onResizeEnd && updates.size > 0) {
       onResizeEnd(updates);
@@ -462,7 +500,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     setResizingItemId(null);
     setResizeDirection(null);
     resizeStartRef.current = null;
-  }, [isResizing, items, selectedIds, onResizeEnd]);
+  }, [isResizing, stage, pixelsToLogical, snapToGridValue, gridSize, onResizeEnd]);
 
   // Start rectangle selection
   const startSelection = useCallback((mousePos: Position) => {
@@ -579,15 +617,20 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
   }, [stage, isDragging, isResizing, isSelecting, updateDrag, updateResize, updateRectSelection]);
 
   // Handle mouse up
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (!stage) return;
+    
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+    
     if (isDragging) {
       endDrag();
     } else if (isResizing) {
-      endResize();
+      endResize(pos);
     } else if (isSelecting) {
       endSelection();
     }
-  }, [isDragging, isResizing, isSelecting, endDrag, endResize, endSelection]);
+  }, [stage, isDragging, isResizing, isSelecting, endDrag, endResize, endSelection]);
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -656,7 +699,11 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       if (isDragging) {
         endDrag();
       } else if (isResizing) {
-        endResize();
+        // Cancel resize without applying changes
+        setIsResizing(false);
+        setResizingItemId(null);
+        setResizeDirection(null);
+        resizeStartRef.current = null;
       } else if (isSelecting) {
         setIsSelecting(false);
         setSelectionRect(null);
@@ -667,7 +714,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
   }, [
     selectedIds, items, stage, isDragging, isResizing, isSelecting,
     onCopy, onCut, onPaste, onDelete, onDuplicate,
-    selectMultiple, clearSelection, endDrag, endResize,
+    selectMultiple, clearSelection, endDrag,
     pixelsToLogical
   ]);
 
@@ -699,13 +746,22 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       }
     };
 
-    const handleWindowMouseUp = () => {
-      if (isDragging) {
-        endDrag();
-      } else if (isResizing) {
-        endResize();
-      } else if (isSelecting) {
-        endSelection();
+    const handleWindowMouseUp = (e: MouseEvent) => {
+      if (isDragging || isResizing || isSelecting) {
+        const container = stage.container();
+        const rect = container.getBoundingClientRect();
+        const pos = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+        
+        if (isDragging) {
+          endDrag();
+        } else if (isResizing) {
+          endResize(pos);
+        } else if (isSelecting) {
+          endSelection();
+        }
       }
     };
 

@@ -3,7 +3,7 @@ Base models for SQL database entities
 """
 
 from datetime import datetime
-from typing import Optional, Type, List
+from typing import Optional, Type, List, Dict, Any
 from sqlmodel import SQLModel, Field
 from sqlalchemy import TIMESTAMP, Column
 from sqlalchemy.dialects.postgresql import JSONB
@@ -129,6 +129,7 @@ class ProjectTrackBase(TimestampMixin):
     trim_end_ticks: int
     duration_ticks: int
     track_number: int
+    instance_metadata: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSONB))
 
 
 class InstrumentFileBase(FileBase):

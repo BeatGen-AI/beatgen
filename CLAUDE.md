@@ -1,0 +1,1 @@
+- never make any assumptions. if something is unclear or you have a question, ask a question to make your understanding as clear as possible.

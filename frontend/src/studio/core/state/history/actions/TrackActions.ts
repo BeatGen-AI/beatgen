@@ -36,6 +36,8 @@ export class TrackPositionAction extends TrackAction {
     }
     
     private updatePosition(position: Position, operation: string): void {
+        // TrackPositionAction should only update the track's base position
+        // Individual instances are handled by InstanceMove actions
         this.get().updateTrackState(this.trackId, { 
             position: { ...position },
             x_position: position.x, 

@@ -19,9 +19,12 @@ import { PlaybackCursor } from './konva/PlaybackCursor';
 import { TimeRuler } from './konva/TimeRuler';
 import { CombinedTrack } from 'src/platform/types/project';
 import { Position as TrackPosition } from '../track/types';
-import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
+import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks, getTrackColor } from '../../constants/gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
+import { getDefaultInstance, updateMultipleInstances, getInstanceWidth } from '../../utils/trackInstanceUtils';
+import { useStudioStore } from '../../stores/studioStore';
+import { Actions } from '../../core/state/history/actions';
 import Konva from 'konva';
 
 export interface KonvaTimelineProps {
@@ -34,6 +37,7 @@ export interface KonvaTimelineProps {
   timeSignature?: [number, number];
   onTrackPositionChange?: (trackId: string, newPosition: TrackPosition, isDragEnd: boolean) => void;
   onTimeChange?: (newTime: number) => void;
+  updateTrack?: (trackId: string, updates: Partial<CombinedTrack>) => void;
   
   // Selection and tool integration
   selectedTool?: Tool;
@@ -63,6 +67,12 @@ export interface KonvaTimelineProps {
   updateMultipleInstancePositions?: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
   resizeMultipleInstances?: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
   
+  // New instance operations
+  onInstanceCreate?: (trackId: string, x: number, width: number) => void;
+  onInstanceDelete?: (trackId: string, instanceId: number) => void;
+  onBatchInstanceUpdate?: (updates: Map<string, Array<{ id: number; changes: Partial<{ x: number; width: number; name: string }> }>>) => void;
+  onInstanceSplit?: (trackId: string, instanceId: number, splitPosition: number) => void;
+  
   // Zoom control
   onZoomChange?: (newZoom: number) => void;
 }
@@ -90,6 +100,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   timeSignature = [4, 4],
   onTrackPositionChange = () => {},
   onTimeChange = () => {},
+  updateTrack,
   selectedTool = 'select',
   onToolChange,
   showToolbar = false,
@@ -110,6 +121,10 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   onInstanceResizeEnd,
   updateMultipleInstancePositions,
   resizeMultipleInstances,
+  onInstanceCreate,
+  onInstanceDelete,
+  onBatchInstanceUpdate,
+  onInstanceSplit,
   onZoomChange
 }, ref) => {
   // State
@@ -147,6 +162,20 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     const ticksPerBeat = MUSIC_CONSTANTS.pulsesPerQuarterNote;
     const ticksPerMeasure = ticksPerBeat * beatsPerMeasure;
     const result = (GRID_CONSTANTS.measureWidth * internalZoom) / ticksPerMeasure;
+    
+    // Safety check
+    if (isNaN(result) || result <= 0) {
+      console.error('[KonvaTimeline] Invalid pixelsPerTick calculated:', {
+        beatsPerMeasure,
+        ticksPerBeat,
+        ticksPerMeasure,
+        measureWidth: GRID_CONSTANTS.measureWidth,
+        internalZoom,
+        result
+      });
+      return 0.5; // Fallback value
+    }
+    
     return result;
   }, [timeSignature, internalZoom]);
   
@@ -156,85 +185,119 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     return getSnapSizeInPixels(gridSnapSize, effectiveGridSize);
   }, [gridSnapSize, effectiveGridSize]);
   
+  // Store drag start positions for delta calculations
+  const dragStartPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
+  
   // Convert track instances to KonvaItems
   const konvaItems: KonvaItem[] = useMemo(() => {
+    console.log('[KonvaTimeline] Recalculating konvaItems');
     const items: KonvaItem[] = [];
     
     tracks.forEach((track, trackIndex) => {
-      // Ensure track has instances
-      if (!track.instances || track.instances.length === 0) {
-        // Fallback: create a single instance from track data
-        const resizePreviewX = resizePreviewPositions.get(track.id);
-        const resizePreviewWidth = resizePreviewWidths.get(track.id);
-        const dragPreview = dragPreviewPositions.get(track.id);
+      // Get instances from metadata or create default
+      let instances = track.instance_metadata?.instances || [];
+      
+      // Backward compatibility: create default instance if none exist
+      if (instances.length === 0 && track.duration_ticks > 0) {
+        instances = [getDefaultInstance(track)];
+        console.log('[KonvaTimeline] Created default instance for track:', track.id, instances);
+        console.log('[KonvaTimeline] Track instance_metadata:', track.instance_metadata);
         
-        let x = track.x_position || 0;
-        if (resizePreviewX !== undefined) {
+        // Important: We need to update the track with instance_metadata
+        // But we can't do it here in the render function - it would cause infinite loops
+        // Instead, the track should be updated when it's first created or loaded
+      }
+      
+      // Get track color based on its index
+      const trackColor = getTrackColor(trackIndex);
+      
+      instances.forEach(instance => {
+        // Create unique ID combining track and instance
+        const itemId = `${track.id}_${instance.id}`;
+        
+        // Check for preview positions (during drag/resize)
+        const resizePreviewX = resizePreviewPositions.get(itemId);
+        const resizePreviewWidth = resizePreviewWidths.get(itemId);
+        const dragPreview = dragPreviewPositions.get(itemId);
+        
+        // Calculate position
+        let x = instance.x || 0;
+        if (resizePreviewX !== undefined && !isNaN(resizePreviewX)) {
           x = resizePreviewX / pixelsPerTick;
         }
-        if (dragPreview) {
-          x = dragPreview.x / pixelsPerTick;
+        
+        // Safety check for NaN position
+        if (isNaN(x)) {
+          console.error('[KonvaTimeline] Invalid x position:', {
+            itemId,
+            instanceX: instance.x,
+            resizePreviewX,
+            pixelsPerTick
+          });
+          x = 0;
         }
         
-        let y = track.y_position !== null && track.y_position !== undefined 
-          ? track.y_position 
-          : trackIndex * GRID_CONSTANTS.trackHeight;
-        if (dragPreview) {
-          y = dragPreview.y;
+        // Don't use drag preview since we're updating positions directly
+        
+        // Log actual position values
+        console.log('[KonvaTimeline] Item position calculation:', {
+          itemId,
+          instanceX: instance.x,
+          finalX: x,
+          pixelsPerTick
+        });
+        
+        // Calculate Y position - use instance Y
+        let y = instance.y || 0;
+        
+        // Safety check for NaN Y position
+        if (isNaN(y)) {
+          console.error('[KonvaTimeline] Invalid y position:', {
+            itemId,
+            instanceY: instance.y
+          });
+          y = 0;
+        }
+        
+        // Calculate width from track duration and trims
+        let width = getInstanceWidth(track, instance);
+        if (resizePreviewWidth !== undefined && !isNaN(resizePreviewWidth)) {
+          width = resizePreviewWidth / pixelsPerTick;
+        }
+        
+        // Safety check for NaN
+        if (isNaN(width) || width <= 0) {
+          console.error('[KonvaTimeline] Invalid width calculated:', {
+            itemId,
+            width,
+            trackDuration: track.duration_ticks,
+            instanceTrimStart: instance.trim_start_ticks,
+            instanceTrimEnd: instance.trim_end_ticks,
+            resizePreviewWidth
+          });
+          width = 100; // Default fallback width
         }
         
         items.push({
-          id: `${track.id}_instance_default`,
+          id: itemId,
           x,
           y,
-          width: resizePreviewWidth !== undefined 
-            ? resizePreviewWidth / pixelsPerTick
-            : (track.duration_ticks ? 
-              (track.trim_end_ticks || track.duration_ticks) - (track.trim_start_ticks || 0) : 
-              MUSIC_CONSTANTS.pulsesPerQuarterNote * 4),
+          width,
           height: GRID_CONSTANTS.trackHeight,
           type: 'track' as const,
-          data: { ...track, instanceId: `${track.id}_instance_default` }
+          data: {
+            trackId: track.id,
+            track,
+            instanceId: instance.id,
+            instance,
+            color: trackColor // Pass color from track
+          }
         });
-      } else {
-        // Create items for each instance
-        track.instances.forEach(instance => {
-          const resizePreviewX = resizePreviewPositions.get(instance.id);
-          const resizePreviewWidth = resizePreviewWidths.get(instance.id);
-          const dragPreview = dragPreviewPositions.get(instance.id);
-          
-          let x = instance.x_position;
-          if (resizePreviewX !== undefined) {
-            x = resizePreviewX / pixelsPerTick;
-          }
-          if (dragPreview) {
-            x = dragPreview.x / pixelsPerTick;
-          }
-          
-          let y = instance.y_position;
-          if (dragPreview) {
-            y = dragPreview.y;
-          }
-          
-          const width = instance.trim_end_ticks - instance.trim_start_ticks;
-          
-          items.push({
-            id: instance.id,
-            x,
-            y,
-            width: resizePreviewWidth !== undefined 
-              ? resizePreviewWidth / pixelsPerTick
-              : width,
-            height: GRID_CONSTANTS.trackHeight,
-            type: 'track' as const,
-            data: { ...track, instanceId: instance.id, instance }
-          });
-        });
-      }
+      });
     });
     
     return items;
-  }, [tracks, resizePreviewPositions, resizePreviewWidths, dragPreviewPositions, pixelsPerTick]);
+  }, [tracks, resizePreviewPositions, resizePreviewWidths, dragPreviewPositions, pixelsPerTick, selectedTrackIds]);
   
   // Get stage from direct Stage ref
   const [stage, setStage] = useState<Konva.Stage | null>(null);
@@ -254,62 +317,105 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       onTrackSelect?.(ids);
     },
     
+    onDragStart: (items) => {
+      // Store initial positions when drag starts
+      dragStartPositions.current.clear();
+      items.forEach(item => {
+        dragStartPositions.current.set(item.id, { x: item.x, y: item.y });
+      });
+    },
+    
+    
     onDragMove: (updates) => {
-      // Convert positions to pixels for display preview
-      const newDragPositions = new Map<string, { x: number; y: number }>();
-      
-      updates.forEach((pos, trackId) => {
-        newDragPositions.set(trackId, {
-          x: pos.x * pixelsPerTick, // Convert to pixels for display
-          y: pos.y
-        });
+      // Always handle as instance moves - update positions directly
+      updates.forEach((pos, itemId) => {
+        const lastUnderscoreIndex = itemId.lastIndexOf('_');
+        if (lastUnderscoreIndex === -1) return;
+        
+        const trackId = itemId.substring(0, lastUnderscoreIndex);
+        const instanceIdStr = itemId.substring(lastUnderscoreIndex + 1);
+        
+        console.log('[KonvaTimeline] Drag move - updating instance:', { trackId, instanceIdStr, x: pos.x, y: pos.y });
+        
+        // Update instance position during drag (no history)
+        onInstancePositionChange?.(trackId, instanceIdStr, { x: pos.x, y: pos.y }, false);
       });
       
-      setDragPreviewPositions(newDragPositions);
+      // Clear any drag preview since we're updating positions directly
+      setDragPreviewPositions(new Map());
     },
     
     onDragEnd: (updates) => {
-      // Clear drag preview
-      setDragPreviewPositions(new Map());
+      console.log('[KonvaTimeline] onDragEnd called with updates:', updates);
       
-      // Check if this is a group drag
-      if (updates.size > 1) {
-        // Group drag - prepare instance updates
+      // Clear drag preview AFTER we process the updates
+      const clearPreview = () => {
+        console.log('[KonvaTimeline] Clearing drag preview');
+        setDragPreviewPositions(new Map());
+      };
+      
+      // We'll clear drag start positions at the end
+      const clearDragStart = () => {
+        console.log('[KonvaTimeline] Clearing drag start positions');
+        dragStartPositions.current.clear();
+      };
+      
+      // Always handle as instance moves - each update is for a specific instance
+      console.log('[KonvaTimeline] Processing instance position updates');
+      
+      // Check if we're moving multiple instances
+      if (updates.size > 1 && updateMultipleInstancePositions) {
+        // Multiple instances selected - batch update
         const instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}> = [];
         
-        updates.forEach((pos, instanceId) => {
-          // Find the track and instance
-          const item = konvaItems.find(item => item.id === instanceId);
-          if (item && item.data) {
-            const trackId = item.data.id;
-            const instance = item.data.instance;
-            if (instance) {
-              const deltaX = pos.x - instance.x_position;
-              const deltaY = pos.y - instance.y_position;
-              instanceUpdates.push({ trackId, instanceId, deltaX, deltaY });
-            }
+        updates.forEach((pos, itemId) => {
+          const lastUnderscoreIndex = itemId.lastIndexOf('_');
+          if (lastUnderscoreIndex === -1) return;
+          
+          const trackId = itemId.substring(0, lastUnderscoreIndex);
+          const instanceIdStr = itemId.substring(lastUnderscoreIndex + 1);
+          
+          // Get original position
+          const originalPos = dragStartPositions.current.get(itemId);
+          if (!originalPos) {
+            console.error('[KonvaTimeline] No drag start position found for:', itemId);
+            return;
           }
+          
+          const deltaX = pos.x - originalPos.x;
+          const deltaY = pos.y - originalPos.y;
+          
+          instanceUpdates.push({
+            trackId,
+            instanceId: instanceIdStr,
+            deltaX,
+            deltaY
+          });
         });
         
-        // Use the group instance update function
-        if (updateMultipleInstancePositions) {
-          updateMultipleInstancePositions(instanceUpdates);
-        }
+        console.log('[KonvaTimeline] Batch updating multiple instances:', instanceUpdates);
+        updateMultipleInstancePositions(instanceUpdates);
+        
       } else {
-        // Single instance drag
-        updates.forEach((pos, instanceId) => {
-          const item = konvaItems.find(item => item.id === instanceId);
-          if (item && item.data) {
-            const trackId = item.data.id;
-            if (onInstancePositionChange) {
-              onInstancePositionChange(trackId, instanceId, {
-                x: pos.x,
-                y: pos.y
-              }, true);
-            }
-          }
+        // Single instance - just update it
+        updates.forEach((pos, itemId) => {
+          // Parse composite ID
+          const lastUnderscoreIndex = itemId.lastIndexOf('_');
+          if (lastUnderscoreIndex === -1) return;
+          
+          const trackId = itemId.substring(0, lastUnderscoreIndex);
+          const instanceIdStr = itemId.substring(lastUnderscoreIndex + 1);
+          
+          console.log('[KonvaTimeline] Drag end - finalizing instance:', { trackId, instanceIdStr, x: pos.x, y: pos.y });
+          
+          // Call position change with isDragEnd=true to create history
+          onInstancePositionChange?.(trackId, instanceIdStr, { x: pos.x, y: pos.y }, true);
         });
       }
+      
+      // Clear immediately since we're not using preview for instances
+      clearDragStart();
+      clearPreview();
     },
     
     onResizeMove: (updates) => {
@@ -317,16 +423,16 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       const newPreviewWidths = new Map(resizePreviewWidths);
       const newPreviewPositions = new Map(resizePreviewPositions);
       
-      updates.forEach((dim, trackId) => {
-        if (dim.width !== undefined) {
+      updates.forEach((dim, itemId) => {
+        if (dim.width !== undefined && !isNaN(dim.width)) {
           // Convert logical width (ticks) to pixels for preview
           const widthInPixels = dim.width * pixelsPerTick;
-          newPreviewWidths.set(trackId, widthInPixels);
+          newPreviewWidths.set(itemId, widthInPixels);
         }
-        if (dim.start !== undefined) {
+        if (dim.start !== undefined && !isNaN(dim.start)) {
           // Convert logical position (ticks) to pixels for preview
           const xInPixels = dim.start * pixelsPerTick;
-          newPreviewPositions.set(trackId, xInPixels);
+          newPreviewPositions.set(itemId, xInPixels);
         }
       });
       
@@ -339,58 +445,112 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       setResizePreviewWidths(new Map());
       setResizePreviewPositions(new Map());
       
-      // Check if this is a group resize
-      if (updates.size > 1 && resizeMultipleInstances) {
-        // Group resize - prepare instance updates
-        const instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}> = [];
+      // Handle resize end for each item
+      updates.forEach((dim, itemId) => {
+        const item = konvaItems.find(item => item.id === itemId);
+        if (!item || !item.data) return;
         
-        updates.forEach((dim, instanceId) => {
-          const item = konvaItems.find(item => item.id === instanceId);
+        const trackId = item.data.trackId;
+        const instance = item.data.instance;
+        const track = item.data.track;
+        
+        if (!instance || !onInstanceResizeEnd) return;
+        
+        // Extract instance ID
+        const instanceIdNum = parseInt(itemId.split('_').pop() || '0');
+        
+        // For left resize
+        if (dim.start !== undefined && dim.width !== undefined) {
+          const positionDeltaTicks = dim.start - instance.x;
+          const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
+          onInstanceResizeEnd(trackId, String(instanceIdNum), deltaPixels, 'left');
+        } 
+        // For right resize
+        else if (dim.width !== undefined) {
+          const currentWidthTicks = getInstanceWidth(track, instance);
+          const newWidthTicks = dim.width;
+          const deltaTicks = newWidthTicks - currentWidthTicks;
+          const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
+          onInstanceResizeEnd(trackId, String(instanceIdNum), deltaPixels, 'right');
+        }
+      });
+        // Group resize - collect all updates and batch them
+        const trackUpdates = new Map<string, Array<{ id: number; changes: Partial<{ x: number; y: number; trim_start_ticks: number; trim_end_ticks: number }> }>>();
+        
+        updates.forEach((dim, itemId) => {
+          const item = konvaItems.find(item => item.id === itemId);
           if (item && item.data) {
-            const trackId = item.data.id;
+            const trackId = item.data.trackId;
             const instance = item.data.instance;
+            const track = item.data.track;
             if (instance) {
-              // Determine resize direction and delta
+              // Extract instance ID from composite itemId
+              const instanceIdNum = parseInt(itemId.split('_').pop() || '0');
+              
+              let changes: Partial<{ x: number; y: number; trim_start_ticks: number; trim_end_ticks: number }> = {};
+              
+              // For left resize, we need to update position and trim_start
               if (dim.start !== undefined && dim.width !== undefined) {
                 // Left resize
-                const positionDeltaTicks = dim.start - instance.x_position;
-                const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
-                instanceUpdates.push({ trackId, instanceId, widthDelta: deltaPixels, anchor: 'left' });
+                const positionDeltaTicks = dim.start - instance.x;
+                const deltaTicks = positionDeltaTicks;
+                
+                changes.x = instance.x + deltaTicks;
+                changes.trim_start_ticks = Math.max(0, instance.trim_start_ticks + deltaTicks);
               } else if (dim.width !== undefined) {
-                // Right resize
-                const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
+                // Right resize - only width changed, update trim_end
+                const currentWidthTicks = getInstanceWidth(track, instance);
                 const newWidthTicks = dim.width;
                 const deltaTicks = newWidthTicks - currentWidthTicks;
-                const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
-                instanceUpdates.push({ trackId, instanceId, widthDelta: deltaPixels, anchor: 'right' });
+                
+                // When width increases (positive delta), trim_end should decrease
+                const newTrimEnd = Math.max(0, instance.trim_end_ticks - deltaTicks);
+                const maxTrimEnd = track.duration_ticks - instance.trim_start_ticks - 1;
+                changes.trim_end_ticks = Math.min(newTrimEnd, maxTrimEnd);
               }
+              
+              // Add to batch updates
+              if (!trackUpdates.has(trackId)) {
+                trackUpdates.set(trackId, []);
+              }
+              trackUpdates.get(trackId)!.push({
+                id: instanceIdNum,
+                changes
+              });
             }
           }
         });
         
-        // Use the group resize function
-        resizeMultipleInstances(instanceUpdates);
+        // Execute batch update
+        if (trackUpdates.size > 0) {
+          onBatchInstanceUpdate(trackUpdates);
+        }
       } else {
         // Single instance resize
-        updates.forEach((dim, instanceId) => {
-          const item = konvaItems.find(item => item.id === instanceId);
+        updates.forEach((dim, itemId) => {
+          const item = konvaItems.find(item => item.id === itemId);
           if (item && item.data) {
-            const trackId = item.data.id;
+            const trackId = item.data.trackId;
             const instance = item.data.instance;
             if (instance && onInstanceResizeEnd) {
               // For left resize, we need to update the trim
               if (dim.start !== undefined && dim.width !== undefined) {
                 // Left resize
-                const positionDeltaTicks = dim.start - instance.x_position;
+                const positionDeltaTicks = dim.start - instance.x;
                 const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
-                onInstanceResizeEnd(trackId, instanceId, deltaPixels, 'left');
+                // Extract instance ID from composite itemId
+                const instanceIdNum = parseInt(itemId.split('_').pop() || '0');
+                onInstanceResizeEnd(trackId, String(instanceIdNum), deltaPixels, 'left');
               } else if (dim.width !== undefined) {
                 // Right resize - only width changed
-                const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
+                const track = item.data.track;
+                const currentWidthTicks = getInstanceWidth(track, instance);
                 const newWidthTicks = dim.width;
                 const deltaTicks = newWidthTicks - currentWidthTicks;
                 const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
-                onInstanceResizeEnd(trackId, instanceId, deltaPixels, 'right');
+                // Extract instance ID from composite itemId
+                const instanceIdNum = parseInt(itemId.split('_').pop() || '0');
+                onInstanceResizeEnd(trackId, String(instanceIdNum), deltaPixels, 'right');
               }
             }
           }
@@ -416,7 +576,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     
     onCopy: (items) => {
       // Extract unique track IDs from instance items
-      const trackIds = [...new Set(items.map(item => item.data?.id).filter(Boolean))];
+      const trackIds = [...new Set(items.map(item => item.data?.trackId).filter(Boolean))];
       const fullTracks = tracks.filter(t => trackIds.includes(t.id));
       setClipboard(fullTracks);
       onCopyTracks?.(fullTracks);
@@ -424,7 +584,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     
     onCut: (items) => {
       // Extract unique track IDs from instance items
-      const trackIds = [...new Set(items.map(item => item.data?.id).filter(Boolean))];
+      const trackIds = [...new Set(items.map(item => item.data?.trackId).filter(Boolean))];
       const fullTracks = tracks.filter(t => trackIds.includes(t.id));
       setClipboard(fullTracks);
       onCutTracks?.(fullTracks);
@@ -443,7 +603,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       // For now, extract track IDs and delete entire tracks
       const trackIds = [...new Set(konvaItems
         .filter(item => itemIds.includes(item.id))
-        .map(item => item.data?.id)
+        .map(item => item.data?.trackId)
         .filter(Boolean))];
       onDeleteTracks?.(trackIds);
     },
@@ -452,7 +612,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       // Extract unique track IDs from instance IDs
       const trackIds = [...new Set(konvaItems
         .filter(item => itemIds.includes(item.id))
-        .map(item => item.data?.id)
+        .map(item => item.data?.trackId)
         .filter(Boolean))];
       onDuplicateTracks?.(trackIds);
     }
@@ -714,8 +874,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             return (
               <KonvaTrack
                 key={item.id}
-                track={item.data}
-                instanceId={item.id} // Pass the instance ID
+                track={item.data.track}
+                instanceId={item.data.instanceId}
                 x={itemX}
                 y={itemDisplayY}
                 width={itemWidth}
@@ -732,6 +892,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 gridSnapEnabled={gridSnapEnabled}
                 snapSizeInPixels={actualSnapSize}
                 selectedCount={interaction.selectedIds.length}
+                data={item.data} // Pass the full data for color and other props
                 onClick={(id, e) => {
                   // Handle instance selection
                   const modifiers = {

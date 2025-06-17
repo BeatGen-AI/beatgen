@@ -2,7 +2,7 @@
 Project models for SQL database
 """
 
-from typing import Optional, List, TYPE_CHECKING, Union
+from typing import Optional, List, TYPE_CHECKING, Union, Dict, Any
 from sqlmodel import SQLModel, Field, Relationship
 import uuid
 
@@ -69,6 +69,8 @@ class CombinedTrack(SQLModel):
     trim_end_ticks: Optional[int] = 0
     duration_ticks: Optional[int] = 0
     track_number: Optional[int] = 0
+    # Instance metadata from JSONB
+    instance_metadata: Optional[Dict[str, Any]] = None
 
     # Track data based on type
     track: Union[AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead]

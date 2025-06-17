@@ -156,6 +156,8 @@ class ProjectService:
                         trim_end_ticks=track_data["trim_end_ticks"],
                         duration_ticks=track_data["duration_ticks"],
                         track_number=track_data["track_number"],
+                        # Instance metadata from JSONB
+                        instance_metadata=track_data.get("instance_metadata"),
                         # Specialized track data
                         track=track_data["track"],
                     )
