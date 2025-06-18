@@ -252,6 +252,7 @@ export interface RootState {
   handleInstanceResizeEnd: (trackId: string, instanceId: string, deltaPixels: number, resizeDirection: 'left' | 'right') => void;
   updateMultipleInstancePositions: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
   resizeMultipleInstances: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
+  deleteMultipleInstances: (instanceDeletions: Array<{trackId: string, instanceId: string}>) => Promise<void>;
 
   // Playback / Transport
   isPlaying: boolean;

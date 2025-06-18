@@ -169,23 +169,24 @@ export class InstanceDelete extends BaseAction {
     type: ActionType = 'INSTANCE_DELETE';
     private trackId: string;
     private instance: TrackInstance;
-    private instanceIndex: number;
 
     constructor(
         get: GetFn,
         trackId: string,
-        instance: TrackInstance,
-        instanceIndex: number
+        instance: TrackInstance
     ) {
         super(get);
         this.trackId = trackId;
         this.instance = instance;
-        this.instanceIndex = instanceIndex;
     }
 
     async execute(): Promise<void> {
-        const { deleteTrackInstance } = this.get();
-        deleteTrackInstance(this.trackId, this.instance.id);
+        const { updateTrackState } = this.get();
+        const track = this.get().tracks.find(t => t.id === this.trackId);
+        if (!track) return;
+
+        const instances = (track.instances || []).filter(inst => inst.id !== this.instance.id);
+        updateTrackState(this.trackId, { instances });
         this.log('Execute', { trackId: this.trackId, instanceId: this.instance.id });
     }
 
@@ -194,8 +195,15 @@ export class InstanceDelete extends BaseAction {
         const track = this.get().tracks.find(t => t.id === this.trackId);
         if (!track) return;
 
-        const instances = [...(track.instances || [])];
-        instances.splice(this.instanceIndex, 0, this.instance);
+        // Add the instance back and maintain order by instance ID number
+        const instances = [...(track.instances || []), this.instance];
+        // Sort by the numeric part of the instance ID to maintain consistent order
+        instances.sort((a, b) => {
+            const aNum = parseInt(a.id.split('_instance_')[1] || '0', 10);
+            const bNum = parseInt(b.id.split('_instance_')[1] || '0', 10);
+            return aNum - bNum;
+        });
+        
         updateTrackState(this.trackId, { instances });
         this.log('Undo', { trackId: this.trackId, instanceId: this.instance.id });
     }

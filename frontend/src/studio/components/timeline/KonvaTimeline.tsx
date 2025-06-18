@@ -62,6 +62,8 @@ export interface KonvaTimelineProps {
   onInstanceResizeEnd?: (trackId: string, instanceId: string, deltaPixels: number, direction: 'left' | 'right') => void;
   updateMultipleInstancePositions?: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
   resizeMultipleInstances?: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
+  onInstanceDelete?: (trackId: string, instanceId: string) => void;
+  onDeleteInstances?: (instances: Array<{trackId: string, instanceId: string}>) => void;
   
   // Zoom control
   onZoomChange?: (newZoom: number) => void;
@@ -110,6 +112,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   onInstanceResizeEnd,
   updateMultipleInstancePositions,
   resizeMultipleInstances,
+  onInstanceDelete,
+  onDeleteInstances,
   onZoomChange
 }, ref) => {
   // State
@@ -423,14 +427,33 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     },
     
     onDelete: (itemIds) => {
-      // For delete, we might want to delete specific instances, not entire tracks
-      // TODO: Implement instance-specific delete
-      // For now, extract track IDs and delete entire tracks
-      const trackIds = [...new Set(konvaItems
-        .filter(item => itemIds.includes(item.id))
-        .map(item => item.data?.id)
-        .filter(Boolean))];
-      onDeleteTracks?.(trackIds);
+      // Delete specific instances
+      if (itemIds.length === 1 && onInstanceDelete) {
+        // Single instance deletion
+        const item = konvaItems.find(item => item.id === itemIds[0]);
+        if (item && item.data) {
+          const trackId = item.data.id;
+          const instanceId = item.id;
+          onInstanceDelete(trackId, instanceId);
+        }
+      } else if (itemIds.length > 1 && onDeleteInstances) {
+        // Multiple instance deletion
+        const instancesToDelete: Array<{trackId: string, instanceId: string}> = [];
+        
+        itemIds.forEach(itemId => {
+          const item = konvaItems.find(item => item.id === itemId);
+          if (item && item.data) {
+            instancesToDelete.push({
+              trackId: item.data.id,
+              instanceId: item.id
+            });
+          }
+        });
+        
+        if (instancesToDelete.length > 0) {
+          onDeleteInstances(instancesToDelete);
+        }
+      }
     },
     
     onDuplicate: (itemIds) => {

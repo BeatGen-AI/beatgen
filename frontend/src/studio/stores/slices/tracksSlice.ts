@@ -5,7 +5,7 @@ import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTr
 import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions';
 import type { Action } from '../../core/state/history/actions'; 
-import { InstanceAdd, InstanceMove, InstanceResize } from '../../core/state/history/actions/InstanceActions';
+import { InstanceAdd, InstanceMove, InstanceResize, InstanceDelete } from '../../core/state/history/actions/InstanceActions';
 import { TRACK_CONFIG, DEFAULT_SAMPLER_CONFIG } from '../config';
 import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
@@ -91,6 +91,7 @@ export interface TracksSlice {
   handleInstanceResizeEnd: (trackId: string, instanceId: string, deltaPixels: number, resizeDirection: 'left' | 'right') => void;
   updateMultipleInstancePositions: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
   resizeMultipleInstances: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
+  deleteMultipleInstances: (instanceDeletions: Array<{trackId: string, instanceId: string}>) => Promise<void>;
 }
 
 // Remove local type alias if it causes confusion
@@ -1542,6 +1543,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
   
   const deleteTrackInstance = (trackId: string, instanceId: string): void => {
+    const { executeHistoryAction } = rootGet();
     const track = findTrackById(trackId);
     if (!track || !track.instances) return;
     
@@ -1551,8 +1553,20 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       return;
     }
     
-    const updatedInstances = track.instances.filter(instance => instance.id !== instanceId);
-    updateTrackState(trackId, { instances: updatedInstances });
+    // Find the instance to delete
+    const instanceToDelete = track.instances.find(inst => inst.id === instanceId);
+    if (!instanceToDelete) {
+      console.error(`Instance ${instanceId} not found in track ${trackId}`);
+      return;
+    }
+    
+    // Create and execute the delete action
+    const action = new Actions.InstanceDelete(
+      get,
+      trackId,
+      instanceToDelete
+    );
+    executeHistoryAction(action);
   };
   
   const getTrackInstances = (trackId: string): TrackInstance[] => {
@@ -1794,6 +1808,54 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     
     _withErrorHandling(resizeLogic, 'resizeMultipleInstances')();
   };
+  
+  const deleteMultipleInstances = async (instanceDeletions: Array<{trackId: string, instanceId: string}>): Promise<void> => {
+    const { _withErrorHandling, executeHistoryAction } = rootGet();
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available");
+      return;
+    }
+
+    const deleteLogic = async () => {
+      // Create individual instance delete actions
+      const actions: InstanceDelete[] = [];
+      
+      for (const deletion of instanceDeletions) {
+        const track = findTrackById(deletion.trackId);
+        if (!track || !track.instances) continue;
+        
+        // Don't delete if it's the only instance
+        if (track.instances.length <= 1) {
+          console.warn(`Cannot delete the last instance of track ${deletion.trackId}`);
+          continue;
+        }
+        
+        const instance = track.instances.find(inst => inst.id === deletion.instanceId);
+        if (!instance) {
+          console.error(`Instance ${deletion.instanceId} not found in track ${deletion.trackId}`);
+          continue;
+        }
+        
+        actions.push(new Actions.InstanceDelete(
+          get,
+          deletion.trackId,
+          instance
+        ));
+      }
+      
+      if (actions.length > 0) {
+        // Create group action for all instance deletions
+        const groupAction = new Actions.GroupAction(
+          get,
+          actions,
+          `Delete ${actions.length} instance${actions.length > 1 ? 's' : ''}`
+        );
+        await executeHistoryAction(groupAction);
+      }
+    };
+    
+    return _withErrorHandling(deleteLogic, 'deleteMultipleInstances')();
+  };
 
   // --- Initial State & Return --- 
   return {
@@ -1860,5 +1922,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     handleInstanceResizeEnd,
     updateMultipleInstancePositions,
     resizeMultipleInstances,
+    deleteMultipleInstances,
   };
 };

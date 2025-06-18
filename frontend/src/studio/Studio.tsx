@@ -128,6 +128,8 @@ function Studio({ projectId }: StudioProps) {
     handleInstanceResizeEnd,
     updateMultipleInstancePositions,
     resizeMultipleInstances,
+    deleteTrackInstance,
+    deleteMultipleInstances,
   } = useStudioStore();
   
   const scrollRef = useRef<KonvaTimelineRef>(null);
@@ -381,6 +383,18 @@ function Studio({ projectId }: StudioProps) {
     console.log('Track resize:', trackId, 'delta:', deltaPixels, 'direction:', direction);
     handleTrackResizeEnd(trackId, deltaPixels, direction);
   }, [handleTrackResizeEnd]);
+
+  // Instance delete handlers
+  const handleInstanceDelete = useCallback((trackId: string, instanceId: string) => {
+    console.log('Deleting instance:', instanceId, 'from track:', trackId);
+    deleteTrackInstance(trackId, instanceId);
+  }, [deleteTrackInstance]);
+
+  const handleDeleteInstances = useCallback((instances: Array<{trackId: string, instanceId: string}>) => {
+    console.log('Deleting multiple instances:', instances);
+    // Use the group action for multiple instance deletion
+    deleteMultipleInstances(instances);
+  }, [deleteMultipleInstances]);
 
   // Determine the theme for the studio based on studioMode
   const currentStudioTheme = useMemo(() => {
@@ -642,6 +656,8 @@ function Studio({ projectId }: StudioProps) {
             onInstanceResizeEnd={handleInstanceResizeEnd}
             updateMultipleInstancePositions={updateMultipleInstancePositions}
             resizeMultipleInstances={resizeMultipleInstances}
+            onInstanceDelete={handleInstanceDelete}
+            onDeleteInstances={handleDeleteInstances}
             ref={scrollRef}
           />
           
