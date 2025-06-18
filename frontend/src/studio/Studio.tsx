@@ -10,6 +10,7 @@ import { CombinedTrack } from '../platform/types/project';
 import AddTrackMenu from './components/sidebar/AddTrackMenu';
 import { GRID_CONSTANTS } from './constants/gridConstants';
 import { useStudioStore } from './stores/studioStore';
+import { usePianoRollStore } from './stores/usePianoRollStore';
 
 // Import piano roll components
 import PianoRollWindows from './components/piano-roll-new/PianoRollWindows';
@@ -112,6 +113,7 @@ function Studio({ projectId }: StudioProps) {
     uploadAudioFile,
     setAddMenuAnchor,
     openDrumMachines,
+    openDrumMachine,
     closeDrumMachine,
     setDrumPattern,
     addSamplerTrackToDrumTrack,
@@ -131,6 +133,9 @@ function Studio({ projectId }: StudioProps) {
     deleteTrackInstance,
     deleteMultipleInstances,
   } = useStudioStore();
+  
+  // Get piano roll functions
+  const openPianoRoll = usePianoRollStore(state => state.openPianoRoll);
   
   const scrollRef = useRef<KonvaTimelineRef>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -396,6 +401,22 @@ function Studio({ projectId }: StudioProps) {
     deleteMultipleInstances(instances);
   }, [deleteMultipleInstances]);
 
+  // Handle track click to open piano roll or drum machine
+  const handleTrackClick = useCallback((trackId: string, instanceId: string) => {
+    console.log('Track clicked:', trackId, 'Instance:', instanceId);
+    
+    // Find the track to check its type
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) return;
+    
+    // Open appropriate editor based on track type
+    if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER') {
+      openPianoRoll(trackId);
+    } else if (track.track_type === 'DRUM') {
+      openDrumMachine(trackId);
+    }
+  }, [tracks, openPianoRoll, openDrumMachine]);
+
   // Determine the theme for the studio based on studioMode
   const currentStudioTheme = useMemo(() => {
     return studioMode === 'light' ? studioLightTheme : studioDarkTheme;
@@ -658,6 +679,7 @@ function Studio({ projectId }: StudioProps) {
             resizeMultipleInstances={resizeMultipleInstances}
             onInstanceDelete={handleInstanceDelete}
             onDeleteInstances={handleDeleteInstances}
+            onTrackClick={handleTrackClick}
             ref={scrollRef}
           />
           

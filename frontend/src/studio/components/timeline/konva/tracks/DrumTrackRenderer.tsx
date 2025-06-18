@@ -36,6 +36,12 @@ export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
   contentOffset,
   color
 }) => {
+  // Validate props
+  if (isNaN(width) || width <= 0) {
+    console.warn('DrumTrackRenderer: Invalid width', width);
+    return null;
+  }
+  
   // Get drum hits from track
   // Get sampler tracks and their MIDI notes
   const samplerTracksWithNotes = useMemo(() => {

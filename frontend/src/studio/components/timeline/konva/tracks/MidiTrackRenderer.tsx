@@ -24,6 +24,12 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
   contentOffset,
   color
 }) => {
+  // Validate props
+  if (isNaN(width) || width <= 0) {
+    console.warn('MidiTrackRenderer: Invalid width', width);
+    return null;
+  }
+  
   // Get MIDI notes from track
   const midiNotes = useMemo(() => {
     if (track.track_type === 'MIDI') {
@@ -42,6 +48,12 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
   
   // Calculate note positions and dimensions
   const noteRects = useMemo(() => {
+    // Validate inputs
+    if (isNaN(pixelsPerTick) || pixelsPerTick <= 0 || isNaN(height) || height <= 0) {
+      console.warn('MidiTrackRenderer: Invalid dimensions', { pixelsPerTick, height });
+      return [];
+    }
+    
     const minNote = 0;
     const maxNote = 127;
     const noteRange = maxNote - minNote + 1;
@@ -52,6 +64,12 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
       const y = height - ((note.pitch - minNote) / noteRange) * height - noteHeight;
       const width = note.duration * pixelsPerTick;
       
+      // Skip invalid notes
+      if (isNaN(x) || isNaN(y) || isNaN(width)) {
+        console.warn('MidiTrackRenderer: Invalid note dimensions', { note, x, y, width });
+        return null;
+      }
+      
       return {
         id: note.id,
         x,
@@ -60,7 +78,7 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
         height: noteHeight,
         velocity: note.velocity
       };
-    });
+    }).filter(Boolean); // Remove null entries
   }, [midiNotes, pixelsPerTick, height]);
   
   // Group notes by time for chord visualization

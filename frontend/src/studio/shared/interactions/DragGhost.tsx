@@ -48,7 +48,7 @@ export const DragGhost: React.FC<DragGhostProps> = ({
   const containerHeight = bounds.maxY - bounds.minY;
 
   // Apply container bounds if provided
-  let finalOffset = { ...offset };
+  const finalOffset = { ...offset };
   if (containerBounds) {
     // Ensure ghosts don't go outside container
     if (bounds.minX + offset.x < 0) {

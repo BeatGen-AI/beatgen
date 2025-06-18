@@ -167,7 +167,7 @@ export function useResizeDrag<T extends DraggableResizableItem>(
           const targetY = mousePosition.y - state.mouseOffset.y;
           
           let primaryNewX = pixelsToTicks(targetX);
-          let primaryNewY = targetY;
+          const primaryNewY = targetY;
           
           if (gridSnapEnabled) {
             primaryNewX = snapToGrid(primaryNewX);

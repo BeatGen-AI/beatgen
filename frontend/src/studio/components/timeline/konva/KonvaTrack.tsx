@@ -59,6 +59,20 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   snapSizeInPixels = 12.5,
   data
 }) => {
+  // Validate required numeric props
+  if (isNaN(x) || isNaN(y) || isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+    console.error('KonvaTrack received invalid props:', { 
+      x, 
+      y, 
+      width, 
+      height, 
+      trackId: track?.id, 
+      instanceId,
+      previewWidth: propPreviewWidth,
+      pixelsPerTick
+    });
+    return null;
+  }
   const groupRef = useRef<any>(null);
   const backgroundRef = useRef<any>(null);
   const [isHovered, setIsHovered] = useState(false);
@@ -67,6 +81,10 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   
   // Use prop preview width if provided (during resize), otherwise use internal state
   const previewWidth = propPreviewWidth || null;
+  
+  // Ensure we have valid width values
+  const displayWidth = Math.max(1, previewWidth || width || 1);
+  const isValidWidth = !isNaN(displayWidth) && displayWidth > 0;
   
   // Get track color from props (passed from parent)
   const trackColor = useMemo(() => {
@@ -91,10 +109,12 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   
   // Calculate content offset for trimmed tracks
   const contentOffset = useMemo(() => {
-    if (!track.instance_metadata || !track.duration_ticks) return 0;
+    if (!track.instance_metadata || !track.duration_ticks || track.duration_ticks === 0) return 0;
+    if (isNaN(pixelsPerTick) || pixelsPerTick <= 0) return 0;
     const trimRatio = track.instance_metadata[0].trim_start_ticks / track.duration_ticks;
     const fullWidth = track.duration_ticks * pixelsPerTick;
-    return -(trimRatio * fullWidth);
+    const result = -(trimRatio * fullWidth);
+    return isNaN(result) ? 0 : result;
   }, [track.instance_metadata, track.duration_ticks, pixelsPerTick]);
   
   
@@ -102,7 +122,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   const renderTrackContent = () => {
     const contentProps = {
       track,
-      width: previewWidth || width,
+      width: displayWidth,
       height,
       pixelsPerTick,
       contentOffset,
@@ -129,7 +149,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       ref={groupRef}
       x={x}
       y={y}
-      width={width}
+      width={displayWidth}
       height={height}
       draggable={false}  // Disable Konva dragging, use manual position updates
       onMouseEnter={() => setIsHovered(true)}
@@ -161,7 +181,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         ref={backgroundRef}
         x={0}
         y={0}
-        width={previewWidth || width}
+        width={displayWidth}
         height={height}
         fill={trackColor}
         stroke={isSelected ? '#fff' : '#333'}
@@ -174,11 +194,11 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       />
       
       {/* Resize preview outline */}
-      {isResizing && previewWidth && previewWidth !== width && (
+      {isResizing && previewWidth && previewWidth !== width && isValidWidth && (
         <Rect
           x={0}
           y={0}
-          width={previewWidth}
+          width={displayWidth}
           height={height}
           stroke="rgba(74, 144, 226, 0.8)"
           strokeWidth={2}
@@ -190,7 +210,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       )}
       
       {/* Track content - clipped to track bounds */}
-      <Group clip={{ x: 0, y: 0, width: previewWidth || width, height }}>
+      <Group clip={{ x: 0, y: 0, width: displayWidth, height }}>
         {renderTrackContent()}
       </Group>
       
@@ -210,7 +230,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         <Rect
           x={-2}
           y={-2}
-          width={(previewWidth || width) + 4}
+          width={displayWidth + 4}
           height={height + 4}
           stroke="#4a90e2"
           strokeWidth={2}
@@ -221,7 +241,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       )}
       
       {/* Custom resize handles - show on hover for all tracks */}
-      {isHovered && !isDragging && !isResizing && (
+      {isHovered && !isDragging && !isResizing && isValidWidth && (
         <>
           {/* Left resize handle */}
           <Rect
@@ -281,7 +301,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           
           {/* Right resize handle */}
           <Rect
-            x={(previewWidth || width) - 8}
+            x={Math.max(0, displayWidth - 8)}
             y={0}
             width={8}
             height={height}
@@ -336,15 +356,15 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           />
           
           {/* Visual resize indicators */}
-          {(isResizingLeft || isResizingRight || isResizing) && (
+          {(isResizingLeft || isResizingRight || isResizing) && isValidWidth && (
             <Text
-              x={(previewWidth || width) / 2}
+              x={displayWidth / 2}
               y={height / 2 - 6}
-              text={`${Math.round(previewWidth || width)}px`}
+              text={`${Math.round(displayWidth)}px`}
               fontSize={12}
               fill="white"
               align="center"
-              width={previewWidth || width}
+              width={displayWidth}
               listening={false}
             />
           )}

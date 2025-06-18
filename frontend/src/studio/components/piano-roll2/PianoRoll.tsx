@@ -14,8 +14,6 @@ import {
   getSnapSizeInPixels 
 } from './gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
-import { Tool, SelectionOverlay, InteractionToolbar } from '../../shared/interactions';
-import { usePianoRollWithInteractions } from './usePianoRollWithInteractions';
 
 // Define a constant grid size to use throughout the component
 const GRID_SIZE = 48; // pixels
@@ -26,9 +24,9 @@ const PIXELS_PER_TICK = GRID_SIZE / PULSES_PER_QUARTER_NOTE; // Pixels per tick 
 // Define our note state interface (normalized values independent of zoom)
 export interface NoteState {
   id: number;
-  length: number;  // Length in ticks (480 ticks per beat)
+  length: number;  // Length in ticks (1/960th of a beat)
   row: number;     // Row index (0-131 for our 132 keys)
-  column: number;  // Column position in ticks (480 ticks per beat)
+  column: number;  // Column position in ticks (1/960th of a beat)
 }
 
 // Custom scrollbar styles
@@ -139,7 +137,7 @@ interface NotesLayerProps {
   gridSize: number;
   snapEnabled: boolean;
   zoomLevel: number;
-  selectedTool: Tool;
+  selectedTool: 'select' | 'pen' | 'highlighter' | 'eraser';
   noteColor: string; // Add note color prop
   hideResizingNotes?: boolean; // Add a prop to control note visibility
 }
@@ -164,12 +162,6 @@ interface PianoRollProps {
   title?: string; // Add title prop
   onClose?: () => void; // Add callback for close button
   initialGridSnapSize?: GridSnapOption; // Use enum for initial grid snap size
-  
-  // Shared tool system props
-  selectedTool?: Tool;
-  snapToGrid?: boolean;
-  onToolChange?: (tool: Tool) => void;
-  onToggleSnapToGrid?: () => void;
 }
 
 // Add this utility function at the top of your file, near the other helper functions
@@ -1140,11 +1132,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
   scaleNotes = [], // Default to empty array (all notes in scale)
   title = "Piano Roll (132 Keys)", // Default title
   onClose,
-  initialGridSnapSize = GridSnapOption.STEP, // Default to "Step" if not provided
-  selectedTool: externalSelectedTool = 'pen',
-  snapToGrid: externalSnapToGrid = true,
-  onToolChange,
-  onToggleSnapToGrid
+  initialGridSnapSize = GridSnapOption.STEP // Default to "Step" if not provided
 }) => {
   // Add mouseOffsetRef at the top of the component
   const mouseOffsetRef = useRef<{ 
@@ -1162,15 +1150,10 @@ export const PianoRoll: FC<PianoRollProps> = ({
   });
 
   // Grid snap settings
-  const [gridSnapEnabled, setGridSnapEnabled] = useState(externalSnapToGrid);
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
   const [gridSnapSize, setGridSnapSize] = useState<GridSnapOption>(initialGridSnapSize); // Use the enum state
   const [gridSnapAnchorEl, setGridSnapAnchorEl] = useState<null | HTMLElement>(null);
   const gridSnapMenuOpen = Boolean(gridSnapAnchorEl);
-  
-  // Sync external snapToGrid prop with internal state
-  useEffect(() => {
-    setGridSnapEnabled(externalSnapToGrid);
-  }, [externalSnapToGrid]);
   
   // Zoom control
   const [zoomLevel, setZoomLevel] = useState(1.0); // Default zoom level
@@ -1179,13 +1162,8 @@ export const PianoRoll: FC<PianoRollProps> = ({
   const MAX_ZOOM = 4.0;
   const ZOOM_STEP = 0.25; // Increment/decrement by 25%
   
-  // Use internal tool state to avoid conflicts with complex drag/resize system
-  const [selectedTool, setSelectedTool] = useState<Tool>(externalSelectedTool);
-  
-  // Sync with external tool state when it changes
-  useEffect(() => {
-    setSelectedTool(externalSelectedTool);
-  }, [externalSelectedTool]);
+  // Tool selection state
+  const [selectedTool, setSelectedTool] = useState<'select' | 'pen' | 'highlighter' | 'eraser'>('pen'); // Default to pen
   
   // Selection rectangle state
   const [selectionRect, setSelectionRect] = useState<{startX: number, startY: number, width: number, height: number} | null>(null);
@@ -1208,10 +1186,12 @@ export const PianoRoll: FC<PianoRollProps> = ({
   }, [initialNotes]); // Depend ONLY on the initialNotes prop
   
   // Handle tool selection with note deselection
-  const handleToolSelect = (tool: Tool) => {
-    // Use the interaction system's tool management
-    interaction.setTool(tool);
-    onToolChange?.(tool); // Sync to global state
+  const handleToolSelect = (tool: 'select' | 'pen' | 'highlighter' | 'eraser') => {
+    // If switching away from select tool, clear the selection
+    if (selectedTool === 'select' && tool !== 'select') {
+      setSelectedNoteIds([]);
+    }
+    setSelectedTool(tool);
   };
   
   // Handle zoom in
@@ -1288,7 +1268,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
   
   // Toggle grid snap on/off
   const toggleGridSnap = () => {
-    onToggleSnapToGrid?.();
+    setGridSnapEnabled(!gridSnapEnabled);
   };
 
   // Track scroll position
@@ -1319,41 +1299,6 @@ export const PianoRoll: FC<PianoRollProps> = ({
   // Calculate common factors for scrollbar calculations
   const contentAreaWidth = dimensions.width - keyboardWidth;
   const contentAreaHeight = dimensions.height - 28 - 16; // Minus header and horizontal scrollbar
-
-  // Use the unified interaction system
-  const interaction = usePianoRollWithInteractions({
-    notes: normalizedNotes,
-    selectedNoteIds,
-    keyHeight,
-    totalKeys,
-    zoomLevel,
-    selectedTool,
-    gridSnapEnabled,
-    gridSnapSize,
-    onNotesChange: (updatedNotes) => {
-      setNormalizedNotes(updatedNotes);
-      onNotesChange?.(updatedNotes);
-    },
-    onSelectionChange: (newSelectedIds) => {
-      setSelectedNoteIds(newSelectedIds);
-    },
-    noteColor: color
-  });
-  
-  // Handle keyboard events for the interaction system
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle if the piano roll is focused
-      if (canvasContainerRef.current?.contains(document.activeElement)) {
-        interaction.handleKeyDown(e);
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [interaction]);
 
   // Handle scroll event with requestAnimationFrame for better performance
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -1801,46 +1746,61 @@ export const PianoRoll: FC<PianoRollProps> = ({
       const pointerPos = stage.getPointerPosition();
       if (!pointerPos) return;
       
-      // Convert to relative position (no scroll offset for interaction system)
-      const position = {
-        x: pointerPos.x,
-        y: pointerPos.y
-      };
+      // Convert pointer position to absolute position with scroll
+      const x = pointerPos.x + scrollX;
+      const y = pointerPos.y + scrollY;
 
-      // Check if clicking on an existing note
-      const clickedItem = interaction.getItemAtPosition(position.x + scrollX, position.y + scrollY);
-      
-      if (clickedItem) {
-        // Handle click on existing note
-        interaction.handleItemClick(clickedItem.id, {
-          shiftKey: e.evt.shiftKey,
-          ctrlKey: e.evt.ctrlKey,
-          metaKey: e.evt.metaKey
-        });
-      } else if (interaction.selectedTool === 'select') {
+      if (selectedTool === 'select') {
         // Start selection rectangle
-        interaction.handleBackgroundMouseDown(position, {
-          shiftKey: e.evt.shiftKey
+        setSelectionRect({
+          startX: x,
+          startY: y,
+          width: 0,
+          height: 0
         });
-      } else if (interaction.selectedTool === 'pen' || interaction.selectedTool === 'highlighter') {
-        // Create a new note at this position
-        const newNoteState = interaction.createNoteAtPosition(position.x + scrollX, position.y + scrollY);
-        if (newNoteState) {
-          // Convert NoteState to Note for handleAddNote
-          const newNote: Note = {
-            id: newNoteState.id,
-            start: newNoteState.column * PIXELS_PER_TICK * zoomLevel,
-            top: (totalKeys - 1 - newNoteState.row) * keyHeight,
-            width: newNoteState.length * PIXELS_PER_TICK * zoomLevel,
-            color: noteColor
-          };
-          handleAddNote(newNote);
+        setIsSelecting(true);
+        // Clear selected notes when starting a new selection unless shift key is pressed
+        if (!e.evt.shiftKey) {
+          setSelectedNoteIds([]);
         }
-      } else if (interaction.selectedTool === 'eraser') {
-        // Eraser tool - check if we clicked on a note
-        const noteToErase = interaction.getNoteAtPosition(position.x + scrollX, position.y + scrollY);
-        if (noteToErase) {
-          handleRemoveNote(noteToErase.id);
+      } else if (selectedTool === 'pen' || selectedTool === 'highlighter') {
+        // Get current snap size in pixels (already accounts for zoom)
+        const actualGridSize = getSnapSizeInPixels(gridSnapSize, effectiveGridSize);
+
+        // Snap position
+        let snappedX, snappedY;
+        
+        if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
+          // Snap to grid
+          snappedX = Math.floor(x / actualGridSize) * actualGridSize;
+        } else {
+          // No horizontal snapping, but still snap to nearest tick for fine-grained control
+          const pixelsPerTickScaled = PIXELS_PER_TICK * zoomLevel;
+          snappedX = Math.floor(x / pixelsPerTickScaled) * pixelsPerTickScaled;
+        }
+        
+        // Always snap vertically to key rows regardless of grid size
+        snappedY = Math.floor(y / keyHeight) * keyHeight;
+        
+        // Check if there's already a note at this cell position using the appropriate check
+        const existingNote = findNoteAtCell(snappedX, snappedY);
+        
+        // Only create a note if there isn't already one at this position
+        if (!existingNote) {
+          // Create a new note using the helper function
+          const newNote = createNewNote(snappedX, snappedY);
+
+          // Add the note immediately if not debounced
+          if (newNote) {
+            handleAddNote(newNote);
+          }
+        }
+      } else if (selectedTool === 'eraser') {
+        // Check if we're clicking on a note to erase it
+        const noteUnderCursor = findNoteAtPosition(x, y);
+        if (noteUnderCursor) {
+          // Remove the note that was clicked
+          handleRemoveNote(noteUnderCursor.id);
         }
       }
     }
@@ -1854,54 +1814,99 @@ export const PianoRoll: FC<PianoRollProps> = ({
     const pointerPos = stage.getPointerPosition();
     if (!pointerPos) return;
     
-    const position = {
-      x: pointerPos.x,
-      y: pointerPos.y
-    };
+    // Convert pointer position to absolute position with scroll
+    const x = pointerPos.x + scrollX;
+    const y = pointerPos.y + scrollY;
     
-    // Handle selection rectangle update
-    if (interaction.isSelecting) {
-      interaction.updateSelection(position);
+    // Skip all actions if we're currently dragging a note
+    if (draggedNoteId !== null) {
+      return;
     }
     
     // Handle eraser tool functionality when mouse button is down
-    if (interaction.selectedTool === 'eraser' && e.evt.buttons === 1) {
-      const noteUnderCursor = interaction.getNoteAtPosition(position.x + scrollX, position.y + scrollY);
+    if (selectedTool === 'eraser' && e.evt.buttons === 1) {
+      const noteUnderCursor = findNoteAtPosition(x, y);
       if (noteUnderCursor) {
+        // Remove the note under the cursor
         handleRemoveNote(noteUnderCursor.id);
       }
+      return;
     }
     
     // Handle highlighter tool functionality when mouse button is down
-    if (interaction.selectedTool === 'highlighter' && e.evt.buttons === 1) {
+    if (selectedTool === 'highlighter' && e.evt.buttons === 1) {
       // Skip if the mouse is over a note (not the stage)
       if (e.target !== stage) return;
       
-      const newNoteState = interaction.createNoteAtPosition(position.x + scrollX, position.y + scrollY);
-      if (newNoteState) {
-        // Convert NoteState to Note for handleAddNote
-        const newNote: Note = {
-          id: newNoteState.id,
-          start: newNoteState.column * PIXELS_PER_TICK * zoomLevel,
-          top: (totalKeys - 1 - newNoteState.row) * keyHeight,
-          width: newNoteState.length * PIXELS_PER_TICK * zoomLevel,
-          color: noteColor
-        };
-        handleAddNote(newNote);
+      // Get current snap size in pixels (already accounts for zoom)
+      const actualGridSize = getSnapSizeInPixels(gridSnapSize, effectiveGridSize);
+
+      // Snap position
+      let snappedX, snappedY;
+      
+      if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
+        // Snap to grid
+        snappedX = Math.floor(x / actualGridSize) * actualGridSize;
+      } else {
+        // No horizontal snapping, but still snap to nearest tick for fine-grained control
+        const pixelsPerTickScaled = PIXELS_PER_TICK * zoomLevel;
+        snappedX = Math.floor(x / pixelsPerTickScaled) * pixelsPerTickScaled;
       }
+      
+      // Always snap vertically to key rows regardless of grid size
+      snappedY = Math.floor(y / keyHeight) * keyHeight;
+      
+      // Check if there's already a note at this cell position using the cell-based check
+      const existingNote = findNoteAtCell(snappedX, snappedY);
+      
+      // Only create a note if there isn't already one at this position
+      if (!existingNote) {
+        // Create a new note using the helper function
+        const newNote = createNewNote(snappedX, snappedY);
+
+        // Add the note immediately if not debounced
+        if (newNote) {
+          handleAddNote(newNote);
+        }
+      }
+      
+      // Update hover position for preview
+      setHoveredNote(getNoteNameFromY(pointerPos.y));
+      setHoverPosition({ x: snappedX, y: snappedY });
+      
+      return;
+    }
+    
+    if (isSelecting && selectionRect) {
+      // Update selection rectangle dimensions
+      setSelectionRect({
+        ...selectionRect,
+        width: x - selectionRect.startX,
+        height: y - selectionRect.startY
+      });
     }
     
     // Track hover position for note preview when using the pen tool or highlighter tool
-    if (interaction.selectedTool === 'pen' || interaction.selectedTool === 'highlighter') {
+    if (selectedTool === 'pen' || selectedTool === 'highlighter') {
       setHoveredNote(getNoteNameFromY(pointerPos.y));
       
-      // Use the interaction system's grid snapping
-      const snappedTicks = gridSnapEnabled ? 
-        Math.round(interaction.pixelsToTicks(position.x + scrollX) / interaction.gridSizeInTicks) * interaction.gridSizeInTicks :
-        interaction.pixelsToTicks(position.x + scrollX);
+      // Get current snap size in pixels (already accounts for zoom)
+      const actualGridSize = getSnapSizeInPixels(gridSnapSize, effectiveGridSize);
+
+      // Snap position
+      let snappedX, snappedY;
       
-      const snappedX = interaction.ticksToPixels(snappedTicks) - scrollX;
-      const snappedY = Math.floor((position.y + scrollY) / keyHeight) * keyHeight - scrollY;
+      if (gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE) {
+        // Snap to grid
+        snappedX = Math.floor(x / actualGridSize) * actualGridSize;
+      } else {
+        // No horizontal snapping, but still snap to nearest tick for fine-grained control
+        const pixelsPerTickScaled = PIXELS_PER_TICK * zoomLevel;
+        snappedX = Math.floor(x / pixelsPerTickScaled) * pixelsPerTickScaled;
+      }
+      
+      // Always snap vertically to key rows regardless of grid size
+      snappedY = Math.floor(y / keyHeight) * keyHeight;
       
       setHoverPosition({ x: snappedX, y: snappedY });
     }
@@ -1927,7 +1932,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
     });
     
     // Only handle selection if the select tool is active
-    if (interaction.selectedTool === 'select') {
+    if (selectedTool === 'select') {
       // If this note is part of a selection, store the starting position of all selected notes
       if (selectedNoteIds.includes(noteId)) {
         const startPositions: {[id: number]: {x: number, y: number}} = {};
@@ -1969,7 +1974,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
     }
     
     // Only allow selection when in select mode
-    if (interaction.selectedTool === 'select') {
+    if (selectedTool === 'select') {
       setSelectedNoteIds(prevSelected => {
         if (prevSelected.includes(noteId)) {
           return prevSelected.filter(id => id !== noteId);
@@ -2004,7 +2009,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
     // Create a new updated notes array
     const updatedNotes = visualNotes.map(note => {
       // If using select tool and this is a selected note
-      if (interaction.selectedTool === 'select' && selectedNoteIds.includes(note.id)) {
+      if (selectedTool === 'select' && selectedNoteIds.includes(note.id)) {
         // Get this note's initial position
         const startPos = selectedNotesStartPos[note.id];
         if (startPos) {
@@ -2090,9 +2095,45 @@ export const PianoRoll: FC<PianoRollProps> = ({
 
   // Modify mouse up to reset highlighting state
   const handleStageMouseUp = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (interaction.isSelecting) {
+    if (isSelecting && selectionRect) {
       // Finalize selection
-      interaction.endSelection(e.evt.shiftKey);
+      setIsSelecting(false);
+      
+      // Ensure width and height are positive for calculations
+      const x = selectionRect.width < 0 ? selectionRect.startX + selectionRect.width : selectionRect.startX;
+      const y = selectionRect.height < 0 ? selectionRect.startY + selectionRect.height : selectionRect.startY;
+      const width = Math.abs(selectionRect.width);
+      const height = Math.abs(selectionRect.height);
+      
+      // Find notes that start within the selection rectangle
+      const selectedIds = visualNotes
+        .filter(note => 
+          note.start >= x && 
+          note.start <= x + width && 
+          note.top >= y && 
+          note.top <= y + height
+        )
+        .map(note => note.id);
+      
+      // Update selected notes
+      if (e.evt.shiftKey) {
+        // Add to existing selection with shift key
+        setSelectedNoteIds(prevSelected => {
+          const mergedSelection = [...prevSelected];
+          selectedIds.forEach(id => {
+            if (!prevSelected.includes(id)) {
+              mergedSelection.push(id);
+            }
+          });
+          return mergedSelection;
+        });
+      } else {
+        // Replace selection
+        setSelectedNoteIds(selectedIds);
+      }
+      
+      // Clear selection rectangle
+      setSelectionRect(null);
     }
   };
 
@@ -2391,7 +2432,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
     }
     
     // Only show hover position for pen and highlighter tools
-    if (interaction.selectedTool !== 'pen' && interaction.selectedTool !== 'highlighter') {
+    if (selectedTool !== 'pen' && selectedTool !== 'highlighter') {
       setHoverPosition(null);
       return;
     }
@@ -2596,15 +2637,15 @@ export const PianoRoll: FC<PianoRollProps> = ({
                   height: "18px",
                   cursor: "pointer",
                   marginRight: "8px",
-                  opacity: interaction.selectedTool === 'select' ? 1 : 0.8,
-                  background: interaction.selectedTool === 'select' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  opacity: selectedTool === 'select' ? 1 : 0.8,
+                  background: selectedTool === 'select' ? 'rgba(255,255,255,0.1)' : 'transparent',
                   padding: '2px',
                   borderRadius: '2px',
                   transition: 'all 0.2s ease',
                 }}
                 onClick={() => handleToolSelect('select')}
-                onMouseEnter={interaction.selectedTool !== 'select' ? iconHoverStyle : undefined}
-                onMouseLeave={interaction.selectedTool !== 'select' ? iconLeaveStyle : undefined}
+                onMouseEnter={selectedTool !== 'select' ? iconHoverStyle : undefined}
+                onMouseLeave={selectedTool !== 'select' ? iconLeaveStyle : undefined}
               />
               
               {/* Pen tool */}
@@ -2616,15 +2657,15 @@ export const PianoRoll: FC<PianoRollProps> = ({
                   height: "18px",
                   cursor: "pointer",
                   marginRight: "8px",
-                  opacity: interaction.selectedTool === 'pen' ? 1 : 0.8,
-                  background: interaction.selectedTool === 'pen' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  opacity: selectedTool === 'pen' ? 1 : 0.8,
+                  background: selectedTool === 'pen' ? 'rgba(255,255,255,0.1)' : 'transparent',
                   padding: '2px',
                   borderRadius: '2px',
                   transition: 'all 0.2s ease',
                 }}
                 onClick={() => handleToolSelect('pen')}
-                onMouseEnter={interaction.selectedTool !== 'pen' ? iconHoverStyle : undefined}
-                onMouseLeave={interaction.selectedTool !== 'pen' ? iconLeaveStyle : undefined}
+                onMouseEnter={selectedTool !== 'pen' ? iconHoverStyle : undefined}
+                onMouseLeave={selectedTool !== 'pen' ? iconLeaveStyle : undefined}
               />
               
               {/* Highlighter tool */}
@@ -2636,15 +2677,15 @@ export const PianoRoll: FC<PianoRollProps> = ({
                   height: "18px",
                   cursor: "pointer",
                   marginRight: "8px",
-                  opacity: interaction.selectedTool === 'highlighter' ? 1 : 0.8,
-                  background: interaction.selectedTool === 'highlighter' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  opacity: selectedTool === 'highlighter' ? 1 : 0.8,
+                  background: selectedTool === 'highlighter' ? 'rgba(255,255,255,0.1)' : 'transparent',
                   padding: '2px',
                   borderRadius: '2px',
                   transition: 'all 0.2s ease',
                 }}
                 onClick={() => handleToolSelect('highlighter')}
-                onMouseEnter={interaction.selectedTool !== 'highlighter' ? iconHoverStyle : undefined}
-                onMouseLeave={interaction.selectedTool !== 'highlighter' ? iconLeaveStyle : undefined}
+                onMouseEnter={selectedTool !== 'highlighter' ? iconHoverStyle : undefined}
+                onMouseLeave={selectedTool !== 'highlighter' ? iconLeaveStyle : undefined}
               />
               
               {/* Eraser tool */}
@@ -3256,14 +3297,14 @@ export const PianoRoll: FC<PianoRollProps> = ({
                       onNoteResizeStart={handleNoteResizeStart}
                       draggedNoteId={draggedNoteId}
                       resizingNoteId={resizingNoteId}
-                      selectedNoteIds={interaction.selectedIds.filter(id => typeof id === 'number') as number[]}
+                      selectedNoteIds={selectedNoteIds}
                       keyHeight={keyHeight}
                       viewportWidth={dimensions.width - keyboardWidth}
                       viewportHeight={dimensions.height - 28 - 16}
                       gridSize={getSnapSizeInPixels(gridSnapSize, effectiveGridSize)} // Use helper function
                       snapEnabled={gridSnapEnabled && gridSnapSize !== GridSnapOption.NONE}
                       zoomLevel={zoomLevel}
-                      selectedTool={interaction.selectedTool}
+                      selectedTool={selectedTool}
                       noteColor={noteColor} // Pass color to NotesLayer
                       hideResizingNotes={isResizingNote} // Add a prop to control note visibility
                     />
@@ -3280,14 +3321,9 @@ export const PianoRoll: FC<PianoRollProps> = ({
                     )}
 
                     {/* Selection rectangle */}
-                    {interaction.selectedTool === 'select' && interaction.selectionState.selectionRect && (
+                    {selectedTool === 'select' && (
                       <SelectionRectangle 
-                        rect={{
-                          startX: interaction.selectionState.selectionRect.startX,
-                          startY: interaction.selectionState.selectionRect.startY,
-                          width: interaction.selectionState.selectionRect.width,
-                          height: interaction.selectionState.selectionRect.height
-                        }}
+                        rect={selectionRect}
                         scrollX={scrollX}
                         scrollY={scrollY}
                       />

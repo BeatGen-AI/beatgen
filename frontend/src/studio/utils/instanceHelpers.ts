@@ -119,11 +119,12 @@ export function createDefaultInstance(
   position?: Position,
   duration?: number
 ): TrackInstance {
+  const defaultDuration = 1920; // Default to 1 bar at 480 ticks per beat
   return {
     id: `${trackId}_instance_1`,
     x_position: position?.x ?? 0,
     y_position: position?.y ?? 0,
     trim_start_ticks: 0,
-    trim_end_ticks: duration ?? 0
+    trim_end_ticks: duration ?? defaultDuration
   };
 }

@@ -81,7 +81,7 @@ class AudioFilePlayer implements TrackPlayer {
     channel.volume.value = convertVolumeToDecibels(defaultVolume, false);
     
     // Get track name from the filename if available
-    let trackName = audioFile ? audioFile.name.split('.')[0] : "MIDI Instrument";
+    const trackName = audioFile ? audioFile.name.split('.')[0] : "MIDI Instrument";
     
     const track: AudioTrack = {
       id,

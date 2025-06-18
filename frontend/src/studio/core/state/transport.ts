@@ -122,7 +122,7 @@ export class TransportController implements Transport {
             
             // CRITICAL: Get the EXACT transport position right before playback starts
             // This ensures we're using the most current position for calculations
-            let transportPosition = Tone.getTransport().seconds;
+            const transportPosition = Tone.getTransport().seconds;
             console.log(`[TransportController.play] transportPosition determined as: ${transportPosition.toFixed(4)}s`);
             console.log(`Starting playback at transport position: ${transportPosition}s`);
             

@@ -632,7 +632,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       // Prepare update object
       const updateObj: Partial<CombinedTrack & TrackParameter> = {};
       let engineUpdateNeeded = true;
-      let historyParamName = paramName as string;
+      const historyParamName = paramName as string;
 
       if (paramName === 'muted') {
         updateObj.mute = newValue as boolean; 
@@ -1519,7 +1519,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       x_position: newPosition.x,
       y_position: newPosition.y,
       trim_start_ticks: sourceInstance?.trim_start_ticks ?? 0,
-      trim_end_ticks: sourceInstance?.trim_end_ticks ?? (track.duration_ticks || 0)
+      trim_end_ticks: sourceInstance?.trim_end_ticks ?? (track.duration_ticks || GRID_CONSTANTS.defaultDurationTicks || 1920)
     };
     
     // Create history action for adding instance

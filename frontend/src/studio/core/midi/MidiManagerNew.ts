@@ -152,7 +152,7 @@ export class MidiManager {
       throw new Error(`Cannot add note to track ${trackId}: track does not exist`);
     }
     
-    let noteToAdd = { ...note }; // Create a copy to potentially modify
+    const noteToAdd = { ...note }; // Create a copy to potentially modify
 
     // Check if the incoming ID needs to be replaced
     if (noteToAdd.id === -1 || noteToAdd.id === undefined || noteToAdd.id === null) {

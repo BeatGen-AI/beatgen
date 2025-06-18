@@ -346,7 +346,7 @@ export class SequencerWrapper {
     
     // Schedule only upcoming events
     let scheduledCount = 0;
-    let scheduledEvents = [];
+    const scheduledEvents = [];
     for (const event of this.noteEvents) {
       // Check if this event should be scheduled based on the position
       // This works for both positive and negative offsets because

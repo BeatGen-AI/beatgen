@@ -22,6 +22,12 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   contentOffset,
   color
 }) => {
+  // Validate props
+  if (isNaN(width) || width <= 0) {
+    console.warn('AudioTrackRenderer: Invalid width', width);
+    return null;
+  }
+  
   // Generate mock waveform data (in real app, this would come from audio analysis)
   const waveformData = useMemo(() => {
     const points: number[] = [];

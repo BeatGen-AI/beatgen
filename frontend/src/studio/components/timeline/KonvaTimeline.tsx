@@ -65,6 +65,9 @@ export interface KonvaTimelineProps {
   onInstanceDelete?: (trackId: string, instanceId: string) => void;
   onDeleteInstances?: (instances: Array<{trackId: string, instanceId: string}>) => void;
   
+  // Track click handler
+  onTrackClick?: (trackId: string, instanceId: string) => void;
+  
   // Zoom control
   onZoomChange?: (newZoom: number) => void;
 }
@@ -114,6 +117,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   resizeMultipleInstances,
   onInstanceDelete,
   onDeleteInstances,
+  onTrackClick,
   onZoomChange
 }, ref) => {
   // State
@@ -151,6 +155,10 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     const ticksPerBeat = MUSIC_CONSTANTS.pulsesPerQuarterNote;
     const ticksPerMeasure = ticksPerBeat * beatsPerMeasure;
     const result = (GRID_CONSTANTS.measureWidth * internalZoom) / ticksPerMeasure;
+    if (isNaN(result) || result <= 0) {
+      console.error('Invalid pixelsPerTick calculation:', { beatsPerMeasure, ticksPerBeat, ticksPerMeasure, internalZoom, result });
+      return 1; // Fallback to prevent division by zero
+    }
     return result;
   }, [timeSignature, internalZoom]);
   
@@ -168,6 +176,12 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       // Create items for each instance. If no instances, nothing is rendered for this track.
       if (track.instances) {
         track.instances.forEach(instance => {
+          // Validate instance data
+          if (!instance || typeof instance.trim_start_ticks !== 'number' || typeof instance.trim_end_ticks !== 'number') {
+            console.error(`Invalid instance data for track ${track.id}:`, instance);
+            return;
+          }
+          
           const resizePreviewX = resizePreviewPositions.get(instance.id);
           const resizePreviewWidth = resizePreviewWidths.get(instance.id);
           const dragPreview = dragPreviewPositions.get(instance.id);
@@ -186,6 +200,19 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
           }
           
           const width = instance.trim_end_ticks - instance.trim_start_ticks;
+          
+          // Skip invalid instances
+          if (isNaN(x) || isNaN(y) || isNaN(width) || width <= 0) {
+            console.warn(`Skipping invalid instance ${instance.id}:`, { 
+              x, 
+              y, 
+              width, 
+              trim_start_ticks: instance.trim_start_ticks,
+              trim_end_ticks: instance.trim_end_ticks,
+              instance 
+            });
+            return;
+          }
           
           items.push({
             id: instance.id,
@@ -392,6 +419,13 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
         onTrackDelete?.(item.id);
       } else if (clickTool === 'pen') {
         onTrackDuplicate?.(item.id);
+      } else if (clickTool === 'select' && onTrackClick) {
+        // Handle track click for opening piano roll/drum machine
+        const trackId = item.data?.id;
+        const instanceId = item.id;
+        if (trackId) {
+          onTrackClick(trackId, instanceId);
+        }
       }
     },
     
@@ -719,6 +753,12 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             const itemDisplayY = dragPreview ? dragPreview.y : item.y;
             const itemWidth = previewWidth !== undefined ? previewWidth : item.width * pixelsPerTick;
             
+            // Skip rendering if values are invalid
+            if (isNaN(itemX) || isNaN(itemDisplayY) || isNaN(itemWidth) || itemWidth <= 0) {
+              console.warn(`Skipping render of invalid track ${item.id}:`, { itemX, itemDisplayY, itemWidth });
+              return null;
+            }
+            
             return (
               <KonvaTrack
                 key={item.id}
@@ -762,6 +802,15 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   }
                   // If item is already selected and no modifiers, don't change selection
                   // This allows dragging/resizing multiple selected items
+                  
+                  // Also handle track click for opening piano roll/drum machine
+                  if (selectedTool === 'select' && onTrackClick && !modifiers.shiftKey && !modifiers.ctrlKey && !modifiers.metaKey) {
+                    const trackId = item.data?.id;
+                    console.log('Track click detected:', { trackId, instanceId: id, item });
+                    if (trackId) {
+                      onTrackClick(trackId, id);
+                    }
+                  }
                 }}
                 onMouseDown={(id, e) => {
                   // Start drag via interaction system
