@@ -1,2 +1,3 @@
 - do not change files in platforms/types/dto. they are auto-generated. if you want to add on to one of those types it needs to be put somewhere else. 
 - always fail loudly. do not use fallbacks. we want to fail as early and as loudly as possible if something is wrong.
+- never make any assumptions. if something is unclear or you have a question, ask a question to make your understanding as clear as possible.
