@@ -243,7 +243,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
       }
 
       const processLogic = async (store: Store): Promise<CombinedTrack | null> => {
-          const trackType = apiTrack.type as TrackType;
+          const trackType = apiTrack.track_type as TrackType;
           if (!TRACK_CONFIG[trackType]) { 
             console.error("Invalid track type from API:", trackType);
             return null;

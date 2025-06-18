@@ -41,7 +41,6 @@ const COLLAPSED_SIDEBAR_WIDTH = '40px'; // Width of the sidebar when collapsed
 function Studio({ projectId }: StudioProps) {
   // Add console log here
   console.log('>>> Studio Component Rendering <<<'); 
-
   // Initialize DB session management
   useStudioDBSession();
   

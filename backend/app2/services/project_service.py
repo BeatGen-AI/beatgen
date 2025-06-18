@@ -183,15 +183,11 @@ class ProjectService:
                     combined_track = CombinedTrack(
                         id=track_data["track_id"],
                         name=track_data["name"],
-                        type=track_data["track_type"],
+                        track_type=track_data["track_type"],
                         # Project-specific track properties
                         volume=track_data["volume"],
                         pan=track_data["pan"],
                         mute=track_data["mute"],
-                        x_position=track_data["x_position"],
-                        y_position=track_data["y_position"],
-                        trim_start_ticks=track_data["trim_start_ticks"],
-                        trim_end_ticks=track_data["trim_end_ticks"],
                         duration_ticks=track_data["duration_ticks"],
                         track_number=track_data["track_number"],
                         instance_metadata=instance_metadata,
@@ -425,11 +421,17 @@ class ProjectService:
                 
                 # Process each track using upsert pattern
                 for track_idx, track_data in enumerate(tracks_data):
-                    if not isinstance(track_data, dict) or "id" not in track_data or "type" not in track_data:
+                    if not isinstance(track_data, dict) or "id" not in track_data:
                         logger.warning(f"Invalid track data format: {track_data}")
                         continue
+                    
+                    # Support both 'type' and 'track_type' fields
+                    type_field = track_data.get("track_type") or track_data.get("type")
+                    if not type_field:
+                        logger.warning(f"No track type found in track data: {track_data}")
+                        continue
                         
-                    track_type = TrackType(track_data["type"])
+                    track_type = TrackType(type_field)
                     track_id = uuid.UUID(track_data["id"])
                     new_track_ids.add(str(track_id))
                     
@@ -446,10 +448,6 @@ class ProjectService:
                         "volume": track_data.get("volume", 1.0),
                         "pan": track_data.get("pan", 0.0),
                         "mute": track_data.get("mute", False),
-                        "x_position": track_data.get("x_position", 0.0),
-                        "y_position": track_data.get("y_position", 0.0),
-                        "trim_start_ticks": track_data.get("trim_start_ticks", 0),
-                        "trim_end_ticks": track_data.get("trim_end_ticks", 0),
                         "duration_ticks": track_data.get("duration_ticks", 0),
                         "track_number": track_idx,
                         "instance_metadata": instance_metadata,
