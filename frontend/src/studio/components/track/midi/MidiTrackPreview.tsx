@@ -84,7 +84,7 @@ export const MidiTrackPreview: React.FC<MidiTrackPreviewProps> = (props) => {
         className="piano-roll-trigger"
         data-testid="piano-roll-trigger"
         data-track-id={track.id}
-        data-track-type={track.type}
+        data-track-type={track.track_type}
         sx={{
           position: 'absolute',
           top: 0,

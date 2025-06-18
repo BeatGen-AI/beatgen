@@ -32,7 +32,7 @@ export const PlaybackCursor = forwardRef<PlaybackCursorRef, PlaybackCursorProps>
   timeSignature
 }, ref) => {
   const [localTime, setLocalTime] = useState(currentTime);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
   const lastUpdateRef = useRef<number>(Date.now());
   const groupRef = useRef<Konva.Group>(null);
   

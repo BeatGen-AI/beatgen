@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 
 export interface SelectionState {
   selectedIds: (string | number)[];
-  selectionRect: { x: number; y: number; width: number; height: number } | null;
+  selectionRect: { startX: number; startY: number; width: number; height: number } | null;
   lastSelectedId: string | number | null;
 }
 

@@ -9,7 +9,7 @@ import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/paginatio
 
 // API and types
 import { getMidiTracks, deleteMidiTrack } from '../api/sounds';
-import { MidiTrackRead } from '../types/track_models/midi_track';
+import { MidiTrackRead } from '../types/dto/track_models/midi_track';
 import MidiTrackCard from './DisplayCards/MidiTrackCard';
 
 interface MidiLibraryProps {

@@ -13,7 +13,7 @@ import {
   SettingsSuggest as SettingsIcon
 } from '@mui/icons-material';
 import { IconWaveSine } from '@tabler/icons-react';
-import { SamplerTrackRead } from '../../../platform/types/track_models/sampler_track';
+import { SamplerTrackRead } from '../../../platform/types/dto/track_models/sampler_track';
 import { formatTime, formatFileSize } from '../../../studio/utils/audioProcessing';
 import { WaveformDisplay } from '../../../studio/components/track/WaveformDisplay';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';

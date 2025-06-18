@@ -8,7 +8,11 @@
 /**
  * Enum for track types
  */
-export type TrackType = "midi" | "audio" | "sampler" | "drum";
+export type TrackType = "MIDI" | "AUDIO" | "SAMPLER" | "DRUM";
+/**
+ * Enum for track types
+ */
+export type TrackType1 = "MIDI" | "AUDIO" | "SAMPLER" | "DRUM";
 
 /**
  * Represents the association between a Project and a specific track type,
@@ -21,15 +25,22 @@ export interface ProjectTrack {
   volume: number;
   pan: number;
   mute: boolean;
+  duration_ticks: number;
+  track_number: number;
+  track_type: TrackType;
+  instance_metadata?: TrackInstance[] | null;
+  project_id?: string;
+  track_id?: string;
+}
+/**
+ * Represents a track instance within a project
+ */
+export interface TrackInstance {
+  id: string;
   x_position: number;
   y_position: number;
   trim_start_ticks: number;
   trim_end_ticks: number;
-  duration_ticks: number;
-  track_number: number;
-  project_id?: string;
-  track_id?: string;
-  track_type: TrackType;
 }
 /**
  * Base model for project tracks
@@ -41,12 +52,10 @@ export interface ProjectTrackBase {
   volume: number;
   pan: number;
   mute: boolean;
-  x_position: number;
-  y_position: number;
-  trim_start_ticks: number;
-  trim_end_ticks: number;
   duration_ticks: number;
   track_number: number;
+  track_type: TrackType;
+  instance_metadata?: TrackInstance[] | null;
 }
 /**
  * Model for creating a new project-track relationship
@@ -58,15 +67,12 @@ export interface ProjectTrackCreate {
   volume: number;
   pan: number;
   mute: boolean;
-  x_position: number;
-  y_position: number;
-  trim_start_ticks: number;
-  trim_end_ticks: number;
   duration_ticks: number;
   track_number: number;
+  track_type: TrackType;
+  instance_metadata?: TrackInstance[] | null;
   project_id: string;
   track_id: string;
-  track_type: TrackType;
 }
 /**
  * Base DTO for Project-Track relationships
@@ -78,15 +84,12 @@ export interface ProjectTrackRead {
   volume: number;
   pan: number;
   mute: boolean;
-  x_position: number;
-  y_position: number;
-  trim_start_ticks: number;
-  trim_end_ticks: number;
   duration_ticks: number;
   track_number: number;
+  track_type: TrackType;
+  instance_metadata?: TrackInstance[] | null;
   project_id: string;
   track_id: string;
-  track_type: TrackType;
 }
 /**
  * Model for updating project-track settings
@@ -98,13 +101,10 @@ export interface ProjectTrackUpdate {
   volume?: number;
   pan?: number;
   mute?: boolean;
-  x_position?: number;
-  y_position?: number;
-  trim_start_ticks?: number;
-  trim_end_ticks?: number;
   duration_ticks?: number;
   track_number?: number;
+  track_type?: TrackType1;
+  instance_metadata?: TrackInstance[] | null;
   project_id: string;
   track_id: string;
-  track_type: TrackType;
 }

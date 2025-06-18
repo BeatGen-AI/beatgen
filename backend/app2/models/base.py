@@ -12,6 +12,23 @@ import uuid
 
 from app2.types.drum_sample_types import DrumSampleType
 from app2.types.genre_types import GenreType
+from app2.types.track_types import TrackType
+from sqlalchemy import Enum as SAEnum
+
+
+class TrackInstance(BaseModel):
+    """Represents a track instance within a project"""
+    
+    model_config = ConfigDict(
+        extra='forbid',  # Don't allow extra fields
+        arbitrary_types_allowed=False  # Stricter type checking
+    )
+    
+    id: str
+    x_position: float
+    y_position: float
+    trim_start_ticks: int
+    trim_end_ticks: int
 
 
 def all_optional(base_model: Type[BaseModel], name: str) -> Type[BaseModel]:
@@ -45,15 +62,15 @@ class TimestampMixin(SQLModel):
         sa_type=TIMESTAMP(timezone=True)
     )
 
-    # Configure JSON serialization for datetime fields
-    model_config = ConfigDict(
-        json_encoders={
-            datetime: lambda dt: dt.isoformat()
-            + "Z"  # Add 'Z' for UTC timezone indicator in ISO format
-        },
-        populate_by_name=True,  # Recommended for SQLModel/Pydantic V2
-        arbitrary_types_allowed=True,  # Often needed with SQLModel
-    )
+    # # Configure JSON serialization for datetime fields
+    # model_config = ConfigDict(
+    #     json_encoders={
+    #         datetime: lambda dt: dt.isoformat()
+    #         + "Z"  # Add 'Z' for UTC timezone indicator in ISO format
+    #     },
+    #     populate_by_name=True,  # Recommended for SQLModel/Pydantic V2
+    #     arbitrary_types_allowed=True,  # Often needed with SQLModel
+    # )
 
 
 class DefaultUUIDMixin(SQLModel):
@@ -123,13 +140,10 @@ class ProjectTrackBase(TimestampMixin):
     volume: float
     pan: float
     mute: bool
-    x_position: float
-    y_position: float
-    trim_start_ticks: int
-    trim_end_ticks: int
     duration_ticks: int
     track_number: int
-    instance_metadata: Optional[List[dict]] = Field(default=None, sa_column=Column(JSONB))
+    track_type: TrackType = Field(sa_column=Column(SAEnum(TrackType), nullable=False))
+    instance_metadata: Optional[List[TrackInstance]] = Field(default=None, sa_column=Column(JSONB))
 
 
 class InstrumentFileBase(FileBase):

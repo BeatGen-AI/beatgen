@@ -1,7 +1,7 @@
 import { Store } from '../../core/state/store';
 import { RootState, SetFn, GetFn, StoreSliceCreator, TrackOptions, TrackType, DrumTrackRead } from '../types';
 import { CombinedTrack } from 'src/platform/types/project';
-import { SamplerTrackBase, SamplerTrackRead } from 'src/platform/types/track_models/sampler_track'; // Added SamplerTrackRead
+import { SamplerTrackBase, SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track'; // Added SamplerTrackRead
 import { downloadAudioTrackFile } from '../../../platform/api/sounds'; // Adjust path as needed
 import { DEFAULT_SAMPLER_CONFIG } from '../config';
 // Import note types and conversion utility
@@ -66,7 +66,7 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
   // Refactored Helper using Immer
   const updateDrumTrackSamplers = (drumTrackId: string, operation: 'add' | 'remove', samplerIds: string[]): void => {
     set(produce((draft: RootState) => {
-        const drumTrackIndex = draft.tracks.findIndex(t => t.id === drumTrackId && t.type === 'DRUM');
+        const drumTrackIndex = draft.tracks.findIndex(t => t.id === drumTrackId && t.track_type === 'DRUM');
         if (drumTrackIndex === -1) {
           console.error(`Drum track ${drumTrackId} not found for sampler update.`);
           return; // Exit draft modification
@@ -161,7 +161,7 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
 
     const addEmptyLogic = async (): Promise<string | null> => {
       // Determine default name
-      const samplerCount = tracks.filter(t => t.type === 'SAMPLER').length;
+      const samplerCount = tracks.filter(t => t.track_type === 'SAMPLER').length;
       const defaultName = newSamplerName || `Sampler ${samplerCount + 1}`;
       
       // 1. Create an empty sampler track (handles history registration)
@@ -209,7 +209,7 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
         const track = findTrackById(trackId);
         
         // Validate track exists and is a sampler
-        if (!track || track.type !== 'SAMPLER') {
+        if (!track || track.track_type !== 'SAMPLER') {
           throw new Error(`Track ${trackId} is not a valid sampler track`);
         }
         

@@ -350,7 +350,8 @@ function Studio({ projectId }: StudioProps) {
     let offsetX = 0;
     if (position) {
       // Calculate the leftmost position of the tracks being pasted
-      const minX = Math.min(...tracks.map(t => t.x_position));
+      // Get minimum X position from first instances
+      const minX = Math.min(...tracks.map(t => t.instances?.[0]?.x_position ?? 0));
       offsetX = position.x - minX;
     } else {
       // No position provided (e.g., keyboard paste)

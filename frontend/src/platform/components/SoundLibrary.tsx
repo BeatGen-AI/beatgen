@@ -9,7 +9,7 @@ import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/paginatio
 
 // API and types
 import { getSoundsPaginated, deleteSound } from '../api/sounds';
-import { AudioTrackRead } from '../types/track_models/audio_track';
+import { AudioTrackRead } from '../types/dto/track_models/audio_track';
 import AudioTrackCard from './DisplayCards/AudioTrackCard';
 
 interface SoundLibraryProps {

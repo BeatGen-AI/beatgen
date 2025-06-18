@@ -14,12 +14,12 @@ import {
   ProjectRead,
   SamplerTrackRead,
   AudioTrackRead
-} from './project';
-import { User } from './user';
-import { AudioTrack, AudioTrackCreate } from './track_models/audio_track';
-import { MidiTrack, MidiTrackCreate, MidiTrackRead } from './track_models/midi_track';
-import { SamplerTrack, SamplerTrackCreate } from './track_models/sampler_track';
-import { DrumTrack, DrumTrackCreate } from './track_models/drum_track';
+} from './dto/project';
+import { User } from './dto/user';
+import { AudioTrack, AudioTrackCreate } from './dto/track_models/audio_track';
+import { MidiTrack, MidiTrackCreate, MidiTrackRead } from './dto/track_models/midi_track';
+import { SamplerTrack, SamplerTrackCreate } from './dto/track_models/sampler_track';
+import { DrumTrack, DrumTrackCreate } from './dto/track_models/drum_track';
 
 /**
  * Converts an API project model to the internal project model

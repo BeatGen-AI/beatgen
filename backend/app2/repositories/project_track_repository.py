@@ -414,11 +414,9 @@ class ProjectTrackRepository:
             query = text("""
                 INSERT INTO project_tracks 
                 (created_at, updated_at, project_id, track_id, track_type, name, volume, pan, mute, 
-                 x_position, y_position, trim_start_ticks, trim_end_ticks, 
                  duration_ticks, track_number, instance_metadata)
                 VALUES 
                 (:created_at, :updated_at, :project_id, :track_id, :track_type, :name, :volume, :pan, :mute,
-                 :x_position, :y_position, :trim_start_ticks, :trim_end_ticks,
                  :duration_ticks, :track_number, :instance_metadata)
                 ON CONFLICT (project_id, track_id) 
                 DO UPDATE SET
@@ -428,10 +426,6 @@ class ProjectTrackRepository:
                     volume = EXCLUDED.volume,
                     pan = EXCLUDED.pan,
                     mute = EXCLUDED.mute,
-                    x_position = EXCLUDED.x_position,
-                    y_position = EXCLUDED.y_position,
-                    trim_start_ticks = EXCLUDED.trim_start_ticks,
-                    trim_end_ticks = EXCLUDED.trim_end_ticks,
                     duration_ticks = EXCLUDED.duration_ticks,
                     track_number = EXCLUDED.track_number,
                     instance_metadata = EXCLUDED.instance_metadata
@@ -450,27 +444,12 @@ class ProjectTrackRepository:
                     # Always store lists as JSON, even if empty
                     instance_metadata = json.dumps(instance_metadata)
                 else:
-                    # If not a list, log warning and create default
-                    self.logger.warning(f"instance_metadata is not a list: {type(instance_metadata)} - {instance_metadata}")
-                    # Create default instance
-                    default_instance = [{
-                        "id": f"{project_track_data['track_id']}_instance_1",
-                        "x_position": project_track_data.get("x_position", 0),
-                        "y_position": project_track_data.get("y_position", 0),
-                        "trim_start_ticks": project_track_data.get("trim_start_ticks", 0),
-                        "trim_end_ticks": project_track_data.get("trim_end_ticks", project_track_data.get("duration_ticks", 0))
-                    }]
-                    instance_metadata = json.dumps(default_instance)
+                    # If not a list, log error and raise exception
+                    self.logger.error(f"instance_metadata is not a list: {type(instance_metadata)} - {instance_metadata}")
+                    raise ValueError(f"instance_metadata must be a list, got {type(instance_metadata)}")
             else:
-                # If None, create default instance for new tracks
-                default_instance = [{
-                    "id": f"{project_track_data['track_id']}_instance_1",
-                    "x_position": project_track_data.get("x_position", 0),
-                    "y_position": project_track_data.get("y_position", 0),
-                    "trim_start_ticks": project_track_data.get("trim_start_ticks", 0),
-                    "trim_end_ticks": project_track_data.get("trim_end_ticks", project_track_data.get("duration_ticks", 0))
-                }]
-                instance_metadata = json.dumps(default_instance)
+                # If None, store as empty list
+                instance_metadata = json.dumps([])
             
             upsert_data = {
                 "created_at": current_time,
@@ -482,10 +461,6 @@ class ProjectTrackRepository:
                 "volume": project_track_data.get("volume", 1.0),
                 "pan": project_track_data.get("pan", 0.0),
                 "mute": project_track_data.get("mute", False),
-                "x_position": project_track_data.get("x_position", 0.0),
-                "y_position": project_track_data.get("y_position", 0.0),
-                "trim_start_ticks": project_track_data.get("trim_start_ticks", 0),
-                "trim_end_ticks": project_track_data.get("trim_end_ticks", 0),
                 "duration_ticks": project_track_data.get("duration_ticks", 0),
                 "track_number": project_track_data.get("track_number", 0),
                 "instance_metadata": instance_metadata,
@@ -600,49 +575,15 @@ class ProjectTrackRepository:
 
             # For each association, load the track based on its type
             for pt in project_tracks:
-                # Use composite key (project_id, track_id) instead of a single id
-                # Handle instance_metadata - ensure it's a list or create default
+                # Handle instance_metadata - pass it through as-is
                 instance_metadata = pt.instance_metadata
-                if instance_metadata is not None:
-                    if isinstance(instance_metadata, list):
-                        # Keep as is if non-empty
-                        if len(instance_metadata) == 0:
-                            # Empty list - create default instance
-                            instance_metadata = [{
-                                "id": f"{pt.track_id}_instance_1",
-                                "x_position": pt.x_position or 0,
-                                "y_position": pt.y_position or 0,
-                                "trim_start_ticks": pt.trim_start_ticks or 0,
-                                "trim_end_ticks": pt.trim_end_ticks or pt.duration_ticks or 0
-                            }]
-                    elif isinstance(instance_metadata, dict) and not instance_metadata:
-                        # Empty dict -> create default instance
-                        instance_metadata = [{
-                            "id": f"{pt.track_id}_instance_1",
-                            "x_position": pt.x_position or 0,
-                            "y_position": pt.y_position or 0,
-                            "trim_start_ticks": pt.trim_start_ticks or 0,
-                            "trim_end_ticks": pt.trim_end_ticks or pt.duration_ticks or 0
-                        }]
-                    else:
-                        # Any other type -> create default instance
-                        self.logger.warning(f"Unexpected instance_metadata type for track {pt.track_id}: {type(instance_metadata)}")
-                        instance_metadata = [{
-                            "id": f"{pt.track_id}_instance_1",
-                            "x_position": pt.x_position or 0,
-                            "y_position": pt.y_position or 0,
-                            "trim_start_ticks": pt.trim_start_ticks or 0,
-                            "trim_end_ticks": pt.trim_end_ticks or pt.duration_ticks or 0
-                        }]
-                else:
-                    # None -> create default instance for backwards compatibility
-                    instance_metadata = [{
-                        "id": f"{pt.track_id}_instance_1",
-                        "x_position": pt.x_position or 0,
-                        "y_position": pt.y_position or 0,
-                        "trim_start_ticks": pt.trim_start_ticks or 0,
-                        "trim_end_ticks": pt.trim_end_ticks or pt.duration_ticks or 0
-                    }]
+                if instance_metadata is not None and not isinstance(instance_metadata, list):
+                    self.logger.warning(f"Unexpected instance_metadata type for track {pt.track_id}: {type(instance_metadata)}")
+                    # Convert to empty list if not a list
+                    instance_metadata = []
+                elif instance_metadata is None:
+                    # If None, use empty list
+                    instance_metadata = []
                 
                 track_data = {
                     "project_id": pt.project_id,
@@ -651,10 +592,6 @@ class ProjectTrackRepository:
                     "volume": pt.volume,
                     "pan": pt.pan,
                     "mute": pt.mute,
-                    "x_position": pt.x_position,
-                    "y_position": pt.y_position,
-                    "trim_start_ticks": pt.trim_start_ticks,
-                    "trim_end_ticks": pt.trim_end_ticks,
                     "duration_ticks": pt.duration_ticks,
                     "track_number": pt.track_number,
                     "track_type": pt.track_type,

@@ -1,4 +1,5 @@
-export * from './types';
+// Export types explicitly to avoid conflicts
+export type { Tool, DraggableResizableItem, Selectable, Note, Track, SelectionRect, ToolState } from './types';
 export * from './useInteractionManager';
 export * from './selectionUtils';
 export { default as SelectionOverlay } from './SelectionOverlay';
@@ -13,11 +14,19 @@ export {
   type ResizeDragState,
   useResizeDrag
 } from './useResizeDrag';
-export * from './useSelection';
+export { 
+  type SelectionState,
+  type UseSelectionOptions,
+  useSelection
+} from './useSelection';
 export { 
   type UseToolOptions,
   useTool
 } from './useTool';
-export * from './useClipboard';
+export {
+  type ClipboardState,
+  type UseClipboardOptions,
+  useClipboard
+} from './useClipboard';
 export * from './ResizeHandle';
 export * from './DragGhost';

@@ -11,6 +11,7 @@ import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import { cn } from '@/lib/utils';
 import { SelectionOverlay, InteractionToolbar, Tool, DragGhost, useInteractions, DraggableResizableItem } from '../../shared/interactions';
 import { getSnapSizeInPixels, GridSnapOption } from '../piano-roll2/gridConstants';
+import { TimelineTrackItem } from './types';
 
 export interface TimelineProps {
   tracks: CombinedTrack[];
@@ -44,6 +45,12 @@ export interface TimelineProps {
   onPasteTracks?: (tracks: CombinedTrack[], position?: { x: number; y: number }) => void;
   onDeleteTracks?: (trackIds: string[]) => void;
   onDuplicateTracks?: (trackIds: string[]) => void;
+  
+  // Instance-specific handlers
+  onInstancePositionChange?: (trackId: string, instanceId: string, newPosition: Position, isDragEnd: boolean) => void;
+  onInstanceResizeEnd?: (trackId: string, instanceId: string, deltaPixels: number, direction: 'left' | 'right') => void;
+  updateMultipleInstancePositions?: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
+  resizeMultipleInstances?: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
 }
 
 // Define imperative handle interface
@@ -90,7 +97,11 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   onCutTracks,
   onPasteTracks,
   onDeleteTracks,
-  onDuplicateTracks
+  onDuplicateTracks,
+  onInstancePositionChange,
+  onInstanceResizeEnd,
+  updateMultipleInstancePositions,
+  resizeMultipleInstances
 }, ref) => {
   const theme = useTheme();
   const { studioMode } = useAppTheme();
@@ -106,7 +117,7 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   const [justCompletedSelection, setJustCompletedSelection] = useState(false);
   
   // State for grid snap options
-  const [gridSnapSize, setGridSnapSize] = useState(propGridSnapSize || GridSnapOption.STEP);
+  const [gridSnapSize, setGridSnapSize] = useState<GridSnapOption>(propGridSnapSize || GridSnapOption.STEP);
   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
   
   // Update gridSnapSize when prop changes
@@ -122,17 +133,18 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     return getSnapSizeInPixels(gridSnapSize, effectiveGridSize);
   }, [gridSnapSize, effectiveGridSize]);
   
-  // Convert tracks to draggable items
-  const trackItems: DraggableResizableItem[] = React.useMemo(() => 
-    tracks.map(track => ({
-      id: track.id,
-      x: track.x_position, // Already in ticks
-      y: track.y_position, // In pixels
-      width: track.duration_ticks ? 
-        (track.trim_end_ticks || track.duration_ticks) - (track.trim_start_ticks || 0) : 
-        MUSIC_CONSTANTS.pulsesPerQuarterNote * 4, // Default to 1 bar
-      height: GRID_CONSTANTS.trackHeight
-    })),
+  // Convert all instances to draggable items
+  const trackItems: TimelineTrackItem[] = React.useMemo(() => 
+    tracks.flatMap(track => 
+      (track.instances || []).map(instance => ({
+        id: instance.id, // Use instance ID
+        x: instance.x_position, // Already in ticks
+        y: instance.y_position, // In pixels
+        width: instance.trim_end_ticks - instance.trim_start_ticks,
+        height: GRID_CONSTANTS.trackHeight,
+        trackId: track.id // Keep reference to parent track
+      }))
+    ),
     [tracks]
   );
 
@@ -153,39 +165,80 @@ export const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     snapToGrid: gridSnapEnabled,
     gridSize: pixelsToTicks(actualSnapSize, bpm, timeSignature),
     onSelectionChange: (ids) => {
-      const trackIds = ids.filter(id => typeof id === 'string') as string[];
+      // Convert instance IDs to track IDs
+      const trackIds = [...new Set(ids.map(id => {
+        const trackItem = trackItems.find(item => item.id === id);
+        return trackItem && 'trackId' in trackItem ? trackItem.trackId : null;
+      }).filter(Boolean) as string[])];
       onTrackSelect?.(trackIds);
     },
     onDragMove: (updates) => {
-      updates.forEach((pos, trackId) => {
-        onTrackPositionChange(trackId as string, {
-          x: pos.x, // Already in ticks from interaction
-          y: pos.y  // In pixels
-        }, false);
+      updates.forEach((pos, instanceId) => {
+        // Find the parent track for this instance
+        const trackItem = trackItems.find(item => item.id === instanceId);
+        if (!trackItem || !('trackId' in trackItem)) return;
+        
+        // Use instance handler if available, otherwise fall back to track handler
+        if (onInstancePositionChange) {
+          onInstancePositionChange(trackItem.trackId, instanceId as string, {
+            x: pos.x, // Already in ticks from interaction
+            y: pos.y  // In pixels
+          }, false);
+        } else {
+          onTrackPositionChange(trackItem.trackId, {
+            x: pos.x,
+            y: pos.y
+          }, false);
+        }
       });
     },
     onDragEnd: (updates) => {
-      updates.forEach((pos, trackId) => {
-        onTrackPositionChange(trackId as string, {
-          x: pos.x,
-          y: pos.y
-        }, true);
+      updates.forEach((pos, instanceId) => {
+        // Find the parent track for this instance
+        const trackItem = trackItems.find(item => item.id === instanceId);
+        if (!trackItem || !('trackId' in trackItem)) return;
+        
+        // Use instance handler if available, otherwise fall back to track handler
+        if (onInstancePositionChange) {
+          onInstancePositionChange(trackItem.trackId, instanceId as string, {
+            x: pos.x,
+            y: pos.y
+          }, true);
+        } else {
+          onTrackPositionChange(trackItem.trackId, {
+            x: pos.x,
+            y: pos.y
+          }, true);
+        }
       });
     },
     onResizeEnd: (updates) => {
-      updates.forEach((dim, trackId) => {
-        const track = tracks.find(t => t.id === trackId);
-        if (!track || !onTrackResizeEnd) return;
+      updates.forEach((dim, instanceId) => {
+        // Find the instance and its parent track
+        const trackItem = trackItems.find(item => item.id === instanceId);
+        if (!trackItem || !('trackId' in trackItem)) return;
+        
+        const track = tracks.find(t => t.id === trackItem.trackId);
+        const instance = track?.instances?.find(inst => inst.id === instanceId);
+        if (!track || !instance) return;
         
         if (dim.start !== undefined) {
           // Left resize - position changed
-          const deltaPixels = ticksToPixels(dim.start - track.x_position, bpm, timeSignature);
-          onTrackResizeEnd(trackId as string, deltaPixels, 'left');
+          const deltaPixels = ticksToPixels(dim.start - instance.x_position, bpm, timeSignature);
+          if (onInstanceResizeEnd) {
+            onInstanceResizeEnd(track.id, instanceId as string, deltaPixels, 'left');
+          } else if (onTrackResizeEnd) {
+            onTrackResizeEnd(track.id, deltaPixels, 'left');
+          }
         } else if (dim.width !== undefined) {
           // Right resize - width changed
-          const currentWidth = (track.trim_end_ticks || track.duration_ticks || 0) - (track.trim_start_ticks || 0);
+          const currentWidth = instance.trim_end_ticks - instance.trim_start_ticks;
           const deltaPixels = ticksToPixels(dim.width - currentWidth, bpm, timeSignature);
-          onTrackResizeEnd(trackId as string, deltaPixels, 'right');
+          if (onInstanceResizeEnd) {
+            onInstanceResizeEnd(track.id, instanceId as string, deltaPixels, 'right');
+          } else if (onTrackResizeEnd) {
+            onTrackResizeEnd(track.id, deltaPixels, 'right');
+          }
         }
       });
     },

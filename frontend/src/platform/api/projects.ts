@@ -4,19 +4,19 @@ import { apiClient } from './client';
 import { ApiError } from './types';
 import { createDrumTrackRecord, createMidiFileRecord, createSamplerTrackRecord, createSoundRecord, getUploadUrl } from './sounds';
 import { 
-  Project as ApiProject, 
+  Project,
   ProjectCreate, 
   ProjectRead, 
   ProjectUpdate, 
-  ProjectWithTracks, 
+  ProjectWithTracks,
+  ProjectWithTracksEntity,
   CombinedTrack 
 } from '../types/project';
-import { Project } from '../../platform/types/project';
-import { AudioTrack, AudioTrackRead } from '../types/track_models/audio_track';
-import { SamplerTrack } from '../types/track_models/sampler_track';
-import { MidiTrack } from '../types/track_models/midi_track';
+import { AudioTrack, AudioTrackRead } from '../types/dto/track_models/audio_track';
+import { SamplerTrack } from '../types/dto/track_models/sampler_track';
+import { MidiTrack } from '../types/dto/track_models/midi_track';
 import { db } from '../../studio/core/db/dexie-client';
-import { DrumTrack } from '../types/track_models/drum_track';
+import { DrumTrack } from '../types/dto/track_models/drum_track';
 import { Page } from '../types/pagination';
 
 export const getProjects = async (page: number = 1, size: number = 10): Promise<Page<Project>> => {
@@ -36,7 +36,7 @@ export const createProject = async (project: ProjectCreate): Promise<Project> =>
   return response.data;
 };
 
-export const updateProject = async (id: string, updates: ProjectWithTracks): Promise<Project> => {
+export const updateProject = async (id: string, updates: ProjectWithTracksEntity): Promise<Project> => {
   try {
     // Map instances to instance_metadata if tracks are present
     const updatesForBackend = { ...updates };
@@ -44,8 +44,7 @@ export const updateProject = async (id: string, updates: ProjectWithTracks): Pro
       updatesForBackend.tracks = updates.tracks.map(track => {
         const { instances, ...trackData } = track;
         return {
-          ...trackData,
-          instance_metadata: instances || []
+          ...trackData
         };
       });
     }
@@ -188,7 +187,7 @@ export const saveProjectWithSounds = async (
 ): Promise<Project> => {
   console.log("Saving project with sounds:", projectId, projectData, tracks);
   for (const track of tracks) {
-    switch (track.type) {
+    switch (track.track_type) {
       case 'AUDIO':
         await uploadAudioTrack(track);
         break;
@@ -211,7 +210,7 @@ export const saveProjectWithSounds = async (
       const { instances, ...trackData } = track;
       return {
         ...trackData,
-        instance_metadata: instances || []
+        instance_metadata: instances as any || []
       };
     });
     

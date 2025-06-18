@@ -14,7 +14,7 @@ import {
   DriveFileMove as EditIcon
 } from '@mui/icons-material';
 import { Drum } from 'lucide-react';
-import { DrumTrackRead } from '../../../platform/types/track_models/drum_track';
+import { DrumTrackRead } from '../../../platform/types/dto/track_models/drum_track';
 import { Badge } from "../../../components/ui/badge";
 
 interface DrumTrackCardProps {

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Group, Rect, Circle, Line, Text } from 'react-konva';
 import { CombinedTrack } from 'src/platform/types/project';
-import { DrumTrack } from 'src/platform/types/track_models/drum_track';
+import { DrumTrackRead, SamplerTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 
 export interface DrumTrackRendererProps {
   track: CombinedTrack;
@@ -13,7 +13,7 @@ export interface DrumTrackRendererProps {
 }
 
 // Standard drum kit mapping
-const DRUM_NAMES = {
+const DRUM_NAMES: { [key: number]: string } = {
   36: 'BD',  // Bass Drum
   38: 'SN',  // Snare
   42: 'HH',  // Hi-Hat Closed
@@ -37,24 +37,46 @@ export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
   color
 }) => {
   // Get drum hits from track
-  const drumHits = useMemo(() => {
-    if (track.type === 'DRUM') {
-      const drumTrack = track as DrumTrack;
-      return drumTrack.notes || [];
+  // Get sampler tracks and their MIDI notes
+  const samplerTracksWithNotes = useMemo(() => {
+    if (track.track_type === 'DRUM') {
+      const drumTrack = track.track as DrumTrackRead;
+      return drumTrack.sampler_tracks || [];
     }
     return [];
   }, [track]);
+
+  // Create drum hits from sampler tracks' MIDI notes
+  const drumHits = useMemo(() => {
+    const hits: Array<{ id: string; pitch: number; tick: number; duration: number; velocity: number }> = [];
+    
+    samplerTracksWithNotes.forEach((samplerTrack, index) => {
+      if (samplerTrack.midi_notes_json?.notes) {
+        const notes = samplerTrack.midi_notes_json.notes as Array<any>;
+        notes.forEach((note: any, noteIndex: number) => {
+          hits.push({
+            id: `${samplerTrack.id}-${noteIndex}`,
+            pitch: index, // Use sampler track index as "pitch" for lane positioning
+            tick: note.tick || 0,
+            duration: note.duration || 480, // Default to quarter note
+            velocity: note.velocity || 100
+          });
+        });
+      }
+    });
+    
+    return hits;
+  }, [samplerTracksWithNotes]);
   
   // Get unique drum types and create lanes
   const drumLanes = useMemo(() => {
-    const uniquePitches = [...new Set(drumHits.map(hit => hit.pitch))].sort((a, b) => a - b);
     const lanes = new Map<number, { y: number; name: string }>();
     
-    uniquePitches.forEach((pitch, index) => {
-      const laneHeight = height / Math.max(uniquePitches.length, 1);
-      lanes.set(pitch, {
+    samplerTracksWithNotes.forEach((samplerTrack, index) => {
+      const laneHeight = height / Math.max(samplerTracksWithNotes.length, 1);
+      lanes.set(index, {
         y: index * laneHeight + laneHeight / 2,
-        name: DRUM_NAMES[pitch] || `D${pitch}`
+        name: samplerTrack.name || `Track ${index + 1}`
       });
     });
     

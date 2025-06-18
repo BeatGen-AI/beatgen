@@ -8,8 +8,9 @@ import { GRID_CONSTANTS, calculateTrackWidth, pixelsToTicks, ticksToPixels, getT
 import { CombinedTrack } from 'src/platform/types/project'; // Import CombinedTrack if needed
 import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions';
-import { MidiTrack } from 'src/platform/types/track_models/midi_track'; // Keep MidiTrack import
+import { MidiTrack } from 'src/platform/types/dto/track_models/midi_track'; // Keep MidiTrack import
 import { Tool } from '../../shared/interactions';
+import { getFirstInstance } from '../../utils/instanceHelpers';
 
 /**
  * Track component serves as the main entry point for rendering tracks in the timeline.
@@ -99,8 +100,9 @@ function Track(props: TrackProps) {
   // Calculate width based on the memoized fullTrack
   const trackWidth = useMemo(() => {
       if (!fullTrack?.duration_ticks) return 100; 
-      const startTicks = fullTrack.trim_start_ticks || 0;
-      const endTicks = fullTrack.trim_end_ticks || fullTrack.duration_ticks;
+      const firstInstance = getFirstInstance(fullTrack);
+      const startTicks = firstInstance?.trim_start_ticks || 0;
+      const endTicks = firstInstance?.trim_end_ticks || fullTrack.duration_ticks;
       const visibleDurationTicks = Math.max(0, endTicks - startTicks);
       // Ensure bpm and timeSignature are valid before calculation
       return ticksToPixels(visibleDurationTicks, bpm ?? 120, timeSignature ?? [4, 4]);
@@ -109,9 +111,9 @@ function Track(props: TrackProps) {
   // Callbacks use memoized fullTrack or selected actions
   const handleTrackClick = useCallback((e: React.MouseEvent) => {
     if (!fullTrack) return;
-    if (fullTrack.type === 'DRUM') {
+    if (fullTrack.track_type === 'DRUM') {
       openDrumMachine(id); 
-    } else if (fullTrack.type === 'MIDI' || fullTrack.type === 'SAMPLER') {
+    } else if (fullTrack.track_type === 'MIDI' || fullTrack.track_type === 'SAMPLER') {
       openPianoRoll(id); 
     }
   }, [fullTrack, id, openDrumMachine, openPianoRoll]);
@@ -147,7 +149,7 @@ function Track(props: TrackProps) {
       onClick={handleTrackClick} 
       sx={{ position: 'relative', cursor: 'pointer' }}
       data-track-id={id}
-      data-track-type={fullTrack.type} 
+      data-track-type={fullTrack.track_type} 
     >
       <TrackFactory
         track={fullTrack}

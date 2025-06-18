@@ -1,17 +1,14 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Group, Rect, Text, Label, Tag } from 'react-konva';
-import { CombinedTrack, TrackInstance } from 'src/platform/types/project';
+import { CombinedTrack } from 'src/platform/types/project';
 import { AudioTrackRenderer } from './tracks/AudioTrackRenderer';
 import { MidiTrackRenderer } from './tracks/MidiTrackRenderer';
 import { DrumTrackRenderer } from './tracks/DrumTrackRenderer';
 import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 
-const SYSTEM_FONT_STACK = 'Sen';
-
 export interface KonvaTrackProps {
   track: CombinedTrack;
-  instance?: TrackInstance;
-  instanceId?: string;
+  instanceId?: string; // Add instance ID prop
   x: number;
   y: number;
   width: number;
@@ -31,6 +28,7 @@ export interface KonvaTrackProps {
   selectedCount?: number;
   gridSnapEnabled?: boolean;
   snapSizeInPixels?: number;
+  data?: any; // Additional data for color etc
 }
 
 /**
@@ -39,7 +37,6 @@ export interface KonvaTrackProps {
  */
 export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   track,
-  instance,
   instanceId,
   x,
   y,
@@ -59,7 +56,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   onResizeStart,
   selectedCount = 1,
   gridSnapEnabled = true,
-  snapSizeInPixels = 12.5
+  snapSizeInPixels = 12.5,
+  data
 }) => {
   const groupRef = useRef<any>(null);
   const backgroundRef = useRef<any>(null);
@@ -70,9 +68,15 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   // Use prop preview width if provided (during resize), otherwise use internal state
   const previewWidth = propPreviewWidth || null;
   
-  // Get track color based on type
+  // Get track color from props (passed from parent)
   const trackColor = useMemo(() => {
-    switch (track.type) {
+    // If color is explicitly passed in data, use it
+    if (data?.color) {
+      return data.color;
+    }
+    
+    // Otherwise fall back to type-based colors
+    switch (track.track_type) {
       case 'AUDIO':
         return '#4caf50';
       case 'MIDI':
@@ -83,17 +87,15 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       default:
         return '#9c27b0';
     }
-  }, [track.type]);
+  }, [track.track_type, data?.color]);
   
   // Calculate content offset for trimmed tracks
   const contentOffset = useMemo(() => {
-    const trimStart = instance?.trim_start_ticks ?? track.trim_start_ticks ?? 0;
-    const duration = track.duration_ticks ?? 0;
-    if (!trimStart || !duration) return 0;
-    const trimRatio = trimStart / duration;
-    const fullWidth = duration * pixelsPerTick;
+    if (!track.instance_metadata || !track.duration_ticks) return 0;
+    const trimRatio = track.instance_metadata[0].trim_start_ticks / track.duration_ticks;
+    const fullWidth = track.duration_ticks * pixelsPerTick;
     return -(trimRatio * fullWidth);
-  }, [instance, track.trim_start_ticks, track.duration_ticks, pixelsPerTick]);
+  }, [track.instance_metadata, track.duration_ticks, pixelsPerTick]);
   
   
   // Render track content based on type
@@ -108,7 +110,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
     };
     
     
-    switch (track.type) {
+    switch (track.track_type) {
       case 'AUDIO':
         return <AudioTrackRenderer {...contentProps} />;
       case 'MIDI':
@@ -135,8 +137,9 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       onClick={(e) => {
         e.cancelBubble = true; // Prevent stage from deselecting
         if (onClick) {
-          // Use instance ID if provided, otherwise fall back to track ID
-          onClick(instanceId || track.id, e);
+          // Use instance ID directly
+          const idToUse = instanceId || track.id;
+          onClick(idToUse, e);
         }
       }}
       onMouseDown={(e) => {
@@ -147,8 +150,9 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         
         e.cancelBubble = true;
         if (onMouseDown) {
-          // Use instance ID if provided, otherwise fall back to track ID
-          onMouseDown(instanceId || track.id, e);
+          // Use instance ID directly
+          const idToUse = instanceId || track.id;
+          onMouseDown(idToUse, e);
         }
       }}
     >
@@ -198,7 +202,6 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           fontSize={12}
           fill="white"
           padding={4}
-          fontFamily={SYSTEM_FONT_STACK}
         />
       </Label>
       
@@ -245,13 +248,32 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
               setIsResizingLeft(false);
             }}
             onMouseDown={(e) => {
+              console.log('🔧 KonvaTrack - LEFT resize handle mouseDown', {
+                trackId: track.id,
+                instanceId,
+                idUsed: instanceId || track.id,
+                onResizeStart: !!onResizeStart,
+                event: e
+              });
               e.cancelBubble = true;
               if (onResizeStart) {
                 const stage = e.target.getStage();
                 const pos = stage?.getPointerPosition();
+                console.log('🔧 KonvaTrack - LEFT resize getting position', {
+                  stage: !!stage,
+                  pos
+                });
                 if (pos) {
-                  // Use instance ID if provided, otherwise fall back to track ID
-                  onResizeStart(instanceId || track.id, 'left', pos);
+                  // Use instance ID directly - it's already the full ID
+                  const idToUse = instanceId || track.id;
+                  console.log('🔧 KonvaTrack - LEFT resize calling onResizeStart', {
+                    instanceId,
+                    trackId: track.id,
+                    idToUse,
+                    direction: 'left',
+                    pos
+                  });
+                  onResizeStart(idToUse, 'left', pos);
                 }
               }
             }}
@@ -282,13 +304,32 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
               setIsResizingRight(false);
             }}
             onMouseDown={(e) => {
+              console.log('🔧 KonvaTrack - RIGHT resize handle mouseDown', {
+                trackId: track.id,
+                instanceId,
+                idUsed: instanceId || track.id,
+                onResizeStart: !!onResizeStart,
+                event: e
+              });
               e.cancelBubble = true;
               if (onResizeStart) {
                 const stage = e.target.getStage();
                 const pos = stage?.getPointerPosition();
+                console.log('🔧 KonvaTrack - RIGHT resize getting position', {
+                  stage: !!stage,
+                  pos
+                });
                 if (pos) {
-                  // Use instance ID if provided, otherwise fall back to track ID
-                  onResizeStart(instanceId || track.id, 'right', pos);
+                  // Use instance ID directly - it's already the full ID
+                  const idToUse = instanceId || track.id;
+                  console.log('🔧 KonvaTrack - RIGHT resize calling onResizeStart', {
+                    instanceId,
+                    trackId: track.id,
+                    idToUse,
+                    direction: 'right',
+                    pos
+                  });
+                  onResizeStart(idToUse, 'right', pos);
                 }
               }
             }}
@@ -305,7 +346,6 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
               align="center"
               width={previewWidth || width}
               listening={false}
-              fontFamily={SYSTEM_FONT_STACK}
             />
           )}
         </>
@@ -320,7 +360,6 @@ export default React.memo(KonvaTrack, (prevProps, nextProps) => {
   return (
     prevProps.track.id === nextProps.track.id &&
     prevProps.instanceId === nextProps.instanceId &&
-    JSON.stringify(prevProps.instance) === JSON.stringify(nextProps.instance) &&
     prevProps.x === nextProps.x &&
     prevProps.y === nextProps.y &&
     prevProps.width === nextProps.width &&

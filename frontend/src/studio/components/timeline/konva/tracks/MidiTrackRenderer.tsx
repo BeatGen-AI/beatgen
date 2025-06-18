@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { Group, Rect, Line } from 'react-konva';
 import { CombinedTrack } from 'src/platform/types/project';
-import { MidiTrack } from 'src/platform/types/track_models/midi_track';
+import { MidiTrackRead } from 'src/platform/types/dto/track_models/midi_track';
+import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track';
 
 export interface MidiTrackRendererProps {
   track: CombinedTrack;
@@ -25,9 +26,16 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
 }) => {
   // Get MIDI notes from track
   const midiNotes = useMemo(() => {
-    if (track.type === 'MIDI' || track.type === 'SAMPLER') {
-      const midiTrack = track as MidiTrack;
-      return midiTrack.notes || [];
+    if (track.track_type === 'MIDI') {
+      const midiTrack = track.track as MidiTrackRead;
+      if (midiTrack.midi_notes_json?.notes) {
+        return midiTrack.midi_notes_json.notes as Array<any>;
+      }
+    } else if (track.track_type === 'SAMPLER') {
+      const samplerTrack = track.track as SamplerTrackRead;
+      if (samplerTrack.midi_notes_json?.notes) {
+        return samplerTrack.midi_notes_json.notes as Array<any>;
+      }
     }
     return [];
   }, [track]);

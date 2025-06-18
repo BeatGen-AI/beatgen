@@ -22,7 +22,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { getPublicDrumSamples } from '../../../../platform/api/drum_samples';
-import { DrumSamplePublicRead } from 'src/platform/types/public_models/drum_samples';
+import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
 import { DrumSampleCard } from './DrumMachineModalCard';
 import { prettyPrint } from '../../../../utils/pretty_print';
 

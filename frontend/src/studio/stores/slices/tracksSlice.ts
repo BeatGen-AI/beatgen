@@ -1,4 +1,5 @@
-import { CombinedTrack, TrackInstance } from 'src/platform/types/project';
+import { TrackInstance } from 'src/platform/types/project';
+import { CombinedTrackEntity as CombinedTrack } from 'src/platform/types/entities/project';
 import { Position } from '../../components/track';
 import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTrackPayload, DrumTrackPayload, MidiTrackPayload, AudioTrackOptions, SamplerTrackOptions, MidiTrackOptions, AnyTrackRead, MidiTrack, AudioTrack, SamplerTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, DrumTrackOptions } from '../types';
 import { Store } from '../../core/state/store';
@@ -185,7 +186,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   const selectDrumTrackById = (trackId: string): DrumTrackRead | undefined => {
     const track = findTrackById(trackId); // Use the slice's findTrackById
     // Ensure track and track.track exist and type is correct
-    return (track && track.type === 'DRUM' && track.track) ? track.track as DrumTrackRead : undefined;
+    return (track && track.track_type === 'DRUM' && track.track) ? track.track as DrumTrackRead : undefined;
   };
 
   const selectSamplerTracksForDrumTrack = (drumTrackId: string): SamplerTrackRead[] => {
@@ -193,7 +194,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     return tracks
       // Ensure track and track.track exist before filtering
       .filter(t => 
-          t.type === 'SAMPLER' && 
+          t.track_type === 'SAMPLER' && 
           t.track && 
           (t.track as SamplerTrackRead).drum_track_id === drumTrackId
       )
@@ -251,16 +252,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const trackData: Omit<CombinedTrack, 'track'> & { track?: any } = {
         id: trackId,
         name: name, 
-        type: type,
+        track_type: type,
+        track_number: tracksLength + 1, // Add track number
         volume: trackProps.volume,
         pan: trackProps.pan,
         mute: trackProps.muted, 
-        x_position: position.x,
-        y_position: position.y,
-        trim_start_ticks: options.trim_start_ticks ?? 0,
-        trim_end_ticks: options.trim_end_ticks ?? null,
         duration_ticks: options.duration ?? defaultDurationTicks,
         dirty: true, // New tracks are dirty by default (need to be saved)
+        // Initialize with empty instances array
+        instances: [],
       };
       
       // Get initial *serializable* nested track properties
@@ -397,16 +397,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const trackData: Omit<CombinedTrack, 'track'> & { track?: any } = {
         id: trackId,
         name: name, 
-        type: type,
+        track_type: type,
+        track_number: tracksLength + 1, // Add track number
         volume: trackProps.volume,
         pan: trackProps.pan,
         mute: trackProps.muted, 
-        x_position: position.x,
-        y_position: position.y,
-        trim_start_ticks: options.trim_start_ticks ?? 0,
-        trim_end_ticks: options.trim_end_ticks ?? null,
         duration_ticks: options.duration ?? defaultDurationTicks,
         dirty: true, // New tracks are dirty by default (need to be saved)
+        // Initialize with empty instances array
+        instances: [],
       };
       
       // Get initial *serializable* nested track properties
@@ -495,7 +494,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
       const deleteLogic = async (passedStore: Store) => {
           // --- Recursive delete for drum track --- 
-          if (trackToDelete.type === 'DRUM' && trackToDelete.track) {
+          if (trackToDelete.track_type === 'DRUM' && trackToDelete.track) {
               const drumTrack = trackToDelete.track as DrumTrackRead;
               const samplerIdsToRemove = drumTrack.sampler_track_ids ? [...drumTrack.sampler_track_ids] : []; 
               if (samplerIdsToRemove.length > 0) {
@@ -527,9 +526,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           }
 
           try {
-              if (trackToDelete.type === 'SAMPLER') {
+              if (trackToDelete.track_type === 'SAMPLER') {
               }
-              if (trackToDelete.type === 'MIDI') {
+              if (trackToDelete.track_type === 'MIDI') {
               }
           } catch (disconnectError) {
               console.error(`Error during track disconnection for ${trackId}:`, disconnectError);
@@ -548,7 +547,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const samplerTrack = findTrackById(samplerTrackId); // Use slice's findTrackById
 
     // 1. Basic Validation
-    if (!samplerTrack || samplerTrack.type !== 'SAMPLER' || !samplerTrack.track) {
+    if (!samplerTrack || samplerTrack.track_type !== 'SAMPLER' || !samplerTrack.track) {
         console.error(`Sampler track ${samplerTrackId} not found or invalid.`);
         return;
     }
@@ -748,10 +747,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         // Update track state with new instances array
         updateTrackState(trackId, { 
             instances: updatedInstances,
-            // Also update track position for compatibility
-            x_position: newPosition.x, 
-            y_position: newPosition.y, 
-            position: { ...newPosition },
             dirty: true
         });
         
@@ -759,12 +754,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
         
         if (isDragEnd) {
-            // Use Actions.TrackPosition (will need to update this to use instances later)
-            const action = new Actions.TrackPosition(
+            // Use instance action for history
+            const action = new InstanceMove(
                 get,
                 trackId,
-                { ...oldPosition },
-                { ...newPosition }
+                firstInstance.id,
+                oldPosition.x,
+                oldPosition.y,
+                newPosition.x,
+                newPosition.y
             );
             await executeHistoryAction(action);
             
@@ -961,17 +959,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         // Update track state with new instances array
         updateTrackState(trackId, { 
             instances: updatedInstances,
-            // Also update track values for compatibility
-            trim_start_ticks: newTrimStartTicks,
-            trim_end_ticks: newTrimEndTicks,
-            x_position: newPositionX,
             dirty: true
         });
 
-        // Create the history action without width params
-        const action = new Actions.TrackResize(
+        // Create instance resize action for history
+        const action = new InstanceResize(
             get, 
             trackId,
+            firstInstance.id,
             oldTrimStartTicks,
             oldTrimEndTicks,
             oldPositionX,
@@ -1211,16 +1206,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       let maxRightPosition = 0;
       
       selectedTracks.forEach(track => {
-        // Get instances (or create default instance data if none exist)
+        // Get instances - skip tracks without instances
         const instances = track.instances && track.instances.length > 0 
           ? track.instances 
-          : [{
-              id: `${track.id}_instance_1`,
-              x_position: track.x_position || 0,
-              y_position: track.y_position || 0,
-              trim_start_ticks: track.trim_start_ticks || 0,
-              trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 0
-            }];
+          : [];
         
         // Find rightmost instance
         instances.forEach(instance => {
@@ -1367,10 +1356,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       
       for (const trackId of trackIds) {
         const track = tracks.find(t => t.id === trackId);
-        if (track) {
-          const oldTrimStartTicks = track.trim_start_ticks || 0;
-          const oldTrimEndTicks = track.trim_end_ticks || track.duration_ticks || 0;
-          const oldPositionX = track.x_position || 0;
+        if (track && track.instances?.[0]) {
+          const firstInstance = track.instances[0];
+          const oldTrimStartTicks = firstInstance.trim_start_ticks || 0;
+          const oldTrimEndTicks = firstInstance.trim_end_ticks || track.duration_ticks || 0;
+          const oldPositionX = firstInstance.x_position || 0;
           
           let newTrimStartTicks = oldTrimStartTicks;
           let newTrimEndTicks = oldTrimEndTicks;
@@ -1444,10 +1434,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       // Create position change actions for all tracks
       trackIds.forEach(trackId => {
         const track = tracks.find(t => t.id === trackId);
-        if (track) {
-          const oldPosition = { x: track.x_position, y: track.y_position };
-          const newX = Math.max(0, track.x_position + deltaX);
-          const newY = Math.max(0, track.y_position + deltaY);
+        if (track && track.instances?.[0]) {
+          const firstInstance = track.instances[0];
+          const oldPosition = { x: firstInstance.x_position, y: firstInstance.y_position };
+          const newX = Math.max(0, firstInstance.x_position + deltaX);
+          const newY = Math.max(0, firstInstance.y_position + deltaY);
           const newPosition = { x: newX, y: newY };
           
           // Create action but don't execute it
@@ -1517,7 +1508,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         y: lastInstance.y_position
       };
     } else if (!newPosition) {
-      newPosition = { x: 0, y: track.y_position || 0 };
+      // Default position if track has no instances
+      newPosition = { x: 0, y: 0 };
     }
     
     // Create new instance - use source instance data if provided

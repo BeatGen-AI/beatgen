@@ -21,6 +21,10 @@ export type DrumSampleType =
   | "perc"
   | "hit"
   | "fx";
+/**
+ * Enum for track types
+ */
+export type TrackType = "MIDI" | "AUDIO" | "SAMPLER" | "DRUM";
 
 /**
  * Mixin that adds UUID primary key (generates default value)
@@ -96,6 +100,7 @@ export interface ProjectBase {
   time_signature_numerator: number;
   time_signature_denominator: number;
   key_signature: string;
+  version?: number;
 }
 /**
  * Base model for project tracks
@@ -107,12 +112,20 @@ export interface ProjectTrackBase {
   volume: number;
   pan: number;
   mute: boolean;
+  duration_ticks: number;
+  track_number: number;
+  track_type: TrackType;
+  instance_metadata?: TrackInstance[] | null;
+}
+/**
+ * Represents a track instance within a project
+ */
+export interface TrackInstance {
+  id: string;
   x_position: number;
   y_position: number;
   trim_start_ticks: number;
   trim_end_ticks: number;
-  duration_ticks: number;
-  track_number: number;
 }
 export interface SQLModel {}
 /**

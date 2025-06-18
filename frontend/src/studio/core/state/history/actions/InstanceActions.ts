@@ -1,5 +1,5 @@
 import { BaseAction } from './BaseAction';
-import { GetState } from '../../../stores/types';
+import { GetFn } from '../../../../stores/types';
 import { TrackInstance } from 'src/platform/types/project';
 import { ActionType } from '.';
 
@@ -16,7 +16,7 @@ export class InstanceMove extends BaseAction {
     private newY: number;
 
     constructor(
-        get: GetState,
+        get: GetFn,
         trackId: string,
         instanceId: string,
         oldX: number,
@@ -67,7 +67,7 @@ export class InstanceResize extends BaseAction {
     private newX: number;
 
     constructor(
-        get: GetState,
+        get: GetFn,
         trackId: string,
         instanceId: string,
         oldTrimStart: number,
@@ -130,7 +130,7 @@ export class InstanceAdd extends BaseAction {
     private instance: TrackInstance;
 
     constructor(
-        get: GetState,
+        get: GetFn,
         trackId: string,
         instance: TrackInstance
     ) {
@@ -172,7 +172,7 @@ export class InstanceDelete extends BaseAction {
     private instanceIndex: number;
 
     constructor(
-        get: GetState,
+        get: GetFn,
         trackId: string,
         instance: TrackInstance,
         instanceIndex: number

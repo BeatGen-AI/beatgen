@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { DraggableResizableItem, Tool } from './types';
 import { 
-  DraggableResizableItem, 
   useResizeDrag,
   PositionUpdate,
   DimensionUpdate 
 } from './useResizeDrag';
 import { useSelection, SelectionState } from './useSelection';
-import { Tool, ToolState, useTool } from './useTool';
+import { ToolState, useTool } from './useTool';
 import { useClipboard, ClipboardState } from './useClipboard';
 
 export interface InteractionOptions<T extends DraggableResizableItem> {

@@ -6,7 +6,7 @@ import { usePianoRollStore } from '../../stores/usePianoRollStore';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { CombinedTrack, DrumTrackRead, SamplerTrackRead, RootState } from '../../stores/types';
 import { DrumMachineModal, DrumMachineModalProps } from '../modals/drum-machine/DrumMachineModal';
-import { DrumSamplePublicRead } from 'src/platform/types/public_models/drum_samples';
+import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
 
 export interface DrumTrackState extends CombinedTrack {
   type: 'DRUM';

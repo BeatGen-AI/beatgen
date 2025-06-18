@@ -1,5 +1,6 @@
 import { Position } from '../components/track';
-import { CombinedTrack, TrackInstance } from 'src/platform/types/project';
+import { TrackInstance } from 'src/platform/types/project';
+import { CombinedTrackEntity as CombinedTrack } from 'src/platform/types/entities/project';
 import { Note } from '../../types/note';
 import { Store } from '../core/state/store';
 import { Action } from '../core/state/history/actions/BaseAction';
@@ -11,7 +12,7 @@ import {
     DrumTrackRead,
     TrackType
 } from '../../platform/types/project';
-import { DrumSamplePublicRead } from '../../platform/types/public_models/drum_samples';
+import { DrumSamplePublicRead } from '../../platform/types/dto/public_models/drum_samples';
 import { Tool } from '../shared/interactions';
 // Remove the type re-export for now
 // export type { ProjectWithTracks as ProjectStateData }; 

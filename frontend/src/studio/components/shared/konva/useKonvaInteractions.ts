@@ -134,6 +134,9 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     direction: 'left' | 'right';
     allItems: Map<string, KonvaItem>;  // Snapshots of all items being resized
   } | null>(null);
+  
+  // Ref to store the last resize updates
+  const lastResizeUpdatesRef = useRef<Map<string, Dimensions> | null>(null);
 
   // Ref for throttling drag updates
   const dragUpdateFrameRef = useRef<number | null>(null);
@@ -341,8 +344,19 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Start resize operation
   const startResize = useCallback((itemId: string, direction: 'left' | 'right', mousePos: Position) => {
+    console.log('🎯 useKonvaInteractions - startResize called', {
+      itemId,
+      direction,
+      mousePos,
+      itemsCount: items.length,
+      itemIds: items.map(i => i.id)
+    });
     const item = items.find(i => i.id === itemId);
-    if (!item) return;
+    if (!item) {
+      console.error('❌ useKonvaInteractions - item not found!', itemId);
+      return;
+    }
+    console.log('✅ useKonvaInteractions - found item', item);
 
     // Check if the item is selected
     const isItemSelected = selectedIds.has(itemId);
@@ -374,6 +388,11 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     setIsResizing(true);
     setResizingItemId(itemId);
     setResizeDirection(direction);
+    console.log('✅ useKonvaInteractions - resize state set', {
+      isResizing: true,
+      resizingItemId: itemId,
+      resizeDirection: direction
+    });
 
     if (onResizeStart) {
       onResizeStart(item, direction);
@@ -382,7 +401,15 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Update resize
   const updateResize = useCallback((mousePos: Position) => {
-    if (!isResizing || !resizeStartRef.current) return;
+    console.log('🔄 updateResize called', {
+      isResizing,
+      hasResizeStartRef: !!resizeStartRef.current,
+      mousePos
+    });
+    if (!isResizing || !resizeStartRef.current) {
+      console.log('⚠️ updateResize early return', { isResizing, hasRef: !!resizeStartRef.current });
+      return;
+    }
 
     const { direction, mousePos: startMousePos, allItems } = resizeStartRef.current;
     const deltaXPixels = mousePos.x - startMousePos.x;
@@ -414,6 +441,9 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       }
     });
 
+    // Store the updates for use in endResize
+    lastResizeUpdatesRef.current = updates;
+    
     if (onResizeMove) {
       onResizeMove(updates);
     }
@@ -421,6 +451,10 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // End resize
   const endResize = useCallback(() => {
+    console.log('🎯 endResize called', {
+      isResizing,
+      hasResizeStartRef: !!resizeStartRef.current
+    });
     if (!isResizing || !resizeStartRef.current) return;
 
     const { item } = resizeStartRef.current;
@@ -432,31 +466,21 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       ? items.filter(i => selectedIds.has(i.id))
       : items.filter(i => i.id === item.id);
     
-    const updates = new Map<string, Dimensions>();
+    // Use the stored resize updates from the last updateResize call
+    const finalUpdates = lastResizeUpdatesRef.current || new Map<string, Dimensions>();
     
-    // Collect final dimensions for all resized items
-    for (const resizeItem of itemsToResize) {
-      const currentItem = items.find(i => i.id === resizeItem.id);
-      if (!currentItem) continue;
-      
-      // Include start position for left resize
-      if (direction === 'left') {
-        updates.set(currentItem.id, {
-          start: currentItem.x,
-          width: currentItem.width,
-          height: currentItem.height
-        });
-      } else {
-        updates.set(currentItem.id, {
-          width: currentItem.width,
-          height: currentItem.height
-        });
-      }
-    }
+    console.log('🎲 endResize - using stored updates', {
+      hasStoredUpdates: !!lastResizeUpdatesRef.current,
+      storedUpdatesSize: finalUpdates.size,
+      updates: Array.from(finalUpdates.entries())
+    });
 
-    if (onResizeEnd && updates.size > 0) {
-      onResizeEnd(updates);
+    if (onResizeEnd && finalUpdates.size > 0) {
+      onResizeEnd(finalUpdates);
     }
+    
+    // Clear the stored updates
+    lastResizeUpdatesRef.current = null;
 
     setIsResizing(false);
     setResizingItemId(null);
@@ -569,25 +593,35 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     const pos = stage.getPointerPosition();
     if (!pos) return;
 
-    if (isDragging) {
+    // Also check refs as state might not have updated yet
+    const isCurrentlyDragging = isDragging || !!dragStartRef.current;
+    const isCurrentlyResizing = isResizing || !!resizeStartRef.current;
+    const isCurrentlySelecting = isSelecting || !!selectionRect;
+
+    if (isCurrentlyDragging) {
       updateDrag(pos);
-    } else if (isResizing) {
+    } else if (isCurrentlyResizing) {
       updateResize(pos);
-    } else if (isSelecting) {
+    } else if (isCurrentlySelecting) {
       updateRectSelection(pos);
     }
-  }, [stage, isDragging, isResizing, isSelecting, updateDrag, updateResize, updateRectSelection]);
+  }, [stage, isDragging, isResizing, isSelecting, selectionRect, updateDrag, updateResize, updateRectSelection]);
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {
-    if (isDragging) {
+    // Check refs as state might not have updated yet
+    const isCurrentlyDragging = isDragging || !!dragStartRef.current;
+    const isCurrentlyResizing = isResizing || !!resizeStartRef.current;
+    const isCurrentlySelecting = isSelecting || !!selectionRect;
+
+    if (isCurrentlyDragging) {
       endDrag();
-    } else if (isResizing) {
+    } else if (isCurrentlyResizing) {
       endResize();
-    } else if (isSelecting) {
+    } else if (isCurrentlySelecting) {
       endSelection();
     }
-  }, [isDragging, isResizing, isSelecting, endDrag, endResize, endSelection]);
+  }, [isDragging, isResizing, isSelecting, selectionRect, endDrag, endResize, endSelection]);
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

@@ -6,7 +6,7 @@ import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import { VirtualInstrumentsModal } from '../modals/VirtualInstrumentsModal';
 import { DrumMachineModal } from '../modals/drum-machine/DrumMachineModal';
-import { DrumSamplePublicRead } from 'src/platform/types/public_models/drum_samples';
+import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
 // Import types from store types file
 import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload } from '../../stores/types';
 

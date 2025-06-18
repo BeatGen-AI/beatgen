@@ -3,7 +3,7 @@
  * This file provides a single source of truth for project types across the application
  */
 
-import { CombinedTrack } from "../platform/types/project";
+import { CombinedTrackEntity } from "../platform/types/entities/project";
 
 /**
  * Core project model - the essential data representing a project
@@ -15,7 +15,7 @@ export interface Project {
   tempo: number;
   timeSignature: [number, number];
   key: string;
-  tracks: CombinedTrack[];
+  tracks: CombinedTrackEntity[];
   
   // Optional metadata
   created_at?: string;
@@ -28,7 +28,7 @@ export interface Project {
  * This should only be used in the UI layer, not for persistence
  */
 export interface ProjectState extends Project {
-  tracks: CombinedTrack[];  // Override tracks to use TrackState
+  tracks: CombinedTrackEntity[];  // Override tracks to use TrackState
   
   // Runtime-specific fields can be added here
   isDirty?: boolean;     // Whether the project has unsaved changes
@@ -51,7 +51,7 @@ export interface ProjectUpdateData {
   tempo?: number;
   timeSignature?: [number, number];
   key?: string;
-  tracks?: CombinedTrack[];
+  tracks?: CombinedTrackEntity[];
 }
 
 /**

@@ -5,6 +5,7 @@ import { pixelsToTicks, ticksToPixels } from '../../../constants/gridConstants';
 import { CombinedTrack } from 'src/platform/types/project';
 import { Position } from '../types';
 import { Tool } from '../../../shared/interactions';
+import { getFirstInstance } from '../../../utils/instanceHelpers';
 
 /**
  * BaseTrackPreview is the foundation for all track visualizations in the timeline.
@@ -124,10 +125,11 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   
   // Calculate the normal content offset for trimming from the beginning
   const calculateContentOffset = () => {
-    if (!track.duration_ticks || !track.trim_start_ticks) return 0;
+    const firstInstance = getFirstInstance(track);
+    if (!track.duration_ticks || !firstInstance?.trim_start_ticks) return 0;
     
     // Calculate what percentage of the original content is trimmed from start
-    const trimRatio = track.trim_start_ticks / track.duration_ticks;
+    const trimRatio = firstInstance.trim_start_ticks / track.duration_ticks;
     
     // Apply that ratio to the full content width to get the offset
     return -(trimRatio * actualContentWidth);
@@ -176,8 +178,8 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
     boxSizing: 'border-box',
     borderBottom: `1px solid ${GRID_CONSTANTS.borderColor}`,
     borderRadius: '6px',
-    left: `${ticksToPixels(track.x_position, bpm, timeSignature)}px`,
-    top: `${track.y_position}px`,
+    left: `${ticksToPixels(getFirstInstance(track)?.x_position ?? 0, bpm, timeSignature)}px`,
+    top: `${getFirstInstance(track)?.y_position ?? 0}px`,
     cursor: isSelected ? 'grab' : getToolCursor(),
     zIndex: isSelected ? 1001 : 1000,
     transition: (interaction?.isDragging || interaction?.isResizing || isGroupDrag || isGroupResize) ? 'none' : 'width 0.2s ease, left 0.2s ease, top 0.2s ease, transform 0.2s ease',
@@ -304,15 +306,16 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   // Sync position AND width from props to DOM
   useEffect(() => {
     if (trackRef.current) {
+      const firstInstance = getFirstInstance(track);
       // Convert track position from ticks to pixels for display
-      const pixelX = ticksToPixels(track.x_position, bpm, timeSignature);
+      const pixelX = ticksToPixels(firstInstance?.x_position ?? 0, bpm, timeSignature);
       
       trackRef.current.style.left = `${pixelX}px`;
-      trackRef.current.style.top = `${track.y_position}px`;
+      trackRef.current.style.top = `${firstInstance?.y_position ?? 0}px`;
       trackRef.current.style.width = `${trackWidth}px`;
       
     }
-  }, [track.x_position, track.y_position, trackWidth, track.id, bpm, timeSignature, track.trim_start_ticks, track.trim_end_ticks, track.duration_ticks]);
+  }, [track.instances, trackWidth, track.id, bpm, timeSignature, track.duration_ticks]);
   
   // Handle resize delta from parent (when using interaction manager for group resize)
   useEffect(() => {
@@ -332,7 +335,8 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         const newWidth = Math.max(48, initialDim.width + delta);
         trackRef.current.style.width = `${newWidth}px`;
         // Keep position unchanged
-        const currentPosPixels = ticksToPixels(track.x_position, bpm, timeSignature);
+        const firstInstance = getFirstInstance(track);
+        const currentPosPixels = ticksToPixels(firstInstance?.x_position ?? 0, bpm, timeSignature);
         trackRef.current.style.left = `${currentPosPixels}px`;
       } else if (propResizeDirection === 'left') {
         // Left resize - change both position and width
@@ -360,7 +364,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         contentRef.current.style.transform = `translateX(${contentOffsetX}px)`;
       }
     }
-  }, [isGroupResize, resizeDelta, resizeInitialDimensions, propResizeDirection, bpm, timeSignature, track.x_position, track.id, trackWidth, contentTransform, contentOffsetX]);
+  }, [isGroupResize, resizeDelta, resizeInitialDimensions, propResizeDirection, bpm, timeSignature, track.instances, track.id, trackWidth, contentTransform, contentOffsetX]);
 
   // Calculate the transform to use for content position
   const getContentTransform = () => {
@@ -499,9 +503,9 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
             position: 'absolute',
             right: 10,
             top: 5,
-            bgcolor: track.type === 'AUDIO' ? '#4caf50' : 
-                    track.type === 'MIDI' ? '#2196f3' : 
-                    track.type === 'DRUM' ? '#ff9800' : '#9c27b0',
+            bgcolor: track.track_type === 'AUDIO' ? '#4caf50' : 
+                    track.track_type === 'MIDI' ? '#2196f3' : 
+                    track.track_type === 'DRUM' ? '#ff9800' : '#9c27b0',
             color: 'white',
             fontSize: '10px',
             fontWeight: 'bold',
@@ -511,7 +515,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
             opacity: 0.7,
             pointerEvents: 'none' // Ensure content doesn't interfere
           }}>
-            {track.type}
+            {track.track_type}
           </Box>
           
           {/* Content Wrapper - Visible part is controlled by the container's overflow: hidden */}

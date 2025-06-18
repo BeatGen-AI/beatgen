@@ -199,7 +199,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   
   // Render type-specific controls based on track type
   const renderTypeSpecificControls = () => {
-    switch(track.type) {
+    switch(track.track_type) {
       case 'MIDI':
         return (
           <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>

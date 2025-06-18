@@ -29,9 +29,9 @@ import { GRID_CONSTANTS } from '../../constants/gridConstants';
 import { CombinedTrack } from '../../../platform/types/project';
 import ReactMarkdown from 'react-markdown'
 import { DrumTrackPayload, MidiTrackPayload } from '../../stores/types';
-import { MidiTrackRead } from 'src/platform/types/track_models/midi_track';
-import { SamplerTrackRead } from 'src/platform/types/track_models/sampler_track';
-import { DrumTrackRead } from 'src/platform/types/track_models/drum_track';
+import { MidiTrackRead } from 'src/platform/types/dto/track_models/midi_track';
+import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track';
+import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 import { alpha } from '@mui/material/styles';
 import ChatModelMenu from './ChatModelMenu';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
@@ -503,15 +503,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
               // processTrack will apply defaults anyway, but being explicit helps clarity
               id: drumTrackData.id,
               name: drumTrackData.name || 'New MIDI Track', // Use name from data or default
-              type: 'DRUM',
+              track_type: 'DRUM',
               volume: 80, // Default volume
               pan: 0,    // Default pan
               mute: false, // Default mute state
-              x_position: 0, // Default position
               // Fields related to audio clips, might not be relevant here or default to 0
-              trim_start_ticks: 0,
-              trim_end_ticks: 0,
               duration_ticks: MUSIC_CONSTANTS.pulsesPerQuarterNote*16,
+              track_number: 0, // Default track number
 
               // Nest the specific track data
               track: drumTrackData
@@ -550,15 +548,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                   // processTrack will apply defaults anyway, but being explicit helps clarity
                   id: midiTrackData.id,
                   name: midiTrackData.name || 'New MIDI Track', // Use name from data or default
-                  type: 'MIDI',
+                  track_type: 'MIDI',
                   volume: 80, // Default volume
                   pan: 0,    // Default pan
                   mute: false, // Default mute state
-                  x_position: 0, // Default position
                   // Fields related to audio clips, might not be relevant here or default to 0
-                  trim_start_ticks: 0,
-                  trim_end_ticks: 0,
                   duration_ticks: MUSIC_CONSTANTS.pulsesPerQuarterNote*16,
+                  track_number: 0, // Default track number
 
                   // Nest the specific track data
                   track: midiTrackData
@@ -647,9 +643,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                         if (updateTrackState) {
                           // Update duration and ensure trim_end covers the new duration
                           updateTrackState(newTrack.id, {
-                            duration_ticks: maxEndTick,
-                            // Set trim_end_ticks to match duration if it was null or shorter
-                            trim_end_ticks: Math.max(newTrack.trim_end_ticks || 0, maxEndTick)
+                            duration_ticks: maxEndTick
                           });
                           console.log(`Updated duration_ticks and trim_end_ticks for track ${newTrack.id}`);
                         } else {
@@ -688,8 +682,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                         const { updateTrackState } = useStudioStore.getState();
                         if (updateTrackState) {
                           updateTrackState(newTrack.id, {
-                            duration_ticks: maxEndTick,
-                            trim_end_ticks: Math.max(newTrack.trim_end_ticks || 0, maxEndTick)
+                            duration_ticks: maxEndTick
                           });
                           console.log(`Updated duration_ticks and trim_end_ticks (fallback) for track ${newTrack.id}`);
                         } else {

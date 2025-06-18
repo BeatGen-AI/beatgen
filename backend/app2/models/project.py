@@ -6,7 +6,7 @@ from typing import Optional, List, TYPE_CHECKING, Union
 from sqlmodel import SQLModel, Field, Relationship
 import uuid
 
-from app2.models.base import ProjectBase
+from app2.models.base import ProjectBase, ProjectTrackBase
 from app2.models.track_models.audio_track import AudioTrackRead
 from app2.models.track_models.drum_track import DrumTrackRead
 from app2.models.track_models.sampler_track import SamplerTrackRead
@@ -52,24 +52,10 @@ class ProjectUpdate(SQLModel):
 
 
 # Combined track model for API responses
-class CombinedTrack(SQLModel):
+class CombinedTrack(ProjectTrackBase):
     """Model that combines Track and ProjectTrack data for API responses"""
 
     id: uuid.UUID
-    name: str
-    type: TrackType
-    # ProjectTrack fields
-    volume: Optional[float] = 0.0
-    pan: Optional[float] = 0.0
-    mute: Optional[bool] = False
-    solo: Optional[bool] = False
-    x_position: Optional[float] = 0.0
-    y_position: Optional[float] = 0.0
-    trim_start_ticks: Optional[int] = 0
-    trim_end_ticks: Optional[int] = 0
-    duration_ticks: Optional[int] = 0
-    track_number: Optional[int] = 0
-    instance_metadata: Optional[List[dict]] = None
 
     # Track data based on type
     track: Union[AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead]

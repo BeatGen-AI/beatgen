@@ -300,6 +300,26 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     },
     
     onResizeEnd: (updates) => {
+      console.log('🎯 KonvaTimeline - onResizeEnd called', {
+        updatesSize: updates.size,
+        updates: Array.from(updates.entries()),
+        hasResizeMultipleInstances: !!resizeMultipleInstances,
+        hasOnInstanceResizeEnd: !!onInstanceResizeEnd,
+        hasOnTrackResizeEnd: !!onTrackResizeEnd
+      });
+      
+      // Log details about each update
+      updates.forEach((dim, instanceId) => {
+        const item = konvaItems.find(item => item.id === instanceId);
+        console.log('📏 Update details:', {
+          instanceId,
+          dim,
+          itemFound: !!item,
+          itemData: item?.data,
+          trackId: item?.data?.id,
+          instance: item?.data?.instance
+        });
+      });
       // Clear preview widths and positions
       setResizePreviewWidths(new Map());
       setResizePreviewPositions(new Map());
@@ -496,7 +516,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       
       const newViewport = {
         ...viewport,
-        x: Math.max(0, Math.min(totalTimelineWidth - viewport.width, viewport.x + deltaX)),
+        x: Math.max(0, Math.min(totalTimelineWidth / internalZoom - viewport.width, viewport.x + deltaX)),
         y: 0 // Always keep y at 0
       };
       
@@ -680,7 +700,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               <KonvaTrack
                 key={item.id}
                 track={item.data}
-                instance={item.data.instance}
                 instanceId={item.id}
                 x={itemX}
                 y={itemDisplayY}

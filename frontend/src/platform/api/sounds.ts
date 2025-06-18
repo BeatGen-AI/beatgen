@@ -1,10 +1,10 @@
 import { apiClient } from './client';
 import { AudioTrackRead, DrumTrackRead, MidiTrackRead, SamplerTrackRead } from '../types/project';
 //import { SamplerTrack } from 'src/types/track';
-import { AudioTrackCreate } from '../types/track_models/audio_track';
-import { MidiTrackCreate } from '../types/track_models/midi_track';
-import { SamplerTrackCreate } from '../types/track_models/sampler_track';
-import { DrumTrackCreate } from '../types/track_models/drum_track';
+import { AudioTrackCreate } from '../types/dto/track_models/audio_track';
+import { MidiTrackCreate } from '../types/dto/track_models/midi_track';
+import { SamplerTrackCreate } from '../types/dto/track_models/sampler_track';
+import { DrumTrackCreate } from '../types/dto/track_models/drum_track';
 import { Page } from '../types/pagination';
 
 // Keep using the Sound interface from studio for now until we can fully migrate

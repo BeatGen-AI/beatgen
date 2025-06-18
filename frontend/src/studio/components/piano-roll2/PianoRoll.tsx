@@ -3283,8 +3283,8 @@ export const PianoRoll: FC<PianoRollProps> = ({
                     {interaction.selectedTool === 'select' && interaction.selectionState.selectionRect && (
                       <SelectionRectangle 
                         rect={{
-                          startX: interaction.selectionState.selectionRect.x,
-                          startY: interaction.selectionState.selectionRect.y,
+                          startX: interaction.selectionState.selectionRect.startX,
+                          startY: interaction.selectionState.selectionRect.startY,
                           width: interaction.selectionState.selectionRect.width,
                           height: interaction.selectionState.selectionRect.height
                         }}

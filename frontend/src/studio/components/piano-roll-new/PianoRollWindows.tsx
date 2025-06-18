@@ -5,7 +5,7 @@ import PianoRoll from '../piano-roll2/PianoRoll';
 import { convertToNoteState, NoteState } from '../../utils/noteConversion';
 import { diffNotes } from '../../utils/noteDiffing';
 import { getTrackColor } from '../../constants/gridConstants';
-import { MidiTrack } from 'src/platform/types/track_models/midi_track';
+import { MidiTrack } from 'src/platform/types/dto/track_models/midi_track';
 import { CombinedTrack } from 'src/platform/types/project';
 import { Store } from '../../core/state/store'; 
 

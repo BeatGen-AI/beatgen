@@ -44,6 +44,7 @@ export const ACTION_TYPES = {
     
     // Group action
     GROUP_ACTION: 'GROUP_ACTION',
+    GROUP_TRACK_MOVE: 'GROUP_TRACK_MOVE',
 } as const;
 
 // Export action type for type checking
