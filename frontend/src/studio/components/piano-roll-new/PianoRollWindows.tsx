@@ -7,7 +7,9 @@ import { diffNotes } from '../../utils/noteDiffing';
 import { getTrackColor } from '../../constants/gridConstants';
 import { MidiTrack } from 'src/platform/types/dto/track_models/midi_track';
 import { CombinedTrack } from 'src/platform/types/project';
-import { Store } from '../../core/state/store'; 
+import { Store } from '../../core/state/store';
+import { Actions } from '../../core/state/history/actions';
+import { convertFromNoteState } from '../../utils/noteConversion'; 
 
 const PianoRollWindows: React.FC = memo(() => {
   const openPianoRolls = usePianoRollStore(state => state.openPianoRolls);
@@ -55,18 +57,89 @@ const PianoRollWindows: React.FC = memo(() => {
   const handleNotesChange = useCallback(async (trackId: string, newNotes: NoteState[]) => {
     const prevNotes = prevNotesByTrack[trackId] || [];
     const changes = diffNotes(prevNotes, newNotes);
-    for (const change of changes) {
-      try {
-        switch (change.type) {
-          case 'add': await addMidiNote(trackId, change.note); break;
-          case 'delete': await removeMidiNote(trackId, change.id); break;
-          case 'move':
-          case 'resize': if (change.oldNote) { await updateMidiNote(trackId, change.note); } break;
+    
+    // If there are multiple changes, use a GroupAction
+    if (changes.length > 1) {
+      const executeHistoryAction = useStudioStore.getState().executeHistoryAction;
+      const midiManager = store?.getMidiManager();
+      if (!executeHistoryAction || !midiManager) return;
+      
+      // Create individual actions for each change
+      const actions: any[] = [];
+      for (const change of changes) {
+        try {
+          switch (change.type) {
+            case 'add': {
+              const internalNoteData = convertFromNoteState({ ...change.note, id: -1 }, trackId);
+              const tempNoteIdString = change.note.id?.toString() || crypto.randomUUID();
+              actions.push(new Actions.AddNote(useStudioStore.getState, trackId, tempNoteIdString, internalNoteData));
+              break;
+            }
+            case 'delete': {
+              const originalNote = midiManager.getTrackNotes(trackId)?.find(n => n.id === change.id);
+              if (originalNote) {
+                actions.push(new Actions.DeleteNote(useStudioStore.getState, trackId, change.id.toString(), { ...originalNote }));
+              }
+              break;
+            }
+            case 'move':
+            case 'resize': {
+              if (change.oldNote) {
+                const noteId = change.note.id as number;
+                const originalNote = midiManager.getTrackNotes(trackId)?.find(n => n.id === noteId);
+                if (originalNote) {
+                  const oldNoteForCompare = originalNote;
+                  const newNoteForCompare = convertFromNoteState(change.note, trackId);
+                  
+                  if (oldNoteForCompare.column !== newNoteForCompare.column || oldNoteForCompare.row !== newNoteForCompare.row) {
+                    const oldPos = { column: Math.round(oldNoteForCompare.column), row: oldNoteForCompare.row };
+                    const newPos = { column: Math.round(newNoteForCompare.column), row: newNoteForCompare.row };
+                    
+                    if (oldNoteForCompare.length !== newNoteForCompare.length) {
+                      actions.push(new Actions.ResizeNote(useStudioStore.getState, trackId, noteId.toString(), Math.round(oldNoteForCompare.length), Math.round(newNoteForCompare.length), { ...originalNote }, oldPos.column, newPos.column));
+                    } else {
+                      actions.push(new Actions.MoveNote(useStudioStore.getState, trackId, noteId.toString(), oldPos, newPos, { ...originalNote }));
+                    }
+                  } else if (oldNoteForCompare.length !== newNoteForCompare.length) {
+                    actions.push(new Actions.ResizeNote(useStudioStore.getState, trackId, noteId.toString(), Math.round(oldNoteForCompare.length), Math.round(newNoteForCompare.length), { ...originalNote }));
+                  }
+                }
+              }
+              break;
+            }
+          }
+        } catch (error) { 
+          console.error(`Error creating action for ${change.type}:`, error); 
         }
-      } catch (error) { console.error(`Error processing ${change.type} op:`, error); }
+      }
+      
+      // Execute all actions as a group
+      if (actions.length > 0) {
+        const groupAction = new Actions.GroupAction(useStudioStore.getState, actions, `Edit ${actions.length} notes`);
+        await executeHistoryAction(groupAction);
+        
+        // Increment note version once for the whole group
+        const incrementNoteVersion = useStudioStore.getState().incrementNoteVersion;
+        if (incrementNoteVersion) {
+          incrementNoteVersion();
+        }
+      }
+    } else {
+      // Single change - use the existing individual action handlers
+      for (const change of changes) {
+        try {
+          switch (change.type) {
+            case 'add': await addMidiNote(trackId, change.note); break;
+            case 'delete': await removeMidiNote(trackId, change.id); break;
+            case 'move':
+            case 'resize': if (change.oldNote) { await updateMidiNote(trackId, change.note); } break;
+          }
+        } catch (error) { console.error(`Error processing ${change.type} op:`, error); }
+      }
     }
+    
     setPrevNotesByTrack(prev => ({ ...prev, [trackId]: [...newNotes] }));
-  }, [prevNotesByTrack, addMidiNote, removeMidiNote, updateMidiNote]);
+  }, [prevNotesByTrack, addMidiNote, removeMidiNote, updateMidiNote, store]);
 
   const handleNotePreview = useCallback((trackId: string, midiNote: number, isOn: boolean) => {
     const instrumentManager = store?.getInstrumentManager(); 
