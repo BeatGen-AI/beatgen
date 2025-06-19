@@ -183,14 +183,35 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         y={0}
         width={displayWidth}
         height={height}
-        fill={trackColor}
-        stroke={isSelected ? '#fff' : '#333'}
-        strokeWidth={isSelected ? 2 : 1}
-        cornerRadius={4}
-        opacity={isDragging ? 0.7 : 1}
-        shadowEnabled={false}
+        fill="rgba(26, 26, 26, 0.8)"
+        stroke={isSelected ? '#2196f3' : 'transparent'}
+        strokeWidth={isSelected ? 3 : 0}
+        strokeScaleEnabled={false}
+        cornerRadius={6}
+        opacity={track.mute ? 0.4 : 0.85}
+        shadowEnabled={isHovered && !track.mute}
+        shadowColor={trackColor}
+        shadowBlur={12}
+        shadowOpacity={1}
         perfectDrawEnabled={false}
         draggable={false}  // Prevent the rect from being dragged independently
+      />
+      
+      {/* Gradient overlay */}
+      <Rect
+        x={0}
+        y={0}
+        width={displayWidth}
+        height={height}
+        fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+        fillLinearGradientEndPoint={{ x: 0, y: height }}
+        fillLinearGradientColorStops={[
+          0, `${trackColor}80`,
+          1, trackColor
+        ]}
+        cornerRadius={6}
+        opacity={track.mute ? 0.4 : 0.85}
+        listening={false}
       />
       
       {/* Resize preview outline */}
@@ -214,45 +235,89 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         {renderTrackContent()}
       </Group>
       
-      {/* Track label */}
-      <Label x={5} y={5}>
-        <Tag fill="rgba(0, 0, 0, 0.7)" cornerRadius={3} />
-        <Text
-          text={track.name}
-          fontSize={12}
-          fill="white"
-          padding={4}
-        />
-      </Label>
-      
-      {/* Selection highlight */}
-      {isSelected && !isDragging && (
+      {/* Track type badge */}
+      <Group x={displayWidth - 10} y={5}>
         <Rect
-          x={-2}
-          y={-2}
-          width={displayWidth + 4}
-          height={height + 4}
-          stroke="#4a90e2"
-          strokeWidth={2}
-          fill="transparent"
-          cornerRadius={4}
+          x={-50}
+          y={0}
+          width={40}
+          height={16}
+          fill={
+            track.track_type === 'AUDIO' ? '#4caf50' : 
+            track.track_type === 'MIDI' ? '#2196f3' : 
+            track.track_type === 'SAMPLER' ? '#2196f3' :
+            track.track_type === 'DRUM' ? '#ff9800' : '#9c27b0'
+          }
+          cornerRadius={3}
+          opacity={0.7}
           listening={false}
         />
+        <Text
+          x={-50}
+          y={3}
+          width={40}
+          text={track.track_type}
+          fontSize={10}
+          fontStyle="bold"
+          fill="white"
+          align="center"
+          listening={false}
+        />
+      </Group>
+      
+      {/* Track name */}
+      <Text
+        x={10}
+        y={6}
+        text={track.name}
+        fontSize={12}
+        fontStyle="bold"
+        fill="white"
+        shadowColor="rgba(0,0,0,0.7)"
+        shadowBlur={2}
+        shadowOffset={{ x: 1, y: 1 }}
+        listening={false}
+      />
+      
+      {/* Muted indicator */}
+      {track.mute && (
+        <>
+          <Rect
+            x={0}
+            y={0}
+            width={displayWidth}
+            height={height}
+            fill="rgba(0,0,0,0.4)"
+            cornerRadius={6}
+            listening={false}
+          />
+          <Text
+            x={displayWidth / 2}
+            y={height / 2 - 7}
+            text="MUTED"
+            fontSize={14}
+            fontStyle="bold"
+            fill="white"
+            align="center"
+            offsetX={20}
+            listening={false}
+          />
+        </>
       )}
+      
+      {/* Selection highlight - already handled by stroke on main background rect */}
       
       {/* Custom resize handles - show on hover for all tracks */}
       {isHovered && !isDragging && !isResizing && isValidWidth && (
         <>
           {/* Left resize handle */}
           <Rect
-            x={0}
+            x={-4}
             y={0}
             width={8}
             height={height}
-            fill={isResizingLeft ? "rgba(74, 144, 226, 0.5)" : "transparent"}
-            stroke={isSelected ? "#4a90e2" : "#666"}
-            strokeWidth={isResizingLeft ? 2 : 1}
-            opacity={isResizingLeft ? 1 : 0.7}
+            fill={isResizingLeft ? "rgba(33, 150, 243, 0.5)" : "transparent"}
+            opacity={1}
             onMouseEnter={(e) => {
               const stage = e.target.getStage();
               if (stage) {
@@ -301,14 +366,12 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           
           {/* Right resize handle */}
           <Rect
-            x={Math.max(0, displayWidth - 8)}
+            x={Math.max(0, displayWidth - 4)}
             y={0}
             width={8}
             height={height}
-            fill={isResizingRight ? "rgba(74, 144, 226, 0.5)" : "transparent"}
-            stroke={isSelected ? "#4a90e2" : "#666"}
-            strokeWidth={isResizingRight ? 2 : 1}
-            opacity={isResizingRight ? 1 : 0.7}
+            fill={isResizingRight ? "rgba(33, 150, 243, 0.5)" : "transparent"}
+            opacity={1}
             onMouseEnter={(e) => {
               const stage = e.target.getStage();
               if (stage) {
