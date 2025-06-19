@@ -7,8 +7,12 @@ export interface Note {
     trackId?: string;  // ID of the track this note belongs to
 }
 
-// Global counter for generating unique note IDs across all calls
-let globalNoteIdCounter = 1;
+// Generate unique note IDs using timestamp + counter to ensure uniqueness across sessions
+let noteIdCounter = 0;
+const generateUniqueNoteId = () => {
+    noteIdCounter++;
+    return Date.now() * 1000 + noteIdCounter;
+};
 
 // Type for the note data we expect from JSON
 interface JsonNote {
@@ -28,7 +32,7 @@ export function convertJsonToNotes(json_data: { [k: string]: unknown }, trackId?
         // Type assertion with proper interface
         const notesArray = json_data.notes as JsonNote[];
         const ret = notesArray.map((note: JsonNote) => ({
-            id: globalNoteIdCounter++,
+            id: generateUniqueNoteId(),
             row: note.row ?? note.pitch ?? 0,
             column: note.column ?? note.start ?? 0,
             length: note.length ?? note.duration ?? 1,
