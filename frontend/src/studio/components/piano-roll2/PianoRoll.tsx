@@ -2513,6 +2513,41 @@ export const PianoRoll: FC<PianoRollProps> = ({
 
   // Add a flag to track if we just finished resizing
   const [justFinishedResize, setJustFinishedResize] = useState(false);
+  
+  // Handle keyboard events
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if delete key is pressed and we have selected notes
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNoteIds.length > 0) {
+        e.preventDefault(); // Prevent any default behavior
+        
+        // If multiple notes are selected, delete them all at once
+        if (selectedNoteIds.length > 1) {
+          // Create a new notes array without the selected notes
+          const updatedNotes = notes.filter(note => !selectedNoteIds.includes(note.id));
+          
+          // Notify parent of the change - the parent will handle group action
+          if (onNotesChange) {
+            onNotesChange(updatedNotes);
+          }
+        } else {
+          // Single note deletion
+          handleRemoveNote(selectedNoteIds[0]);
+        }
+        
+        // Clear selection after deletion
+        setSelectedNoteIds([]);
+      }
+    };
+    
+    // Add event listener
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedNoteIds, notes, onNotesChange]);
 
   return (
     <>
