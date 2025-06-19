@@ -457,14 +457,14 @@ class ProjectService:
                     await self.project_track_repository.upsert(project_track_settings)
                     logger.info(f"Upserted track {track_id} to project {project_id}")
                 
-                # Remove tracks that are no longer in the project
-                tracks_to_remove = existing_track_ids - new_track_ids
-                if tracks_to_remove:
-                    track_ids_to_remove = [uuid.UUID(track_id) for track_id in tracks_to_remove]
-                    deleted_count = await self.project_track_repository.delete_by_track_ids(
-                        project_id, track_ids_to_remove
-                    )
-                    logger.info(f"Removed {deleted_count} tracks from project {project_id}")
+                # # Remove tracks that are no longer in the project
+                # tracks_to_remove = existing_track_ids - new_track_ids
+                # if tracks_to_remove:
+                #     track_ids_to_remove = [uuid.UUID(track_id) for track_id in tracks_to_remove]
+                #     deleted_count = await self.project_track_repository.delete_by_track_ids(
+                #         project_id, track_ids_to_remove
+                #     )
+                #     logger.info(f"Removed {deleted_count} tracks from project {project_id}")
                         
             except Exception as e:
                 logger.error(f"Error updating project tracks: {str(e)}")

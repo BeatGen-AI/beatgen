@@ -16,6 +16,7 @@ const generateUniqueNoteId = () => {
 
 // Type for the note data we expect from JSON
 interface JsonNote {
+    id?: number;  // Include ID since it's saved with notes
     row?: number;
     pitch?: number;
     column?: number;
@@ -32,7 +33,8 @@ export function convertJsonToNotes(json_data: { [k: string]: unknown }, trackId?
         // Type assertion with proper interface
         const notesArray = json_data.notes as JsonNote[];
         const ret = notesArray.map((note: JsonNote) => ({
-            id: generateUniqueNoteId(),
+            // Preserve existing ID if available, otherwise generate a new one
+            id: note.id ?? generateUniqueNoteId(),
             row: note.row ?? note.pitch ?? 0,
             column: note.column ?? note.start ?? 0,
             length: note.length ?? note.duration ?? 1,

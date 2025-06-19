@@ -60,9 +60,9 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
     const noteHeight = Math.max(2, height / noteRange);
     
     return midiNotes.map(note => {
-      const x = note.tick * pixelsPerTick;
-      const y = height - ((note.pitch - minNote) / noteRange) * height - noteHeight;
-      const width = note.duration * pixelsPerTick;
+      const x = note.column * pixelsPerTick;
+      const y = height - ((note.row - minNote) / noteRange) * height - noteHeight;
+      const width = note.length * pixelsPerTick;
       
       // Skip invalid notes
       if (isNaN(x) || isNaN(y) || isNaN(width)) {
