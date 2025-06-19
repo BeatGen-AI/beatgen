@@ -72,6 +72,12 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
         if (historyManager.canUndo()) {
              await historyManager.undo();
             _updateHistoryState();
+            
+            // Increment note version after undo to trigger re-render
+            const { incrementNoteVersion } = rootGet();
+            if (incrementNoteVersion) {
+                incrementNoteVersion();
+            }
         } else {
             console.warn("Undo called but nothing to undo.");
         }
@@ -96,6 +102,12 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
         if (historyManager.canRedo()) {
             await historyManager.redo();
             _updateHistoryState();
+            
+            // Increment note version after redo to trigger re-render
+            const { incrementNoteVersion } = rootGet();
+            if (incrementNoteVersion) {
+                incrementNoteVersion();
+            }
         } else {
              console.warn("Redo called but nothing to redo.");
         }

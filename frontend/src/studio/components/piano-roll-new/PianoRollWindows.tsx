@@ -18,6 +18,7 @@ const PianoRollWindows: React.FC = memo(() => {
   const addMidiNote = useStudioStore(state => state.addMidiNote);
   const removeMidiNote = useStudioStore(state => state.removeMidiNote);
   const updateMidiNote = useStudioStore(state => state.updateMidiNote);
+  const noteVersion = useStudioStore(state => state.noteVersion); // Subscribe to note changes
   
   // Tool state from store
   const selectedTool = useStudioStore(state => state.selectedTool);
@@ -49,7 +50,7 @@ const PianoRollWindows: React.FC = memo(() => {
   // Depend on the raw openTrackIds array and the tracks array
   }, [openTrackIds, tracks, closePianoRoll]);
 
-  console.log('Piano Roll Windows - Render (Individual Selectors) - Open IDs:', openTrackIds);
+  console.log('Piano Roll Windows - Render (Individual Selectors) - Open IDs:', openTrackIds, 'Note Version:', noteVersion);
 
   const handleNotesChange = useCallback(async (trackId: string, newNotes: NoteState[]) => {
     const prevNotes = prevNotesByTrack[trackId] || [];
@@ -140,7 +141,7 @@ const PianoRollWindows: React.FC = memo(() => {
               key={`piano-roll-${trackId}`}
               title={`Piano Roll - ${track?.name || 'Unknown Track'}`}
               color={trackColor} 
-              initialNotes={pianoRollNotes} 
+              notes={pianoRollNotes} 
               onNotesChange={(newNotes) => handleNotesChange(trackId, newNotes)}
               // Restore necessary props
               initialX={Math.max(50, window.innerWidth / 2 - 420)}

@@ -157,7 +157,7 @@ interface PianoRollProps {
   contentWidth?: number;
   keyboardWidth?: number;
   onNotesChange?: (notes: NoteState[]) => void; // Add callback for note changes
-  initialNotes?: NoteState[]; // Add initial notes prop
+  notes?: NoteState[]; // Changed from initialNotes - these ARE the notes
   scaleNotes?: number[]; // Add scale notes prop (0-11 representing notes in the scale)
   title?: string; // Add title prop
   onClose?: () => void; // Add callback for close button
@@ -1128,7 +1128,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
   contentWidth: initialContentWidth = 100000, // Much wider than viewport
   keyboardWidth = 80,
   onNotesChange,
-  initialNotes = [], // Default to empty array
+  notes = [], // Default to empty array
   scaleNotes = [], // Default to empty array (all notes in scale)
   title = "Piano Roll (132 Keys)", // Default title
   onClose,
@@ -1140,6 +1140,9 @@ export const PianoRoll: FC<PianoRollProps> = ({
     y: number,
     resizeData?: Record<string, { start?: number, width?: number }> 
   }>({ x: 0, y: 0 });
+  
+  // Add ref for the Konva Stage
+  const stageRef = useRef<Konva.Stage>(null);
   
   // State for viewport dimensions and position
   const [dimensions, setDimensions] = useState({
@@ -1170,20 +1173,6 @@ export const PianoRoll: FC<PianoRollProps> = ({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
   
-  // Initialize directly from the prop
-  const [normalizedNotes, setNormalizedNotes] = useState<NoteState[]>(initialNotes);
-  
-  // Effect to synchronize internal state when initialNotes prop changes from parent
-  useEffect(() => {
-    setNormalizedNotes(initialNotes);
-    // Update nextNoteId as well if external notes change
-    if (initialNotes.length > 0) {
-      const maxId = Math.max(...initialNotes.map(note => note.id), 0); // Added default 0 for empty array case
-      setNextNoteId(maxId + 1);
-    } else {
-      setNextNoteId(1); // Reset if notes are cleared externally
-    }
-  }, [initialNotes]); // Depend ONLY on the initialNotes prop
   
   // Handle tool selection with note deselection
   const handleToolSelect = (tool: 'select' | 'pen' | 'highlighter' | 'eraser') => {
@@ -1600,8 +1589,8 @@ export const PianoRoll: FC<PianoRollProps> = ({
   // Next ID for new notes
   const [nextNoteId, setNextNoteId] = useState(() => {
     // Initialize with a value higher than any existing note ID
-    return initialNotes.length > 0 
-      ? Math.max(...initialNotes.map(note => note.id)) + 1 
+    return notes.length > 0 
+      ? Math.max(...notes.map(note => note.id)) + 1 
       : 1;
   });
 
@@ -1619,7 +1608,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
 
   // Convert NoteState objects to visual Note objects
   const visualNotes = useMemo(() => {
-    return normalizedNotes.map((noteState) => ({
+    return notes.map((noteState) => ({
       id: noteState.id,
       start: noteState.column * PIXELS_PER_TICK * zoomLevel, // Convert ticks to pixels
       // Invert the row calculation for flipped keyboard
@@ -1627,7 +1616,16 @@ export const PianoRoll: FC<PianoRollProps> = ({
       width: noteState.length * PIXELS_PER_TICK * zoomLevel, // Convert ticks to pixels
       color: noteColor, // Use the color prop from component
     }));
-  }, [normalizedNotes, zoomLevel, keyHeight, totalKeys, noteColor]);
+  }, [notes, zoomLevel, keyHeight, totalKeys, noteColor]);
+  
+  // Force Konva to redraw when notes change
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage) {
+      // Force a redraw of the entire stage
+      stage.batchDraw();
+    }
+  }, [notes]); // Trigger redraw whenever notes prop changes
 
   // Convert visual notes to normalized note states
   const convertNotesToState = (notes: Note[]): NoteState[] => {
@@ -1673,12 +1671,6 @@ export const PianoRoll: FC<PianoRollProps> = ({
     };
   };
 
-  // Update the parent when normalized notes change
-  const updateParentNotes = (notesToUpdate: NoteState[]) => {
-    if (onNotesChange) {
-      onNotesChange(notesToUpdate);
-    }
-  };
 
   // Helper function to find a note at a specific position
   const findNoteAtPosition = (x: number, y: number): Note | undefined => {
@@ -1704,22 +1696,24 @@ export const PianoRoll: FC<PianoRollProps> = ({
     // Convert the visual note to a normalized note
     const newNormalizedNote = convertNotesToState([newVisualNote])[0];
     
-    // Update normalized notes state
-    const updatedNormalizedNotes = [...normalizedNotes, newNormalizedNote];
-    setNormalizedNotes(updatedNormalizedNotes);
+    // Create updated notes array
+    const updatedNotes = [...notes, newNormalizedNote];
     
     // Notify parent of change
-    updateParentNotes(updatedNormalizedNotes);
+    if (onNotesChange) {
+      onNotesChange(updatedNotes);
+    }
   };
 
   // Handle removing a note
   const handleRemoveNote = (noteId: number) => {
-    // Remove note from normalized notes
-    const updatedNormalizedNotes = normalizedNotes.filter(n => n.id !== noteId);
-    setNormalizedNotes(updatedNormalizedNotes);
+    // Remove note from notes array
+    const updatedNotes = notes.filter(n => n.id !== noteId);
     
     // Notify parent of change
-    updateParentNotes(updatedNormalizedNotes);
+    if (onNotesChange) {
+      onNotesChange(updatedNotes);
+    }
   };
 
   // Handle updating multiple notes
@@ -1727,11 +1721,10 @@ export const PianoRoll: FC<PianoRollProps> = ({
     // Convert visual notes to normalized notes
     const updatedNormalizedNotes = convertNotesToState(updatedVisualNotes);
     
-    // Update normalized notes state
-    setNormalizedNotes(updatedNormalizedNotes);
-    
-    // Notify parent of change
-    updateParentNotes(updatedNormalizedNotes);
+    // Notify parent of change directly
+    if (onNotesChange) {
+      onNotesChange(updatedNormalizedNotes);
+    }
   };
 
   // Modify the handleStageMouseDown function
@@ -2180,7 +2173,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
   useEffect(() => {
     // We only need to update the previous zoom level for future calculations
     // The actual visual scaling happens in the visualNotes useMemo
-    // which derives from normalizedNotes and the current zoomLevel
+    // which derives from notes prop and the current zoomLevel
     setPrevZoomLevel(zoomLevel);
   }, [zoomLevel]);
 
@@ -2351,15 +2344,6 @@ export const PianoRoll: FC<PianoRollProps> = ({
 
   // Add state for tracking resize preview data
   const [resizePreviewData, setResizePreviewData] = useState<Record<string, { start?: number, width?: number }>>({});
-
-  // Initialize notes from props when component mounts or when initialNotes changes
-  useEffect(() => {
-    // Update the next note ID to be higher than any existing note ID
-    if (initialNotes.length > 0) {
-      const maxId = Math.max(...initialNotes.map(note => note.id));
-      setNextNoteId(maxId + 1);
-    }
-  }, [initialNotes]);
 
   // Import necessary hooks
   const [hoveredNote, setHoveredNote] = useState<string | null>(null);
@@ -3212,6 +3196,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
                   }}
                 >
                   <Stage 
+                    ref={stageRef}
                     width={dimensions.width - keyboardWidth} 
                     height={dimensions.height - 28 - 16} 
                     onMouseDown={handleStageMouseDown}
@@ -3277,6 +3262,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
 
                     {/* Notes layer */}
                     <NotesLayer
+                      key={`notes-${notes.map(n => n.id).join('-')}`}
                       notes={visualNotes.map(note => {
                         // Hide notes that have a preview version while resizing
                         if (isResizingNote && resizePreviewData[note.id]) {
