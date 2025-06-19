@@ -12,6 +12,7 @@ export interface TimeRulerProps {
   onClick?: (measure: number) => void;
   viewport: Viewport;
   zoom: number;
+  studioMode?: 'light' | 'dark';
 }
 
 /**
@@ -27,14 +28,18 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
   bpm,
   onClick,
   viewport,
-  zoom
+  zoom,
+  studioMode = 'dark'
 }) => {
-  const [beatsPerMeasure] = timeSignature;
+  const [beatsPerMeasure, subdivisionsPerBeat] = timeSignature;
   const pixelsPerBeat = pixelsPerMeasure / beatsPerMeasure;
+  const subdivisionWidth = pixelsPerBeat / subdivisionsPerBeat;
   
-  // Calculate visible range
-  const visibleStartMeasure = Math.floor(viewport.x / pixelsPerMeasure);
-  const visibleEndMeasure = Math.ceil((viewport.x + viewport.width) / pixelsPerMeasure) + 1;
+  // Define colors based on theme (matching Timeline)
+  const isDark = studioMode === 'dark'
+  const SUBDIVISION_LINE_COLOR = isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.10)';
+  const BEAT_LINE_COLOR = isDark ? 'rgba(255, 255, 255, 0.40)' : 'rgba(0, 0, 0, 0.20)';
+  const MEASURE_LINE_COLOR = isDark ? 'rgba(255, 255, 255, 0.70)' : 'rgba(0, 0, 0, 0.40)';
   
   // Handle click
   const handleClick = (e: any) => {
@@ -59,74 +64,89 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
           y={0}
           width={width}
           height={height}
-          fill="#2a2a2a"
+          fill={isDark ? '#262626' : '#f5f5f5'}
           onClick={handleClick}
           listening={true}
         />
       
-      {/* Bottom border */}
-      <Line
-        points={[0, height, width, height]}
-        stroke="rgba(255, 255, 255, 0.2)"
-        strokeWidth={1}
-      />
+      {/* Draw subdivisions first (dimmest) */}
+      {Array.from({ length: measureCount }).map((_, m) => {
+        return Array.from({ length: beatsPerMeasure }).map((_, b) => {
+          return Array.from({ length: subdivisionsPerBeat - 1 }).map((_, s) => {
+            const x = m * pixelsPerMeasure + b * pixelsPerBeat + (s + 1) * subdivisionWidth;
+            return (
+              <Line
+                key={`subdiv-${m}-${b}-${s}`}
+                points={[x, height * 0.85, x, height]}
+                stroke={SUBDIVISION_LINE_COLOR}
+                strokeWidth={1}
+              />
+            );
+          });
+        }).flat();
+      }).flat()}
       
-      {/* Measure markers and numbers */}
-      {Array.from({ length: visibleEndMeasure - visibleStartMeasure }).map((_, index) => {
-        const measureIndex = visibleStartMeasure + index;
-        if (measureIndex < 0 || measureIndex >= measureCount) return null;
-        
-        const x = measureIndex * pixelsPerMeasure;
-        
-        return (
-          <Group key={`measure-${measureIndex}`}>
-            {/* Measure line */}
+      {/* Draw beat lines (medium prominence) */}
+      {Array.from({ length: measureCount }).map((_, m) => {
+        return Array.from({ length: beatsPerMeasure - 1 }).map((_, b) => {
+          const x = m * pixelsPerMeasure + (b + 1) * pixelsPerBeat;
+          return (
             <Line
+              key={`beat-${m}-${b}`}
               points={[x, 0, x, height]}
-              stroke="rgba(255, 255, 255, 0.5)"
-              strokeWidth={1}
+              stroke={BEAT_LINE_COLOR}
+              strokeWidth={0.5}
             />
-            
-            {/* Measure number */}
-            <Text
-              x={x + 5}
-              y={height / 2 - 7}
-              text={`${measureIndex + 1}`}
-              fontSize={14}
-              fontFamily="Arial"
-              fill="rgba(255, 255, 255, 0.8)"
-            />
-            
-            {/* Beat markers */}
-            {Array.from({ length: beatsPerMeasure - 1 }).map((_, beatIndex) => {
-              const beatX = x + (beatIndex + 1) * pixelsPerBeat;
-              
-              return (
-                <Group key={`beat-${measureIndex}-${beatIndex}`}>
-                  {/* Beat line */}
-                  <Line
-                    points={[beatX, height * 0.7, beatX, height]}
-                    stroke="rgba(255, 255, 255, 0.3)"
-                    strokeWidth={0.5}
-                  />
-                  
-                  {/* Beat number (only if zoomed in enough) */}
-                  {zoom > 1.5 && (
-                    <Text
-                      x={beatX + 3}
-                      y={height / 2 + 2}
-                      text={`${beatIndex + 2}`}
-                      fontSize={10}
-                      fontFamily="Arial"
-                      fill="rgba(255, 255, 255, 0.5)"
-                    />
-                  )}
-                </Group>
-              );
-            })}
-          </Group>
+          );
+        });
+      }).flat()}
+      
+      {/* Draw measure lines (most prominent) */}
+      {Array.from({ length: measureCount + 1 }).map((_, i) => {
+        const x = i * pixelsPerMeasure;
+        return (
+          <Line
+            key={`measure-${i}`}
+            points={[x, 0, x, height]}
+            stroke={MEASURE_LINE_COLOR}
+            strokeWidth={1}
+          />
         );
       })}
+      
+      {/* Measure numbers */}
+      {Array.from({ length: measureCount }).map((_, measureIndex) => {
+        const x = measureIndex * pixelsPerMeasure;
+        return (
+          <Text
+            key={`measure-num-${measureIndex}`}
+            x={x + 5}
+            y={height / 2 - 7}
+            text={`${measureIndex + 1}`}
+            fontSize={14}
+            fontFamily="Arial"
+            fill={isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)'}
+          />
+        );
+      })}
+      
+      {/* Beat numbers */}
+      {Array.from({ length: measureCount }).map((_, measureIndex) => {
+        return Array.from({ length: beatsPerMeasure - 1 }).map((_, beatIndex) => {
+          const x = measureIndex * pixelsPerMeasure + (beatIndex + 1) * pixelsPerBeat;
+          return (
+            <Text
+              key={`beat-num-${measureIndex}-${beatIndex}`}
+              x={x + 4}
+              y={height / 2 + 2}
+              text={`${beatIndex + 2}`}
+              fontSize={8}
+              fontFamily="Arial"
+              fill={isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)'}
+            />
+          );
+        });
+      }).flat()}
       </Group>
     </Layer>
   );
