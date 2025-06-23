@@ -246,13 +246,16 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Start drag operation
   const startDrag = useCallback((itemId: string, mousePos: Position) => {
-    // Ensure the item is selected
+    // Ensure the item is selected and get the updated selection
+    let currentSelectedIds = selectedIds;
     if (!selectedIds.has(itemId)) {
-      selectItem(itemId);
+      // If dragging an unselected item, it becomes the only selected item
+      currentSelectedIds = new Set([itemId]);
+      updateSelection(currentSelectedIds);
     }
 
-    // Get all selected items
-    const selectedItems = items.filter(item => selectedIds.has(item.id));
+    // Get all selected items using the current selection
+    const selectedItems = items.filter(item => currentSelectedIds.has(item.id));
     
     // Store initial positions
     const itemPositions = new Map<string, Position>();

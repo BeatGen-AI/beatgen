@@ -143,7 +143,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   // Update all tracks and recalculate indices
   const updateTracks = (newTracks: CombinedTrack[]) => {
       set(produce((draft: RootState) => {
-          draft.tracks = newTracks;
+          // Ensure no duplicate track IDs
+          const uniqueTracks = new Map<string, CombinedTrack>();
+          newTracks.forEach(track => {
+              if (!uniqueTracks.has(track.id)) {
+                  uniqueTracks.set(track.id, track);
+              } else {
+                  console.warn(`Duplicate track ID detected: ${track.id}. Keeping first occurrence.`);
+              }
+          });
+          draft.tracks = Array.from(uniqueTracks.values());
       }));
   };
 
@@ -173,7 +182,17 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   // Explicitly define setTracks within the slice scope
   const setTracks = (newTracks: CombinedTrack[]) => {
       set(produce((draft: RootState) => {
-          draft.tracks = newTracks;
+          // Ensure no duplicate track IDs
+          const uniqueTracks = new Map<string, CombinedTrack>();
+          newTracks.forEach(track => {
+              if (!uniqueTracks.has(track.id)) {
+                  uniqueTracks.set(track.id, track);
+              } else {
+                  console.warn(`Duplicate track ID detected during setTracks: ${track.id}. Keeping first occurrence.`);
+              }
+          });
+          
+          draft.tracks = Array.from(uniqueTracks.values());
           draft.tracks.forEach((track, index) => { 
               // !! IMPORTANT: Ensure CombinedTrack has track_number !!
               track.track_number = index;
@@ -311,6 +330,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               storage_key: samplerOptions.storage_key,
               drum_track_id: samplerOptions.drum_track_id || null,
               waveform_data: samplerOptions.waveform_data,
+              midi_notes_json: { notes: [] }, // Initialize midi_notes_json for SAMPLER tracks
               // NO sampleFile property here
            }
       }

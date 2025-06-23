@@ -29,12 +29,26 @@ export class AddNoteAction extends NoteAction {
             await midiManager.addNoteToTrack(this.trackId, { ...this.note, id: parseInt(this.noteId) });
             this.markTrackAsDirty(); // Mark track as dirty when note is added
             
+            // Get all notes from MidiManager for this track
+            const allNotes = midiManager.getTrackNotes(this.trackId);
+            const { _updateNestedTrackData, updateTrackState } = this.get();
+            
+            // Update the nested track data with the notes
+            if (allNotes && _updateNestedTrackData) {
+                _updateNestedTrackData(this.trackId, {
+                    midi_notes_json: { notes: allNotes }
+                });
+            }
+            
+            // Don't update track name anymore - it causes unnecessary re-renders
+            
             this.log('Execute', {
                 trackId: this.trackId,
                 noteId: this.noteId,
                 row: this.note.row,
                 column: this.note.column,
-                length: this.note.length
+                length: this.note.length,
+                totalNotes: allNotes?.length || 0
             });
         } catch (error) {
             console.error(`Error adding note to track ${this.trackId}:`, error);
@@ -90,9 +104,23 @@ export class DeleteNoteAction extends NoteAction {
             await midiManager.removeNoteFromTrack(this.trackId, parseInt(this.noteId));
             this.markTrackAsDirty(); // Mark track as dirty when note is deleted
             
+            // Get all notes from MidiManager for this track
+            const allNotes = midiManager.getTrackNotes(this.trackId);
+            const { _updateNestedTrackData, updateTrackState } = this.get();
+            
+            // Update the nested track data with the notes
+            if (allNotes && _updateNestedTrackData) {
+                _updateNestedTrackData(this.trackId, {
+                    midi_notes_json: { notes: allNotes }
+                });
+            }
+            
+            // Don't update track name anymore - it causes unnecessary re-renders
+            
             this.log('Execute', {
                 trackId: this.trackId,
-                noteId: this.noteId
+                noteId: this.noteId,
+                totalNotes: allNotes?.length || 0
             });
         } catch (error) {
             console.error(`Error removing note ${this.noteId} from track ${this.trackId}:`, error);
@@ -163,6 +191,15 @@ export class MoveNoteAction extends NoteAction {
             };
             
             await midiManager.updateNote(this.trackId, updatedNote);
+            
+            // Sync all notes to track state
+            const allNotes = midiManager.getTrackNotes(this.trackId);
+            const { _updateNestedTrackData } = this.get();
+            if (allNotes && _updateNestedTrackData) {
+                _updateNestedTrackData(this.trackId, {
+                    midi_notes_json: { notes: allNotes }
+                });
+            }
         } catch (error) {
             console.error(`Error updating position of note ${this.noteId} in track ${this.trackId}:`, error);
         }
@@ -237,6 +274,15 @@ export class ResizeNoteAction extends NoteAction {
             };
             
             await midiManager.updateNote(this.trackId, updatedNote);
+            
+            // Sync all notes to track state
+            const allNotes = midiManager.getTrackNotes(this.trackId);
+            const { _updateNestedTrackData } = this.get();
+            if (allNotes && _updateNestedTrackData) {
+                _updateNestedTrackData(this.trackId, {
+                    midi_notes_json: { notes: allNotes }
+                });
+            }
         } catch (error) {
             console.error(`Error resizing note ${this.noteId} in track ${this.trackId}:`, error);
         }

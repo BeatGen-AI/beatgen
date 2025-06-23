@@ -61,16 +61,6 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
 }) => {
   // Validate required numeric props
   if (isNaN(x) || isNaN(y) || isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
-    console.error('KonvaTrack received invalid props:', { 
-      x, 
-      y, 
-      width, 
-      height, 
-      trackId: track?.id, 
-      instanceId,
-      previewWidth: propPreviewWidth,
-      pixelsPerTick
-    });
     return null;
   }
   const groupRef = useRef<any>(null);
@@ -78,6 +68,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isResizingLeft, setIsResizingLeft] = useState(false);
   const [isResizingRight, setIsResizingRight] = useState(false);
+  const [resizeContentOffset, setResizeContentOffset] = useState(0);
+  const [resizeStartX, setResizeStartX] = useState<number | null>(null);
   
   // Use prop preview width if provided (during resize), otherwise use internal state
   const previewWidth = propPreviewWidth || null;
@@ -93,42 +85,65 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       return data.color;
     }
     
-    // Otherwise fall back to type-based colors
-    switch (track.track_type) {
-      case 'AUDIO':
-        return '#4caf50';
-      case 'MIDI':
-      case 'SAMPLER':
-        return '#2196f3';
-      case 'DRUM':
-        return '#ff9800';
-      default:
-        return '#9c27b0';
-    }
-  }, [track.track_type, data?.color]);
+    // This should not happen - color should always be passed from parent
+    return '#9c27b0';
+  }, [data?.color]);
   
-  // Calculate content offset for trimmed tracks
-  const contentOffset = useMemo(() => {
-    if (!track.instance_metadata || !track.duration_ticks || track.duration_ticks === 0) return 0;
+  // Get the instance data
+  const instance = useMemo(() => {
+    return track.instances?.find(inst => inst.id === instanceId);
+  }, [track.instances, instanceId]);
+  
+  // Calculate full content width
+  const fullContentWidth = useMemo(() => {
+    if (!track.duration_ticks || isNaN(pixelsPerTick) || pixelsPerTick <= 0) return displayWidth;
+    return track.duration_ticks * pixelsPerTick;
+  }, [track.duration_ticks, pixelsPerTick, displayWidth]);
+  
+  // Calculate base content offset for trimmed tracks
+  const baseContentOffset = useMemo(() => {
+    if (!instance || !track.duration_ticks || track.duration_ticks === 0) return 0;
     if (isNaN(pixelsPerTick) || pixelsPerTick <= 0) return 0;
-    const trimRatio = track.instance_metadata[0].trim_start_ticks / track.duration_ticks;
-    const fullWidth = track.duration_ticks * pixelsPerTick;
-    const result = -(trimRatio * fullWidth);
+    const trimRatio = instance.trim_start_ticks / track.duration_ticks;
+    const result = -(trimRatio * fullContentWidth);
     return isNaN(result) ? 0 : result;
-  }, [track.instance_metadata, track.duration_ticks, pixelsPerTick]);
+  }, [instance, track.duration_ticks, pixelsPerTick, fullContentWidth]);
   
+  // Calculate final content offset including resize adjustments
+  const contentOffset = baseContentOffset + resizeContentOffset;
+  
+  // Track when resize starts
+  useEffect(() => {
+    if (isResizing && resizeStartX === null) {
+      // Resize just started, record the initial x position
+      setResizeStartX(x);
+    } else if (!isResizing && resizeStartX !== null) {
+      // Resize ended, clear the start position
+      setResizeStartX(null);
+      setResizeContentOffset(0);
+    }
+  }, [isResizing, resizeStartX, x]);
+
+  // Update content offset during left resize to keep content stable
+  useEffect(() => {
+    if (isResizing && resizeDirection === 'left' && resizeStartX !== null) {
+      // Calculate how much the track has moved from its original position
+      const positionDelta = x - resizeStartX;
+      // Move content in opposite direction to compensate
+      setResizeContentOffset(-positionDelta);
+    }
+  }, [isResizing, resizeDirection, x, resizeStartX]);
   
   // Render track content based on type
   const renderTrackContent = () => {
     const contentProps = {
       track,
-      width: displayWidth,
+      width: fullContentWidth, // Use full content width, not display width
       height,
       pixelsPerTick,
-      contentOffset,
+      contentOffset: 0, // Don't pass offset to renderer, handle it in Group transform
       color: trackColor
     };
-    
     
     switch (track.track_type) {
       case 'AUDIO':
@@ -232,7 +247,10 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       
       {/* Track content - clipped to track bounds */}
       <Group clip={{ x: 0, y: 0, width: displayWidth, height }}>
-        {renderTrackContent()}
+        {/* Content wrapper with transform for trimming and resize */}
+        <Group x={contentOffset}>
+          {renderTrackContent()}
+        </Group>
       </Group>
       
       {/* Track type badge */}
@@ -242,12 +260,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           y={0}
           width={40}
           height={16}
-          fill={
-            track.track_type === 'AUDIO' ? '#4caf50' : 
-            track.track_type === 'MIDI' ? '#2196f3' : 
-            track.track_type === 'SAMPLER' ? '#2196f3' :
-            track.track_type === 'DRUM' ? '#ff9800' : '#9c27b0'
-          }
+          fill={trackColor}
           cornerRadius={3}
           opacity={0.7}
           listening={false}
@@ -333,31 +346,13 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
               setIsResizingLeft(false);
             }}
             onMouseDown={(e) => {
-              console.log('🔧 KonvaTrack - LEFT resize handle mouseDown', {
-                trackId: track.id,
-                instanceId,
-                idUsed: instanceId || track.id,
-                onResizeStart: !!onResizeStart,
-                event: e
-              });
               e.cancelBubble = true;
               if (onResizeStart) {
                 const stage = e.target.getStage();
                 const pos = stage?.getPointerPosition();
-                console.log('🔧 KonvaTrack - LEFT resize getting position', {
-                  stage: !!stage,
-                  pos
-                });
                 if (pos) {
                   // Use instance ID directly - it's already the full ID
                   const idToUse = instanceId || track.id;
-                  console.log('🔧 KonvaTrack - LEFT resize calling onResizeStart', {
-                    instanceId,
-                    trackId: track.id,
-                    idToUse,
-                    direction: 'left',
-                    pos
-                  });
                   onResizeStart(idToUse, 'left', pos);
                 }
               }
@@ -387,31 +382,13 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
               setIsResizingRight(false);
             }}
             onMouseDown={(e) => {
-              console.log('🔧 KonvaTrack - RIGHT resize handle mouseDown', {
-                trackId: track.id,
-                instanceId,
-                idUsed: instanceId || track.id,
-                onResizeStart: !!onResizeStart,
-                event: e
-              });
               e.cancelBubble = true;
               if (onResizeStart) {
                 const stage = e.target.getStage();
                 const pos = stage?.getPointerPosition();
-                console.log('🔧 KonvaTrack - RIGHT resize getting position', {
-                  stage: !!stage,
-                  pos
-                });
                 if (pos) {
                   // Use instance ID directly - it's already the full ID
                   const idToUse = instanceId || track.id;
-                  console.log('🔧 KonvaTrack - RIGHT resize calling onResizeStart', {
-                    instanceId,
-                    trackId: track.id,
-                    idToUse,
-                    direction: 'right',
-                    pos
-                  });
                   onResizeStart(idToUse, 'right', pos);
                 }
               }
@@ -440,25 +417,58 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
 // Export memoized version to prevent unnecessary re-renders
 export default React.memo(KonvaTrack, (prevProps, nextProps) => {
   // Custom comparison function - only re-render if important props change
+  // Skip deep comparison for performance - only check specific fields that matter
+  
+  // Quick checks for the most common changes
+  if (
+    prevProps.x !== nextProps.x ||
+    prevProps.y !== nextProps.y ||
+    prevProps.width !== nextProps.width ||
+    prevProps.height !== nextProps.height ||
+    prevProps.isSelected !== nextProps.isSelected ||
+    prevProps.isDragging !== nextProps.isDragging ||
+    prevProps.isResizing !== nextProps.isResizing ||
+    prevProps.previewWidth !== nextProps.previewWidth
+  ) {
+    return false; // Props changed, need to re-render
+  }
+  
+  // Check track-specific data that affects rendering
+  if (prevProps.track.id !== nextProps.track.id ||
+      prevProps.track.name !== nextProps.track.name ||
+      prevProps.track.mute !== nextProps.track.mute ||
+      prevProps.track.track_type !== nextProps.track.track_type) {
+    return false;
+  }
+  
+  // For MIDI/SAMPLER tracks, check if notes have changed
+  if (prevProps.track.track_type === 'MIDI' || prevProps.track.track_type === 'SAMPLER') {
+    const prevNotes = prevProps.track.track?.midi_notes_json?.notes;
+    const nextNotes = nextProps.track.track?.midi_notes_json?.notes;
+    
+    // Quick length check first
+    if (prevNotes?.length !== nextNotes?.length) {
+      return false;
+    }
+    
+    // If both are empty or undefined, they're equal
+    if (!prevNotes && !nextNotes) {
+      return true;
+    }
+  }
+  
+  // All other props can be compared directly
   return (
-    prevProps.track.id === nextProps.track.id &&
     prevProps.instanceId === nextProps.instanceId &&
-    prevProps.x === nextProps.x &&
-    prevProps.y === nextProps.y &&
-    prevProps.width === nextProps.width &&
-    prevProps.height === nextProps.height &&
-    prevProps.isSelected === nextProps.isSelected &&
-    prevProps.isDragging === nextProps.isDragging &&
     prevProps.isPrimary === nextProps.isPrimary &&
-    prevProps.isResizing === nextProps.isResizing &&
     prevProps.resizeDirection === nextProps.resizeDirection &&
-    prevProps.previewWidth === nextProps.previewWidth &&
     prevProps.pixelsPerTick === nextProps.pixelsPerTick &&
     prevProps.bpm === nextProps.bpm &&
     prevProps.timeSignature[0] === nextProps.timeSignature[0] &&
     prevProps.timeSignature[1] === nextProps.timeSignature[1] &&
     prevProps.gridSnapEnabled === nextProps.gridSnapEnabled &&
     prevProps.snapSizeInPixels === nextProps.snapSizeInPixels &&
-    prevProps.selectedCount === nextProps.selectedCount
+    prevProps.selectedCount === nextProps.selectedCount &&
+    prevProps.data?.color === nextProps.data?.color
   );
 });
