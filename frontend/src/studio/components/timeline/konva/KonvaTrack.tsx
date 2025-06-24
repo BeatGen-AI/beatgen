@@ -5,6 +5,7 @@ import { AudioTrackRenderer } from './tracks/AudioTrackRenderer';
 import { MidiTrackRenderer } from './tracks/MidiTrackRenderer';
 import { DrumTrackRenderer } from './tracks/DrumTrackRenderer';
 import { GRID_CONSTANTS } from '../../../constants/gridConstants';
+import { getInstanceById } from '@/studio/utils/instanceHelpers';
 
 export interface KonvaTrackProps {
   track: CombinedTrack;
@@ -112,7 +113,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   // Calculate the base content offset from trim values
   const calculateBaseContentOffset = () => {
     // Get the specific instance data from props
-    const instance = track.instance;
+    const instance = getInstanceById(track, instanceId);
     if (!instance) {
       console.error('KonvaTrack: No instance data found!', {
         trackId: track?.id,
