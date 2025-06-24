@@ -932,7 +932,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             />
           )}
           
-          {/* Drag Ghost */}
+          {/* Drag Ghost
           {interaction.isDragging && dragGhostItems.length > 0 && (
             <DragGhost
               items={dragGhostItems}
@@ -943,7 +943,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               opacity={0.6}
               showCountBadge={dragGhostItems.length > 1}
             />
-          )}
+          )} */}
           
           {/* Playback Cursor */}
           <PlaybackCursor
