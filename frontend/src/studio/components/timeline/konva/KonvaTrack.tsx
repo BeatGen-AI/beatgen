@@ -84,6 +84,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isResizingLeft, setIsResizingLeft] = useState(false);
   const [isResizingRight, setIsResizingRight] = useState(false);
+  const theme = useTheme();
   
   // Removed cursor reset - now handled by cursor manager in interaction system
   
@@ -256,7 +257,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           y={1.5}
           width={displayWidth - 2}
           height={height - 2}
-          stroke={useTheme().palette.mode === 'dark' ? 'white' : '#222222'}
+          stroke={theme.palette.mode === 'dark' ? 'white' : '#222222'}
           strokeWidth={2}
           fill="transparent"
           cornerRadius={4}
