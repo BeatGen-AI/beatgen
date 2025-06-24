@@ -19,6 +19,7 @@ export interface KonvaTrackProps {
   isResizing?: boolean;
   resizeDirection?: 'left' | 'right' | null;
   previewWidth?: number;
+  contentTransform?: number; // Content transform passed from parent
   pixelsPerTick: number;
   bpm: number;
   timeSignature: [number, number];
@@ -48,6 +49,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   isResizing = false,
   resizeDirection = null,
   previewWidth: propPreviewWidth,
+  contentTransform: propContentTransform = 0,
   pixelsPerTick,
   bpm,
   timeSignature,
@@ -107,15 +109,22 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
     }
   }, [track.track_type, data?.color]);
   
-  // Calculate content offset for trimmed tracks
-  const contentOffset = useMemo(() => {
-    if (!track.instance_metadata || !track.duration_ticks || track.duration_ticks === 0) return 0;
-    if (isNaN(pixelsPerTick) || pixelsPerTick <= 0) return 0;
-    const trimRatio = track.instance_metadata[0].trim_start_ticks / track.duration_ticks;
-    const fullWidth = track.duration_ticks * pixelsPerTick;
-    const result = -(trimRatio * fullWidth);
-    return isNaN(result) ? 0 : result;
-  }, [track.instance_metadata, track.duration_ticks, pixelsPerTick]);
+  // Calculate the base content offset from trim values
+  const calculateBaseContentOffset = () => {
+    const firstInstance = track.instances?.[0];
+    if (!track.duration_ticks || !firstInstance?.trim_start_ticks) return 0;
+    
+    // Calculate what percentage of the original content is trimmed from start
+    const trimRatio = firstInstance.trim_start_ticks / track.duration_ticks;
+    
+    // Apply that ratio to the full content width to get the offset
+    // We need to calculate the full content width (untrimmed)
+    const fullContentWidth = track.duration_ticks * pixelsPerTick;
+    return -(trimRatio * fullContentWidth);
+  };
+  
+  // Combine base offset with any additional transform from resize
+  const contentOffset = calculateBaseContentOffset() + propContentTransform;
   
   
   // Render track content based on type

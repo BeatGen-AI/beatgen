@@ -3,6 +3,9 @@ import { Group, Rect, Line } from 'react-konva';
 import { CombinedTrack } from 'src/platform/types/project';
 import { MidiTrackRead } from 'src/platform/types/dto/track_models/midi_track';
 import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track';
+import { Note } from 'src/types/note';
+import KonvaMidiNotesPreview from '../../../piano-roll/components/KonvaMidiNotesPreview';
+import { useTrackNotes } from '../../../../hooks/useTrackNotes';
 
 export interface MidiTrackRendererProps {
   track: CombinedTrack;
@@ -30,73 +33,66 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
     return null;
   }
   
-  // Get MIDI notes from track
-  const midiNotes = useMemo(() => {
+  // Get live notes from MidiManager
+  const { notes: liveNotes, hasTrack } = useTrackNotes(track.id);
+  
+  // Get static notes from track data as fallback
+  const staticNotes = useMemo(() => {
+    let rawNotes: Array<any> = [];
+    
     if (track.track_type === 'MIDI') {
       const midiTrack = track.track as MidiTrackRead;
       if (midiTrack.midi_notes_json?.notes) {
-        return midiTrack.midi_notes_json.notes as Array<any>;
+        rawNotes = midiTrack.midi_notes_json.notes as Array<any>;
       }
     } else if (track.track_type === 'SAMPLER') {
       const samplerTrack = track.track as SamplerTrackRead;
       if (samplerTrack.midi_notes_json?.notes) {
-        return samplerTrack.midi_notes_json.notes as Array<any>;
+        rawNotes = samplerTrack.midi_notes_json.notes as Array<any>;
       }
     }
-    return [];
+    
+    // Convert to Note format
+    return rawNotes.map((note, index): Note => ({
+      id: note.id ?? index,
+      row: note.row ?? note.pitch ?? 0,
+      column: note.column ?? note.start ?? 0,
+      length: note.length ?? note.duration ?? 1,
+      velocity: note.velocity ?? 0.8
+    }));
   }, [track]);
   
-  // Calculate note positions and dimensions
-  const noteRects = useMemo(() => {
-    // Validate inputs
-    if (isNaN(pixelsPerTick) || pixelsPerTick <= 0 || isNaN(height) || height <= 0) {
-      console.warn('MidiTrackRenderer: Invalid dimensions', { pixelsPerTick, height });
-      return [];
+  // Use live notes if track exists in MidiManager, otherwise fall back to static data
+  const notes = useMemo(() => {
+    // If track exists in MidiManager, use live notes (even if empty)
+    if (hasTrack) {
+      console.log(`MidiTrackRenderer: Using ${liveNotes.length} live notes for track ${track.id}`);
+      return liveNotes;
     }
     
-    const minNote = 0;
-    const maxNote = 127;
-    const noteRange = maxNote - minNote + 1;
-    const noteHeight = Math.max(2, height / noteRange);
-    
-    return midiNotes.map(note => {
-      const x = note.column * pixelsPerTick;
-      const y = height - ((note.row - minNote) / noteRange) * height - noteHeight;
-      const width = note.length * pixelsPerTick;
-      
-      // Skip invalid notes
-      if (isNaN(x) || isNaN(y) || isNaN(width)) {
-        console.warn('MidiTrackRenderer: Invalid note dimensions', { note, x, y, width });
-        return null;
-      }
-      
-      return {
-        id: note.id,
-        x,
-        y,
-        width: Math.max(1, width), // Minimum 1 pixel width
-        height: noteHeight,
-        velocity: note.velocity
-      };
-    }).filter(Boolean); // Remove null entries
-  }, [midiNotes, pixelsPerTick, height]);
+    // Otherwise use static notes from track data
+    console.log(`MidiTrackRenderer: Using ${staticNotes.length} static notes for track ${track.id} (track not in MidiManager)`);
+    return staticNotes;
+  }, [liveNotes, staticNotes, track.id, hasTrack]);
+  
   
   // Group notes by time for chord visualization
   const chordLines = useMemo(() => {
     const lines: { x: number; notes: number }[] = [];
     const threshold = 10; // Group notes within 10 ticks
     
-    noteRects.forEach(note => {
-      const existingLine = lines.find(line => Math.abs(line.x - note.x) < threshold * pixelsPerTick);
+    notes.forEach(note => {
+      const noteX = (note.column * pixelsPerTick) + contentOffset;
+      const existingLine = lines.find(line => Math.abs(line.x - noteX) < threshold * pixelsPerTick);
       if (existingLine) {
         existingLine.notes++;
       } else {
-        lines.push({ x: note.x, notes: 1 });
+        lines.push({ x: noteX, notes: 1 });
       }
     });
     
     return lines.filter(line => line.notes > 1);
-  }, [noteRects, pixelsPerTick]);
+  }, [notes, pixelsPerTick, contentOffset]);
   
   return (
     <Group>
@@ -135,39 +131,16 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
         />
       ))}
       
-      {/* MIDI notes */}
-      {noteRects.map(note => {
-        // Calculate opacity based on velocity
-        const velocityOpacity = 0.4 + (note.velocity / 127) * 0.6;
-        
-        return (
-          <Group key={note.id}>
-            {/* Note rectangle */}
-            <Rect
-              x={note.x}
-              y={note.y}
-              width={note.width}
-              height={note.height}
-              fill={color}
-              opacity={velocityOpacity}
-              cornerRadius={Math.min(2, note.height / 2)}
-            />
-            
-            {/* Note border for visibility */}
-            <Rect
-              x={note.x}
-              y={note.y}
-              width={note.width}
-              height={note.height}
-              stroke={color}
-              strokeWidth={0.5}
-              fill="transparent"
-              opacity={0.8}
-              cornerRadius={Math.min(2, note.height / 2)}
-            />
-          </Group>
-        );
-      })}
+      {/* MIDI notes using KonvaMidiNotesPreview */}
+      <KonvaMidiNotesPreview
+        notes={notes}
+        width={width}
+        height={height}
+        noteColor={'white'}
+        pixelsPerTick={pixelsPerTick}
+        contentOffset={contentOffset}
+        trackId={track.id}
+      />
       
       {/* Beat markers */}
       {Array.from({ length: Math.floor(width / (pixelsPerTick * 480)) }).map((_, i) => {

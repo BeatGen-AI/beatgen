@@ -135,6 +135,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   const [resizePreviewWidths, setResizePreviewWidths] = useState<Map<string, number>>(new Map());
   const [resizePreviewPositions, setResizePreviewPositions] = useState<Map<string, number>>(new Map());
   const [dragPreviewPositions, setDragPreviewPositions] = useState<Map<string, { x: number; y: number }>>(new Map());
+  const [resizeStartPositions, setResizeStartPositions] = useState<Map<string, number>>(new Map());
+  const [contentTransforms, setContentTransforms] = useState<Map<string, number>>(new Map());
   
   // Refs
   const stageRef = useRef<Konva.Stage>(null);
@@ -312,10 +314,19 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       }
     },
     
+    onResizeStart: (item, direction) => {
+      // Track start position for left resize
+      if (direction === 'left') {
+        const startX = item.x * pixelsPerTick;
+        setResizeStartPositions(prev => new Map(prev).set(item.id, startX));
+      }
+    },
+    
     onResizeMove: (updates) => {
       // Update preview widths and positions during resize
       const newPreviewWidths = new Map(resizePreviewWidths);
       const newPreviewPositions = new Map(resizePreviewPositions);
+      const newContentTransforms = new Map(contentTransforms);
       
       updates.forEach((dim, trackId) => {
         if (dim.width !== undefined) {
@@ -327,11 +338,19 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
           // Convert logical position (ticks) to pixels for preview
           const xInPixels = dim.start * pixelsPerTick;
           newPreviewPositions.set(trackId, xInPixels);
+          
+          // Calculate content transform for left resize
+          const startX = resizeStartPositions.get(trackId);
+          if (startX !== undefined && interaction.resizeDirection === 'left') {
+            const deltaX = xInPixels - startX;
+            newContentTransforms.set(trackId, -deltaX);
+          }
         }
       });
       
       setResizePreviewWidths(newPreviewWidths);
       setResizePreviewPositions(newPreviewPositions);
+      setContentTransforms(newContentTransforms);
     },
     
     onResizeEnd: (updates) => {
@@ -358,6 +377,9 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       // Clear preview widths and positions
       setResizePreviewWidths(new Map());
       setResizePreviewPositions(new Map());
+      // Clear content transforms after resize ends
+      setContentTransforms(new Map());
+      setResizeStartPositions(new Map());
       
       // Check if this is a group resize
       if (updates.size > 1 && resizeMultipleInstances) {
@@ -766,6 +788,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 isResizing={isBeingResized}
                 resizeDirection={interaction.resizeDirection}
                 previewWidth={previewWidth}
+                contentTransform={contentTransforms.get(item.id) || 0}
                 pixelsPerTick={pixelsPerTick}
                 bpm={bpm}
                 timeSignature={timeSignature}
