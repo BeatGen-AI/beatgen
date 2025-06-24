@@ -190,9 +190,12 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           trackId: track.id,
           isResizingLeft,
           isResizingRight,
+          isResizing,
+          isDragging,
           cancelBubble: e.cancelBubble,
           propagationStopped: e.evt.cancelBubble
         });
+        
         e.cancelBubble = true; // Prevent stage from deselecting
         if (onClick) {
           // Use instance ID directly

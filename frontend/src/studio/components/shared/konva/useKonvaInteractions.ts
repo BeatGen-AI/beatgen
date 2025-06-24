@@ -120,6 +120,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [resizingItemId, setResizingItemId] = useState<string | null>(null);
   const [resizeDirection, setResizeDirection] = useState<'left' | 'right' | null>(null);
+  const [hasMovedDuringInteraction, setHasMovedDuringInteraction] = useState(false);
 
   // Refs for tracking drag state
   const dragStartRef = useRef<{
@@ -312,6 +313,9 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       });
       return;
     }
+    
+    // Set flag that movement has occurred
+    setHasMovedDuringInteraction(true);
 
     // Cancel any pending animation frame
     if (dragUpdateFrameRef.current) {
@@ -664,6 +668,9 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     } else if (isCurrentlySelecting) {
       endSelection();
     }
+    
+    // Always reset the movement flag on mouse up
+    setHasMovedDuringInteraction(false);
   }, [isDragging, isResizing, isSelecting, selectionRect, endDrag, endResize, endSelection]);
 
   // Keyboard shortcuts
@@ -827,6 +834,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     draggedItemId,
     resizingItemId,
     resizeDirection,
+    hasMovedDuringInteraction,
     
     // Methods
     selectItem,

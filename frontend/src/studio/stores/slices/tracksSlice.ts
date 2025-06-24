@@ -1780,8 +1780,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           // For left resize, adjust trim start and position
           newTrimStartTicks = oldTrimStartTicks + deltaTicks;
           newPositionX = oldPositionX + deltaTicks;
-          // Ensure trim start doesn't exceed trim end
-          newTrimStartTicks = Math.max(0, Math.min(newTrimStartTicks, oldTrimEndTicks));
+          // Allow negative trim_start for expansion beyond original content
+          // No clamping - let it go negative
           newPositionX = Math.max(0, newPositionX);
         } else {
           // For right resize, adjust trim end

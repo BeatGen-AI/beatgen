@@ -249,18 +249,12 @@ function Studio({ projectId }: StudioProps) {
 
   const handleZoomIn = () => {
     setZoomLevel(Math.min(zoomLevel + GRID_CONSTANTS.studioZoomStep, GRID_CONSTANTS.studioZoomMax));
-    // Update measureWidth in gridStore based on zoom level
-    const newMeasureWidth = DEFAULT_MEASURE_WIDTH * (Math.min(zoomLevel + GRID_CONSTANTS.studioZoomStep, GRID_CONSTANTS.studioZoomMax));
-    useGridStore.getState().setMidiMeasurePixelWidth(newMeasureWidth);
-    useGridStore.getState().setAudioMeasurePixelWidth(newMeasureWidth);
+    // Grid store should maintain constant base measure width - zoom is applied by timeline components
   };
 
   const handleZoomOut = () => {
     setZoomLevel(Math.max(zoomLevel - GRID_CONSTANTS.studioZoomStep, GRID_CONSTANTS.studioZoomMin));
-    // Update measureWidth in gridStore based on zoom level
-    const newMeasureWidth = DEFAULT_MEASURE_WIDTH * (Math.max(zoomLevel - GRID_CONSTANTS.studioZoomStep, GRID_CONSTANTS.studioZoomMin));
-    useGridStore.getState().setMidiMeasurePixelWidth(newMeasureWidth);
-    useGridStore.getState().setAudioMeasurePixelWidth(newMeasureWidth);
+    // Grid store should maintain constant base measure width - zoom is applied by timeline components
   };
 
   const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {

@@ -743,7 +743,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             
             {/* Grid lines - similar to Timeline GridOverlay */}
             {Array.from({ length: measureCount + 1 }).map((_, i) => {
-              const x = i * GRID_CONSTANTS.measureWidth;
+              const x = i * GRID_CONSTANTS.measureWidth * internalZoom;
               
               return (
                 <React.Fragment key={`grid-${i}`}>
@@ -757,7 +757,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   />
                   {/* Beat lines */}
                   {i < measureCount && timeSignature[0] > 1 && Array.from({ length: timeSignature[0] - 1 }).map((_, j) => {
-                    const beatX = x + ((j + 1) * GRID_CONSTANTS.measureWidth / timeSignature[0]);
+                    const beatX = x + ((j + 1) * GRID_CONSTANTS.measureWidth * internalZoom / timeSignature[0]);
                     return (
                       <Rect
                         key={`beat-${i}-${j}`}
@@ -771,9 +771,9 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   })}
                   {/* Subdivision lines */}
                   {i < measureCount && Array.from({ length: timeSignature[0] }).map((_, beatIndex) => {
-                    const beatX = x + (beatIndex * GRID_CONSTANTS.measureWidth / timeSignature[0]);
+                    const beatX = x + (beatIndex * GRID_CONSTANTS.measureWidth * internalZoom / timeSignature[0]);
                     return Array.from({ length: timeSignature[1] - 1 }).map((_, subdivIndex) => {
-                      const subdivX = beatX + ((subdivIndex + 1) * GRID_CONSTANTS.measureWidth / (timeSignature[0] * timeSignature[1]));
+                      const subdivX = beatX + ((subdivIndex + 1) * GRID_CONSTANTS.measureWidth * internalZoom / (timeSignature[0] * timeSignature[1]));
                       return (
                         <Rect
                           key={`subdiv-${i}-${beatIndex}-${subdivIndex}`}
@@ -866,7 +866,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   // This allows dragging/resizing multiple selected items
                   
                   // Also handle track click for opening piano roll/drum machine
-                  if (selectedTool === 'select' && onTrackClick && !modifiers.shiftKey && !modifiers.ctrlKey && !modifiers.metaKey) {
+                  if (onTrackClick && !modifiers.shiftKey && !modifiers.ctrlKey && !modifiers.metaKey) {
                     const trackId = item.data?.id;
                     console.log('Track click detected:', { trackId, instanceId: id, item });
                     if (trackId) {
