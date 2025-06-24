@@ -866,9 +866,15 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   // This allows dragging/resizing multiple selected items
                   
                   // Also handle track click for opening piano roll/drum machine
-                  if (onTrackClick && !modifiers.shiftKey && !modifiers.ctrlKey && !modifiers.metaKey) {
+                  // Don't open if any track has moved during this interaction
+                  if (onTrackClick && !modifiers.shiftKey && !modifiers.ctrlKey && !modifiers.metaKey && !interaction.hasMovedDuringInteraction) {
                     const trackId = item.data?.id;
-                    console.log('Track click detected:', { trackId, instanceId: id, item });
+                    console.log('Track click detected:', { 
+                      trackId, 
+                      instanceId: id, 
+                      item,
+                      hasMovedDuringInteraction: interaction.hasMovedDuringInteraction 
+                    });
                     if (trackId) {
                       onTrackClick(trackId, id);
                     }
