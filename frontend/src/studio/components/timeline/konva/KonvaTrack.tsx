@@ -111,11 +111,21 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   
   // Calculate the base content offset from trim values
   const calculateBaseContentOffset = () => {
-    const firstInstance = track.instances?.[0];
-    if (!track.duration_ticks || !firstInstance?.trim_start_ticks) return 0;
+    // Get the specific instance data from props
+    const instance = track.instance;
+    if (!instance) {
+      console.error('KonvaTrack: No instance data found!', {
+        trackId: track?.id,
+        instanceId,
+        track
+      });
+      return 0;
+    }
+    
+    if (!track.duration_ticks || !instance.trim_start_ticks) return 0;
     
     // Calculate what percentage of the original content is trimmed from start
-    const trimRatio = firstInstance.trim_start_ticks / track.duration_ticks;
+    const trimRatio = instance.trim_start_ticks / track.duration_ticks;
     
     // Apply that ratio to the full content width to get the offset
     // We need to calculate the full content width (untrimmed)

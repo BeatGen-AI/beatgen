@@ -328,22 +328,22 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       const newPreviewPositions = new Map(resizePreviewPositions);
       const newContentTransforms = new Map(contentTransforms);
       
-      updates.forEach((dim, trackId) => {
+      updates.forEach((dim, instanceId) => {
         if (dim.width !== undefined) {
           // Convert logical width (ticks) to pixels for preview
           const widthInPixels = dim.width * pixelsPerTick;
-          newPreviewWidths.set(trackId, widthInPixels);
+          newPreviewWidths.set(instanceId, widthInPixels);
         }
         if (dim.start !== undefined) {
           // Convert logical position (ticks) to pixels for preview
           const xInPixels = dim.start * pixelsPerTick;
-          newPreviewPositions.set(trackId, xInPixels);
+          newPreviewPositions.set(instanceId, xInPixels);
           
           // Calculate content transform for left resize
-          const startX = resizeStartPositions.get(trackId);
+          const startX = resizeStartPositions.get(instanceId);
           if (startX !== undefined && interaction.resizeDirection === 'left') {
             const deltaX = xInPixels - startX;
-            newContentTransforms.set(trackId, -deltaX);
+            newContentTransforms.set(instanceId, -deltaX);
           }
         }
       });
