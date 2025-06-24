@@ -246,19 +246,21 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Start drag operation
   const startDrag = useCallback((itemId: string, mousePos: Position) => {
-    // Ensure the item is selected
-    if (!selectedIds.has(itemId)) {
-      selectItem(itemId);
-    }
-
-    // Get all selected items
-    const selectedItems = items.filter(item => selectedIds.has(item.id));
+    // Check if the dragged item is part of current selection
+    const isDraggingSelected = selectedIds.has(itemId);
+    
+    // Determine which items to drag:
+    // - If dragging a selected item and there are multiple selected, drag all selected
+    // - If dragging an unselected item, only drag that item
+    const itemsToDrag = isDraggingSelected && selectedIds.size > 0
+      ? items.filter(item => selectedIds.has(item.id))
+      : items.filter(item => item.id === itemId);
     
     // Store initial positions
     const itemPositions = new Map<string, Position>();
     const initialOffsets = new Map<string, Position>();
     
-    selectedItems.forEach(item => {
+    itemsToDrag.forEach(item => {
       itemPositions.set(item.id, { x: item.x, y: item.y });
       initialOffsets.set(item.id, {
         x: mousePos.x - logicalToPixels(item.x),
@@ -276,9 +278,9 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     setDraggedItemId(itemId);
 
     if (onDragStart) {
-      onDragStart(selectedItems);
+      onDragStart(itemsToDrag);
     }
-  }, [selectedIds, items, selectItem, logicalToPixels, onDragStart]);
+  }, [selectedIds, items, logicalToPixels, onDragStart]);
 
   // Update drag
   const updateDrag = useCallback((mousePos: Position) => {
@@ -548,11 +550,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     if (tool === 'select') {
       if (item) {
         // Regular click/drag - resize is handled by custom handles
-        if (e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey) {
-          toggleItemSelection(item.id);
-        } else if (!selectedIds.has(item.id)) {
-          selectItem(item.id);
-        }
+        // Remove click-to-select behavior - only rectangle tool can select
         // Don't start drag here - it's handled by onMouseDown in KonvaTrack
       } else {
         // Background click - start selection rectangle

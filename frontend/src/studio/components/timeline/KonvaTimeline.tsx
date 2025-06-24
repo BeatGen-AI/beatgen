@@ -317,8 +317,24 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     onResizeStart: (item, direction) => {
       // Track start position for left resize
       if (direction === 'left') {
-        const startX = item.x * pixelsPerTick;
-        setResizeStartPositions(prev => new Map(prev).set(item.id, startX));
+        const newStartPositions = new Map();
+        
+        // Check if this is a group resize
+        if (interaction.selectedIds.includes(item.id) && interaction.selectedIds.length > 1) {
+          // Track start positions for all selected items
+          konvaItems.forEach(konvaItem => {
+            if (interaction.selectedIds.includes(konvaItem.id)) {
+              const startX = konvaItem.x * pixelsPerTick;
+              newStartPositions.set(konvaItem.id, startX);
+            }
+          });
+        } else {
+          // Single item resize
+          const startX = item.x * pixelsPerTick;
+          newStartPositions.set(item.id, startX);
+        }
+        
+        setResizeStartPositions(newStartPositions);
       }
     },
     
