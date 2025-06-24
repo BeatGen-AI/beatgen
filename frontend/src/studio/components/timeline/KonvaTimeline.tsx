@@ -402,6 +402,15 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
         // Group resize - prepare instance updates
         const instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}> = [];
         
+        console.log('🔍 onResizeEnd - Group resize with updates:', {
+          updatesSize: updates.size,
+          updates: Array.from(updates.entries()).map(([id, dim]) => ({
+            id,
+            start: dim.start,
+            width: dim.width
+          }))
+        });
+        
         updates.forEach((dim, instanceId) => {
           const item = konvaItems.find(item => item.id === instanceId);
           if (item && item.data) {
@@ -410,9 +419,22 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             if (instance) {
               // Determine resize direction and delta
               if (dim.start !== undefined && dim.width !== undefined) {
-                // Left resize
+                // Left resize - for group resize, still pass position delta
+                // The backend treats it as position delta despite the parameter name
                 const positionDeltaTicks = dim.start - instance.x_position;
                 const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
+                console.log('Group left resize delta calculation:', {
+                  instanceId,
+                  oldPosition: instance.x_position,
+                  newPosition: dim.start,
+                  positionDeltaTicks,
+                  deltaPixels,
+                  oldTrimStart: instance.trim_start_ticks,
+                  oldTrimEnd: instance.trim_end_ticks,
+                  oldWidth: instance.trim_end_ticks - instance.trim_start_ticks,
+                  newWidth: dim.width,
+                  expectedNewTrimStart: instance.trim_start_ticks + positionDeltaTicks
+                });
                 instanceUpdates.push({ trackId, instanceId, widthDelta: deltaPixels, anchor: 'left' });
               } else if (dim.width !== undefined) {
                 // Right resize
@@ -438,9 +460,18 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             if (instance && onInstanceResizeEnd) {
               // For left resize, we need to update the trim
               if (dim.start !== undefined && dim.width !== undefined) {
-                // Left resize
+                // Left resize - pass the position change, not width change
                 const positionDeltaTicks = dim.start - instance.x_position;
                 const deltaPixels = ticksToPixels(positionDeltaTicks, bpm, timeSignature);
+                console.log('Single left resize delta calculation:', {
+                  instanceId,
+                  oldPosition: instance.x_position,
+                  newPosition: dim.start,
+                  positionDeltaTicks,
+                  deltaPixels,
+                  oldTrimStart: instance.trim_start_ticks,
+                  oldTrimEnd: instance.trim_end_ticks
+                });
                 onInstanceResizeEnd(trackId, instanceId, deltaPixels, 'left');
               } else if (dim.width !== undefined) {
                 // Right resize - only width changed

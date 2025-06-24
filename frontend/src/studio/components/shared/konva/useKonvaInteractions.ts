@@ -246,6 +246,13 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Start drag operation
   const startDrag = useCallback((itemId: string, mousePos: Position) => {
+    console.log('🚀 startDrag called', {
+      itemId,
+      mousePos,
+      selectedIds: Array.from(selectedIds),
+      itemsCount: items.length
+    });
+    
     // Check if the dragged item is part of current selection
     const isDraggingSelected = selectedIds.has(itemId);
     
@@ -255,6 +262,14 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     const itemsToDrag = isDraggingSelected && selectedIds.size > 0
       ? items.filter(item => selectedIds.has(item.id))
       : items.filter(item => item.id === itemId);
+      
+    console.log('🚀 startDrag itemsToDrag', {
+      itemId,
+      isDraggingSelected,
+      selectedIdsSize: selectedIds.size,
+      itemsToDragCount: itemsToDrag.length,
+      itemsToDragIds: itemsToDrag.map(i => i.id)
+    });
     
     // Store initial positions
     const itemPositions = new Map<string, Position>();
@@ -276,6 +291,12 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
     setIsDragging(true);
     setDraggedItemId(itemId);
+    
+    console.log('🚀 startDrag state set', {
+      isDragging: true,
+      draggedItemId: itemId,
+      hasDragStartRef: true
+    });
 
     if (onDragStart) {
       onDragStart(itemsToDrag);
@@ -284,7 +305,13 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Update drag
   const updateDrag = useCallback((mousePos: Position) => {
-    if (!isDragging || !dragStartRef.current) return;
+    if (!isDragging || !dragStartRef.current) {
+      console.log('⚠️ updateDrag early return', {
+        isDragging,
+        hasDragStartRef: !!dragStartRef.current
+      });
+      return;
+    }
 
     // Cancel any pending animation frame
     if (dragUpdateFrameRef.current) {
@@ -455,7 +482,9 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
   const endResize = useCallback(() => {
     console.log('🎯 endResize called', {
       isResizing,
-      hasResizeStartRef: !!resizeStartRef.current
+      hasResizeStartRef: !!resizeStartRef.current,
+      resizingItemId,
+      resizeDirection
     });
     if (!isResizing || !resizeStartRef.current) return;
 
@@ -488,7 +517,12 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     setResizingItemId(null);
     setResizeDirection(null);
     resizeStartRef.current = null;
-  }, [isResizing, items, selectedIds, onResizeEnd]);
+    
+    // Reset cursor to default
+    if (stage) {
+      stage.container().style.cursor = 'default';
+    }
+  }, [isResizing, items, selectedIds, onResizeEnd, stage]);
 
   // Start rectangle selection
   const startSelection = useCallback((mousePos: Position) => {
@@ -540,10 +574,21 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Handle mouse down
   const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    console.log('🎮 Stage handleMouseDown triggered', {
+      hasStage: !!stage,
+      target: e.target.getClassName(),
+      cancelBubble: e.cancelBubble
+    });
+    
     if (!stage) return;
 
     const pos = stage.getPointerPosition();
     if (!pos) return;
+    
+    console.log('🎮 Stage handleMouseDown processing', {
+      pos,
+      tool
+    });
 
     const item = getItemAtPosition(pos.x, pos.y);
     

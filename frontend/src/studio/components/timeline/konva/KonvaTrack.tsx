@@ -82,6 +82,16 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   const [isResizingLeft, setIsResizingLeft] = useState(false);
   const [isResizingRight, setIsResizingRight] = useState(false);
   
+  // Reset cursor when resize ends
+  useEffect(() => {
+    if (!isResizing && groupRef.current) {
+      const stage = groupRef.current.getStage();
+      if (stage) {
+        stage.container().style.cursor = 'default';
+      }
+    }
+  }, [isResizing]);
+  
   // Use prop preview width if provided (during resize), otherwise use internal state
   const previewWidth = propPreviewWidth || null;
   
@@ -175,6 +185,14 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={(e) => {
+        console.log('🎯 KonvaTrack onClick', {
+          instanceId,
+          trackId: track.id,
+          isResizingLeft,
+          isResizingRight,
+          cancelBubble: e.cancelBubble,
+          propagationStopped: e.evt.cancelBubble
+        });
         e.cancelBubble = true; // Prevent stage from deselecting
         if (onClick) {
           // Use instance ID directly
@@ -183,15 +201,35 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         }
       }}
       onMouseDown={(e) => {
-        // Don't start drag if clicking on resize handles
-        if (isResizingLeft || isResizingRight) {
-          return;
-        }
+        console.log('🎯 KonvaTrack onMouseDown START', {
+          instanceId,
+          trackId: track.id,
+          isResizingLeft,
+          isResizingRight,
+          willReturn: isResizingLeft || isResizingRight,
+          cancelBubble: e.cancelBubble,
+          propagationStopped: e.evt.cancelBubble
+        });
+        
+        // Reset resize handle states when starting drag
+        // This prevents stuck hover states from blocking drag
+        setIsResizingLeft(false);
+        setIsResizingRight(false);
         
         e.cancelBubble = true;
+        console.log('🎯 KonvaTrack onMouseDown PROCEEDING', {
+          instanceId,
+          cancelBubbleAfter: e.cancelBubble
+        });
+        
         if (onMouseDown) {
           // Use instance ID directly
           const idToUse = instanceId || track.id;
+          console.log('🎯 KonvaTrack calling onMouseDown callback', {
+            idToUse,
+            instanceIdIsZero: instanceId === 0,
+            instanceIdType: typeof instanceId
+          });
           onMouseDown(idToUse, e);
         }
       }}
@@ -347,7 +385,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
             }}
             onMouseLeave={(e) => {
               const stage = e.target.getStage();
-              if (stage && !isResizing) {
+              if (stage) {
                 stage.container().style.cursor = 'default';
               }
               setIsResizingLeft(false);
@@ -401,7 +439,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
             }}
             onMouseLeave={(e) => {
               const stage = e.target.getStage();
-              if (stage && !isResizing) {
+              if (stage) {
                 stage.container().style.cursor = 'default';
               }
               setIsResizingRight(false);

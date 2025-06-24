@@ -919,12 +919,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
         if (resizeDirection === 'left') {
             // For left resize, deltaTicks represents position change
-            newTrimStartTicks = oldTrimStartTicks + deltaTicks;
+            // When making bigger from left, deltaTicks is negative (moving left)
             newPositionX = oldPositionX + deltaTicks;
-            // Ensure trim start doesn't exceed trim end
-            newTrimStartTicks = Math.max(0, Math.min(newTrimStartTicks, oldTrimEndTicks));
-            // Ensure position doesn't go negative
-            newPositionX = Math.max(0, newPositionX);
+            newPositionX = Math.max(0, newPositionX); // Don't go past timeline start
+            
+            // Adjust trim_start by the same amount the position moved
+            const actualPositionDelta = newPositionX - oldPositionX;
+            newTrimStartTicks = oldTrimStartTicks + actualPositionDelta;
+            
+            // trim_start can go negative when expanding beyond original content
+            // Don't clamp to trim_end - that prevents expansion
             
         } else { 
             // For right resize, deltaTicks represents width change
@@ -1662,12 +1666,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
         if (resizeDirection === 'left') {
             // For left resize, deltaTicks represents position change
-            newTrimStartTicks = oldTrimStartTicks + deltaTicks;
+            // When making bigger from left, deltaTicks is negative (moving left)
             newPositionX = oldPositionX + deltaTicks;
-            // Ensure trim start doesn't exceed trim end
-            newTrimStartTicks = Math.max(0, Math.min(newTrimStartTicks, oldTrimEndTicks));
-            // Ensure position doesn't go negative
-            newPositionX = Math.max(0, newPositionX);
+            newPositionX = Math.max(0, newPositionX); // Don't go past timeline start
+            
+            // Adjust trim_start by the same amount the position moved
+            const actualPositionDelta = newPositionX - oldPositionX;
+            newTrimStartTicks = oldTrimStartTicks + actualPositionDelta;
+            
+            // trim_start can go negative when expanding beyond original content
+            // Don't clamp to trim_end - that prevents expansion
         } else { 
             // For right resize, deltaTicks represents width change
             newTrimEndTicks = oldTrimEndTicks + deltaTicks;
