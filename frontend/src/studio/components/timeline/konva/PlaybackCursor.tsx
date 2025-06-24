@@ -118,7 +118,7 @@ export const PlaybackCursor = forwardRef<PlaybackCursorRef, PlaybackCursorProps>
         cornerRadius={[0, 0, 6, 6]}
       />
       
-      {/* Time display (optional) */}
+      {/* Time display (optional)
       {!isPlaying && (
         <Group>
           <Rect
@@ -138,7 +138,7 @@ export const PlaybackCursor = forwardRef<PlaybackCursorRef, PlaybackCursorProps>
             fill="white"
           />
         </Group>
-      )}
+      )} */}
       
       {/* Glow effect when playing */}
       {isPlaying && (
