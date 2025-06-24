@@ -22,3 +22,7 @@ export type { UseKonvaInteractionsOptions, KonvaItem, Tool, Position, Dimensions
 
 export { DraggableItem } from './DraggableItem';
 export type { DraggableItemProps } from './DraggableItem';
+
+// Hooks
+export { useCursorManager } from '../../../hooks/useCursorManager';
+export type { CursorType } from '../../../hooks/useCursorManager';

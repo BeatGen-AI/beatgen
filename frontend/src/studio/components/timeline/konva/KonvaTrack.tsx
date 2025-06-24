@@ -82,15 +82,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   const [isResizingLeft, setIsResizingLeft] = useState(false);
   const [isResizingRight, setIsResizingRight] = useState(false);
   
-  // Reset cursor when resize ends
-  useEffect(() => {
-    if (!isResizing && groupRef.current) {
-      const stage = groupRef.current.getStage();
-      if (stage) {
-        stage.container().style.cursor = 'default';
-      }
-    }
-  }, [isResizing]);
+  // Removed cursor reset - now handled by cursor manager in interaction system
   
   // Use prop preview width if provided (during resize), otherwise use internal state
   const previewWidth = propPreviewWidth || null;
@@ -380,18 +372,20 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
             fill={isResizingLeft ? "rgba(33, 150, 243, 0.5)" : "transparent"}
             opacity={1}
             onMouseEnter={(e) => {
+              setIsResizingLeft(true);
+              // Set cursor directly for resize handle
               const stage = e.target.getStage();
               if (stage) {
                 stage.container().style.cursor = 'ew-resize';
               }
-              setIsResizingLeft(true);
             }}
             onMouseLeave={(e) => {
+              setIsResizingLeft(false);
+              // Reset cursor
               const stage = e.target.getStage();
               if (stage) {
                 stage.container().style.cursor = 'default';
               }
-              setIsResizingLeft(false);
             }}
             onMouseDown={(e) => {
               console.log('🔧 KonvaTrack - LEFT resize handle mouseDown', {
@@ -434,18 +428,20 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
             fill={isResizingRight ? "rgba(33, 150, 243, 0.5)" : "transparent"}
             opacity={1}
             onMouseEnter={(e) => {
+              setIsResizingRight(true);
+              // Set cursor directly for resize handle
               const stage = e.target.getStage();
               if (stage) {
                 stage.container().style.cursor = 'ew-resize';
               }
-              setIsResizingRight(true);
             }}
             onMouseLeave={(e) => {
+              setIsResizingRight(false);
+              // Reset cursor
               const stage = e.target.getStage();
               if (stage) {
                 stage.container().style.cursor = 'default';
               }
-              setIsResizingRight(false);
             }}
             onMouseDown={(e) => {
               console.log('🔧 KonvaTrack - RIGHT resize handle mouseDown', {

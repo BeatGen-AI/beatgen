@@ -8,6 +8,7 @@ import {
   DragGhost,
   Ruler,
   useKonvaInteractions,
+  useCursorManager,
   KonvaItem,
   Tool,
   Position,
@@ -241,6 +242,14 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   // Get stage from direct Stage ref
   const [stage, setStage] = useState<Konva.Stage | null>(null);
   
+  // Initialize cursor manager
+  const cursorManager = useCursorManager(stage);
+  
+  // Update tool cursor when tool changes
+  useEffect(() => {
+    cursorManager.setToolCursor(cursorManager.getToolCursor(tool));
+  }, [tool, cursorManager]);
+  
   // Use the unified interaction system
   const interaction = useKonvaInteractions({
     items: konvaItems,
@@ -250,6 +259,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     gridSize: gridSnapEnabled ? pixelsToTicks(actualSnapSize, bpm, timeSignature) : 0,
     snapToGrid: gridSnapEnabled,
     trackHeight: GRID_CONSTANTS.trackHeight,
+    cursorManager,
     
     // Callbacks
     onSelectionChange: (ids) => {
@@ -673,11 +683,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
           flex: 1, 
           position: 'relative',
           overflow: 'auto',
-          backgroundColor: 'background.default',
-          cursor: tool === 'select' ? 'default' : 
-                  tool === 'pen' ? 'copy' :
-                  tool === 'eraser' ? 'crosshair' :
-                  tool === 'highlighter' ? 'cell' : 'default'
+          backgroundColor: 'background.default'
         }}
         onWheel={handleWheel}
       >

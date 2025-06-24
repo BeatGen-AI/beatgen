@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import Konva from 'konva';
+import { useCursorManager } from '../../../hooks/useCursorManager';
 
 /**
  * Tool types available in the interaction system
@@ -62,6 +63,9 @@ export interface UseKonvaInteractionsOptions {
   /** Track height for Y-axis snapping (in pixels) */
   trackHeight?: number;
   
+  /** Cursor manager instance */
+  cursorManager?: ReturnType<typeof useCursorManager>;
+  
   // Callbacks
   onSelectionChange?: (selectedIds: string[]) => void;
   onDragStart?: (items: KonvaItem[]) => void;
@@ -92,6 +96,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     gridSize = 1,
     snapToGrid = true,
     trackHeight = 60,
+    cursorManager,
     onSelectionChange,
     onDragStart,
     onDragMove,
@@ -293,6 +298,11 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     setIsDragging(true);
     setDraggedItemId(itemId);
     
+    // Set move cursor during drag
+    if (cursorManager) {
+      cursorManager.setInteractionCursor('move');
+    }
+    
     console.log('🚀 startDrag state set', {
       isDragging: true,
       draggedItemId: itemId,
@@ -373,6 +383,11 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     setIsDragging(false);
     setDraggedItemId(null);
     dragStartRef.current = null;
+    
+    // Reset cursor after drag
+    if (cursorManager) {
+      cursorManager.resetInteractionCursor();
+    }
   }, [isDragging, items, onDragEnd]);
 
   // Start resize operation
@@ -421,6 +436,12 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     setIsResizing(true);
     setResizingItemId(itemId);
     setResizeDirection(direction);
+    
+    // Set resize cursor during resize
+    if (cursorManager) {
+      cursorManager.setInteractionCursor(cursorManager.getResizeCursor(direction));
+    }
+    
     console.log('✅ useKonvaInteractions - resize state set', {
       isResizing: true,
       resizingItemId: itemId,
@@ -522,8 +543,11 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     setResizeDirection(null);
     resizeStartRef.current = null;
     
-    // Reset cursor to default
-    if (stage) {
+    // Reset cursor after resize
+    if (cursorManager) {
+      cursorManager.resetInteractionCursor();
+    } else if (stage) {
+      // Fallback if no cursor manager
       stage.container().style.cursor = 'default';
     }
   }, [isResizing, items, selectedIds, onResizeEnd, stage]);
@@ -534,6 +558,11 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       x: pixelsToLogical(mousePos.x),
       y: mousePos.y // Y is already in pixels
     };
+    
+    // Set crosshair cursor for selection
+    if (cursorManager) {
+      cursorManager.setInteractionCursor('crosshair');
+    }
     
     
     setIsSelecting(true);
@@ -574,6 +603,11 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
     setIsSelecting(false);
     setSelectionRect(null);
+    
+    // Reset cursor after selection
+    if (cursorManager) {
+      cursorManager.resetInteractionCursor();
+    }
   }, [isSelecting, selectionRect, getItemsInRect, selectMultiple, clearSelection, items]);
 
   // Handle mouse down
@@ -651,8 +685,16 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       updateResize(pos);
     } else if (isCurrentlySelecting) {
       updateRectSelection(pos);
+    } else if (cursorManager && tool === 'select') {
+      // Handle hover cursor when not in any interaction
+      const item = getItemAtPosition(pos.x, pos.y);
+      if (item) {
+        cursorManager.setHoverCursor('pointer');
+      } else {
+        cursorManager.resetHoverCursor();
+      }
     }
-  }, [stage, isDragging, isResizing, isSelecting, selectionRect, updateDrag, updateResize, updateRectSelection]);
+  }, [stage, isDragging, isResizing, isSelecting, selectionRect, updateDrag, updateResize, updateRectSelection, cursorManager, tool, getItemAtPosition]);
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {
