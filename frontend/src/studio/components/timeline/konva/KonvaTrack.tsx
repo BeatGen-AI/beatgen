@@ -30,6 +30,7 @@ export interface KonvaTrackProps {
   selectedCount?: number;
   gridSnapEnabled?: boolean;
   snapSizeInPixels?: number;
+  trackColor?: string; // Track color prop
   data?: any; // Additional data for color etc
 }
 
@@ -60,6 +61,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   selectedCount = 1,
   gridSnapEnabled = true,
   snapSizeInPixels = 12.5,
+  trackColor,
   data
 }) => {
   // Validate required numeric props
@@ -91,26 +93,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   const displayWidth = Math.max(1, previewWidth || width || 1);
   const isValidWidth = !isNaN(displayWidth) && displayWidth > 0;
   
-  // Get track color from props (passed from parent)
-  const trackColor = useMemo(() => {
-    // If color is explicitly passed in data, use it
-    if (data?.color) {
-      return data.color;
-    }
-    
-    // Otherwise fall back to type-based colors
-    switch (track.track_type) {
-      case 'AUDIO':
-        return '#4caf50';
-      case 'MIDI':
-      case 'SAMPLER':
-        return '#2196f3';
-      case 'DRUM':
-        return '#ff9800';
-      default:
-        return '#9c27b0';
-    }
-  }, [track.track_type, data?.color]);
+  // Use trackColor prop or fall back to data.color
+  const finalTrackColor = trackColor || data?.color || '#9c27b0';
   
   // Calculate the base content offset from trim values
   const calculateBaseContentOffset = () => {
@@ -148,7 +132,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       height,
       pixelsPerTick,
       contentOffset,
-      color: trackColor
+      color: finalTrackColor
     };
     
     
@@ -237,13 +221,13 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         width={displayWidth}
         height={height}
         fill="rgba(26, 26, 26, 0.8)"
-        stroke={isSelected ? '#2196f3' : 'transparent'}
+        stroke={isSelected ? 'white' : 'transparent'}
         strokeWidth={isSelected ? 3 : 0}
         strokeScaleEnabled={false}
         cornerRadius={6}
         opacity={track.mute ? 0.4 : 0.85}
         shadowEnabled={isHovered && !track.mute}
-        shadowColor={trackColor}
+        shadowColor={finalTrackColor}
         shadowBlur={12}
         shadowOpacity={1}
         perfectDrawEnabled={false}
@@ -259,8 +243,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         fillLinearGradientStartPoint={{ x: 0, y: 0 }}
         fillLinearGradientEndPoint={{ x: 0, y: height }}
         fillLinearGradientColorStops={[
-          0, `${trackColor}80`,
-          1, trackColor
+          0, `${finalTrackColor}80`,
+          1, finalTrackColor
         ]}
         cornerRadius={6}
         opacity={track.mute ? 0.4 : 0.85}
@@ -295,12 +279,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           y={0}
           width={40}
           height={16}
-          fill={
-            track.track_type === 'AUDIO' ? '#4caf50' : 
-            track.track_type === 'MIDI' ? '#2196f3' : 
-            track.track_type === 'SAMPLER' ? '#2196f3' :
-            track.track_type === 'DRUM' ? '#ff9800' : '#9c27b0'
-          }
+          fill={finalTrackColor}
           cornerRadius={3}
           opacity={0.7}
           listening={false}

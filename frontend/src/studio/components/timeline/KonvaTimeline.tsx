@@ -20,7 +20,7 @@ import { PlaybackCursor } from './konva/PlaybackCursor';
 import { TimeRuler } from './konva/TimeRuler';
 import { CombinedTrack } from 'src/platform/types/project';
 import { Position as TrackPosition } from '../track/types';
-import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
+import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks, getTrackColor } from '../../constants/gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
@@ -230,7 +230,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               : width,
             height: GRID_CONSTANTS.trackHeight,
             type: 'track' as const,
-            data: { ...track, instanceId: instance.id, instance }
+            data: { ...track, instanceId: instance.id, instance, trackIndex }
           });
         });
       }
@@ -848,6 +848,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 gridSnapEnabled={gridSnapEnabled}
                 snapSizeInPixels={actualSnapSize}
                 selectedCount={interaction.selectedIds.length}
+                data={item.data}
+                trackColor={item.data?.trackIndex !== undefined ? getTrackColor(item.data.trackIndex) : undefined}
                 onClick={(id, e) => {
                   // Handle instance selection
                   const modifiers = {
