@@ -6,6 +6,7 @@ import { MidiTrackRenderer } from './tracks/MidiTrackRenderer';
 import { DrumTrackRenderer } from './tracks/DrumTrackRenderer';
 import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 import { getInstanceById } from '@/studio/utils/instanceHelpers';
+import { useTheme } from '@mui/material/styles';
 
 export interface KonvaTrackProps {
   track: CombinedTrack;
@@ -221,9 +222,6 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         width={displayWidth}
         height={height}
         fill="rgba(26, 26, 26, 0.8)"
-        stroke={isSelected ? 'white' : 'transparent'}
-        strokeWidth={isSelected ? 3 : 0}
-        strokeScaleEnabled={false}
         cornerRadius={6}
         opacity={track.mute ? 0.4 : 0.85}
         shadowEnabled={isHovered && !track.mute}
@@ -250,6 +248,21 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         opacity={track.mute ? 0.4 : 0.85}
         listening={false}
       />
+      
+      {/* Selection border - inset */}
+      {isSelected && (
+        <Rect
+          x={1.5}
+          y={1.5}
+          width={displayWidth - 2}
+          height={height - 2}
+          stroke={useTheme().palette.mode === 'dark' ? 'white' : '#222222'}
+          strokeWidth={2}
+          fill="transparent"
+          cornerRadius={4}
+          listening={false}
+        />
+      )}
       
       {/* Resize preview outline */}
       {isResizing && previewWidth && previewWidth !== width && isValidWidth && (
@@ -337,7 +350,6 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         </>
       )}
       
-      {/* Selection highlight - already handled by stroke on main background rect */}
       
       {/* Custom resize handles - show on hover for all tracks */}
       {isHovered && !isDragging && !isResizing && isValidWidth && (
