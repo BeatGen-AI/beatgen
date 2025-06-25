@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Button, Popover, ToggleButton, ToggleButtonGroup, useTheme } from '@mui/material';
+import { Box, Button, Popover, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 
 interface KeySelectorProps {
   selectedKey: string;

@@ -1,5 +1,6 @@
 import React, { forwardRef, memo, useRef, useState } from 'react';
-import { Box, IconButton, Typography, TextField, Tooltip, useTheme, Menu, MenuItem } from '@mui/material';
+import { IconButton, Typography, TextField, Tooltip, Menu, MenuItem } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 // Import components
 import BPMControl from './BPMControl';
 import TimeSignatureDisplay from './TimeSignatureDisplay';
@@ -128,39 +129,17 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     };
 
     return (
-        <Box 
-            sx={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                zIndex: 1300,
-                bgcolor: theme.palette.mode === 'dark' ? 'rgba(18, 18, 18, 0.8)' : 'rgba(240, 240, 240, 0.1)',
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                overflowX: 'auto',
-                overflowY: 'hidden'
-            }}
-        >
-            <Box 
-                ref={ref}
-                sx={{
-                display: 'grid',
+        <div className="fixed top-0 left-0 right-0 z-50 border-b overflow-x-auto overflow-y-hidden" style={{
+            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(18, 18, 18, 0.8)' : 'rgba(240, 240, 240, 0.1)',
+            borderBottomColor: theme.palette.divider
+        }}>
+            <div ref={ref} className="grid grid-cols-3 items-center w-full min-w-fit gap-2 p-1" style={{
                 gridTemplateColumns: '1fr auto 1fr',
-                alignItems: 'center',
-                width: '100%',
-                minWidth: 'fit-content',
-                gap: 2,
-                p: 1,
-                color: 'text.primary'
+                color: theme.palette.text.primary
             }}>
             {/* Left section */}
-            <Box sx={{ 
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                justifySelf: 'start',
-            }}>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+            <div className="flex items-center gap-2 justify-self-start">
+                <div className="flex gap-1">
                     <Tooltip title="Go back to Projects" arrow>
                         <IconButton
                             size="small"
@@ -211,11 +190,11 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     >
                         <IconArrowForwardUp />
                     </IconButton>
-                </Box>
+                </div>
 
                 {/* Tool Icons */}
                 {showToolbar && (
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <div className="flex gap-1">
                         <IconButton
                             size="small"
                             color="inherit"
@@ -297,20 +276,14 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                 {snapToGrid ? <GridIcon /> : <GridOffIcon />}
                             </IconButton>
                         </Tooltip>
-                    </Box>
+                    </div>
                 )}
 
-                <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
-                    borderRadius: 1,
-                    px: 2,
-                    py: 0.5,
-                    gap: 1,
+                <div className="flex items-center rounded gap-1 px-2 py-1" style={{
+                    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'
                 }}>
                     <BPMControl bpm={bpm} onBpmChange={onBpmChange} />
-                </Box>
+                </div>
 
                 {/* <TimeSignatureDisplay
                     topNumber={timeSignature[0]}
@@ -324,7 +297,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     onKeyChange={onKeySignatureChange}
                 />
 
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <div className="flex gap-1">
                     <IconButton
                         size="small"
                         color="inherit"
@@ -353,15 +326,11 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     >
                         <IconPlayerSkipBackFilled />
                     </IconButton>
-                </Box>
-            </Box>
+                </div>
+            </div>
 
             {/* Center section - Project Title */}
-            <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'center',
-                justifySelf: 'center',
-            }}>
+            <div className="flex justify-center justify-self-center">
                 <TextField
                     variant="standard"
                     value={projectTitle}
@@ -376,17 +345,11 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         }
                     }}
                 />
-            </Box>
+            </div>
 
             {/* Right section */}
-            <Box sx={{
-                justifySelf: 'end',
-            }}>
-                <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1
-                }}>
+            <div className="justify-self-end">
+                <div className="flex items-center gap-1">
                     <IconButton
                         size="small"
                         color="inherit"
@@ -401,18 +364,13 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     >
                         <IconZoomIn />
                     </IconButton>
-                    <Box sx={{ 
-                        color: "text.primary",
-                        fontWeight: "bold", 
-                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
-                        minWidth: 40, 
-                        textAlign: "center", 
-                        border: `1px solid ${theme.palette.divider}`,
-                        padding: "4px 4px", 
-                        borderRadius: "6px" 
+                    <div className="font-bold min-w-10 text-center p-1 rounded border" style={{
+                        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
+                        color: theme.palette.text.primary,
+                        borderColor: theme.palette.divider
                     }}>
                         {zoomLevel.toFixed(1)}x
-                    </Box>
+                    </div>
                     <IconButton
                         size="small"
                         color="inherit"
@@ -475,9 +433,9 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     >
                         <IconSettings />
                     </IconButton>
-                </Box>
-            </Box>
-            </Box>
+                </div>
+            </div>
+            </div>
 
             {/* Grid Snap Menu */}
             <Menu
@@ -514,8 +472,8 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                 </MenuItem>
                 
                 {/* Step section */}
-                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5, pt: 0.5 }}>
-                    <Box sx={{ fontSize: '0.75rem', color: 'text.secondary', px: 2, py: 0.5 }}>STEP</Box>
+                <div className="border-t mt-2 pt-2" style={{borderTopColor: theme.palette.divider}}>
+                    <div className="text-xs px-2 py-1" style={{color: theme.palette.text.secondary}}>STEP</div>
                     <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_6)}>
                         <span>1/6 step</span>
                         {gridSnapSize === GridSnapOption.STEP_1_6 && <CheckIcon fontSize="small" />}
@@ -536,11 +494,11 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         <span>Step</span>
                         {gridSnapSize === GridSnapOption.STEP && <CheckIcon fontSize="small" />}
                     </MenuItem>
-                </Box>
+                </div>
                 
                 {/* Beat section */}
-                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5, pt: 0.5 }}>
-                    <Box sx={{ fontSize: '0.75rem', color: 'text.secondary', px: 2, py: 0.5 }}>BEAT</Box>
+                <div className="border-t mt-2 pt-2" style={{borderTopColor: theme.palette.divider}}>
+                    <div className="text-xs px-2 py-1" style={{color: theme.palette.text.secondary}}>BEAT</div>
                     <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_6)}>
                         <span>1/6 beat</span>
                         {gridSnapSize === GridSnapOption.BEAT_1_6 && <CheckIcon fontSize="small" />}
@@ -561,17 +519,17 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         <span>Beat</span>
                         {gridSnapSize === GridSnapOption.BEAT && <CheckIcon fontSize="small" />}
                     </MenuItem>
-                </Box>
+                </div>
                 
                 {/* Bar option */}
-                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5, pt: 0.5 }}>
+                <div className="border-t mt-2 pt-2" style={{borderTopColor: theme.palette.divider}}>
                     <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BAR)}>
                         <span>Bar</span>
                         {gridSnapSize === GridSnapOption.BAR && <CheckIcon fontSize="small" />}
                     </MenuItem>
-                </Box>
+                </div>
             </Menu>
-        </Box>
+        </div>
     );
 }));
 

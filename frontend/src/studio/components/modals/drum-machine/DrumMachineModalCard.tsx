@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
 import { prettyPrint } from '../../../../utils/pretty_print';
-import { useTheme } from '@mui/material/styles';
+import { useTheme } from '../../../../platform/theme/ThemeContext';
 
 export interface DrumSampleCardProps {
     sample: DrumSamplePublicRead;

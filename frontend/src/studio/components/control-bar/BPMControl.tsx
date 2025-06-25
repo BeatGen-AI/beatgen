@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import TextField from '@mui/material/TextField';
 import Box from '@mui/material/Box';
-import { useTheme } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 import { alpha } from '@mui/material/styles';
 
 interface BPMControlProps {

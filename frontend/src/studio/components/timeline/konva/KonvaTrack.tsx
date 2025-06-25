@@ -6,7 +6,7 @@ import { MidiTrackRenderer } from './tracks/MidiTrackRenderer';
 import { DrumTrackRenderer } from './tracks/DrumTrackRenderer';
 import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 import { getInstanceById } from '@/studio/utils/instanceHelpers';
-import { useTheme } from '@mui/material/styles';
+import { useTheme } from '../../../../platform/theme/ThemeContext';
 
 export interface KonvaTrackProps {
   track: CombinedTrack;

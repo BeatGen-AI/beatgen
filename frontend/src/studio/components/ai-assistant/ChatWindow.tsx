@@ -6,9 +6,9 @@ import {
   TextField, 
   IconButton, 
   CircularProgress,
-  Chip,
-  useTheme
+  Chip
 } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 import {IconX} from '@tabler/icons-react';
 import SendIcon from '@mui/icons-material/Send';
 import { IconAi } from '@tabler/icons-react';

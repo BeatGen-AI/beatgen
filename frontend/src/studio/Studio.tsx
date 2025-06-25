@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useLayoutEffect, useCallback } from 'react';
-import { Box, Button } from '@mui/material';
+import { Button } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 
@@ -418,12 +418,9 @@ function Studio({ projectId }: StudioProps) {
 
   return (
     <MuiThemeProvider theme={currentStudioTheme}>
-      <Box sx={{ 
-        height: '100vh', 
-        bgcolor: 'background.default',
-        color: 'text.primary',
-        display: 'flex',
-        flexDirection: 'column',
+      <div className="h-screen flex flex-col" style={{
+        backgroundColor: currentStudioTheme.palette.background.default,
+        color: currentStudioTheme.palette.text.primary
       }}>
         <StudioControlBar
           ref={controlBarRef}
@@ -464,46 +461,22 @@ function Studio({ projectId }: StudioProps) {
         />
 
         {/* Main Content Area */}
-        <Box sx={{ 
-          display: 'flex', 
-          flex: 1, 
-          overflow: 'visible',
-          position: 'relative',
-          paddingTop: `${controlBarHeight}px`
-        }}>
+        <div className="flex flex-1 overflow-visible relative" style={{ paddingTop: `${controlBarHeight}px` }}>
           {/* Left Sidebar - Fixed position */}
-          <Box sx={{ 
+          <div className="flex flex-col fixed left-0 overflow-x-hidden z-10 transition-all duration-300 ease-in-out border-r" style={{
             width: isSidebarOpen ? GRID_CONSTANTS.sidebarWidth : COLLAPSED_SIDEBAR_WIDTH,
-            transition: 'width 0.3s ease-in-out',
-            borderRight: `${GRID_CONSTANTS.borderWidth} solid ${GRID_CONSTANTS.borderColor}`,
-            bgcolor: 'background.paper',
-            display: 'flex',
-            flexDirection: 'column',
-            position: 'fixed',
-            left: 0,
             top: `${controlBarHeight}px`,
             height: `calc(100vh - ${controlBarHeight}px)`,
-            overflowX: 'hidden', // Prevent horizontal overflow during transition
-            zIndex: 10
+            backgroundColor: currentStudioTheme.palette.background.paper,
+            borderRightColor: currentStudioTheme.palette.divider
           }}>
             {/* Header section with Add Track button */}
-            <Box sx={{
+            <div className="flex items-center p-0 box-border overflow-hidden border-b" style={{
               height: GRID_CONSTANTS.headerHeight,
-              minHeight: GRID_CONSTANTS.headerHeight, // Ensure header height is maintained
-              borderBottom: `${GRID_CONSTANTS.borderWidth} solid ${GRID_CONSTANTS.borderColor}`,
-              display: 'flex',
-              alignItems: 'center',
-              p: 0, // User's update
-              boxSizing: 'border-box',
-              overflow: 'hidden', // Prevent content spill during transition
+              minHeight: GRID_CONSTANTS.headerHeight,
+              borderBottomColor: currentStudioTheme.palette.divider
             }}>
-              <Box sx={{ 
-                position: 'relative', 
-                display: 'flex',
-                alignItems: 'center',
-                width: '100%',
-                padding: '0 4px', // Add some padding for content within header
-              }}>
+              <div className="relative flex items-center w-full px-1">
                 {isSidebarOpen && (
                   <Button
                       size="small"
@@ -548,13 +521,7 @@ function Studio({ projectId }: StudioProps) {
                 )}
                 {/* Placeholder for right side balance when sidebar is open */}
                 {isSidebarOpen && (
-                  <Box
-                    sx={{
-                      width: '28px',
-                      minWidth: '28px',
-                      marginLeft: '8px', // Match marginRight of the left chevron
-                    }}
-                  />
+                  <div className="w-7 min-w-7 ml-2" />
                 )}
                 {!isSidebarOpen && (
                   <Button
@@ -586,16 +553,12 @@ function Studio({ projectId }: StudioProps) {
                     onFileUpload={uploadAudioFile}
                   />
                 )}
-              </Box>
-            </Box>
+              </div>
+            </div>
 
             {/* Track controls section */}
             {isSidebarOpen && (
-              <Box sx={{ 
-                flex: 1, 
-                overflowY: 'auto', // Allow scrolling for track controls only when open
-                overflowX: 'hidden',
-              }}>
+              <div className="flex-1 overflow-y-auto overflow-x-hidden">
                 <TrackControlsSidebar 
                   tracks={tracks}
                   onVolumeChange={handleTrackVolumeChange}
@@ -607,19 +570,17 @@ function Studio({ projectId }: StudioProps) {
                   onInstrumentChange={handleInstrumentChange}
                   onLoadAudioFile={handleLoadAudioFile}
                 />
-              </Box>
+              </div>
             )}
-          </Box>
+          </div>
           
           {/* Spacer to maintain layout with fixed sidebar */}
-          <Box sx={{ 
-            width: isSidebarOpen ? GRID_CONSTANTS.sidebarWidth : COLLAPSED_SIDEBAR_WIDTH,
-            flexShrink: 0,
-            transition: 'width 0.3s ease-in-out', // Match transition for smoothness
+          <div className="flex-shrink-0 transition-all duration-300 ease-in-out" style={{
+            width: isSidebarOpen ? GRID_CONSTANTS.sidebarWidth : COLLAPSED_SIDEBAR_WIDTH
           }} />
 
           {/* Timeline Area */}
-          <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <div className="flex-1 min-w-0 overflow-hidden">
             <KonvaTimeline
               tracks={tracks}
               currentTime={currentTime}
@@ -677,7 +638,7 @@ function Studio({ projectId }: StudioProps) {
               onTrackClick={handleTrackClick}
               ref={scrollRef}
             />
-          </Box>
+          </div>
           
           {/* AI Assistant Chat Window - slides in from right */}
           <ChatWindow 
@@ -689,7 +650,7 @@ function Studio({ projectId }: StudioProps) {
           <PianoRollWindows />
           <DrumMachineWindows />
 
-        </Box>
+        </div>
         
         {/* Studio Settings Modal */}
         <StudioSettingsModal
@@ -705,7 +666,7 @@ function Studio({ projectId }: StudioProps) {
           accept="audio/*" 
           style={{ display: 'none' }}
         />
-      </Box>
+      </div>
     </MuiThemeProvider>
   );
 }

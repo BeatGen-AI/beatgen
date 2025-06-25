@@ -9,9 +9,9 @@ import {
     AccordionSummary, 
     AccordionDetails,
     CircularProgress,
-    Alert,
-    useTheme
+    Alert
 } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 import CloseIcon from '@mui/icons-material/Close';
 import PianoIcon from '@mui/icons-material/Piano';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';

@@ -23,7 +23,6 @@ import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks, getTrackColor } from '../
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
-import { useTheme } from '@mui/material/styles';
 import Konva from 'konva';
 
 export interface KonvaTimelineProps {

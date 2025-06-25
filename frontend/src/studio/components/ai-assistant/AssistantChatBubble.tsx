@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { Box, Typography, useTheme } from '@mui/material'; // Keep using useTheme from MUI
+import { Box, Typography } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 import AssistantActionChip from './AssistantActionChip';
 import ReactMarkdown from 'react-markdown';
 // Remove the incorrect import

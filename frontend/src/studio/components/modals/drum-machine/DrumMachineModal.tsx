@@ -16,9 +16,9 @@ import {
     InputLabel,
     Select,
     MenuItem,
-    SelectChangeEvent,
-    useTheme
+    SelectChangeEvent
 } from '@mui/material';
+import { useTheme } from '../../../../platform/theme/ThemeContext';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { getPublicDrumSamples } from '../../../../platform/api/drum_samples';

@@ -5,11 +5,11 @@ import {
     IconButton,
     Typography,
     InputLabel,
-    useTheme,
     FormControlLabel,
     Grid,
     Divider
 } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 import CloseIcon from '@mui/icons-material/Close';
 import Brightness4Icon from '@mui/icons-material/Brightness4'; // For Dark Mode
 import SettingsIcon from '@mui/icons-material/Settings'; // Generic settings icon

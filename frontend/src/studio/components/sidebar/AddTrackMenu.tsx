@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Menu, MenuItem, ListItemIcon, ListItemText, Divider, useTheme } from '@mui/material';
+import { Menu, MenuItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 import PianoIcon from '@mui/icons-material/Piano';
 import AudioFileIcon from '@mui/icons-material/AudioFile';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';

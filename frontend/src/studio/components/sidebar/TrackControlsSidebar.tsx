@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Box, 
   Typography, 
   Slider, 
   IconButton, 
@@ -8,9 +7,9 @@ import {
   TextField,
   Select, 
   MenuItem,
-  ButtonBase,
-  useTheme
+  ButtonBase
 } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';
@@ -51,15 +50,8 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
 
   if (tracks.length === 0) {
     return (
-      <Box sx={{ 
-        p: 2, 
-        textAlign: 'center', 
-        color: 'text.disabled',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%'
+      <div className="p-2 text-center flex flex-col items-center justify-center h-full" style={{
+        color: theme.palette.text.disabled
       }}>
         <Typography variant="body2" color="inherit">
           No tracks yet
@@ -67,16 +59,12 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
         <Typography variant="caption" sx={{ mt: 1 }} color="inherit">
           Add tracks using the button above
         </Typography>
-      </Box>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      height: '100%',
-      overflow: 'auto'
-    }}>
+    <div className="w-full h-full overflow-auto">
       {tracks.map((track, index) => (
         <TrackControls 
           key={track.id}
@@ -92,7 +80,7 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
           onLoadAudioFile={onLoadAudioFile}
         />
       ))}
-    </Box>
+    </div>
   );
 };
 
@@ -202,7 +190,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
     switch(track.track_type) {
       case 'MIDI':
         return (
-          <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
+          <div className="mb-2 flex items-center">
             <Typography variant="caption" sx={{ 
               color: trackColor,
               fontSize: '9px',
@@ -212,25 +200,18 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             }}>
               Inst:
             </Typography>
-            <Box sx={{ 
-              fontSize: '10px',
-              color: 'text.secondary',
-              bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
-              p: 0.5,
-              borderRadius: 1,
-              flexGrow: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
+            <div className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap" style={{
+              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
+              color: theme.palette.text.secondary
             }}>
               {track.name}
-            </Box>
-          </Box>
+            </div>
+          </div>
         );
       
       case 'DRUM':
         return (
-          <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
+          <div className="mb-2 flex items-center">
             <Typography variant="caption" sx={{ 
               color: trackColor,
               fontSize: '9px',
@@ -256,7 +237,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
               <MenuItem value="acoustic" sx={{ fontSize: '10px' }}>Acoustic Kit</MenuItem>
               <MenuItem value="electronic" sx={{ fontSize: '10px' }}>Electronic Kit</MenuItem>
             </Select>
-          </Box>
+          </div>
         );
         
       case 'AUDIO':
@@ -264,7 +245,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         const audioTrackData = track.track as AudioTrackRead;
         const audioFileName = audioTrackData.name;
         return (
-          <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
+          <div className="mb-2 flex items-center">
             <Typography variant="caption" sx={{ 
               color: trackColor,
               fontSize: '9px',
@@ -300,7 +281,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
                   {audioFileName || track.name}
               </ButtonBase>
             </Tooltip>
-          </Box>
+          </div>
         );
         
       case 'SAMPLER':
@@ -308,7 +289,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         const samplerTrackData = track.track as SamplerTrackRead;
         const samplerFileName = samplerTrackData.audio_file_name;
         return (
-          <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
+          <div className="mb-2 flex items-center">
             <Typography variant="caption" sx={{ 
               color: trackColor,
               fontSize: '9px',
@@ -344,7 +325,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
                   {samplerFileName || track.name}
               </ButtonBase>
             </Tooltip>
-          </Box>
+          </div>
         );
         
       default:
@@ -353,30 +334,24 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   };
   
   return (
-    <Box sx={{
-      p: 0.7,
-      mb: 0.3,
+    <div className="p-2 mb-1 box-border border-b hover:bg-opacity-50" style={{
       height: `${GRID_CONSTANTS.trackHeight - 2}px`,
-      boxSizing: 'border-box',
-      borderBottom: `1px solid ${theme.palette.divider}`,
       borderLeft: `3px solid ${trackColor}`,
-      bgcolor: theme.palette.background.paper,
-      '&:hover': {
-        bgcolor: theme.palette.action.hover,
-      }
+      borderBottomColor: theme.palette.divider,
+      backgroundColor: theme.palette.background.paper
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.backgroundColor = theme.palette.action.hover;
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.backgroundColor = theme.palette.background.paper;
     }}>
       {/* Track Name and Delete Button */}
-      <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        mb: 0.4,
-        width: '100%'
-      }}>
+      <div className="flex items-center justify-between mb-1 w-full">
         {/* Track name and type-specific controls */}
-        <Box sx={{ flexGrow: 1, mr: 1, maxWidth: 146 }}>
+        <div className="flex-grow mr-1 max-w-36">
           {renderTypeSpecificControls()}
-        </Box>
+        </div>
         
         <Tooltip title="Delete track">
           <IconButton 
@@ -397,18 +372,12 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             <IconBackspace size={18}/>
           </IconButton>
         </Tooltip>
-      </Box>
+      </div>
       
       {/* Controls row - Modified for even spacing */}
-      <Box sx={{ 
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        alignItems: 'center',
-        gap: '8px',
-        mb: 0.5
-      }}>
+      <div className="grid grid-cols-4 items-center gap-2 mb-2">
         {/* Volume Knob */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="flex justify-center">
           <ControlKnob
             value={localVolume}
             min={0}
@@ -422,10 +391,10 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             disabled={track.mute ?? false}
             valueFormatter={(val) => `${val}%`}
           />
-        </Box>
+        </div>
         
         {/* Pan Knob */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="flex justify-center">
           <ControlKnob
             value={localPan}
             min={-100}
@@ -437,57 +406,53 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             onChange={handlePanChange}
             onChangeCommitted={handlePanChangeCommitted}
           />
-        </Box>
+        </div>
 
         {/* Mute button */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="flex justify-center">
           <Tooltip title={track.mute ? "Unmute" : "Mute"}>
-              <Box 
+              <div 
                 onClick={handleMuteToggle}
-                sx={{ 
-                  bgcolor: track.mute ? theme.palette.warning.light : theme.palette.action.disabledBackground,
-                  color: track.mute ? theme.palette.warning.contrastText : trackColor,
-                  borderRadius: '3px',
-                  px: 1.2,
-                  py: 0.4,
-                  fontSize: '12px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  '&:hover': {
-                    bgcolor: track.mute ? theme.palette.warning.main : theme.palette.action.hover
-                  }
+                className="rounded px-3 py-1 text-xs font-bold cursor-pointer"
+                style={{ 
+                  backgroundColor: track.mute ? theme.palette.warning.light : theme.palette.action.disabledBackground,
+                  color: track.mute ? theme.palette.warning.contrastText : trackColor
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = track.mute ? theme.palette.warning.main : theme.palette.action.hover;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = track.mute ? theme.palette.warning.light : theme.palette.action.disabledBackground;
                 }}
               >
                 M
-              </Box>
+              </div>
             </Tooltip>
-        </Box>
+        </div>
         
         {/* Solo Button */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="flex justify-center">
           <Tooltip title={track.solo ? "Unsolo" : "Solo"}>
-            <Box 
+            <div 
               onClick={handleSoloToggle}
-              sx={{ 
-                bgcolor: track.solo ? '#ffc107' : 'rgba(255, 255, 255, 0.1)',
-                color: track.solo ? '#000' : trackColor,
-                borderRadius: '3px',
-                px: 1.2,
-                py: 0.4,
-                fontSize: '12px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                '&:hover': {
-                  bgcolor: track.solo ? '#e6ac00' : 'rgba(255, 255, 255, 0.15)'
-                }
+              className="rounded px-3 py-1 text-xs font-bold cursor-pointer"
+              style={{ 
+                backgroundColor: track.solo ? '#ffc107' : 'rgba(255, 255, 255, 0.1)',
+                color: track.solo ? '#000' : trackColor
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = track.solo ? '#e6ac00' : 'rgba(255, 255, 255, 0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = track.solo ? '#ffc107' : 'rgba(255, 255, 255, 0.1)';
               }}
             >
               S
-            </Box>
+            </div>
           </Tooltip>
-        </Box>
-      </Box>
-    </Box>
+        </div>
+      </div>
+    </div>
   );
 };
 

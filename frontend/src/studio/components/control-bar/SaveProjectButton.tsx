@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { IconButton, CircularProgress, Snackbar, Alert, useTheme } from '@mui/material';
+import { IconButton, CircularProgress, Snackbar, Alert } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 import { IconCloudUpload } from '@tabler/icons-react';
 import { 
   createProject, 
@@ -9,7 +10,6 @@ import {
 import { useAuth } from '../../../platform/auth/auth-context';
 import { useStudioStore } from '../../stores/studioStore';
 import { CombinedTrack, Project } from 'src/platform/types/project';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
 
 interface SaveProjectButtonProps {
   projectTitle: string;
@@ -44,8 +44,7 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
   // Get auth user and store
   const { user } = useAuth();
   const studioStore = useStudioStore();
-  const appTheme = useAppTheme(); // Renamed to avoid conflict
-  const muiTheme = useTheme(); // Get the MUI theme for palette
+  const theme = useTheme();
 
   // Function to mark tracks as clean (not dirty) after successful save
   const markTracksAsClean = (trackIds: string[]) => {
@@ -266,10 +265,10 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
         onClick={handleSave}
         disabled={saving}
         sx={{
-          color: appTheme.studioMode === 'dark' ? 'white' : 'black',
+          color: theme.palette.text.primary,
           borderRadius: '8px',
           '&:hover': {
-            backgroundColor: muiTheme.palette.action.hover,
+            backgroundColor: theme.palette.action.hover,
           },
         }}
         disableRipple

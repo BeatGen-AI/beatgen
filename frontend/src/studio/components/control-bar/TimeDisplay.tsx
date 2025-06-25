@@ -1,4 +1,4 @@
-import { Box, useTheme } from '@mui/material';
+import { useTheme } from '../../../platform/theme/ThemeContext';
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 
 export interface TimeDisplayHandle {
@@ -120,22 +120,22 @@ export const TimeDisplay = forwardRef<TimeDisplayHandle, TimeDisplayProps>(
     }, []);
 
     return (
-      <Box sx={{
-        color: 'text.primary',
+      <div style={{
+        color: theme.palette.text.primary,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: '80px', // Adjusted width to better fit "00:00.00"
-        minWidth: '90px', // Ensure enough space
-        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
+        width: '80px',
+        minWidth: '90px',
+        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
         padding: '4px 8px',
         borderRadius: '6px',
         border: `1px solid ${theme.palette.divider}`,
         fontFamily: 'monospace',
-        fontSize: '0.9rem', // Slightly adjust font size if needed
+        fontSize: '0.9rem',
       }}>
         {formatTime(currentTime)}
-      </Box>
+      </div>
     );
   }
 );
