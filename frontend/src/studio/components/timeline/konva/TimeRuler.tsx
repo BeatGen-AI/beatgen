@@ -111,7 +111,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
               return (
                 <Line
                   key={`subdiv-${m}-${b}-${s}`}
-                  points={[x, height * 0.85, x, height]}
+                  points={[x+0.5, height * 0.85, x+0.5, height]}
                   stroke={SUBDIVISION_LINE_COLOR}
                   strokeWidth={1}
                 />
@@ -133,7 +133,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
             return (
               <Line
                 key={`beat-${m}-${b}`}
-                points={[x, 0, x, height]}
+                points={[x + 0.5, 0, x + 0.5, height]}
                 stroke={BEAT_LINE_COLOR}
                 strokeWidth={0.5}
               />
@@ -153,7 +153,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
           return (
             <Line
               key={`measure-${i}`}
-              points={[x, 0, x, height]}
+              points={[x+0.5, 0, x+0.5, height]}
               stroke={MEASURE_LINE_COLOR}
               strokeWidth={1}
             />
