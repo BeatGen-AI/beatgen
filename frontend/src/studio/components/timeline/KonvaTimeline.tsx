@@ -23,6 +23,7 @@ import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks, getTrackColor } from '../
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useTheme } from '@mui/material/styles';
 import Konva from 'konva';
 
 export interface KonvaTimelineProps {
@@ -1037,41 +1038,40 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
           )} */}
             </Layer>
             
-            
           </Stage>
           
         </div>
-        
-        {/* Overlay Stage for PlaybackCursor - positioned absolutely over entire timeline */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            pointerEvents: 'none',
-            overflow: 'hidden'
-          }}
+      </div>
+      
+      {/* PlaybackCursor overlay - positioned to cover both ruler and content */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: stageSize.width || 800,
+          height: stageSize.height || 600,
+          pointerEvents: 'none',
+          overflow: 'hidden'
+        }}
+      >
+        <Stage
+          width={stageSize.width || 800}
+          height={stageSize.height || 600}
+          style={{ display: 'block' }}
         >
-          <Stage
-            width={stageSize.width || 800}
-            height={stageSize.height || 600}
-            style={{ display: 'block' }}
-          >
-            <Layer x={-viewport.x}>
-              <PlaybackCursor
-                ref={playbackCursorRef}
-                currentTime={currentTime}
-                isPlaying={isPlaying}
-                height={stageSize.height || 600}
-                pixelsPerTick={pixelsPerTick}
-                bpm={bpm}
-                timeSignature={timeSignature}
-              />
-            </Layer>
-          </Stage>
-        </div>
+          <Layer x={-viewport.x}>
+            <PlaybackCursor
+              ref={playbackCursorRef}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
+              height={stageSize.height || 600}
+              pixelsPerTick={pixelsPerTick}
+              bpm={bpm}
+              timeSignature={timeSignature}
+            />
+          </Layer>
+        </Stage>
       </div>
     </div>
   );
