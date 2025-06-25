@@ -678,13 +678,10 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   }, [internalZoom, onZoomChange]);
   
   // Handle ruler click
-  const handleRulerClick = useCallback((value: number) => {
-    // value is the measure number, convert to time
-    const ticksPerMeasure = MUSIC_CONSTANTS.pulsesPerQuarterNote * timeSignature[0];
-    const ticks = value * ticksPerMeasure;
-    const timeInSeconds = (ticks * 60) / (bpm * MUSIC_CONSTANTS.pulsesPerQuarterNote);
+  const handleRulerClick = useCallback((timeInSeconds: number) => {
+    // Time is already in seconds, just pass it through
     onTimeChange(timeInSeconds);
-  }, [bpm, timeSignature, onTimeChange]);
+  }, [onTimeChange]);
   
   // Imperative handle
   useImperativeHandle(ref, () => ({
