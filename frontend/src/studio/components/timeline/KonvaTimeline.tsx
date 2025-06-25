@@ -1035,17 +1035,40 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               showCountBadge={dragGhostItems.length > 1}
             />
           )} */}
+            </Layer>
+            
+            
+          </Stage>
           
-          {/* Playback Cursor */}
-          <PlaybackCursor
-            ref={playbackCursorRef}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            height={totalTimelineHeight}
-            pixelsPerTick={pixelsPerTick}
-            bpm={bpm}
-            timeSignature={timeSignature}
-          />
+        </div>
+        
+        {/* Overlay Stage for PlaybackCursor - positioned absolutely over entire timeline */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            pointerEvents: 'none',
+            overflow: 'hidden'
+          }}
+        >
+          <Stage
+            width={stageSize.width || 800}
+            height={stageSize.height || 600}
+            style={{ display: 'block' }}
+          >
+            <Layer x={-viewport.x}>
+              <PlaybackCursor
+                ref={playbackCursorRef}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                height={stageSize.height || 600}
+                pixelsPerTick={pixelsPerTick}
+                bpm={bpm}
+                timeSignature={timeSignature}
+              />
             </Layer>
           </Stage>
         </div>

@@ -120,7 +120,7 @@ export const PlaybackCursor = forwardRef<PlaybackCursorRef, PlaybackCursorProps>
         strokeWidth={2}
       />
       
-      {/* Triangle handle at top */}
+      {/* Triangle handle at top of ruler */}
       <Path
         data={`M ${x - 5} 0 L ${x + 5} 0 L ${x} 8 Z`}
         fill={cursorColor}
