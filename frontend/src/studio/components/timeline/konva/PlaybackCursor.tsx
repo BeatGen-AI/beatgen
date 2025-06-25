@@ -1,6 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
-import { Group, Line, Rect, Text } from 'react-konva';
+import { Group, Line, Rect, Text, Path } from 'react-konva';
 import { MUSIC_CONSTANTS } from '../../../constants/musicConstants';
+import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 import Konva from 'konva';
 
 export interface PlaybackCursorProps {
@@ -96,60 +97,34 @@ export const PlaybackCursor = forwardRef<PlaybackCursorRef, PlaybackCursorProps>
     }
   }), [currentTime]);
   
+  // Determine color based on playing state
+  const cursorColor = isPlaying ? GRID_CONSTANTS.cursorColor : GRID_CONSTANTS.cursorColorInactive;
+  
   return (
     <Group ref={groupRef} listening={false}>
-      {/* Cursor line */}
-      <Line
-        points={[x, 0, x, height]}
-        stroke="#ff0000"
-        strokeWidth={2}
-        shadowColor="#ff0000"
-        shadowBlur={isPlaying ? 10 : 5}
-        shadowOpacity={isPlaying ? 0.8 : 0.5}
-      />
-      
-      {/* Cursor head */}
-      <Rect
-        x={x - 6}
-        y={0}
-        width={12}
-        height={20}
-        fill="#ff0000"
-        cornerRadius={[0, 0, 6, 6]}
-      />
-      
-      {/* Time display (optional)
-      {!isPlaying && (
-        <Group>
-          <Rect
-            x={x + 5}
-            y={5}
-            width={60}
-            height={20}
-            fill="rgba(0, 0, 0, 0.8)"
-            cornerRadius={3}
-          />
-          <Text
-            x={x + 10}
-            y={8}
-            text={`${Math.floor(currentTime / 60)}:${(currentTime % 60).toFixed(1).padStart(4, '0')}`}
-            fontSize={12}
-            fontFamily="monospace"
-            fill="white"
-          />
-        </Group>
-      )} */}
-      
-      {/* Glow effect when playing */}
+      {/* Shadow/glow effect when playing */}
       {isPlaying && (
         <Line
           points={[x, 0, x, height]}
-          stroke="#ff0000"
-          strokeWidth={4}
-          opacity={0.3}
+          stroke={GRID_CONSTANTS.cursorColor}
+          strokeWidth={16}
+          opacity={0.15}
           listening={false}
         />
       )}
+      
+      {/* Main cursor line */}
+      <Line
+        points={[x, 0, x, height]}
+        stroke={cursorColor}
+        strokeWidth={2}
+      />
+      
+      {/* Triangle handle at top */}
+      <Path
+        data={`M ${x - 5} 0 L ${x + 5} 0 L ${x} 8 Z`}
+        fill={cursorColor}
+      />
     </Group>
   );
 });
