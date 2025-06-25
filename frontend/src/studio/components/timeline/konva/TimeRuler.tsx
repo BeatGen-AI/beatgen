@@ -56,8 +56,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
   };
   
   return (
-    <Layer name="time-ruler-layer">
-      <Group y={0}>
+    <Group name="time-ruler-group">
         {/* Background */}
         <Rect
           x={0}
@@ -69,86 +68,115 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
           listening={true}
         />
       
-      {/* Draw subdivisions first (dimmest) */}
-      {Array.from({ length: measureCount }).map((_, m) => {
-        return Array.from({ length: beatsPerMeasure }).map((_, b) => {
-          return Array.from({ length: subdivisionsPerBeat - 1 }).map((_, s) => {
-            const x = m * pixelsPerMeasure + b * pixelsPerBeat + (s + 1) * subdivisionWidth;
+      {/* Draw subdivisions first (dimmest) - only visible ones */}
+      {(() => {
+        const firstVisibleMeasure = Math.max(0, Math.floor(viewport.x / pixelsPerMeasure) - 1);
+        const lastVisibleMeasure = Math.min(measureCount, Math.ceil((viewport.x + viewport.width) / pixelsPerMeasure) + 1);
+        
+        return Array.from({ length: lastVisibleMeasure - firstVisibleMeasure }, (_, idx) => {
+          const m = firstVisibleMeasure + idx;
+          return Array.from({ length: beatsPerMeasure }).map((_, b) => {
+            return Array.from({ length: subdivisionsPerBeat - 1 }).map((_, s) => {
+              const x = m * pixelsPerMeasure + b * pixelsPerBeat + (s + 1) * subdivisionWidth;
+              return (
+                <Line
+                  key={`subdiv-${m}-${b}-${s}`}
+                  points={[x, height * 0.85, x, height]}
+                  stroke={SUBDIVISION_LINE_COLOR}
+                  strokeWidth={1}
+                />
+              );
+            });
+          }).flat();
+        }).flat();
+      })()}
+      
+      {/* Draw beat lines (medium prominence) - only visible ones */}
+      {(() => {
+        const firstVisibleMeasure = Math.max(0, Math.floor(viewport.x / pixelsPerMeasure) - 1);
+        const lastVisibleMeasure = Math.min(measureCount, Math.ceil((viewport.x + viewport.width) / pixelsPerMeasure) + 1);
+        
+        return Array.from({ length: lastVisibleMeasure - firstVisibleMeasure }, (_, idx) => {
+          const m = firstVisibleMeasure + idx;
+          return Array.from({ length: beatsPerMeasure - 1 }).map((_, b) => {
+            const x = m * pixelsPerMeasure + (b + 1) * pixelsPerBeat;
             return (
               <Line
-                key={`subdiv-${m}-${b}-${s}`}
-                points={[x, height * 0.85, x, height]}
-                stroke={SUBDIVISION_LINE_COLOR}
-                strokeWidth={1}
+                key={`beat-${m}-${b}`}
+                points={[x, 0, x, height]}
+                stroke={BEAT_LINE_COLOR}
+                strokeWidth={0.5}
               />
             );
           });
         }).flat();
-      }).flat()}
+      })()}
       
-      {/* Draw beat lines (medium prominence) */}
-      {Array.from({ length: measureCount }).map((_, m) => {
-        return Array.from({ length: beatsPerMeasure - 1 }).map((_, b) => {
-          const x = m * pixelsPerMeasure + (b + 1) * pixelsPerBeat;
+      {/* Draw measure lines (most prominent) - only visible ones */}
+      {(() => {
+        const firstVisibleMeasure = Math.max(0, Math.floor(viewport.x / pixelsPerMeasure) - 1);
+        const lastVisibleMeasure = Math.min(measureCount + 1, Math.ceil((viewport.x + viewport.width) / pixelsPerMeasure) + 1);
+        
+        return Array.from({ length: lastVisibleMeasure - firstVisibleMeasure }, (_, idx) => {
+          const i = firstVisibleMeasure + idx;
+          const x = i * pixelsPerMeasure;
           return (
             <Line
-              key={`beat-${m}-${b}`}
+              key={`measure-${i}`}
               points={[x, 0, x, height]}
-              stroke={BEAT_LINE_COLOR}
-              strokeWidth={0.5}
+              stroke={MEASURE_LINE_COLOR}
+              strokeWidth={1}
             />
           );
         });
-      }).flat()}
+      })()}
       
-      {/* Draw measure lines (most prominent) */}
-      {Array.from({ length: measureCount + 1 }).map((_, i) => {
-        const x = i * pixelsPerMeasure;
-        return (
-          <Line
-            key={`measure-${i}`}
-            points={[x, 0, x, height]}
-            stroke={MEASURE_LINE_COLOR}
-            strokeWidth={1}
-          />
-        );
-      })}
-      
-      {/* Measure numbers */}
-      {Array.from({ length: measureCount }).map((_, measureIndex) => {
-        const x = measureIndex * pixelsPerMeasure;
-        return (
-          <Text
-            key={`measure-num-${measureIndex}`}
-            x={x + 5}
-            y={height / 2 - 7}
-            text={`${measureIndex + 1}`}
-            fontSize={14}
-            fontFamily="Arial"
-            fill={isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)'}
-          />
-        );
-      })}
-      
-      {/* Beat numbers */}
-      {Array.from({ length: measureCount }).map((_, measureIndex) => {
-        return Array.from({ length: beatsPerMeasure - 1 }).map((_, beatIndex) => {
-          const x = measureIndex * pixelsPerMeasure + (beatIndex + 1) * pixelsPerBeat;
+      {/* Measure numbers - only render visible ones */}
+      {(() => {
+        const firstVisibleMeasure = Math.max(0, Math.floor(viewport.x / pixelsPerMeasure));
+        const lastVisibleMeasure = Math.min(measureCount, Math.ceil((viewport.x + viewport.width) / pixelsPerMeasure));
+        
+        return Array.from({ length: lastVisibleMeasure - firstVisibleMeasure + 1 }, (_, idx) => {
+          const measureIndex = firstVisibleMeasure + idx;
+          const x = measureIndex * pixelsPerMeasure;
           return (
             <Text
-              key={`beat-num-${measureIndex}-${beatIndex}`}
-              x={x + 4}
-              y={height / 2 + 2}
-              text={`${beatIndex + 2}`}
-              fontSize={8}
-              fontFamily="Arial"
-              fill={isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)'}
+              key={`measure-num-${measureIndex}`}
+              x={x + 5}
+              y={height / 2 - 7}
+              text={`${measureIndex + 1}`}
+              fontSize={14}
+              fontFamily="Sen"
+              fill={isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)'}
             />
           );
         });
-      }).flat()}
-      </Group>
-    </Layer>
+      })()}
+      
+      {/* Beat numbers - only render visible ones */}
+      {(() => {
+        const firstVisibleMeasure = Math.max(0, Math.floor(viewport.x / pixelsPerMeasure));
+        const lastVisibleMeasure = Math.min(measureCount, Math.ceil((viewport.x + viewport.width) / pixelsPerMeasure));
+        
+        return Array.from({ length: lastVisibleMeasure - firstVisibleMeasure + 1 }, (_, idx) => {
+          const measureIndex = firstVisibleMeasure + idx;
+          return Array.from({ length: beatsPerMeasure - 1 }).map((_, beatIndex) => {
+            const x = measureIndex * pixelsPerMeasure + (beatIndex + 1) * pixelsPerBeat;
+            return (
+              <Text
+                key={`beat-num-${measureIndex}-${beatIndex}`}
+                x={x + 4}
+                y={height / 2 + 2}
+                text={`${beatIndex + 2}`}
+                fontSize={8}
+                fontFamily="Sen"
+                fill={isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)'}
+              />
+            );
+          });
+        }).flat();
+      })()}
+    </Group>
   );
 };
 

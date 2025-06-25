@@ -148,7 +148,7 @@ export const Ruler: React.FC<RulerProps> = ({
             y={size / 2 - fontSize / 2}
             text={labelFunction(i)}
             fontSize={fontSize}
-            fontFamily="Arial"
+            fontFamily="Sen"
             fill={textColor}
           />
         );
@@ -173,7 +173,7 @@ export const Ruler: React.FC<RulerProps> = ({
               y={position - fontSize / 2}
               text={labelFunction(i)}
               fontSize={fontSize}
-              fontFamily="Arial"
+              fontFamily="Sen"
               fill={textColor}
             />
           );

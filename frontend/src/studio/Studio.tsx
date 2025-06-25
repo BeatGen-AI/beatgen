@@ -619,63 +619,65 @@ function Studio({ projectId }: StudioProps) {
           }} />
 
           {/* Timeline Area */}
-          <KonvaTimeline
-            tracks={tracks}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            measureCount={measureCount}
-            zoomLevel={zoomLevel}
-            bpm={bpm}
-            timeSignature={timeSignature}
-            showToolbar={false}
-            gridSnapSize={gridSnapSize}
-            onTrackPositionChange={handleTrackPositionChange}
-            onZoomChange={setZoomLevel}
-            onTimeChange={(newTime) => {
-              // Update global state only when user explicitly changes time
-              setCurrentTime(newTime);
-              
-              // Update transport position
-              if (store && store.getTransport()) {
-                store.getTransport().setPosition(newTime);
-              }
-              
-              // Use imperative API to update cursor position
-              if (scrollRef.current?.playbackCursor) {
-                scrollRef.current.playbackCursor.seek(newTime);
-              }
-            }}
-            selectedTrackIds={selectedTrackIds}
-            onTrackSelect={(instanceIds) => {
-              // Convert instance IDs to track IDs for the store
-              // Instance IDs follow the pattern: trackId_instance_timestamp
-              const trackIds = [...new Set(instanceIds.map(instanceId => {
-                // Extract track ID from instance ID
-                const parts = instanceId.split('_instance_');
-                return parts[0]; // The track ID is before '_instance_'
-              }))];
-              setSelectedTrackIds(trackIds);
-            }}
-            onTrackDelete={handleTrackDelete}
-            onTrackResizeEnd={handleTrackResize}
-            selectedTool={selectedTool}
-            onToolChange={setSelectedTool}
-            onCopyTracks={handleCopyTracks}
-            onCutTracks={handleCutTracks}
-            onPasteTracks={handlePasteTracks}
-            onDeleteTracks={handleDeleteTracks}
-            onDuplicateTracks={handleDuplicateTracks}
-            updateMultipleTrackPositions={updateMultipleTrackPositions}
-            resizeMultipleTracks={resizeMultipleTracks}
-            onInstancePositionChange={handleInstancePositionChange}
-            onInstanceResizeEnd={handleInstanceResizeEnd}
-            updateMultipleInstancePositions={updateMultipleInstancePositions}
-            resizeMultipleInstances={resizeMultipleInstances}
-            onInstanceDelete={handleInstanceDelete}
-            onDeleteInstances={handleDeleteInstances}
-            onTrackClick={handleTrackClick}
-            ref={scrollRef}
-          />
+          <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+            <KonvaTimeline
+              tracks={tracks}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
+              measureCount={measureCount}
+              zoomLevel={zoomLevel}
+              bpm={bpm}
+              timeSignature={timeSignature}
+              showToolbar={false}
+              gridSnapSize={gridSnapSize}
+              onTrackPositionChange={handleTrackPositionChange}
+              onZoomChange={setZoomLevel}
+              onTimeChange={(newTime) => {
+                // Update global state only when user explicitly changes time
+                setCurrentTime(newTime);
+                
+                // Update transport position
+                if (store && store.getTransport()) {
+                  store.getTransport().setPosition(newTime);
+                }
+                
+                // Use imperative API to update cursor position
+                if (scrollRef.current?.playbackCursor) {
+                  scrollRef.current.playbackCursor.seek(newTime);
+                }
+              }}
+              selectedTrackIds={selectedTrackIds}
+              onTrackSelect={(instanceIds) => {
+                // Convert instance IDs to track IDs for the store
+                // Instance IDs follow the pattern: trackId_instance_timestamp
+                const trackIds = [...new Set(instanceIds.map(instanceId => {
+                  // Extract track ID from instance ID
+                  const parts = instanceId.split('_instance_');
+                  return parts[0]; // The track ID is before '_instance_'
+                }))];
+                setSelectedTrackIds(trackIds);
+              }}
+              onTrackDelete={handleTrackDelete}
+              onTrackResizeEnd={handleTrackResize}
+              selectedTool={selectedTool}
+              onToolChange={setSelectedTool}
+              onCopyTracks={handleCopyTracks}
+              onCutTracks={handleCutTracks}
+              onPasteTracks={handlePasteTracks}
+              onDeleteTracks={handleDeleteTracks}
+              onDuplicateTracks={handleDuplicateTracks}
+              updateMultipleTrackPositions={updateMultipleTrackPositions}
+              resizeMultipleTracks={resizeMultipleTracks}
+              onInstancePositionChange={handleInstancePositionChange}
+              onInstanceResizeEnd={handleInstanceResizeEnd}
+              updateMultipleInstancePositions={updateMultipleInstancePositions}
+              resizeMultipleInstances={resizeMultipleInstances}
+              onInstanceDelete={handleInstanceDelete}
+              onDeleteInstances={handleDeleteInstances}
+              onTrackClick={handleTrackClick}
+              ref={scrollRef}
+            />
+          </Box>
           
           {/* AI Assistant Chat Window - slides in from right */}
           <ChatWindow 

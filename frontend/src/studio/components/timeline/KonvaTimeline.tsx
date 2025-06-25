@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
-import { Box, useTheme } from '@mui/material';
 import { Stage, Layer, Rect } from 'react-konva';
 import {
   KonvaBase,
@@ -122,7 +121,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   onTrackClick,
   onZoomChange
 }, ref) => {
-  const theme = useTheme();
   const { studioMode } = useAppTheme();
   
   // State
@@ -138,6 +136,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   const [dragPreviewPositions, setDragPreviewPositions] = useState<Map<string, { x: number; y: number }>>(new Map());
   const [resizeStartPositions, setResizeStartPositions] = useState<Map<string, number>>(new Map());
   const [contentTransforms, setContentTransforms] = useState<Map<string, number>>(new Map());
+  const [scrollX, setScrollX] = useState(0);
+  const [scrollY, setScrollY] = useState(0);
   
   // Refs
   const stageRef = useRef<Konva.Stage>(null);
@@ -152,11 +152,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     }
   }, [zoomLevel]);
   
-  // Calculate dimensions
-  const totalTimelineWidth = measureCount * GRID_CONSTANTS.measureWidth * internalZoom;
-  const totalTimelineHeight = Math.max(600, tracks.length * GRID_CONSTANTS.trackHeight + 200);
-  
-  // Calculate pixels per tick
+  // Calculate pixels per tick (moved before calculateContentWidth)
   const pixelsPerTick = useMemo(() => {
     const beatsPerMeasure = timeSignature[0];
     const ticksPerBeat = MUSIC_CONSTANTS.pulsesPerQuarterNote;
@@ -168,6 +164,33 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     }
     return result;
   }, [timeSignature, internalZoom]);
+  
+  // Calculate dimensions
+  // Calculate the actual content width based on the rightmost edge of all tracks
+  const calculateContentWidth = useMemo(() => {
+    let maxRightEdge = 0;
+    
+    tracks.forEach(track => {
+      if (track.instances) {
+        track.instances.forEach(instance => {
+          // Calculate the right edge of this instance in pixels
+          const instanceRight = (instance.x_position + (instance.trim_end_ticks - instance.trim_start_ticks)) * pixelsPerTick;
+          maxRightEdge = Math.max(maxRightEdge, instanceRight);
+        });
+      }
+    });
+    
+    // Ensure we have at least the minimum width based on measure count
+    const minWidth = measureCount * GRID_CONSTANTS.measureWidth * internalZoom;
+    
+    // Add some padding to the right (e.g., 1 extra measure worth of space)
+    const padding = GRID_CONSTANTS.measureWidth * internalZoom;
+    
+    return Math.max(minWidth, maxRightEdge + padding);
+  }, [tracks, measureCount, internalZoom, pixelsPerTick]);
+  
+  const totalTimelineWidth = calculateContentWidth;
+  const totalTimelineHeight = Math.max(600, tracks.length * GRID_CONSTANTS.trackHeight + 200);
   
   // Calculate actual grid snap size
   const effectiveGridSize = GRID_CONSTANTS.measureWidth / (timeSignature[0] * 4);
@@ -239,6 +262,28 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     return items;
   }, [tracks, resizePreviewPositions, resizePreviewWidths, dragPreviewPositions, pixelsPerTick]);
   
+  // Filter konva items to only include visible ones (viewport culling)
+  const visibleKonvaItems = useMemo(() => {
+    const buffer = 200; // Add buffer for smooth scrolling
+    const viewportLeft = viewport.x - buffer;
+    const viewportRight = viewport.x + (stageSize.width || 800) + buffer;
+    const viewportTop = viewport.y - buffer;
+    const viewportBottom = viewport.y + (stageSize.height || 600) + buffer;
+    
+    return konvaItems.filter(item => {
+      const itemLeft = item.x * pixelsPerTick;
+      const itemRight = itemLeft + (item.width * pixelsPerTick);
+      const itemTop = item.y;
+      const itemBottom = itemTop + item.height;
+      
+      // Check if item intersects with viewport
+      return !(itemRight < viewportLeft || 
+               itemLeft > viewportRight || 
+               itemBottom < viewportTop || 
+               itemTop > viewportBottom);
+    });
+  }, [konvaItems, viewport, stageSize, pixelsPerTick]);
+  
   // Get stage from direct Stage ref
   const [stage, setStage] = useState<Konva.Stage | null>(null);
   
@@ -260,6 +305,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     snapToGrid: gridSnapEnabled,
     trackHeight: GRID_CONSTANTS.trackHeight,
     cursorManager,
+    scrollOffset: { x: viewport.x, y: viewport.y },
     
     // Callbacks
     onSelectionChange: (ids) => {
@@ -587,9 +633,11 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setStageSize({ width: rect.width, height: rect.height });
-        setViewport(prev => ({ ...prev, width: rect.width, height: rect.height }));
+        // Use clientWidth/clientHeight to exclude scrollbar dimensions
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+        setStageSize({ width, height });
+        setViewport(prev => ({ ...prev, width, height }));
       }
     };
     
@@ -675,81 +723,126 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     : [];
   
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', position: 'relative' }}>
       {/* Timeline Container */}
-      <Box 
+      <div 
         ref={containerRef}
-        sx={{ 
-          flex: 1, 
-          position: 'relative',
+        style={{ 
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           overflow: 'auto',
-          backgroundColor: 'background.default'
+          backgroundColor: studioMode === 'dark' ? '#000000' : '#ffffff'
         }}
         onWheel={handleWheel}
+        onScroll={(e) => {
+          const target = e.currentTarget;
+          const newScrollX = target.scrollLeft;
+          const newScrollY = target.scrollTop;
+          
+          setScrollX(newScrollX);
+          setScrollY(newScrollY);
+          setViewport(prev => ({
+            ...prev,
+            x: newScrollX,
+            y: newScrollY
+          }));
+        }}
       >
-        {/* Time Ruler - sticky at top like Timeline */}
-        <Box
-          sx={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 2,
-            height: GRID_CONSTANTS.headerHeight,
-            width: totalTimelineWidth * internalZoom,
-            backgroundColor: studioMode === 'dark' ? '#262626' : '#f5f5f5',
-            borderBottom: '1px solid',
-            borderColor: theme.palette.divider,
-          }}
-        >
-          <Stage
-            width={totalTimelineWidth}
-            height={GRID_CONSTANTS.headerHeight}
-            style={{ display: 'block' }}
-          >
-            <TimeRuler
-              width={totalTimelineWidth * internalZoom}
-              height={GRID_CONSTANTS.headerHeight}
-              measureCount={measureCount}
-              pixelsPerMeasure={GRID_CONSTANTS.measureWidth * internalZoom}
-              timeSignature={timeSignature}
-              bpm={bpm}
-              onClick={handleRulerClick}
-              viewport={{ x: 0, y: 0, width: totalTimelineWidth * internalZoom, height: GRID_CONSTANTS.headerHeight }}
-              zoom={internalZoom}
-              studioMode={studioMode}
-            />
-          </Stage>
-        </Box>
+        {/* Invisible spacer div for scroll dimensions */}
+        <div style={{ 
+          width: totalTimelineWidth, 
+          height: totalTimelineHeight + GRID_CONSTANTS.headerHeight,
+          position: 'absolute',
+          pointerEvents: 'none'
+        }} />
         
-        {/* Main Stage with transformed content */}
-        <Stage
-          ref={(node) => {
-            if (node && !stage) {
-              setStage(node);
-            }
-          }}
-          width={stageSize.width}
-          height={Math.max(stageSize.height, totalTimelineHeight)}
-          style={{ 
-            width: totalTimelineWidth * internalZoom,
-            transformOrigin: 'top left'
-          }}
-        >
-          <Layer>
-            {/* Background - transparent to show CSS background */}
+        {/* Fixed viewport container */}
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          left: 0,
+          width: stageSize.width || '100%',
+          height: stageSize.height || '100%',
+          overflow: 'hidden',
+          pointerEvents: 'auto'
+        }}>
+          {/* Time Ruler - sticky at top */}
+          <div
+            style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 2,
+              height: GRID_CONSTANTS.headerHeight,
+              backgroundColor: studioMode === 'dark' ? '#262626' : '#f5f5f5',
+              borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+              overflow: 'hidden'
+            }}
+          >
+            <Stage
+              width={stageSize.width || 800}
+              height={GRID_CONSTANTS.headerHeight}
+              style={{ display: 'block' }}
+            >
+              <Layer x={-viewport.x}>
+                <TimeRuler
+                  width={totalTimelineWidth}
+                  height={GRID_CONSTANTS.headerHeight}
+                  measureCount={Math.ceil(totalTimelineWidth / (GRID_CONSTANTS.measureWidth * internalZoom))}
+                  pixelsPerMeasure={GRID_CONSTANTS.measureWidth * internalZoom}
+                  timeSignature={timeSignature}
+                  bpm={bpm}
+                  onClick={handleRulerClick}
+                  viewport={{ x: viewport.x, y: 0, width: stageSize.width || 800, height: GRID_CONSTANTS.headerHeight }}
+                  zoom={internalZoom}
+                  studioMode={studioMode}
+                />
+              </Layer>
+            </Stage>
+          </div>
+          
+          {/* Main Stage with transformed content */}
+          <Stage
+            ref={(node) => {
+              if (node && !stage) {
+                setStage(node);
+              }
+            }}
+            width={stageSize.width || 800}
+            height={Math.max(stageSize.height - GRID_CONSTANTS.headerHeight, 600)}
+            style={{ 
+              display: 'block',
+              touchAction: 'auto',
+              userSelect: 'none',
+              backgroundColor: studioMode === 'dark' ? '#000000' : '#ffffff'
+            }}
+          >
+            <Layer x={-viewport.x} y={-viewport.y}>
+            {/* Background - filled to match theme */}
             <Rect
               x={0}
               y={0}
-              width={totalTimelineWidth / internalZoom}
+              width={Math.max(totalTimelineWidth, stageSize.width || 800)}
               height={Math.max(stageSize.height, totalTimelineHeight)}
-              fill="transparent"
+              fill={studioMode === 'dark' ? '#000000' : '#ffffff'}
               onMouseDown={(e) => {
                 // This ensures the stage receives mouse events for selection rectangle
               }}
             />
             
-            {/* Grid lines - similar to Timeline GridOverlay */}
-            {Array.from({ length: measureCount + 1 }).map((_, i) => {
-              const x = i * GRID_CONSTANTS.measureWidth * internalZoom;
+            {/* Grid lines - optimized to only render visible measures */}
+            {(() => {
+              const measureWidth = GRID_CONSTANTS.measureWidth * internalZoom;
+              const firstVisibleMeasure = Math.max(0, Math.floor(viewport.x / measureWidth));
+              // Calculate total measures needed based on actual content width
+              const totalMeasuresNeeded = Math.ceil(totalTimelineWidth / measureWidth);
+              const lastVisibleMeasure = Math.min(totalMeasuresNeeded + 1, Math.ceil((viewport.x + (stageSize.width || 800)) / measureWidth) + 1);
+              
+              return Array.from({ length: lastVisibleMeasure - firstVisibleMeasure + 1 }, (_, idx) => {
+                const i = firstVisibleMeasure + idx;
+                const x = i * measureWidth;
               
               return (
                 <React.Fragment key={`grid-${i}`}>
@@ -762,7 +855,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                     fill="rgba(128, 128, 128, 0.8)"
                   />
                   {/* Beat lines */}
-                  {i < measureCount && timeSignature[0] > 1 && Array.from({ length: timeSignature[0] - 1 }).map((_, j) => {
+                  {i < totalMeasuresNeeded && timeSignature[0] > 1 && Array.from({ length: timeSignature[0] - 1 }).map((_, j) => {
                     const beatX = x + ((j + 1) * GRID_CONSTANTS.measureWidth * internalZoom / timeSignature[0]);
                     return (
                       <Rect
@@ -776,7 +869,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                     );
                   })}
                   {/* Subdivision lines */}
-                  {i < measureCount && Array.from({ length: timeSignature[0] }).map((_, beatIndex) => {
+                  {i < totalMeasuresNeeded && Array.from({ length: timeSignature[0] }).map((_, beatIndex) => {
                     const beatX = x + (beatIndex * GRID_CONSTANTS.measureWidth * internalZoom / timeSignature[0]);
                     return Array.from({ length: timeSignature[1] - 1 }).map((_, subdivIndex) => {
                       const subdivX = beatX + ((subdivIndex + 1) * GRID_CONSTANTS.measureWidth * internalZoom / (timeSignature[0] * timeSignature[1]));
@@ -794,10 +887,11 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   }).flat()}
                 </React.Fragment>
               );
-            })}
+              });
+            })()}
             
           {/* Track Instances */}
-          {React.useMemo(() => konvaItems.map((item) => {
+          {React.useMemo(() => visibleKonvaItems.map((item) => {
             const isSelected = interaction.selectedIds.includes(item.id);
             const isBeingDragged = interaction.isDragging && isSelected;
             const isPrimaryDrag = interaction.draggedItemId === item.id;
@@ -905,7 +999,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               />
             );
           }), [
-            konvaItems,
+            visibleKonvaItems,
             interaction.selectedIds,
             interaction.isDragging,
             interaction.draggedItemId,
@@ -955,10 +1049,11 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             bpm={bpm}
             timeSignature={timeSignature}
           />
-          </Layer>
-        </Stage>
-      </Box>
-    </Box>
+            </Layer>
+          </Stage>
+        </div>
+      </div>
+    </div>
   );
 });
 

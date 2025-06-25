@@ -66,6 +66,9 @@ export interface UseKonvaInteractionsOptions {
   /** Cursor manager instance */
   cursorManager?: ReturnType<typeof useCursorManager>;
   
+  /** Scroll offset for virtual scrolling */
+  scrollOffset?: { x: number; y: number };
+  
   // Callbacks
   onSelectionChange?: (selectedIds: string[]) => void;
   onDragStart?: (items: KonvaItem[]) => void;
@@ -97,6 +100,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     snapToGrid = true,
     trackHeight = 60,
     cursorManager,
+    scrollOffset = { x: 0, y: 0 },
     onSelectionChange,
     onDragStart,
     onDragMove,
@@ -170,10 +174,14 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Get item at position
   const getItemAtPosition = useCallback((x: number, y: number): KonvaItem | null => {
+    // Apply scroll offset to get absolute position
+    const absoluteX = x + scrollOffset.x;
+    const absoluteY = y + scrollOffset.y;
+    
     // Convert to logical coordinates
     // X is in logical units (ticks), Y is in pixels
-    const logicalX = pixelsToLogical(x);
-    const logicalY = y; // Y is already in pixels, no conversion needed
+    const logicalX = pixelsToLogical(absoluteX);
+    const logicalY = absoluteY; // Y is already in pixels, no conversion needed
 
 
     // Find item under cursor (reverse order to check top items first)
@@ -189,7 +197,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       }
     }
     return null;
-  }, [items, pixelsToLogical]);
+  }, [items, pixelsToLogical, scrollOffset]);
 
   // Get items in rectangle
   const getItemsInRect = useCallback((start: Position, end: Position): KonvaItem[] => {
@@ -555,8 +563,8 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
   // Start rectangle selection
   const startSelection = useCallback((mousePos: Position) => {
     const logicalPos = {
-      x: pixelsToLogical(mousePos.x),
-      y: mousePos.y // Y is already in pixels
+      x: pixelsToLogical(mousePos.x + scrollOffset.x),
+      y: mousePos.y + scrollOffset.y // Y is already in pixels
     };
     
     // Set crosshair cursor for selection
@@ -570,15 +578,15 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       start: logicalPos,
       end: logicalPos
     });
-  }, [pixelsToLogical]);
+  }, [pixelsToLogical, scrollOffset]);
 
   // Update rectangle selection
   const updateRectSelection = useCallback((mousePos: Position) => {
     if (!isSelecting || !selectionRect) return;
 
     const logicalPos = {
-      x: pixelsToLogical(mousePos.x),
-      y: mousePos.y // Y is already in pixels
+      x: pixelsToLogical(mousePos.x + scrollOffset.x),
+      y: mousePos.y + scrollOffset.y // Y is already in pixels
     };
     
     
@@ -586,7 +594,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       start: selectionRect.start,
       end: logicalPos
     });
-  }, [isSelecting, selectionRect, pixelsToLogical]);
+  }, [isSelecting, selectionRect, pixelsToLogical, scrollOffset]);
 
   // End rectangle selection
   const endSelection = useCallback((addToSelection = false) => {
@@ -644,8 +652,8 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
         
         if (onBackgroundClick) {
           onBackgroundClick({
-            x: pixelsToLogical(pos.x),
-            y: pos.y // Y is in pixels
+            x: pixelsToLogical(pos.x + scrollOffset.x),
+            y: pos.y + scrollOffset.y // Y is in pixels
           }, tool);
         }
       }
@@ -655,8 +663,8 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
         onItemClick(item, tool);
       } else if (onBackgroundClick) {
         onBackgroundClick({
-          x: pixelsToLogical(pos.x),
-          y: pos.y // Y is in pixels
+          x: pixelsToLogical(pos.x + scrollOffset.x),
+          y: pos.y + scrollOffset.y // Y is in pixels
         }, tool);
       }
     }
@@ -747,8 +755,8 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
           const mousePos = stage.getPointerPosition();
           if (mousePos) {
             onPaste({
-              x: pixelsToLogical(mousePos.x),
-              y: mousePos.y // Y is in pixels
+              x: pixelsToLogical(mousePos.x + scrollOffset.x),
+              y: mousePos.y + scrollOffset.y // Y is in pixels
             });
           } else {
             onPaste();
@@ -794,7 +802,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     selectedIds, items, stage, isDragging, isResizing, isSelecting,
     onCopy, onCut, onPaste, onDelete, onDuplicate,
     selectMultiple, clearSelection, endDrag, endResize,
-    pixelsToLogical
+    pixelsToLogical, scrollOffset
   ]);
 
   // Set up stage event listeners
