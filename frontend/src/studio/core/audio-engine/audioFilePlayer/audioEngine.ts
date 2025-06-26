@@ -57,13 +57,12 @@ class AudioFilePlayer implements TrackPlayer {
 
   public async initialize(): Promise<void> {
     try {
-      console.log('AudioEngine: Starting Tone.js');
-      //await Tone.start();
-      // Set context to start immediately
-      //Tone.getContext().resume();
-      console.log('AudioEngine: Tone.js started successfully');
+      console.log('AudioEngine: Initializing');
+      // Note: Tone.start() is now handled by audioContextManager in Store.initializeAudio()
+      // We just need to ensure our audio nodes are ready
+      console.log('AudioEngine: Ready for playback');
     } catch (error) {
-      console.error('AudioEngine: Failed to start Tone.js:', error);
+      console.error('AudioEngine: Initialization failed:', error);
       throw error;
     }
   }

@@ -5,6 +5,7 @@ import { calculatePositionTime } from '../../constants/gridConstants';
 import { SoundfontEngineController } from '../audio-engine/soundfontEngineController';
 import { SamplerController } from '../audio-engine/samplerController';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
+import { audioContextManager } from '../audio/audioContextManager';
 
 export interface Transport {
     position: number;        // Current playback position
@@ -115,7 +116,11 @@ export class TransportController implements Transport {
         console.log(`[TransportController.play] Entry. Current Tone.Transport.seconds: ${Tone.getTransport().seconds.toFixed(4)}s`);
 
         try {
-            await Tone.start();
+            // Ensure audio context is initialized and started
+            if (!audioContextManager.isInitialized()) {
+                console.warn('TransportController: Audio context not initialized, initializing now...');
+                await audioContextManager.initialize();
+            }
             
             // Clear any previously scheduled events
             this.clearScheduledEvents();

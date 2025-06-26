@@ -84,6 +84,54 @@ export class ProjectManager {
       this.currentProject.key_signature = key;
     }
   }
+
+  /**
+   * Update a track with partial data
+   * This is used by StoreWithInstances to update track instances
+   */
+  public updateTrack(trackId: string, updates: Partial<CombinedTrack>): void {
+    if (!this.currentProject) return;
+    
+    const trackIndex = this.currentProject.tracks.findIndex(t => t.id === trackId);
+    if (trackIndex === -1) return;
+    
+    // Update the track with the new data
+    this.currentProject.tracks[trackIndex] = {
+      ...this.currentProject.tracks[trackIndex],
+      ...updates
+    };
+  }
+
+  /**
+   * Add a track to the project
+   * This is used by AddTrackAction to ensure the track exists in ProjectManager
+   */
+  public addTrack(track: CombinedTrack): void {
+    if (!this.currentProject) {
+      throw new Error('No project loaded');
+    }
+    
+    // Check if track already exists
+    const existingIndex = this.currentProject.tracks.findIndex(t => t.id === track.id);
+    if (existingIndex !== -1) {
+      // Update existing track
+      this.currentProject.tracks[existingIndex] = track;
+    } else {
+      // Add new track
+      this.currentProject.tracks.push(track);
+    }
+  }
+
+  /**
+   * Remove a track from the project
+   */
+  public removeTrack(trackId: string): void {
+    if (!this.currentProject) return;
+    
+    this.currentProject.tracks = this.currentProject.tracks.filter(
+      track => track.id !== trackId
+    );
+  }
 }
 
 export default ProjectManager;

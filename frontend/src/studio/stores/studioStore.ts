@@ -1,5 +1,6 @@
 import { create, StoreApi } from 'zustand';
 import { Store } from '../core/state/store';
+import { StoreWithInstances } from '../core/state/storeWithInstances';
 import { RootState, TrackOperation, CombinedTrack } from './types';
 import { immer } from 'zustand/middleware/immer';
 
@@ -140,8 +141,8 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
     _withStore,
     _withErrorHandling,
     
-    // Initialize the store instance
-    store: new Store(), 
+    // Initialize the store instance with instance support
+    store: new StoreWithInstances(), 
     // isInitialized might be part of CoreSlice now?
     isInitialized: false, 
   };

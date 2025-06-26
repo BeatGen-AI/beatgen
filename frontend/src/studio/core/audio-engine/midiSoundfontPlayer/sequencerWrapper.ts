@@ -289,23 +289,8 @@ export class SequencerWrapper {
     
     // If playing, schedule upcoming events
     if (this._isPlaying) {
-      // Schedule only upcoming events (don't worry about currently active notes)
-      let scheduledCount = 0;
-      for (const event of this.noteEvents) {
-        // This is the key fix for negative offsets:
-        // We need to compare against the localTick which already includes the offset adjustment
-        if (event.tick >= localTick) {
-          // Calculate the relative position from our current tick
-          // When we have a negative offset, localTick already includes that adjustment
-          const relativeTickFromNow = event.tick - localTick;
-          
-          // The isAbsolute=false parameter means this is relative to current sequencer position
-          this.sequencer.sendEventAt(event.event as any, relativeTickFromNow, false);
-          scheduledCount++;
-        }
-      }
-      
-      console.log(`Scheduled ${scheduledCount} events from tick ${localTick} on channel ${this.channel}`);
+      // Use the same scheduling logic as scheduleEvents
+      this.scheduleEvents(localTick);
     }
   }
   
@@ -347,16 +332,33 @@ export class SequencerWrapper {
     // Schedule only upcoming events
     let scheduledCount = 0;
     const scheduledEvents = [];
-    for (const event of this.noteEvents) {
-      // Check if this event should be scheduled based on the position
-      // This works for both positive and negative offsets because
-      // the offset is already correctly applied in globalToLocalTick
-      if (event.tick >= fromTick) {
-        // Calculate relative position from current position
-        const relativeTick = event.tick - fromTick;
-        this.sequencer.sendEventAt(event.event as any, relativeTick, true);
+    
+    // If fromTick is negative (instance starts in the future), 
+    // schedule all events with appropriate delay
+    if (fromTick < 0) {
+      const delayTicks = Math.abs(fromTick);
+      console.log(`Instance starts in future, adding delay of ${delayTicks} ticks`);
+      
+      for (const event of this.noteEvents) {
+        // Add the delay to each event's tick position
+        const adjustedTick = event.tick + delayTicks;
+        this.sequencer.sendEventAt(event.event as any, adjustedTick, true);
         scheduledCount++;
         scheduledEvents.push(event);
+      }
+    } else {
+      // Normal scheduling for current/past instances
+      for (const event of this.noteEvents) {
+        // Check if this event should be scheduled based on the position
+        // This works for both positive and negative offsets because
+        // the offset is already correctly applied in globalToLocalTick
+        if (event.tick >= fromTick) {
+          // Calculate relative position from current position
+          const relativeTick = event.tick - fromTick;
+          this.sequencer.sendEventAt(event.event as any, relativeTick, true);
+          scheduledCount++;
+          scheduledEvents.push(event);
+        }
       }
     }
     

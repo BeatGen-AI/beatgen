@@ -59,9 +59,16 @@ export class MidiSoundfontPlayer {
       const initialize = async () => {
         try {
           console.log('Initializing MidiSoundfontPlayer...');
-          // Register worklet processor - load libfluidsynth first, then the worklet
-          await audioContext.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
-          await audioContext.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
+          // Note: AudioWorklet modules should already be loaded by audioContextManager
+          // We'll try to load them here as a fallback, but catch any errors if already loaded
+          try {
+            await audioContext.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
+            await audioContext.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
+            console.log('MidiSoundfontPlayer: Loaded worklet modules');
+          } catch (error) {
+            // This is expected if modules are already loaded
+            console.log('MidiSoundfontPlayer: Worklet modules already loaded (this is expected)');
+          }
           
           // Create node and connect
           this.audioNode = this.synth.createAudioNode(audioContext, {

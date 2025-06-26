@@ -112,7 +112,15 @@ export class AddTrackAction extends BaseAction {
         });
 
         if (!trackAddedToState) return; 
-        this.get().updateTrackIndices(); 
+        this.get().updateTrackIndices();
+        
+        // Step 1.5: Add track to ProjectManager so it can be found by connectTrackToSoundfont
+        // Ensure project exists first
+        if (!this.store.getProjectManager().getCurrentProject()) {
+            console.log('No project exists, creating one');
+            this.store.getProjectManager().createProject('Untitled Project');
+        }
+        this.store.getProjectManager().addTrack(this.trackData); 
 
         // Step 2: Initialize Engine Backend
         const typeConfig = TRACK_CONFIG[this.trackData.track_type];
@@ -187,6 +195,9 @@ export class AddTrackAction extends BaseAction {
         // Step 1: Remove from State
         this.get()._updateState('tracks', state => state.filter(t => t.id !== this.trackData.id));
         this.get().updateTrackIndices();
+        
+        // Step 1.5: Remove from ProjectManager
+        this.store.getProjectManager().removeTrack(this.trackData.id);
 
         // Step 2: Remove from Engine and Controllers
         try {
@@ -226,6 +237,9 @@ export class DeleteTrackAction extends BaseAction {
         
         this.get()._updateState('tracks', state => state.filter(t => t.id !== this.trackData.id));
         this.get().updateTrackIndices();
+        
+        // Remove from ProjectManager
+        this.store.getProjectManager().removeTrack(this.trackData.id);
         
         this.log('Execute', { 
             trackId: this.trackData.id, 
@@ -272,6 +286,9 @@ export class DeleteTrackAction extends BaseAction {
         
         this.get()._updateState('tracks', (prevTracks) => [...prevTracks, this.trackData]);
         this.get().updateTrackIndices();
+        
+        // Add back to ProjectManager
+        this.store.getProjectManager().addTrack(this.trackData);
         
         this.log('Undo', { 
             trackId: this.trackData.id, 

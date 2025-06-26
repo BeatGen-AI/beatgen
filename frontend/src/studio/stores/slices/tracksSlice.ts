@@ -3,10 +3,12 @@ import { CombinedTrackEntity as CombinedTrack } from 'src/platform/types/entitie
 import { Position } from '../../components/track';
 import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTrackPayload, DrumTrackPayload, MidiTrackPayload, AudioTrackOptions, SamplerTrackOptions, MidiTrackOptions, AnyTrackRead, MidiTrack, AudioTrack, SamplerTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, DrumTrackOptions } from '../types';
 import { Store } from '../../core/state/store';
+import { StoreWithInstances } from '../../core/state/storeWithInstances';
 import { Actions } from '../../core/state/history/actions';
 import type { Action } from '../../core/state/history/actions'; 
 import { InstanceAdd, InstanceMove, InstanceResize, InstanceDelete } from '../../core/state/history/actions/InstanceActions';
 import { TRACK_CONFIG, DEFAULT_SAMPLER_CONFIG } from '../config';
+import { TRACK_CONFIG_WITH_INSTANCES } from '../configWithInstances';
 import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { PULSES_PER_QUARTER_NOTE } from '../../utils/noteConversion';
@@ -145,6 +147,22 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       set(produce((draft: RootState) => {
           draft.tracks = newTracks;
       }));
+      
+      // Sync with ProjectManager
+      const { store } = rootGet();
+      if (store) {
+          const projectManager = store.getProjectManager();
+          // Ensure project exists
+          if (!projectManager.getCurrentProject()) {
+              console.log('No project exists, creating one in updateTracks');
+              projectManager.createProject('Untitled Project');
+          }
+          // Add all tracks to ProjectManager
+          newTracks.forEach(track => {
+              projectManager.addTrack(track);
+          });
+          console.log(`Synced ${newTracks.length} tracks to ProjectManager`);
+      }
   };
 
   // Action to recalculate and add/update the index property for UI ordering
@@ -232,7 +250,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         instrumentStorageKey: (options as any).instrumentStorageKey,
       };
       
-      const typeConfig = TRACK_CONFIG[type];
+      const typeConfig = TRACK_CONFIG_WITH_INSTANCES[type];
       if (!typeConfig) throw new Error(`Invalid track type: ${type}`);
       
       // Extract the file object early
@@ -378,7 +396,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         instrumentStorageKey: (options as any).instrumentStorageKey,
       };
       
-      const typeConfig = TRACK_CONFIG[type];
+      const typeConfig = TRACK_CONFIG_WITH_INSTANCES[type];
       if (!typeConfig) throw new Error(`Invalid track type: ${type}`);
       
       // Extract the file object early
@@ -1005,7 +1023,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           if (type === 'DRUM') {
               // 1. Create the main drum track first
               const count = rootState.tracks.length + 1; 
-              const mainDrumTrackName = TRACK_CONFIG.DRUM.getDefaultName(count, 'Drum Kit');
+              const mainDrumTrackName = TRACK_CONFIG_WITH_INSTANCES.DRUM.getDefaultName(count, 'Drum Kit');
               const mainDrumTrack = await createTrackAndRegisterWithHistory('DRUM', mainDrumTrackName, {
                   instrumentName: 'Drum Sequencer', 
               });
@@ -1063,7 +1081,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   instrumentStorageKey: midiPayload.instrumentStorageKey
               };
           }
-          const trackNameStd = TRACK_CONFIG[type]?.getDefaultName(countStd, instrumentNameStd) || `Track ${countStd}`;
+          const trackNameStd = TRACK_CONFIG_WITH_INSTANCES[type]?.getDefaultName(countStd, instrumentNameStd) || `Track ${countStd}`;
           const trackData = await createTrackAndRegisterWithHistory(type, trackNameStd, trackOptionsStd);
           return trackData;
       }

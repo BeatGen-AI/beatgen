@@ -1,0 +1,753 @@
+diff --git a/frontend/src/studio/components/timeline/KonvaTimeline.tsx b/frontend/src/studio/components/timeline/KonvaTimeline.tsx
+index e5ff66d..096fe43 100644
+--- a/frontend/src/studio/components/timeline/KonvaTimeline.tsx
++++ b/frontend/src/studio/components/timeline/KonvaTimeline.tsx
+@@ -130,7 +130,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
+   const [gridSnapSize, setGridSnapSize] = useState(propGridSnapSize || GridSnapOption.STEP);
+   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, width: 800, height: 600 });
+-  const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
++  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+   const [internalZoom, setInternalZoom] = useState(zoomLevel || 1);
+   const [resizePreviewWidths, setResizePreviewWidths] = useState<Map<string, number>>(new Map());
+   const [resizePreviewPositions, setResizePreviewPositions] = useState<Map<string, number>>(new Map());
+@@ -150,7 +150,9 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+   }, [zoomLevel]);
+   
+   // Calculate dimensions
+-  const totalTimelineWidth = measureCount * GRID_CONSTANTS.measureWidth * internalZoom;
++  const baseTimelineWidth = measureCount * GRID_CONSTANTS.measureWidth;
++  // Ensure minimum width for scrolling on wide screens (most monitors are < 3000px)
++  const totalTimelineWidth = Math.max(baseTimelineWidth, 3000);
+   const totalTimelineHeight = Math.max(600, tracks.length * GRID_CONSTANTS.trackHeight + 200);
+   
+   // Calculate pixels per tick
+@@ -239,6 +241,10 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+   // Get stage from direct Stage ref
+   const [stage, setStage] = useState<Konva.Stage | null>(null);
+   
++  // Track scroll position
++  const [scrollX, setScrollX] = useState(0);
++  const [scrollY, setScrollY] = useState(0);
++  
+   // Use the unified interaction system
+   const interaction = useKonvaInteractions({
+     items: konvaItems,
+@@ -509,19 +515,31 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+     const updateSize = () => {
+       if (containerRef.current) {
+         const rect = containerRef.current.getBoundingClientRect();
+-        setStageSize({ width: rect.width, height: rect.height });
+-        setViewport(prev => ({ ...prev, width: rect.width, height: rect.height }));
++        const width = rect.width || 800;
++        const height = rect.height || 600;
++        setStageSize({ width, height });
++        setViewport(prev => ({ ...prev, width, height }));
+       }
+     };
+     
++    // Initial update
+     updateSize();
++    
++    // Update on window resize
+     window.addEventListener('resize', updateSize);
+     
++    // Use ResizeObserver for more reliable container size changes
++    const resizeObserver = new ResizeObserver(updateSize);
++    if (containerRef.current) {
++      resizeObserver.observe(containerRef.current);
++    }
++    
+     // Also update on a small delay in case the container hasn't fully rendered
+     const timeoutId = setTimeout(updateSize, 100);
+     
+     return () => {
+       window.removeEventListener('resize', updateSize);
++      resizeObserver.disconnect();
+       clearTimeout(timeoutId);
+     };
+   }, []);
+@@ -531,23 +549,39 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+     setViewport(newViewport);
+   }, []);
+   
+-  // Handle wheel events on the container div for scrolling
+-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+-    // Let the browser handle scrolling naturally
+-    // We don't need custom wheel handling since we're using overflow: 'auto'
++  // Handle scroll events
++  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
++    const target = e.target as HTMLDivElement;
++    setScrollX(target.scrollLeft);
++    setScrollY(target.scrollTop);
++  }, []);
++  
++  // Handle wheel events for zoom
++  useEffect(() => {
++    const container = containerRef.current;
++    if (!container) return;
+     
+-    // Only handle zoom with Ctrl/Cmd
+-    if (e.ctrlKey || e.metaKey) {
+-      e.preventDefault();
+-      
+-      const scaleBy = 1.1;
+-      const direction = e.deltaY < 0 ? 1 : -1;
+-      const newScale = direction > 0 ? internalZoom * scaleBy : internalZoom / scaleBy;
+-      const clampedScale = Math.max(0.25, Math.min(4, newScale));
+-      
+-      setInternalZoom(clampedScale);
+-      onZoomChange?.(clampedScale);
+-    }
++    const handleWheel = (e: WheelEvent) => {
++      // Only handle zoom with Ctrl/Cmd
++      if (e.ctrlKey || e.metaKey) {
++        e.preventDefault();
++        
++        const scaleBy = 1.1;
++        const direction = e.deltaY < 0 ? 1 : -1;
++        const newScale = direction > 0 ? internalZoom * scaleBy : internalZoom / scaleBy;
++        const clampedScale = Math.max(0.25, Math.min(4, newScale));
++        
++        setInternalZoom(clampedScale);
++        onZoomChange?.(clampedScale);
++      }
++    };
++    
++    // Add non-passive wheel listener to allow preventDefault
++    container.addEventListener('wheel', handleWheel, { passive: false });
++    
++    return () => {
++      container.removeEventListener('wheel', handleWheel);
++    };
+   }, [internalZoom, onZoomChange]);
+   
+   // Handle ruler click
+@@ -604,13 +638,13 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+           flex: 1, 
+           position: 'relative',
+           overflow: 'auto',
+-          backgroundColor: 'background.default',
++          backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#fafafa',
+           cursor: tool === 'select' ? 'default' : 
+                   tool === 'pen' ? 'copy' :
+                   tool === 'eraser' ? 'crosshair' :
+                   tool === 'highlighter' ? 'cell' : 'default'
+         }}
+-        onWheel={handleWheel}
++        onScroll={handleScroll}
+       >
+         {/* Time Ruler - sticky at top like Timeline */}
+         <Box
+@@ -645,28 +679,54 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+           </Stage>
+         </Box>
+         
+-        {/* Main Stage with transformed content */}
+-        <Stage
+-          ref={(node) => {
+-            if (node && !stage) {
+-              setStage(node);
+-            }
+-          }}
+-          width={stageSize.width}
+-          height={Math.max(stageSize.height, totalTimelineHeight)}
+-          style={{ 
+-            width: totalTimelineWidth * internalZoom,
+-            transformOrigin: 'top left'
++        {/* Scrollable content div for correct scrolling dimensions */}
++        <div
++          style={{
++            width: `${totalTimelineWidth * internalZoom}px`,
++            height: `${Math.max(stageSize.height || 600, totalTimelineHeight)}px`,
++            position: 'relative',
++            background: 'transparent',
+           }}
+         >
+-          <Layer>
+-            {/* Background - transparent to show CSS background */}
++          {/* Viewport-sized Stage for performance */}
++          <div
++            style={{
++              position: 'sticky',
++              top: 0,
++              left: 0,
++              width: stageSize.width || 800,
++              height: Math.max(stageSize.height || 600, totalTimelineHeight),
++              overflow: 'hidden',
++            }}
++          >
++            <Stage
++              ref={(node) => {
++                if (node && !stage) {
++                  setStage(node);
++                  stageRef.current = node;
++                  // Make sure the stage can receive events
++                  if (node) {
++                    const container = node.container();
++                    container.style.pointerEvents = 'auto';
++                  }
++                }
++              }}
++              width={stageSize.width || 800}
++              height={Math.max(stageSize.height || 600, totalTimelineHeight)}
++              x={-scrollX}
++              y={-scrollY}
++              scaleX={internalZoom}
++              scaleY={1}
++              style={{ display: 'block' }}
++            >
++              <Layer>
++            {/* Background */}
+             <Rect
+-              x={0}
++              x={scrollX / internalZoom}
+               y={0}
+-              width={totalTimelineWidth / internalZoom}
++              width={(stageSize.width || 800) / internalZoom + 100}
+               height={Math.max(stageSize.height, totalTimelineHeight)}
+-              fill="transparent"
++              fill={studioMode === 'dark' ? '#1a1a1a' : '#fafafa'}
+               onMouseDown={(e) => {
+                 // This ensures the stage receives mouse events for selection rectangle
+               }}
+@@ -674,7 +734,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+             
+             {/* Grid lines - similar to Timeline GridOverlay */}
+             {Array.from({ length: measureCount + 1 }).map((_, i) => {
+-              const x = i * GRID_CONSTANTS.measureWidth;
++              const x = i * GRID_CONSTANTS.measureWidth * internalZoom;
+               
+               return (
+                 <React.Fragment key={`grid-${i}`}>
+@@ -688,7 +748,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+                   />
+                   {/* Beat lines */}
+                   {i < measureCount && timeSignature[0] > 1 && Array.from({ length: timeSignature[0] - 1 }).map((_, j) => {
+-                    const beatX = x + ((j + 1) * GRID_CONSTANTS.measureWidth / timeSignature[0]);
++                    const beatX = x + ((j + 1) * GRID_CONSTANTS.measureWidth * internalZoom / timeSignature[0]);
+                     return (
+                       <Rect
+                         key={`beat-${i}-${j}`}
+@@ -702,9 +762,9 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+                   })}
+                   {/* Subdivision lines */}
+                   {i < measureCount && Array.from({ length: timeSignature[0] }).map((_, beatIndex) => {
+-                    const beatX = x + (beatIndex * GRID_CONSTANTS.measureWidth / timeSignature[0]);
++                    const beatX = x + (beatIndex * GRID_CONSTANTS.measureWidth * internalZoom / timeSignature[0]);
+                     return Array.from({ length: timeSignature[1] - 1 }).map((_, subdivIndex) => {
+-                      const subdivX = beatX + ((subdivIndex + 1) * GRID_CONSTANTS.measureWidth / (timeSignature[0] * timeSignature[1]));
++                      const subdivX = beatX + ((subdivIndex + 1) * GRID_CONSTANTS.measureWidth * internalZoom / (timeSignature[0] * timeSignature[1]));
+                       return (
+                         <Rect
+                           key={`subdiv-${i}-${beatIndex}-${subdivIndex}`}
+@@ -741,9 +801,9 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+             
+             // Get drag preview position
+             const dragPreview = dragPreviewPositions.get(item.id);
+-            const itemX = dragPreview ? dragPreview.x : (previewX !== undefined ? previewX : item.x * pixelsPerTick);
++            const itemX = (dragPreview ? dragPreview.x : (previewX !== undefined ? previewX : item.x * pixelsPerTick)) * internalZoom;
+             const itemDisplayY = dragPreview ? dragPreview.y : item.y;
+-            const itemWidth = previewWidth !== undefined ? previewWidth : item.width * pixelsPerTick;
++            const itemWidth = (previewWidth !== undefined ? previewWidth : item.width * pixelsPerTick) * internalZoom;
+             
+             // Skip rendering if values are invalid
+             if (isNaN(itemX) || isNaN(itemDisplayY) || isNaN(itemWidth) || itemWidth <= 0) {
+@@ -871,8 +931,10 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
+             bpm={bpm}
+             timeSignature={timeSignature}
+           />
+-          </Layer>
+-        </Stage>
++              </Layer>
++            </Stage>
++          </div>
++        </div>
+       </Box>
+     </Box>
+   );
+diff --git a/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx b/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
+index 38d8071..9de95fe 100644
+--- a/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
++++ b/frontend/src/studio/components/timeline/konva/KonvaTrack.tsx
+@@ -59,6 +59,16 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+   snapSizeInPixels = 12.5,
+   data
+ }) => {
++  // DEBUG: Log track data
++  console.log('DEBUG KonvaTrack - Track received:', {
++    trackId: track?.id,
++    instanceId,
++    trackType: track?.track_type,
++    trackName: track?.name,
++    track: track?.track,
++    data
++  });
++  
+   // Validate required numeric props
+   if (isNaN(x) || isNaN(y) || isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+     console.error('KonvaTrack received invalid props:', { 
+@@ -109,13 +119,9 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
+   
+   // Calculate content offset for trimmed tracks
+   const contentOffset = useMemo(() => {
+-    if (!track.instance_metadata || !track.duration_ticks || track.duration_ticks === 0) return 0;
+-    if (isNaN(pixelsPerTick) || pixelsPerTick <= 0) return 0;
+-    const trimRatio = track.instance_metadata[0].trim_start_ticks / track.duration_ticks;
+-    const fullWidth = track.duration_ticks * pixelsPerTick;
+-    const result = -(trimRatio * fullWidth);
+-    return isNaN(result) ? 0 : result;
+-  }, [track.instance_metadata, track.duration_ticks, pixelsPerTick]);
++    // For now, return 0 to simplify debugging
++    return 0;
++  }, []);
+   
+   
+   // Render track content based on type
+diff --git a/frontend/src/studio/components/timeline/konva/tracks/MidiTrackRenderer.tsx b/frontend/src/studio/components/timeline/konva/tracks/MidiTrackRenderer.tsx
+index 17ae0f9..153d1db 100644
+--- a/frontend/src/studio/components/timeline/konva/tracks/MidiTrackRenderer.tsx
++++ b/frontend/src/studio/components/timeline/konva/tracks/MidiTrackRenderer.tsx
+@@ -1,5 +1,5 @@
+ import React, { useMemo } from 'react';
+-import { Group, Rect, Line } from 'react-konva';
++import { Group, Rect } from 'react-konva';
+ import { CombinedTrack } from 'src/platform/types/project';
+ import { MidiTrackRead } from 'src/platform/types/dto/track_models/midi_track';
+ import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track';
+@@ -13,6 +13,11 @@ export interface MidiTrackRendererProps {
+   color: string;
+ }
+ 
++// Helper function similar to scaleToPreview in MidiNotesPreview
++const scaleToPreview = (value: number): number => {
++  return Math.max(1, Math.round(value));
++};
++
+ /**
+  * Renders MIDI note preview for MIDI and Sampler tracks.
+  */
+@@ -24,164 +29,173 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
+   contentOffset,
+   color
+ }) => {
++  // DEBUG: Immediate log to see if component re-renders
++  console.log('🎨 MidiTrackRenderer RENDER - Track name:', track.name, 'Track ID:', track.id);
++  
+   // Validate props
+   if (isNaN(width) || width <= 0) {
+     console.warn('MidiTrackRenderer: Invalid width', width);
+     return null;
+   }
+   
++  // Memoize the random heights so they don't change on every render
++  const randomHeights = useMemo(() => 
++    Array.from({length: 12}).map(() => Math.random() * 12 + 4),
++    [] // Empty dependency array means this only runs once when component mounts
++  );
++  
+   // Get MIDI notes from track
+-  const midiNotes = useMemo(() => {
++  const notes = useMemo(() => {
++    let midiNotes: any[] = [];
++    
++    // DEBUG: Log track data
++    console.log('DEBUG MidiTrackRenderer - Track data:', {
++      id: track.id,
++      name: track.name,
++      track_type: track.track_type,
++      track: track.track
++    });
++    
+     if (track.track_type === 'MIDI') {
+       const midiTrack = track.track as MidiTrackRead;
++      console.log('DEBUG MidiTrackRenderer - MIDI track midi_notes_json:', midiTrack.midi_notes_json);
+       if (midiTrack.midi_notes_json?.notes) {
+-        return midiTrack.midi_notes_json.notes as Array<any>;
++        midiNotes = midiTrack.midi_notes_json.notes as Array<any>;
+       }
+     } else if (track.track_type === 'SAMPLER') {
+       const samplerTrack = track.track as SamplerTrackRead;
++      console.log('DEBUG MidiTrackRenderer - SAMPLER track midi_notes_json:', samplerTrack.midi_notes_json);
+       if (samplerTrack.midi_notes_json?.notes) {
+-        return samplerTrack.midi_notes_json.notes as Array<any>;
++        midiNotes = samplerTrack.midi_notes_json.notes as Array<any>;
+       }
+     }
+-    return [];
++    
++    console.log('DEBUG MidiTrackRenderer - Found notes:', midiNotes);
++    
++    return midiNotes;
+   }, [track]);
+   
+-  // Calculate note positions and dimensions
++  // Calculate note positions following MidiNotesPreview logic
+   const noteRects = useMemo(() => {
+-    // Validate inputs
+-    if (isNaN(pixelsPerTick) || pixelsPerTick <= 0 || isNaN(height) || height <= 0) {
+-      console.warn('MidiTrackRenderer: Invalid dimensions', { pixelsPerTick, height });
++    console.log('DEBUG MidiTrackRenderer - Calculating noteRects, notes:', notes);
++    console.log('DEBUG MidiTrackRenderer - width:', width, 'height:', height);
++    
++    if (!notes || notes.length === 0) {
++      console.log('DEBUG MidiTrackRenderer - No notes to render');
+       return [];
+     }
+     
+-    const minNote = 0;
+-    const maxNote = 127;
+-    const noteRange = maxNote - minNote + 1;
+-    const noteHeight = Math.max(2, height / noteRange);
++    // Find the range of notes for better scaling
++    let minNoteRow = 127;
++    let maxNoteRow = 0;
++    let maxColumn = 0;
+     
+-    return midiNotes.map(note => {
+-      const x = note.column * pixelsPerTick;
+-      const y = height - ((note.row - minNote) / noteRange) * height - noteHeight;
+-      const width = note.length * pixelsPerTick;
++    notes.forEach(note => {
++      console.log('DEBUG MidiTrackRenderer - Processing note:', note);
++      // Track min and max note rows
++      if (note.row < minNoteRow) minNoteRow = note.row;
++      if (note.row > maxNoteRow) maxNoteRow = note.row;
+       
+-      // Skip invalid notes
+-      if (isNaN(x) || isNaN(y) || isNaN(width)) {
+-        console.warn('MidiTrackRenderer: Invalid note dimensions', { note, x, y, width });
+-        return null;
+-      }
++      // Track max column for width scaling
++      const noteEnd = note.column + note.length;
++      if (noteEnd > maxColumn) maxColumn = noteEnd;
++    });
++    
++    // Ensure we have at least a small range for scaling
++    if (maxNoteRow - minNoteRow < 6) {
++      // Expand the range to at least an octave
++      const midPoint = Math.floor((maxNoteRow + minNoteRow) / 2);
++      minNoteRow = midPoint - 3;
++      maxNoteRow = midPoint + 3;
++    }
++    
++    // Add some padding to the range
++    minNoteRow = Math.max(0, minNoteRow - 2);
++    maxNoteRow = Math.min(127, maxNoteRow + 2);
++    
++    const noteRange = maxNoteRow - minNoteRow + 1;
++    const noteHeightScale = height / noteRange;
++    
++    // Calculate the columns that should fit within the view width
++    // Standard 4-bar section at 16th note resolution = 64 columns (4 * 4 * 4)
++    const standardColumns = 16;
++    
++    // Maintain consistent column width regardless of the maxColumn
++    // This way, notes at column 32 always appear at the same position
++    const noteWidthScale = width / standardColumns;
++    
++    console.log('DEBUG MidiTrackRenderer - Note scaling:', {
++      minNoteRow,
++      maxNoteRow,
++      noteRange,
++      noteHeightScale,
++      noteWidthScale,
++      standardColumns
++    });
++    
++    const calculatedNotes = notes.map((note, index) => {
++      // Calculate position and dimensions
++      const x = scaleToPreview(note.column * noteWidthScale);
++      // Calculate relative position in our range and invert Y (high notes at top)
++      const relativePosition = maxNoteRow - note.row;
++      const y = relativePosition * noteHeightScale;
++      const w = scaleToPreview(note.length * noteWidthScale);
++      const h = noteHeightScale * 0.9; // Slight gap between notes
+       
+-      return {
+-        id: note.id,
++      const rect = {
++        id: note.id || `note-${index}-${note.column}-${note.row}`,
+         x,
+         y,
+-        width: Math.max(1, width), // Minimum 1 pixel width
+-        height: noteHeight,
+-        velocity: note.velocity
++        width: w,
++        height: h,
++        velocity: note.velocity || 100
+       };
+-    }).filter(Boolean); // Remove null entries
+-  }, [midiNotes, pixelsPerTick, height]);
+-  
+-  // Group notes by time for chord visualization
+-  const chordLines = useMemo(() => {
+-    const lines: { x: number; notes: number }[] = [];
+-    const threshold = 10; // Group notes within 10 ticks
+-    
+-    noteRects.forEach(note => {
+-      const existingLine = lines.find(line => Math.abs(line.x - note.x) < threshold * pixelsPerTick);
+-      if (existingLine) {
+-        existingLine.notes++;
+-      } else {
+-        lines.push({ x: note.x, notes: 1 });
+-      }
++      
++      console.log('DEBUG MidiTrackRenderer - Calculated rect for note:', note, '→', rect);
++      
++      return rect;
+     });
+     
+-    return lines.filter(line => line.notes > 1);
+-  }, [noteRects, pixelsPerTick]);
++    console.log('DEBUG MidiTrackRenderer - All calculated rects:', calculatedNotes);
++    return calculatedNotes;
++  }, [notes, width, height]);
+   
+   return (
+     <Group>
+-      {/* Track background gradient */}
+-      <Rect
+-        x={0}
+-        y={0}
+-        width={width}
+-        height={height}
+-        fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+-        fillLinearGradientEndPoint={{ x: 0, y: height }}
+-        fillLinearGradientColorStops={[0, `${color}10`, 1, `${color}05`]}
+-      />
+-      
+-      {/* Piano roll grid lines (subtle) */}
+-      {Array.from({ length: 12 }).map((_, i) => {
+-        const y = (i / 12) * height;
+-        return (
+-          <Line
+-            key={i}
+-            points={[0, y, width, y]}
+-            stroke={`${color}10`}
+-            strokeWidth={0.5}
++      {/* Render notes if we have them */}
++      {noteRects.length > 0 ? (
++        noteRects.map(note => (
++          <Rect
++            key={note.id}
++            x={note.x}
++            y={note.y}
++            width={note.width}
++            height={note.height}
++            fill="white"
++            opacity={1}
++            cornerRadius={2}
++            shadowColor="white"
++            shadowBlur={3}
++            shadowOpacity={0.2}
+           />
+-        );
+-      })}
+-      
+-      {/* Chord indicators */}
+-      {chordLines.map((line, i) => (
+-        <Line
+-          key={i}
+-          points={[line.x, 0, line.x, height]}
+-          stroke={`${color}30`}
+-          strokeWidth={2}
+-          dash={[4, 4]}
+-        />
+-      ))}
+-      
+-      {/* MIDI notes */}
+-      {noteRects.map(note => {
+-        // Calculate opacity based on velocity
+-        const velocityOpacity = 0.4 + (note.velocity / 127) * 0.6;
+-        
+-        return (
+-          <Group key={note.id}>
+-            {/* Note rectangle */}
++        ))
++      ) : (
++        // Show placeholder bars when no notes
++        <Group x={width / 2} y={height / 2}>
++          {randomHeights.map((barHeight, i) => (
+             <Rect
+-              x={note.x}
+-              y={note.y}
+-              width={note.width}
+-              height={note.height}
+-              fill={color}
+-              opacity={velocityOpacity}
+-              cornerRadius={Math.min(2, note.height / 2)}
++              key={i}
++              x={(i - 6) * 5}
++              y={-barHeight / 2}
++              width={4}
++              height={barHeight}
++              fill="white"
++              opacity={0.6}
++              cornerRadius={2}
+             />
+-            
+-            {/* Note border for visibility */}
+-            <Rect
+-              x={note.x}
+-              y={note.y}
+-              width={note.width}
+-              height={note.height}
+-              stroke={color}
+-              strokeWidth={0.5}
+-              fill="transparent"
+-              opacity={0.8}
+-              cornerRadius={Math.min(2, note.height / 2)}
+-            />
+-          </Group>
+-        );
+-      })}
+-      
+-      {/* Beat markers */}
+-      {Array.from({ length: Math.floor(width / (pixelsPerTick * 480)) }).map((_, i) => {
+-        const x = i * pixelsPerTick * 480; // Every beat
+-        return (
+-          <Line
+-            key={i}
+-            points={[x, 0, x, height]}
+-            stroke={`${color}15`}
+-            strokeWidth={1}
+-            dash={[1, 3]}
+-          />
+-        );
+-      })}
++          ))}
++        </Group>
++      )}
+     </Group>
+   );
+ };
+diff --git a/frontend/src/studio/core/state/history/actions/NoteActions.ts b/frontend/src/studio/core/state/history/actions/NoteActions.ts
+index 44ed86c..ca043a3 100644
+--- a/frontend/src/studio/core/state/history/actions/NoteActions.ts
++++ b/frontend/src/studio/core/state/history/actions/NoteActions.ts
+@@ -29,6 +29,41 @@ export class AddNoteAction extends NoteAction {
+             await midiManager.addNoteToTrack(this.trackId, { ...this.note, id: parseInt(this.noteId) });
+             this.markTrackAsDirty(); // Mark track as dirty when note is added
+             
++            // DEBUG: Update track name to indicate notes were added
++            const { updateTrackState, findTrackById, _updateNestedTrackData } = this.get();
++            if (updateTrackState) {
++                console.log('DEBUG: Updating track name to "NOTES ADDED"');
++                updateTrackState(this.trackId, { name: 'NOTES ADDED' });
++                
++                // Get all notes from MidiManager for this track
++                const allNotes = midiManager.getTrackNotes(this.trackId);
++                if (allNotes && _updateNestedTrackData) {
++                    console.log('DEBUG: Updating track.track.midi_notes_json with notes:', allNotes.length);
++                    // Update the nested track data with the notes
++                    _updateNestedTrackData(this.trackId, {
++                        midi_notes_json: { notes: allNotes }
++                    });
++                }
++                
++                // Also log the current track state after adding note
++                setTimeout(() => {
++                    const track = findTrackById(this.trackId);
++                    if (track) {
++                        console.log('DEBUG: Track after adding note:', {
++                            id: track.id,
++                            name: track.name,
++                            track_type: track.track_type,
++                            track: track.track
++                        });
++                        
++                        if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER') {
++                            const trackData = track.track as any;
++                            console.log('DEBUG: midi_notes_json:', trackData.midi_notes_json);
++                        }
++                    }
++                }, 100);
++            }
++            
+             this.log('Execute', {
+                 trackId: this.trackId,
+                 noteId: this.noteId,
+@@ -90,6 +125,15 @@ export class DeleteNoteAction extends NoteAction {
+             await midiManager.removeNoteFromTrack(this.trackId, parseInt(this.noteId));
+             this.markTrackAsDirty(); // Mark track as dirty when note is deleted
+             
++            // Update track's nested data with the updated notes
++            const { _updateNestedTrackData } = this.get();
++            const allNotes = midiManager.getTrackNotes(this.trackId);
++            if (allNotes && _updateNestedTrackData) {
++                _updateNestedTrackData(this.trackId, {
++                    midi_notes_json: { notes: allNotes }
++                });
++            }
++            
+             this.log('Execute', {
+                 trackId: this.trackId,
+                 noteId: this.noteId
+@@ -110,6 +154,15 @@ export class DeleteNoteAction extends NoteAction {
+             await midiManager.addNoteToTrack(this.trackId, this.note);
+             this.markTrackAsDirty(); // Mark track as dirty when note is restored (undo)
+             
++            // Update track's nested data with the updated notes
++            const { _updateNestedTrackData } = this.get();
++            const allNotes = midiManager.getTrackNotes(this.trackId);
++            if (allNotes && _updateNestedTrackData) {
++                _updateNestedTrackData(this.trackId, {
++                    midi_notes_json: { notes: allNotes }
++                });
++            }
++            
+             this.log('Undo', {
+                 trackId: this.trackId,
+                 noteId: this.noteId,
+@@ -163,6 +216,15 @@ export class MoveNoteAction extends NoteAction {
+             };
+             
+             await midiManager.updateNote(this.trackId, updatedNote);
++            
++            // Update track's nested data with the updated notes
++            const { _updateNestedTrackData } = this.get();
++            const allNotes = midiManager.getTrackNotes(this.trackId);
++            if (allNotes && _updateNestedTrackData) {
++                _updateNestedTrackData(this.trackId, {
++                    midi_notes_json: { notes: allNotes }
++                });
++            }
+         } catch (error) {
+             console.error(`Error updating position of note ${this.noteId} in track ${this.trackId}:`, error);
+         }
+@@ -237,6 +299,15 @@ export class ResizeNoteAction extends NoteAction {
+             };
+             
+             await midiManager.updateNote(this.trackId, updatedNote);
++            
++            // Update track's nested data with the updated notes
++            const { _updateNestedTrackData } = this.get();
++            const allNotes = midiManager.getTrackNotes(this.trackId);
++            if (allNotes && _updateNestedTrackData) {
++                _updateNestedTrackData(this.trackId, {
++                    midi_notes_json: { notes: allNotes }
++                });
++            }
+         } catch (error) {
+             console.error(`Error resizing note ${this.noteId} in track ${this.trackId}:`, error);
+         }
+diff --git a/frontend/src/studio/stores/slices/tracksSlice.ts b/frontend/src/studio/stores/slices/tracksSlice.ts
+index 537aa12..e5de2fc 100644
+--- a/frontend/src/studio/stores/slices/tracksSlice.ts
++++ b/frontend/src/studio/stores/slices/tracksSlice.ts
+@@ -136,6 +136,13 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+             if (updates.dirty !== false) {
+                 draft.tracks[trackIndex].dirty = true;
+             }
++            
++            // DEBUG: Log the track after update
++            console.log('DEBUG updateTrackState - Track updated:', {
++                trackId,
++                updates,
++                updatedTrack: draft.tracks[trackIndex]
++            });
+         }
+     }));
+   };

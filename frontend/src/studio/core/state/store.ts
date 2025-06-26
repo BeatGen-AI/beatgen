@@ -7,6 +7,7 @@ import * as Tone from 'tone';
 import { SoundfontEngineController } from '../audio-engine/soundfontEngineController';
 import { SamplerController } from '../audio-engine/samplerController';
 import { Note } from '../../../types/note'; // Added for Note type
+import { audioContextManager } from '../audio/audioContextManager';
 import { NoteActions } from './history/actions/NoteActions'; // Added for NoteActions
 import { HistoryManager, historyManager } from './history/HistoryManager'; // Added for historyManager
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
@@ -60,30 +61,17 @@ export class Store implements StoreInterface {
     if (this.initialized) return;
     
     try {
+      // Initialize audio context manager first - this handles Tone.start() and worklet loading
+      console.log('Store: Initializing audio context manager...');
+      const audioContext = await audioContextManager.initialize();
+      console.log('Store: Audio context manager initialized successfully');
+      
       // Initialize audio engine
       await this.getAudioEngine().initialize();
       
-      // Get Tone.js context and extract raw audio context
-      // This is a workaround since AudioEngine doesn't expose the context directly
-      const toneContext = Tone.getContext();
-      const rawContext = toneContext.rawContext;
-      
-      // Log the context type to help debug
-      console.log('Audio context type:', {
-        toneContextType: typeof toneContext,
-        rawContextType: typeof rawContext,
-        rawContextConstructorName: rawContext.constructor.name,
-        isAudioContext: rawContext instanceof AudioContext,
-        isBaseAudioContext: rawContext instanceof BaseAudioContext
-      });
-      
-      // Some browsers may need to create a new AudioContext from an existing one
-      const audioContext = new AudioContext({
-        latencyHint: 'interactive',
-        sampleRate: rawContext.sampleRate
-      });
-
-      this.getSoundfontController().initialize(audioContext);
+      // Initialize soundfont controller with the same audio context
+      console.log('Store: Initializing soundfont controller...');
+      await this.getSoundfontController().initialize(audioContext);
 
       this.initialized = true;
       // Removed syncTracksFromProjectManager call

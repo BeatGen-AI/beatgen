@@ -35,11 +35,12 @@ class MidiSampler {
     // Initialize audio context
     public async initialize(): Promise<void> {
         try {
-            //await Tone.start();
-            this.log("Audio context initialized");
+            // Note: Tone.start() is now handled centrally by audioContextManager
+            // This method is kept for compatibility but audio context should already be started
+            this.log("Sampler initialized");
             return Promise.resolve();
         } catch (error: any) {
-            this.log(`Error initializing audio: ${error.message}`);
+            this.log(`Error initializing sampler: ${error.message}`);
             return Promise.reject(error);
         }
     }
