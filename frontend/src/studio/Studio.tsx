@@ -59,6 +59,7 @@ function Studio({ projectId }: StudioProps) {
   const {
     store,
     tracks,
+    activeInstanceByTrack,
     isPlaying,
     currentTime,
     bpm,
@@ -403,6 +404,13 @@ function Studio({ projectId }: StudioProps) {
     const track = tracks.find(t => t.id === trackId);
     if (!track) return;
     
+    // Set the clicked instance as active
+    const setActiveInstance = useStudioStore.getState().setActiveInstance;
+    if (setActiveInstance && instanceId) {
+      setActiveInstance(trackId, instanceId);
+      console.log(`[Studio] Set active instance for track ${trackId}: ${instanceId}`);
+    }
+    
     // Open appropriate editor based on track type
     if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER') {
       openPianoRoll(trackId);
@@ -622,6 +630,7 @@ function Studio({ projectId }: StudioProps) {
           <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
             <KonvaTimeline
               tracks={tracks}
+              activeInstanceByTrack={activeInstanceByTrack}
               currentTime={currentTime}
               isPlaying={isPlaying}
               measureCount={measureCount}

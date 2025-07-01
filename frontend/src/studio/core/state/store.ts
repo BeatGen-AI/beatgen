@@ -54,6 +54,8 @@ export class Store implements StoreInterface {
     this.sampleManager = SampleManager.getInstance(db); 
     
     this.transportController = new TransportController();
+    // Set MidiManager reference in transport for instance-aware playback
+    this.transportController.setMidiManager(this.midiManager);
   }
 
   public async initializeAudio(): Promise<void> {

@@ -16,6 +16,7 @@ export interface KonvaTrackProps {
   width: number;
   height: number;
   isSelected: boolean;
+  isActive?: boolean; // Whether this is the active instance for editing
   isDragging?: boolean;
   isPrimary?: boolean;
   isResizing?: boolean;
@@ -47,6 +48,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   width,
   height,
   isSelected,
+  isActive = false,
   isDragging = false,
   isPrimary = false,
   isResizing = false,
@@ -261,6 +263,25 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           strokeWidth={2}
           fill="transparent"
           cornerRadius={4}
+          listening={false}
+        />
+      )}
+      
+      {/* Active instance indicator - glowing border */}
+      {isActive && (
+        <Rect
+          x={0}
+          y={0}
+          width={displayWidth}
+          height={height}
+          stroke={finalTrackColor}
+          strokeWidth={3}
+          fill="transparent"
+          cornerRadius={6}
+          shadowEnabled={true}
+          shadowColor={finalTrackColor}
+          shadowBlur={10}
+          shadowOpacity={0.8}
           listening={false}
         />
       )}

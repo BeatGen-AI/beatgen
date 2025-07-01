@@ -5,6 +5,7 @@ export interface Note {
     length: number;  // Duration in grid units
     velocity?: number;  // MIDI velocity (0-127), defaults to 100
     trackId?: string;  // ID of the track this note belongs to
+    instanceId?: string;  // ID of the track instance this note belongs to
 }
 
 // Generate unique note IDs using timestamp + counter to ensure uniqueness across sessions

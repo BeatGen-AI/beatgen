@@ -654,13 +654,11 @@ export class SequencerWrapper {
     const ticksPerSecond = (this.currentBpm * this.ppq) / 60;
     
     for (const note of notes) {
-      // Convert grid position to time (in seconds), then to ticks
-      const timeInSeconds = note.column; // Convert grid position to time in seconds
-      const startTick = Math.round(timeInSeconds);
+      // note.column is already in ticks (from MidiManager)
+      const startTick = note.column;
       
-      // Convert grid length to duration (in ms)
-      const durationInSeconds = note.length; // Convert grid length to duration in seconds
-      const duration = Math.round(durationInSeconds); // Convert to ms
+      // note.length is also in ticks
+      const duration = note.length;
       
       // Create note event
       events.push({

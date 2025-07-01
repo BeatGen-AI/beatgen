@@ -11,11 +11,12 @@ import { Actions } from '../../core/state/history/actions';
 // This slice might not hold state directly, as MidiManager is the source of truth
 export interface MidiSlice {
   noteVersion: number; // Increments whenever notes change (add/remove/update/undo/redo)
-  addMidiNote: (trackId: string, note: NoteState) => void;
+  addMidiNote: (trackId: string, note: NoteState, instanceId?: string) => void;
   removeMidiNote: (trackId: string, noteId: number) => void;
   updateMidiNote: (trackId: string, note: NoteState) => void;
   getTrackNotes: (trackId: string) => Note[] | null;
-  removeSamplerNote: (trackId: string, tickPosition: number, midiRow: number) => Promise<void>;
+  getInstanceNotes: (trackId: string, instanceId: string) => Note[] | null;
+  removeSamplerNote: (trackId: string, tickPosition: number, midiRow: number, instanceId?: string) => Promise<void>;
   incrementNoteVersion: () => void; // Helper to increment version
 }
 
@@ -38,12 +39,18 @@ export const createMidiSlice: StoreSliceCreator<MidiSlice> = (set, get) => {
   };
 
   // Add a MIDI note to a track and record history
-  const addMidiNote = async (trackId: string, note: NoteState): Promise<void> => {
+  const addMidiNote = async (trackId: string, note: NoteState, instanceId?: string): Promise<void> => {
     const { store, _withErrorHandling, executeHistoryAction } = rootGet();
     const midiManager = getMidiManager();
     if (!store || !_withErrorHandling || !executeHistoryAction) { return; }
     
     const internalNoteData = convertFromNoteState({ ...note, id: -1 }, trackId); 
+    
+    // Add instanceId to the note if provided
+    if (instanceId) {
+      internalNoteData.instanceId = instanceId;
+    }
+    
     // History action needs a stable ID for undo. 
     // This still assumes MidiManager assigns ID internally upon add.
     // The Action's execute/undo might need modification to handle this properly.
@@ -85,11 +92,18 @@ export const createMidiSlice: StoreSliceCreator<MidiSlice> = (set, get) => {
     await _withErrorHandling(removeLogic, 'removeMidiNote')();
   };
 
-  const removeSamplerNote = async (trackId: string, tickPosition: number, midiRow: number): Promise<void> => {
-    console.log(`>>> removeSamplerNote: trackId: ${trackId}, tickPosition: ${tickPosition}, midiRow: ${midiRow} <<<`);
+  const removeSamplerNote = async (trackId: string, tickPosition: number, midiRow: number, instanceId?: string): Promise<void> => {
+    console.log(`>>> removeSamplerNote: trackId: ${trackId}, tickPosition: ${tickPosition}, midiRow: ${midiRow}, instanceId: ${instanceId} <<<`);
     const { store, _withErrorHandling, executeHistoryAction } = rootGet();
     if (!store || !_withErrorHandling || !executeHistoryAction) { return; }
-    const notes = getTrackNotes(trackId);
+    
+    let notes: Note[] | null;
+    if (instanceId) {
+      notes = getInstanceNotes(trackId, instanceId);
+    } else {
+      notes = getTrackNotes(trackId);
+    }
+    
     if (!notes) { return; }
     const noteToRemove = notes.find(n => n.column === tickPosition && n.row === midiRow);
     if (!noteToRemove) { return; }
@@ -167,6 +181,22 @@ export const createMidiSlice: StoreSliceCreator<MidiSlice> = (set, get) => {
     }
   };
 
+  // Get notes for a specific instance
+  const getInstanceNotes = (trackId: string, instanceId: string): Note[] | null => {
+    const midiManager = getMidiManager();
+    if (!midiManager) {
+      console.error("Cannot getInstanceNotes: MidiManager not available");
+      return null;
+    }
+    try {
+      // Directly call MidiManager method
+      return midiManager.getInstanceNotes(trackId, instanceId);
+    } catch (error) {
+      console.error(`Error in getInstanceNotes for track ${trackId}, instance ${instanceId}:`, error);
+      return null;
+    }
+  };
+
   return {
     // State
     noteVersion: 0, // Initialize with 0
@@ -176,6 +206,7 @@ export const createMidiSlice: StoreSliceCreator<MidiSlice> = (set, get) => {
     removeMidiNote,
     updateMidiNote,
     getTrackNotes,
+    getInstanceNotes,
     removeSamplerNote,
     incrementNoteVersion,
   };

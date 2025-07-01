@@ -70,6 +70,9 @@ export interface KonvaTimelineProps {
   // Track click handler
   onTrackClick?: (trackId: string, instanceId: string) => void;
   
+  // Active instances
+  activeInstanceByTrack?: Record<string, string>;
+  
   // Zoom control
   onZoomChange?: (newZoom: number) => void;
 }
@@ -89,6 +92,7 @@ export interface KonvaTimelineRef {
 
 export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   tracks,
+  activeInstanceByTrack = {},
   currentTime = 0,
   isPlaying = false,
   measureCount = GRID_CONSTANTS.measureCount,
@@ -918,6 +922,10 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               return null;
             }
             
+            // Check if this instance is active
+            const trackId = item.data?.id;
+            const isActive = trackId && activeInstanceByTrack[trackId] === item.id;
+            
             return (
               <KonvaTrack
                 key={item.id}
@@ -928,6 +936,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 width={itemWidth}
                 height={item.height}
                 isSelected={isSelected}
+                isActive={isActive}
                 isDragging={isBeingDragged}
                 isPrimary={isPrimaryDrag}
                 isResizing={isBeingResized}

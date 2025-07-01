@@ -46,6 +46,9 @@ export class MidiManager {
   // Core data storage
   private tracks: Map<string, Note[]> = new Map();
   
+  // Instance management
+  private registeredInstances: Map<string, Set<string>> = new Map(); // trackId -> Set of instanceIds
+  
   // Subscription management
   private subscribers: Map<string, TrackUpdateCallback[]> = new Map();
   private globalListeners: TrackUpdateCallback[] = [];
@@ -133,14 +136,46 @@ export class MidiManager {
     this.debouncePersistence(trackId, notesCopy);
   }
 
+  
+  /**
+   * Legacy method - kept for compatibility
+   * Since instances now share notes, this just removes instance IDs
+   */
+  migrateNotesToFirstInstance(trackId: string, firstInstanceId: string): void {
+    const notes = this.getTrackNotes(trackId);
+    if (!notes) {
+      console.log(`MidiManager: No notes to migrate for track ${trackId}`);
+      return;
+    }
+    
+    // Remove instance IDs from all notes since instances share notes
+    let hasInstanceIds = false;
+    const migratedNotes = notes.map(note => {
+      if (note.instanceId) {
+        hasInstanceIds = true;
+        const { instanceId, ...noteWithoutInstanceId } = note;
+        return noteWithoutInstanceId;
+      }
+      return note;
+    });
+    
+    if (hasInstanceIds) {
+      console.log(`MidiManager: Removed instance IDs from notes for shared instance model`);
+      this.updateTrack(trackId, migratedNotes);
+    } else {
+      console.log(`MidiManager: Notes already using shared model`);
+    }
+  }
+  
   /**
    * Add a single note to a track
    * Assigns a unique ID if the incoming note ID is invalid (-1).
+   * If no instanceId is provided, assigns to the active instance if available
    * @param trackId The track ID
    * @param note The note to add
    * @throws Error if the track doesn't exist
    */
-  async addNoteToTrack(trackId: string, note: Note): Promise<void> {
+  async addNoteToTrack(trackId: string, note: Note, getActiveInstance?: (trackId: string) => string | undefined): Promise<void> {
     // Log entry, instance ID, and map state BEFORE check
     console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): ENTER addNoteToTrack - Target ID: ${trackId}`); 
     console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): Checking if track exists... Has ${trackId}?`, this.tracks.has(trackId));
@@ -152,7 +187,9 @@ export class MidiManager {
       throw new Error(`Cannot add note to track ${trackId}: track does not exist`);
     }
     
-    const noteToAdd = { ...note }; // Create a copy to potentially modify
+    // Remove instanceId if present since instances share notes
+    const { instanceId, ...noteWithoutInstanceId } = note;
+    const noteToAdd = { ...noteWithoutInstanceId }; // Create a copy without instanceId
 
     // Check if the incoming ID needs to be replaced
     if (noteToAdd.id === -1 || noteToAdd.id === undefined || noteToAdd.id === null) {
@@ -373,6 +410,192 @@ export class MidiManager {
     );
   }
 
+  /**
+   * Register a track instance
+   * @param trackId The track ID
+   * @param instanceId The instance ID to register
+   */
+  registerInstance(trackId: string, instanceId: string): void {
+    console.log(`MidiManager: Registering instance ${instanceId} for track ${trackId}`);
+    
+    if (!this.registeredInstances.has(trackId)) {
+      this.registeredInstances.set(trackId, new Set());
+    }
+    
+    this.registeredInstances.get(trackId)!.add(instanceId);
+  }
+  
+  /**
+   * Unregister a track instance and remove its notes
+   * @param trackId The track ID
+   * @param instanceId The instance ID to unregister
+   */
+  unregisterInstance(trackId: string, instanceId: string): void {
+    console.log(`MidiManager: Unregistering instance ${instanceId} for track ${trackId}`);
+    
+    const instances = this.registeredInstances.get(trackId);
+    if (instances) {
+      instances.delete(instanceId);
+      // Don't remove notes since instances share them
+    }
+  }
+  
+  /**
+   * Get notes for a specific instance
+   * Since instances share the same notes, this returns all track notes
+   * @param trackId The track ID
+   * @param instanceId The instance ID (not used since all instances share notes)
+   * @returns Array of notes for the track
+   */
+  getInstanceNotes(trackId: string, instanceId: string): Note[] {
+    const notes = this.getTrackNotes(trackId);
+    if (!notes) {
+      console.log(`MidiManager: No notes found for track ${trackId}`);
+      return [];
+    }
+    
+    console.log(`MidiManager: Returning ${notes.length} shared notes for instance ${instanceId} of track ${trackId}`);
+    
+    // All instances share the same notes
+    return notes;
+  }
+  
+  /**
+   * Add a note to a specific instance
+   * Since instances share notes, this just adds to the track
+   * @param trackId The track ID
+   * @param instanceId The instance ID (not used)
+   * @param note The note to add
+   */
+  async addNoteToInstance(trackId: string, instanceId: string, note: Note): Promise<void> {
+    // Just add to track since all instances share notes
+    await this.addNoteToTrack(trackId, note);
+  }
+  
+  /**
+   * Update all notes for a specific instance
+   * Since instances share notes, this updates the track notes
+   * @param trackId The track ID
+   * @param instanceId The instance ID (not used)
+   * @param instanceNotes The new notes
+   */
+  updateInstanceNotes(trackId: string, instanceId: string, instanceNotes: Note[]): void {
+    // Just update track notes since all instances share them
+    this.updateTrack(trackId, instanceNotes);
+  }
+  
+  /**
+   * Move all notes of an instance by a delta
+   * Since instances share notes, this is not applicable
+   * @deprecated Instances share notes and are positioned independently
+   */
+  moveInstance(trackId: string, instanceId: string, deltaX: number): void {
+    console.warn('MidiManager: moveInstance is deprecated - instances share notes and are positioned independently');
+  }
+  
+  /**
+   * Get visible notes for an instance based on its position and trim values
+   * This is used during playback to determine which notes should actually play
+   * @param trackId The track ID
+   * @param instanceId The instance ID
+   * @param instancePosition The x position of the instance in ticks
+   * @param trimStartTicks The start trim position in ticks (relative to track start)
+   * @param trimEndTicks The end trim position in ticks (relative to track start)
+   * @returns Notes adjusted for playback with their positions relative to the timeline
+   */
+  getInstanceNotesForPlayback(
+    trackId: string, 
+    instanceId: string, 
+    instancePosition: number,
+    trimStartTicks: number, 
+    trimEndTicks: number
+  ): Note[] {
+    const notes = this.getInstanceNotes(trackId, instanceId);
+    if (notes.length === 0) return [];
+    
+    // The trim window defines which part of the track content is visible
+    const trimDuration = trimEndTicks - trimStartTicks;
+    
+    // Filter and adjust notes based on trim window
+    const playableNotes = notes.filter(note => {
+      // Note positions are relative to track start (0-based)
+      const noteStart = note.column;
+      const noteEnd = note.column + note.length;
+      
+      // Check if note overlaps with trim window
+      return noteEnd > trimStartTicks && noteStart < trimEndTicks;
+    }).map(note => {
+      const noteStart = note.column;
+      const noteEnd = note.column + note.length;
+      
+      // Calculate note position relative to the trim window
+      let relativeColumn = noteStart - trimStartTicks;
+      let adjustedLength = note.length;
+      
+      // Clip note if it starts before trim window
+      if (noteStart < trimStartTicks) {
+        const clipAmount = trimStartTicks - noteStart;
+        relativeColumn = 0; // Start at beginning of trim window
+        adjustedLength -= clipAmount;
+      }
+      
+      // Clip note if it extends beyond trim window
+      if (noteEnd > trimEndTicks) {
+        adjustedLength = trimEndTicks - Math.max(noteStart, trimStartTicks);
+      }
+      
+      // Calculate final position on timeline
+      const timelineColumn = instancePosition + relativeColumn;
+      
+      return {
+        ...note,
+        column: timelineColumn,
+        length: Math.max(1, adjustedLength)
+      };
+    });
+    
+    // Debug logging
+    if (playableNotes.length > 0) {
+      console.log(`MidiManager: Instance ${instanceId} playback notes:`, {
+        originalNoteCount: notes.length,
+        playableNoteCount: playableNotes.length,
+        instancePosition,
+        trimRange: `${trimStartTicks}-${trimEndTicks}`,
+        firstNote: {
+          originalColumn: notes[0].column,
+          adjustedColumn: playableNotes[0].column
+        }
+      });
+    }
+    
+    return playableNotes;
+  }
+  
+  /**
+   * Trim instance notes based on trim boundaries
+   * This permanently modifies the notes to fit within the trim window
+   * Used when resizing instances
+   * @param trackId The track ID
+   * @param instanceId The instance ID
+   * @param trimStartTicks The start trim position in ticks
+   * @param trimEndTicks The end trim position in ticks
+   * @returns The trimmed notes
+   */
+  trimInstance(trackId: string, instanceId: string, trimStartTicks: number, trimEndTicks: number): Note[] {
+    const notes = this.getInstanceNotes(trackId, instanceId);
+    if (notes.length === 0) return [];
+    
+    // For permanent trimming, we don't modify the stored notes
+    // The trim values on the instance determine what's visible
+    // This allows non-destructive editing
+    
+    console.log(`MidiManager: Trim boundaries updated for instance ${instanceId}: ${trimStartTicks}-${trimEndTicks} ticks`);
+    
+    // Return the notes that would be visible with these trim settings
+    // The actual filtering happens during playback
+    return this.getInstanceNotesForPlayback(trackId, instanceId, 0, trimStartTicks, trimEndTicks);
+  }
+  
   /**
    * Convert app notes to MIDI data format
    * @param trackId The track ID

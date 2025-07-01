@@ -821,8 +821,8 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
       <Rnd
         ref={rndRef}
         default={{
-          x: 0,
-          y: 0,
+          x: window.innerWidth / 2 - containerSize.width / 2,
+          y: window.innerHeight / 2 - containerSize.height / 2,
           width: containerSize.width,
           height: containerSize.height
         }}

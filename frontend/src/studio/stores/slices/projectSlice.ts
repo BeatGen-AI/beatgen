@@ -381,6 +381,23 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       console.log(`No MIDI notes to load for track ${track.id}`);
                       midiManager.updateTrack(track.id, []);
                   }
+                  
+                  // Register all instances with MidiManager
+                  if (track.instances) {
+                      track.instances.forEach((instance, index) => {
+                          console.log(`Registering MIDI track ${track.id} instance ${instance.id}`);
+                          midiManager.registerInstance(track.id, instance.id);
+                          
+                          // Set first instance as active
+                          if (index === 0) {
+                              const setActiveInstance = get().setActiveInstance;
+                              if (setActiveInstance) {
+                                  setActiveInstance(track.id, instance.id);
+                                  console.log(`[Track Load] Set active instance for track ${track.id}: ${instance.id}`);
+                              }
+                          }
+                      });
+                  }
               }
               
               // --- Audio Connection --- 
@@ -439,6 +456,23 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                   console.log(`Converted ${convertedNotes.length} notes for sampler track ${track.id}: ${JSON.stringify(convertedNotes)}`);
                   midiManager.updateTrack(track.id, convertedNotes);
                   samplerController.registerTrackSubscription(track.id, midiManager);
+                  
+                  // Register all instances with MidiManager
+                  if (track.instances) {
+                      track.instances.forEach((instance, index) => {
+                          console.log(`Registering sampler track ${track.id} instance ${instance.id}`);
+                          midiManager.registerInstance(track.id, instance.id);
+                          
+                          // Set first instance as active
+                          if (index === 0) {
+                              const setActiveInstance = get().setActiveInstance;
+                              if (setActiveInstance) {
+                                  setActiveInstance(track.id, instance.id);
+                                  console.log(`[Track Load] Set active instance for track ${track.id}: ${instance.id}`);
+                              }
+                          }
+                      });
+                  }
               }
           } catch (error) {
                console.error(`Error connecting track ${track.id} (type: ${track.track_type}):`, error);

@@ -5,13 +5,15 @@ import { calculatePositionTime } from '../../constants/gridConstants';
 import { SoundfontEngineController } from '../audio-engine/soundfontEngineController';
 import { SamplerController } from '../audio-engine/samplerController';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
+import { CombinedTrack } from 'src/platform/types/project';
+import { MidiManager } from '../midi/MidiManagerNew';
 
 export interface Transport {
     position: number;        // Current playback position
     isPlaying: boolean;
     tempo: number;
     
-    play(): Promise<void>;
+    play(tracks?: CombinedTrack[]): Promise<void>;
     pause(): void;
     stop(): void;
     seek(position: number): void;
@@ -22,6 +24,7 @@ export class TransportController implements Transport {
     private audioEngine: AudioFilePlayer;
     private soundfontController: SoundfontEngineController;
     private samplerController: SamplerController;
+    private midiManager: MidiManager | null = null;
     private isStarting: boolean = false;
     private maxPosition: number = 3600;  // Default to 1 hour (3600 seconds) as safety
     private static FADE_TIME = 0.01; // 10ms fade
@@ -34,6 +37,10 @@ export class TransportController implements Transport {
         
         // We'll initialize the soundfont controller later when the audio context is available
         // This happens in the Store's initializeAudio method via initializeSoundfont
+    }
+    
+    setMidiManager(midiManager: MidiManager): void {
+        this.midiManager = midiManager;
     }
 
     get position(): number {
@@ -108,7 +115,7 @@ export class TransportController implements Transport {
     // Track the IDs of scheduled events so we can clean them up
     private scheduledEvents: number[] = [];
     
-    public async play(): Promise<void> {
+    public async play(tracks?: CombinedTrack[]): Promise<void> {
         if (this.isStarting) return;
         this.isStarting = true;
 
@@ -141,12 +148,70 @@ export class TransportController implements Transport {
                 }
             });
             
-            // Process each track with its specific timeline position
-            this.audioEngine.getAllTracks().forEach(track => {
-                if (!track.player) return;
-                
-                try {
-                    const trackXTicks = track.position?.x || 0;
+            // Process each track instance with its specific timeline position
+            // If tracks are provided, use them; otherwise fall back to audio engine tracks
+            if (tracks && tracks.length > 0) {
+                // New instance-aware approach
+                tracks.forEach(track => {
+                    // Skip tracks without instances
+                    if (!track.instances || track.instances.length === 0) return;
+                    
+                    // Process each instance of the track
+                    track.instances.forEach(instance => {
+                        try {
+                            const trackXTicks = instance.x_position;
+                            const trimStartTicks = instance.trim_start_ticks;
+                            const trimEndTicks = instance.trim_end_ticks;
+                            
+                            // For audio tracks, get the player from audio engine
+                            if (track.track_type === 'AUDIO') {
+                                const audioTrack = this.audioEngine.getTrack(track.id);
+                                if (!audioTrack || !audioTrack.player) return;
+                                
+                                // Calculate the offset when this instance should start playing
+                                const trackPositionOffset = this.getTrackTimeOffset(trackXTicks);
+                                
+                                // TODO: Handle instance-specific playback for audio tracks
+                                // For now, use the first instance only (temporary)
+                                if (instance.id.endsWith('_instance_1')) {
+                                    // Apply trim settings if needed
+                                    const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote;
+                                    const bpm = Tone.getTransport().bpm.value;
+                                    const trimStartSec = (trimStartTicks / ppq) * (60 / bpm);
+                                    const trimEndSec = (trimEndTicks / ppq) * (60 / bpm);
+                                    
+                                    if (trimStartTicks > 0 || trimEndTicks < track.duration_ticks) {
+                                        // Set trim on the player
+                                        (audioTrack.player as any)._trimSettings = {
+                                            trimEnabled: true,
+                                            trimStartSeconds: trimStartSec,
+                                            trimEndSeconds: trimEndSec
+                                        };
+                                    }
+                                    
+                                    // Schedule playback
+                                    if (trackPositionOffset <= transportPosition) {
+                                        const startOffset = Math.max(0, transportPosition - trackPositionOffset);
+                                        audioTrack.player.stop();
+                                        audioTrack.player.unsync();
+                                        audioTrack.player.start(0, trimStartSec + startOffset);
+                                        audioTrack.player.sync();
+                                        console.log(`Audio track ${track.id} instance ${instance.id} synced, starting at offset ${startOffset}s`);
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Error scheduling instance ${instance.id} of track ${track.id}:`, error);
+                        }
+                    });
+                });
+            } else {
+                // Fallback to old approach for backward compatibility
+                this.audioEngine.getAllTracks().forEach(track => {
+                    if (!track.player) return;
+                    
+                    try {
+                        const trackXTicks = track.position?.x || 0;
                     
                     // Get track's trim settings if available
                     const hasTrimSettings = 
@@ -224,6 +289,7 @@ export class TransportController implements Transport {
                     console.error(`Error scheduling track ${track.id}:`, error);
                 }
             });
+            }
 
             // URGENT FIX: Force a clean Transport start
             // This is critical to ensure correct timing
@@ -239,7 +305,12 @@ export class TransportController implements Transport {
             // Start soundfont player if available
             try {
                 console.log(`Starting soundfont player. Transport position: ${transportPosition}s`);
-                await this.getSoundfontController().play(transportPosition);
+                console.log(`Tracks passed to soundfont:`, tracks?.map(t => ({
+                    id: t.id,
+                    type: t.track_type,
+                    instances: t.instances?.length || 0
+                })));
+                await this.getSoundfontController().play(transportPosition, tracks, this.midiManager);
             } catch (error) {
                 console.error('Failed to start soundfont player:', error);
             }
@@ -247,8 +318,13 @@ export class TransportController implements Transport {
             // Start sampler tracks
             try {
                 console.log('Starting sampler tracks');
+                console.log(`Tracks passed to sampler:`, tracks?.map(t => ({
+                    id: t.id,
+                    type: t.track_type,
+                    instances: t.instances?.length || 0
+                })));
                 const bpm = Tone.Transport.bpm.value; // Get current BPM
-                await this.getSamplerController().play(transportPosition, bpm);
+                await this.getSamplerController().play(transportPosition, bpm, tracks, this.midiManager);
             } catch (error) {
                 console.error('Failed to start sampler tracks:', error);
             }
