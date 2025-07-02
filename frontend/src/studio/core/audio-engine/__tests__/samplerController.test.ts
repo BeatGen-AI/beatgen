@@ -48,10 +48,10 @@ describe('SamplerController', () => {
         // Reset all mocks
         vi.clearAllMocks();
 
-        // Create console spies
-        consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-        consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        // // Create console spies
+        // consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        // consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        // consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         // Create mock MidiSampler instance
         mockMidiSampler = {
@@ -69,7 +69,7 @@ describe('SamplerController', () => {
             setOffset: vi.fn(),
             setVolume: vi.fn(),
             setMute: vi.fn(),
-            buffer: true,
+            //buffer: true,
         };
 
         // Mock the MidiSampler constructor

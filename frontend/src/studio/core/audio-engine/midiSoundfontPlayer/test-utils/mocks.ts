@@ -1,106 +1,107 @@
 import { AudioWorkletNodeSynthesizer, ISequencer } from 'js-synthesizer';
 import { SequencerWrapper } from '../sequencerWrapper';
 import { Note } from '../../../../../types/note';
+import { expect } from 'vitest';
 
 /**
  * Mock AudioContext factory
  */
-export const createMockAudioContext = (overrides?: Partial<AudioContext>) => ({
-  destination: {},
-  audioWorklet: {
-    addModule: jest.fn().mockResolvedValue(undefined)
-  },
-  sampleRate: 44100,
-  currentTime: 0,
-  state: 'running' as AudioContextState,
-  ...overrides
-} as unknown as AudioContext);
+// export const createMockAudioContext = (overrides?: Partial<AudioContext>) => ({
+//   destination: {},
+//   audioWorklet: {
+//     addModule: jest.fn().mockResolvedValue(undefined)
+//   },
+//   sampleRate: 44100,
+//   currentTime: 0,
+//   state: 'running' as AudioContextState,
+//   ...overrides
+// } as unknown as AudioContext);
 
-/**
- * Mock AudioWorkletNode factory
- */
-export const createMockAudioNode = (overrides?: Partial<AudioWorkletNode>) => ({
-  connect: jest.fn(),
-  disconnect: jest.fn(),
-  port: {
-    postMessage: jest.fn(),
-    onmessage: null
-  },
-  ...overrides
-} as unknown as AudioWorkletNode);
+// /**
+//  * Mock AudioWorkletNode factory
+//  */
+// export const createMockAudioNode = (overrides?: Partial<AudioWorkletNode>) => ({
+//   connect: jest.fn(),
+//   disconnect: jest.fn(),
+//   port: {
+//     postMessage: jest.fn(),
+//     onmessage: null
+//   },
+//   ...overrides
+// } as unknown as AudioWorkletNode);
 
-/**
- * Mock ISequencer factory
- */
-export const createMockSequencer = (overrides?: Partial<ISequencer>): jest.Mocked<ISequencer> => ({
-  registerSynthesizer: jest.fn().mockResolvedValue(undefined),
-  setTimeScale: jest.fn(),
-  getTimeScale: jest.fn().mockResolvedValue(1000),
-  getTick: jest.fn().mockResolvedValue(0),
-  sendEventAt: jest.fn(),
-  removeAllEvents: jest.fn(),
-  close: jest.fn().mockResolvedValue(undefined),
-  processSequencer: jest.fn(),
-  ...overrides
-} as any);
+// /**
+//  * Mock ISequencer factory
+//  */
+// export const createMockSequencer = (overrides?: Partial<ISequencer>): jest.Mocked<ISequencer> => ({
+//   registerSynthesizer: jest.fn().mockResolvedValue(undefined),
+//   setTimeScale: jest.fn(),
+//   getTimeScale: jest.fn().mockResolvedValue(1000),
+//   getTick: jest.fn().mockResolvedValue(0),
+//   sendEventAt: jest.fn(),
+//   removeAllEvents: jest.fn(),
+//   close: jest.fn().mockResolvedValue(undefined),
+//   processSequencer: jest.fn(),
+//   ...overrides
+// } as any);
 
-/**
- * Mock AudioWorkletNodeSynthesizer factory
- */
-export const createMockSynth = (overrides?: Partial<AudioWorkletNodeSynthesizer>): jest.Mocked<AudioWorkletNodeSynthesizer> => {
-  const mockSequencer = createMockSequencer();
+// /**
+//  * Mock AudioWorkletNodeSynthesizer factory
+//  */
+// export const createMockSynth = (overrides?: Partial<AudioWorkletNodeSynthesizer>): jest.Mocked<AudioWorkletNodeSynthesizer> => {
+//   const mockSequencer = createMockSequencer();
   
-  return {
-    createAudioNode: jest.fn().mockReturnValue(createMockAudioNode()),
-    loadSFont: jest.fn().mockResolvedValue(1),
-    setSFontBankOffset: jest.fn(),
-    getSFontBankOffset: jest.fn().mockResolvedValue(100),
-    midiProgramSelect: jest.fn(),
-    midiControl: jest.fn(),
-    midiAllNotesOff: jest.fn(),
-    closePlayer: jest.fn(),
-    createSequencer: jest.fn().mockResolvedValue(mockSequencer),
-    getSFontObject: jest.fn().mockResolvedValue({
-      getPresetIterable: jest.fn().mockResolvedValue([
-        { bankNum: 0, num: 0 } // Default preset
-      ])
-    }),
-    ...overrides
-  } as any;
-};
+//   return {
+//     createAudioNode: jest.fn().mockReturnValue(createMockAudioNode()),
+//     loadSFont: jest.fn().mockResolvedValue(1),
+//     setSFontBankOffset: jest.fn(),
+//     getSFontBankOffset: jest.fn().mockResolvedValue(100),
+//     midiProgramSelect: jest.fn(),
+//     midiControl: jest.fn(),
+//     midiAllNotesOff: jest.fn(),
+//     closePlayer: jest.fn(),
+//     createSequencer: jest.fn().mockResolvedValue(mockSequencer),
+//     getSFontObject: jest.fn().mockResolvedValue({
+//       getPresetIterable: jest.fn().mockResolvedValue([
+//         { bankNum: 0, num: 0 } // Default preset
+//       ])
+//     }),
+//     ...overrides
+//   } as any;
+// };
 
-/**
- * Mock SequencerWrapper factory
- */
-export const createMockSequencerWrapper = (overrides?: Partial<SequencerWrapper>): jest.Mocked<SequencerWrapper> => ({
-  initialize: jest.fn().mockResolvedValue(undefined),
-  play: jest.fn().mockResolvedValue(undefined),
-  pause: jest.fn(),
-  stop: jest.fn().mockResolvedValue(undefined),
-  mute: jest.fn(),
-  unmute: jest.fn(),
-  setVolume: jest.fn(),
-  seekToGlobalTime: jest.fn().mockResolvedValue(undefined),
-  resetPosition: jest.fn(),
-  dispose: jest.fn().mockResolvedValue(undefined),
-  setOffset: jest.fn(),
-  getOffset: jest.fn().mockReturnValue(0),
-  setBPM: jest.fn(),
-  getBPM: jest.fn().mockReturnValue(120),
-  getChannel: 0,
-  isMuted: false,
-  process: jest.fn(),
-  silence: jest.fn(),
-  getRawTickOffset: jest.fn().mockReturnValue(0),
-  getSoundFontId: jest.fn().mockReturnValue(1),
-  getBankOffset: jest.fn().mockReturnValue(100),
-  updateWithNotes: jest.fn(),
-  applyCurrentBPM: jest.fn(),
-  prepareForPlayback: jest.fn().mockResolvedValue(undefined),
-  globalToLocalTick: jest.fn().mockReturnValue(0),
-  updateLocalPosition: jest.fn(),
-  ...overrides
-} as any);
+// /**
+//  * Mock SequencerWrapper factory
+//  */
+// export const createMockSequencerWrapper = (overrides?: Partial<SequencerWrapper>): jest.Mocked<SequencerWrapper> => ({
+//   initialize: jest.fn().mockResolvedValue(undefined),
+//   play: jest.fn().mockResolvedValue(undefined),
+//   pause: jest.fn(),
+//   stop: jest.fn().mockResolvedValue(undefined),
+//   mute: jest.fn(),
+//   unmute: jest.fn(),
+//   setVolume: jest.fn(),
+//   seekToGlobalTime: jest.fn().mockResolvedValue(undefined),
+//   resetPosition: jest.fn(),
+//   dispose: jest.fn().mockResolvedValue(undefined),
+//   setOffset: jest.fn(),
+//   getOffset: jest.fn().mockReturnValue(0),
+//   setBPM: jest.fn(),
+//   getBPM: jest.fn().mockReturnValue(120),
+//   getChannel: 0,
+//   isMuted: false,
+//   process: jest.fn(),
+//   silence: jest.fn(),
+//   getRawTickOffset: jest.fn().mockReturnValue(0),
+//   getSoundFontId: jest.fn().mockReturnValue(1),
+//   getBankOffset: jest.fn().mockReturnValue(100),
+//   updateWithNotes: jest.fn(),
+//   applyCurrentBPM: jest.fn(),
+//   prepareForPlayback: jest.fn().mockResolvedValue(undefined),
+//   globalToLocalTick: jest.fn().mockReturnValue(0),
+//   updateLocalPosition: jest.fn(),
+//   ...overrides
+// } as any);
 
 /**
  * Test note factory
@@ -149,11 +150,11 @@ export const createMockPreset = (bankNum: number = 0, num: number = 0) => ({
 /**
  * Create a mock soundfont object with presets
  */
-export const createMockSoundfontObject = (presets: any[] = [createMockPreset()]) => ({
-  getPresetIterable: jest.fn().mockResolvedValue(presets),
-  getName: jest.fn().mockReturnValue('Test Soundfont'),
-  getPresetCount: jest.fn().mockReturnValue(presets.length)
-});
+// export const createMockSoundfontObject = (presets: any[] = [createMockPreset()]) => ({
+//   getPresetIterable: jest.fn().mockResolvedValue(presets),
+//   getName: jest.fn().mockReturnValue('Test Soundfont'),
+//   getPresetCount: jest.fn().mockReturnValue(presets.length)
+// });
 
 /**
  * State verification helper
