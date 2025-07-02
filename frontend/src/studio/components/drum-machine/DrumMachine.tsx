@@ -428,39 +428,30 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
         return track ? track.name : `Sampler ${i + 1}`; // Use index as fallback
       });
 
-      // Synchronize the grid, notes, and names
-      setGrid(prevGrid => {
-        const currentLength = prevGrid.length;
-        if (numRows > currentLength) {
-          // Add new rows
-          const rowsToAdd = numRows - currentLength;
-          const newRows = Array(rowsToAdd).fill(null).map(() => Array(MAX_COLUMNS).fill(false));
-          return [...prevGrid, ...newRows];
-        } else if (numRows < currentLength) {
-          // Remove extra rows
-          return prevGrid.slice(0, numRows);
-        } else {
-          // Length matches, no change needed
-          return prevGrid;
+      // Initialize grid from existing MIDI notes
+      const newGrid = samplerTracks.map((track, rowIndex) => {
+        const gridRow = Array(MAX_COLUMNS).fill(false);
+        
+        // Check if track has MIDI notes and populate grid
+        if (track.midi_notes_json?.notes) {
+          track.midi_notes_json.notes.forEach(note => {
+            const column = Math.floor(note.column / TICKS_PER_STEP);
+            if (column >= 0 && column < MAX_COLUMNS) {
+              gridRow[column] = true;
+            }
+          });
         }
+        
+        return gridRow;
       });
 
-      setDrumNotes(prevNotes => {
-        const currentLength = prevNotes.length;
-        if (numRows > currentLength) {
-          // Add new empty note arrays
-          const rowsToAdd = numRows - currentLength;
-          const newRows = Array(rowsToAdd).fill(null).map(() => []);
-          return [...prevNotes, ...newRows];
-        } else if (numRows < currentLength) {
-          // Remove extra note arrays
-          return prevNotes.slice(0, numRows);
-        } else {
-          // Length matches, no change needed
-          return prevNotes;
-        }
+      // Initialize drum notes from MIDI data
+      const newDrumNotes = samplerTracks.map((track) => {
+        return track.midi_notes_json?.notes || [];
       });
 
+      setGrid(newGrid);
+      setDrumNotes(newDrumNotes);
       setDrumNames(newNames);
 
       // Adjust container height based on the number of rows
