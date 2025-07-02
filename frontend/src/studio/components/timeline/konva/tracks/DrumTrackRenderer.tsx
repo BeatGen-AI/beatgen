@@ -3,6 +3,8 @@ import { Group, Rect, Line } from 'react-konva';
 import { CombinedTrack } from 'src/platform/types/project';
 import { DrumTrackRead, SamplerTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 import { MUSIC_CONSTANTS } from '../../../../constants/musicConstants';
+import { useStudioStore } from '../../../../stores/studioStore';
+import { Note } from '../../../../../types/note';
 
 export interface DrumTrackRendererProps {
   track: CombinedTrack;
@@ -47,6 +49,16 @@ export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
     };
 
     document.addEventListener('drumPatternChanged', handlePatternChange);
+    
+    // Request the drum machine to compute and send the pattern
+    // This simulates what happens when clicking on the track
+    setTimeout(() => {
+      // Dispatch an event to request the pattern from any mounted DrumMachine
+      document.dispatchEvent(new CustomEvent('requestDrumPattern', { 
+        detail: { trackId: track.id } 
+      }));
+    }, 100);
+    
     return () => document.removeEventListener('drumPatternChanged', handlePatternChange);
   }, [track.id]);
 
@@ -58,17 +70,67 @@ export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
     }
     return [];
   }, [track]);
+  
+  // Get live MIDI notes from MidiManager
+  const { store } = useStudioStore();
+  const midiManager = store?.getMidiManager();
+  const [allTrackNotes, setAllTrackNotes] = useState<{ [trackId: string]: Note[] }>({});
+  
+  // Subscribe to MIDI notes for all sampler tracks
+  useEffect(() => {
+    if (!midiManager || samplerTracks.length === 0) {
+      setAllTrackNotes({});
+      return;
+    }
+    
+    const unsubscribers: (() => void)[] = [];
+    const notesMap: { [trackId: string]: Note[] } = {};
+    
+    // Subscribe to each sampler track's notes
+    samplerTracks.forEach(track => {
+      const trackId = track.id;
+      
+      // Get initial notes
+      const initialNotes = midiManager.getTrackNotes(trackId) || [];
+      notesMap[trackId] = initialNotes;
+      
+      // Subscribe to updates
+      const unsubscribe = midiManager.subscribeToTrack(trackId, (_, updatedNotes) => {
+        setAllTrackNotes(prev => ({
+          ...prev,
+          [trackId]: updatedNotes
+        }));
+      });
+      
+      unsubscribers.push(unsubscribe);
+    });
+    
+    setAllTrackNotes(notesMap);
+    
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+    };
+  }, [midiManager, samplerTracks]);
 
-  // Only show empty pattern as fallback - don't compute from MIDI
-  // The DrumMachine is the source of truth for the pattern
+  // Compute pattern from live MIDI notes as fallback
   const fallbackPattern = useMemo(() => {
     if (samplerTracks.length === 0) return null;
     
-    // Create empty pattern matching the number of sampler tracks
-    return samplerTracks.map(() => 
-      new Array(PREVIEW_COLS).fill(false)
-    );
-  }, [samplerTracks]);
+    // Compute grid from live MIDI notes (same as DrumMachine)
+    return samplerTracks.map((track) => {
+      const gridRow = Array(PREVIEW_COLS).fill(false);
+      const trackNotes = allTrackNotes[track.id] || [];
+      
+      trackNotes.forEach(note => {
+        const column = Math.floor(note.column / TICKS_PER_STEP);
+        if (column >= 0 && column < PREVIEW_COLS) {
+          gridRow[column] = true;
+        }
+      });
+      
+      return gridRow;
+    });
+  }, [samplerTracks, allTrackNotes]);
   
   // Use live pattern if available, otherwise use empty fallback
   const displayPattern = livePattern || fallbackPattern;
