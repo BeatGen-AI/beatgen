@@ -195,7 +195,7 @@ function Studio({ projectId }: StudioProps) {
     document.body.style.touchAction = 'pan-x';
     document.body.style.userSelect = 'none';
     document.body.style.webkitUserSelect = 'none';
-    document.body.style.msUserSelect = 'none';
+    //document.body.style.msUserSelect = 'none';
     
     // Add meta viewport tag to prevent zoom
     const metaViewport = document.querySelector('meta[name="viewport"]');
@@ -245,7 +245,7 @@ function Studio({ projectId }: StudioProps) {
       document.body.style.touchAction = '';
       document.body.style.userSelect = '';
       document.body.style.webkitUserSelect = '';
-      document.body.style.msUserSelect = '';
+      //document.body.style.msUserSelect = '';
       
       // Restore original viewport settings
       if (metaViewport && originalContent) {
@@ -470,12 +470,6 @@ function Studio({ projectId }: StudioProps) {
     const track = tracks.find(t => t.id === trackId);
     if (!track) return;
     
-    // Set the clicked instance as active
-    const setActiveInstance = useStudioStore.getState().setActiveInstance;
-    if (setActiveInstance && instanceId) {
-      setActiveInstance(trackId, instanceId);
-      console.log(`[Studio] Set active instance for track ${trackId}: ${instanceId}`);
-    }
     
     // Open appropriate editor based on track type
     if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER') {

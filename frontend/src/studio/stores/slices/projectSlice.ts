@@ -387,15 +387,6 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       track.instances.forEach((instance, index) => {
                           console.log(`Registering MIDI track ${track.id} instance ${instance.id}`);
                           midiManager.registerInstance(track.id, instance.id);
-                          
-                          // Set first instance as active
-                          if (index === 0) {
-                              const setActiveInstance = get().setActiveInstance;
-                              if (setActiveInstance) {
-                                  setActiveInstance(track.id, instance.id);
-                                  console.log(`[Track Load] Set active instance for track ${track.id}: ${instance.id}`);
-                              }
-                          }
                       });
                   }
               }
@@ -462,15 +453,6 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       track.instances.forEach((instance, index) => {
                           console.log(`Registering sampler track ${track.id} instance ${instance.id}`);
                           midiManager.registerInstance(track.id, instance.id);
-                          
-                          // Set first instance as active
-                          if (index === 0) {
-                              const setActiveInstance = get().setActiveInstance;
-                              if (setActiveInstance) {
-                                  setActiveInstance(track.id, instance.id);
-                                  console.log(`[Track Load] Set active instance for track ${track.id}: ${instance.id}`);
-                              }
-                          }
                       });
                   }
               }

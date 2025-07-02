@@ -175,7 +175,7 @@ export class MidiManager {
    * @param note The note to add
    * @throws Error if the track doesn't exist
    */
-  async addNoteToTrack(trackId: string, note: Note, getActiveInstance?: (trackId: string) => string | undefined): Promise<void> {
+  async addNoteToTrack(trackId: string, note: Note): Promise<void> {
     // Log entry, instance ID, and map state BEFORE check
     console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): ENTER addNoteToTrack - Target ID: ${trackId}`); 
     console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): Checking if track exists... Has ${trackId}?`, this.tracks.has(trackId));

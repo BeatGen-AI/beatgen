@@ -29,8 +29,6 @@ export interface TracksSlice {
   updateTrack: (trackId: string, updates: Partial<CombinedTrack>) => void; // Alias for updateTrackState
   findTrackById: (trackId: string) => CombinedTrack | undefined;
   updateTrackIndices: () => void;
-  setActiveInstance: (trackId: string, instanceId: string) => void;
-  getActiveInstance: (trackId: string) => string | undefined;
 
   // Core track operations (creation/deletion)
   // Note: These will interact heavily with the audio engine and history
@@ -151,15 +149,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               ...track,
               track_number: index,
               // Ensure each track has instances
-              instances: track.instances && track.instances.length > 0 
-                  ? track.instances 
-                  : [{
-                      id: `${track.id}_instance_1`,
-                      x_position: track.x_position || 0,
-                      y_position: track.y_position || 0,
-                      trim_start_ticks: track.trim_start_ticks || 0,
-                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
-                  }]
+              instances: track.instances 
+                  // ? track.instances 
+                  // : [{
+                  //     id: `${track.id}_instance_1`,
+                  //     x_position: track.x_position || 0,
+                  //     y_position: track.y_position || 0,
+                  //     trim_start_ticks: track.trim_start_ticks || 0,
+                  //     trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
+                  // }]
           }));
       }));
       
@@ -182,11 +180,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                       track.instances.forEach(instance => {
                           midiManager.registerInstance(track.id, instance.id);
                       });
-                      
-                      // Set the first instance as active if there's no active instance yet
-                      if (!getActiveInstance(track.id)) {
-                          setActiveInstance(track.id, track.instances[0].id);
-                      }
                       
                       // Migrate notes without instance IDs to the first instance
                       midiManager.migrateNotesToFirstInstance(track.id, track.instances[0].id);
@@ -229,17 +222,17 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               // Mark loaded tracks as clean (not dirty) since they come from database
               track.dirty = false;
               
-              // Handle backward compatibility: create default instance if none exist
-              if (!track.instances || track.instances.length === 0) {
-                  console.log(`Track ${track.id} has no instances, creating default instance`);
-                  track.instances = [{
-                      id: `${track.id}_instance_1`,
-                      x_position: track.x_position || 0,
-                      y_position: track.y_position || 0,
-                      trim_start_ticks: track.trim_start_ticks || 0,
-                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
-                  }];
-              }
+              // // Handle backward compatibility: create default instance if none exist
+              // if (!track.instances || track.instances.length === 0) {
+              //     console.log(`Track ${track.id} has no instances, creating default instance`);
+              //     track.instances = [{
+              //         id: `${track.id}_instance_1`,
+              //         x_position: track.x_position || 0,
+              //         y_position: track.y_position || 0,
+              //         trim_start_ticks: track.trim_start_ticks || 0,
+              //         trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
+              //     }];
+              // }
           });
       }), true);
       
@@ -261,9 +254,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                       track.instances.forEach(instance => {
                           midiManager.registerInstance(track.id, instance.id);
                       });
-                      
-                      // Set the first instance as active
-                      setActiveInstance(track.id, track.instances[0].id);
                       
                       // Migrate notes without instance IDs to the first instance
                       midiManager.migrateNotesToFirstInstance(track.id, track.instances[0].id);
@@ -437,10 +427,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               }
               // Register the instance
               midiManager.registerInstance(trackId, initialInstance.id);
-              
-              // Set the initial instance as active
-              setActiveInstance(trackId, initialInstance.id);
-              console.log(`[Track Creation] Set active instance for track ${trackId}: ${initialInstance.id}`);
           }
       }
 
@@ -1630,7 +1616,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       x_position: newPosition.x,
       y_position: newPosition.y,
       trim_start_ticks: sourceInstance?.trim_start_ticks ?? 0,
-      trim_end_ticks: sourceInstance?.trim_end_ticks ?? (track.duration_ticks || GRID_CONSTANTS.defaultDurationTicks || 1920)
+      trim_end_ticks: sourceInstance?.trim_end_ticks ?? (track.duration_ticks || 1920)
     };
     
     // Register instance with MidiManager for MIDI-based tracks
@@ -1639,13 +1625,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       if (midiManager) {
         // Register the new instance
         midiManager.registerInstance(trackId, instanceId);
-        
-        // Set the new instance as active
-        setActiveInstance(trackId, instanceId);
-        console.log(`[Instance Add] Set active instance for track ${trackId}: ${instanceId}`);
-        
-        // Instances share notes, no need to duplicate
-        console.log(`[Instance Add] Instance ${instanceId} will share notes with all other instances of track ${trackId}`);
       }
     }
     
@@ -2014,20 +1993,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     return _withErrorHandling(deleteLogic, 'deleteMultipleInstances')();
   };
 
-  // Active instance methods
-  const setActiveInstance = (trackId: string, instanceId: string) => {
-    set(produce((draft: RootState) => {
-      if (!draft.activeInstanceByTrack) {
-        draft.activeInstanceByTrack = {};
-      }
-      draft.activeInstanceByTrack[trackId] = instanceId;
-    }));
-  };
-
-  const getActiveInstance = (trackId: string): string | undefined => {
-    return rootGet().activeInstanceByTrack?.[trackId];
-  };
-
   // --- Initial State & Return --- 
   return {
     tracks: [],
@@ -2040,8 +2005,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     updateTrack: updateTrackState, // Alias for updateTrackState
     findTrackById,
     updateTrackIndices,
-    setActiveInstance,
-    getActiveInstance,
 
     // Core track operations
     createTrackAndRegisterWithHistory,
