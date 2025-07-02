@@ -59,7 +59,6 @@ function Studio({ projectId }: StudioProps) {
   const {
     store,
     tracks,
-    activeInstanceByTrack,
     isPlaying,
     currentTime,
     bpm,
@@ -701,7 +700,6 @@ function Studio({ projectId }: StudioProps) {
           <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
             <KonvaTimeline
               tracks={tracks}
-              activeInstanceByTrack={activeInstanceByTrack}
               currentTime={currentTime}
               isPlaying={isPlaying}
               measureCount={measureCount}

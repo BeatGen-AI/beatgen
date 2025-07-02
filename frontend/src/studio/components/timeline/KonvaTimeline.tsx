@@ -996,10 +996,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               return null;
             }
             
-            // Check if this instance is active
-            const trackId = item.data?.id;
-            const isActive = trackId && activeInstanceByTrack[trackId] === item.id;
-            
             return (
               <KonvaTrack
                 key={item.id}
@@ -1010,7 +1006,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 width={itemWidth}
                 height={item.height}
                 isSelected={isSelected}
-                isActive={isActive}
                 isDragging={isBeingDragged}
                 isPrimary={isPrimaryDrag}
                 isResizing={isBeingResized}

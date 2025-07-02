@@ -28,13 +28,14 @@ import UserChatBubble from './UserChatBubble';
 import { GRID_CONSTANTS } from '../../constants/gridConstants';
 import { CombinedTrack } from '../../../platform/types/project';
 import ReactMarkdown from 'react-markdown'
-import { DrumTrackPayload, MidiTrackPayload } from '../../stores/types';
+import { MidiTrackPayload } from '../../stores/types';
 import { MidiTrackRead } from 'src/platform/types/dto/track_models/midi_track';
 import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track';
 import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 import { alpha } from '@mui/material/styles';
 import ChatModelMenu from './ChatModelMenu';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
+import { createDefaultInstance } from '../../utils/instanceHelpers';
 
 interface Message {
   text: string;
@@ -57,6 +58,11 @@ interface ChatWindowProps {
 
 // Define available AI models (placeholder)
 const AVAILABLE_MODELS = ["Deepseek R1", "Deepseek V3", "Claude 4 Sonnet", "Claude 4 Opus", "Claude 3.7 Sonnet",  "GPT-4.1", "GPT-4o", "o3", "o3-mini", "Gemini Pro 2.5", "Gemini Flash 2.5", "Llama 4 Maverick", "Llama 4 Scout"];
+
+// UI Constants
+const CHAT_WINDOW_WIDTH = 350;
+const ANIMATION_DURATION = 225; // ms
+const DOT_ANIMATION_INTERVAL = 500; // ms
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   const theme = useTheme();
@@ -105,7 +111,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       // Wait for slide animation to complete before hiding
       const timer = setTimeout(() => {
         setIsVisible(false);
-      }, 225); // Match the transition duration
+      }, ANIMATION_DURATION);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
@@ -169,7 +175,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       intervalId = setInterval(() => {
         currentStateIndex = (currentStateIndex + 1) % dotStates.length;
         setAnimatedDots(dotStates[currentStateIndex]);
-      }, 500); // Update every half a second
+      }, DOT_ANIMATION_INTERVAL);
     } else {
       setAnimatedDots(''); // Reset dots when not loading
     }
@@ -469,6 +475,36 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     }
   };
   
+  // Helper function to create a CombinedTrack with instance metadata
+  const createCombinedTrack = (
+    trackData: MidiTrackRead | SamplerTrackRead | DrumTrackRead,
+    trackType: 'MIDI' | 'SAMPLER' | 'DRUM'
+  ): CombinedTrack => {
+    const defaultName = `New ${trackType.charAt(0) + trackType.slice(1).toLowerCase()} Track`;
+    
+    return {
+      id: trackData.id,
+      name: trackData.name || defaultName,
+      track_type: trackType,
+      volume: 80,
+      pan: 0,
+      mute: false,
+      duration_ticks: MUSIC_CONSTANTS.pulsesPerQuarterNote * 16,
+      track_number: 0,
+      instance_metadata: [createDefaultInstance(
+        trackData.id, 
+        { x: 0, y: 0 }, 
+        MUSIC_CONSTANTS.pulsesPerQuarterNote * 16
+      )],
+      instances: [createDefaultInstance(
+        trackData.id, 
+        { x: 0, y: 0 }, 
+        MUSIC_CONSTANTS.pulsesPerQuarterNote * 16
+      )],
+      track: trackData
+    };
+  };
+
   const handleAction = async (action: string, actionData: any) => {
     const { store } = useStudioStore.getState();
     
@@ -479,47 +515,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         }
         break;
       case 'add_drum_track':
-        console.log('🟢 add_track action received:', actionData);
-        // New action type for adding an individual generated track with notes
+        console.log('🟢 add_drum_track action received:', actionData);
         if (store) {
           try {
-            const trackId = actionData.trackId || crypto.randomUUID();
-            const instrumentId = actionData.instrument_id;  // Fix: map from snake_case to camelCase
-            const storageKey = actionData.storageKey;
-            const hasNotes = actionData.hasNotes || false;
-            
-            const trackType = actionData.type;
-            
-            let actionTrackData;
-            let payload: DrumTrackPayload;
             const drumTrackData = actionData.track_data as DrumTrackRead;
-            // Ensure type is set, although it should come from action
-            console.log('🟢 Drum actionTrackData for CombinedTrack:', drumTrackData);
-
-            // Construct the CombinedTrack object
-            const combinedDrumTrack: CombinedTrack = {
-              // Populate top-level CombinedTrack fields
-              // Use data from midiTrackData where available, otherwise provide defaults
-              // processTrack will apply defaults anyway, but being explicit helps clarity
-              id: drumTrackData.id,
-              name: drumTrackData.name || 'New MIDI Track', // Use name from data or default
-              track_type: 'DRUM',
-              volume: 80, // Default volume
-              pan: 0,    // Default pan
-              mute: false, // Default mute state
-              // Fields related to audio clips, might not be relevant here or default to 0
-              duration_ticks: MUSIC_CONSTANTS.pulsesPerQuarterNote*16,
-              track_number: 0, // Default track number
-
-              // Nest the specific track data
-              track: drumTrackData
-            };
-
+            const combinedDrumTrack = createCombinedTrack(drumTrackData, 'DRUM');
             console.log('🟢 Constructed CombinedTrack:', combinedDrumTrack);
-            loadDrumTrack(combinedDrumTrack); // Pass the correctly structured object
-            break;
+            loadDrumTrack(combinedDrumTrack);
           } catch (error) {
-            console.error('Failed to add AI generated track:', error);
+            console.error('Failed to add AI generated drum track:', error);
           }
         }
         break;
@@ -528,198 +532,32 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         // New action type for adding an individual generated track with notes
         if (store) {
           try {
-            const trackId = actionData.trackId || crypto.randomUUID();
-            const instrumentId = actionData.instrument_id;  // Fix: map from snake_case to camelCase
-            const storageKey = actionData.storageKey;
-            const hasNotes = actionData.hasNotes || false;
+            const trackType = actionData.type as 'MIDI' | 'SAMPLER' | 'DRUM';
+            const trackData = actionData.track_data;
             
-            const trackType = actionData.type;
-            let actionTrackData;
             switch (trackType) {
               case 'MIDI':
-                const midiTrackData = actionData.track_data as MidiTrackRead;
-                // Ensure type is set, although it should come from action
-                console.log('🟢 Midi actionTrackData for CombinedTrack:', midiTrackData);
-
-                // Construct the CombinedTrack object
-                const combinedMidiTrack: CombinedTrack = {
-                  // Populate top-level CombinedTrack fields
-                  // Use data from midiTrackData where available, otherwise provide defaults
-                  // processTrack will apply defaults anyway, but being explicit helps clarity
-                  id: midiTrackData.id,
-                  name: midiTrackData.name || 'New MIDI Track', // Use name from data or default
-                  track_type: 'MIDI',
-                  volume: 80, // Default volume
-                  pan: 0,    // Default pan
-                  mute: false, // Default mute state
-                  // Fields related to audio clips, might not be relevant here or default to 0
-                  duration_ticks: MUSIC_CONSTANTS.pulsesPerQuarterNote*16,
-                  track_number: 0, // Default track number
-
-                  // Nest the specific track data
-                  track: midiTrackData
-                };
-
-                console.log('🟢 Constructed CombinedTrack:', combinedMidiTrack);
-                loadTrack(combinedMidiTrack); // Pass the correctly structured object
+                const midiTrack = createCombinedTrack(trackData as MidiTrackRead, 'MIDI');
+                console.log('🟢 Constructed MIDI track:', midiTrack);
+                loadTrack(midiTrack);
                 break;
+                
               case 'SAMPLER':
-                actionTrackData = actionData.track_data as SamplerTrackRead;
-                actionTrackData.type = 'SAMPLER';
-                console.log('🟢 Sampler actionTrackData:', actionTrackData);
-                loadTrack(actionTrackData);
+                const samplerTrack = createCombinedTrack(trackData as SamplerTrackRead, 'SAMPLER');
+                console.log('🟢 Constructed SAMPLER track:', samplerTrack);
+                loadTrack(samplerTrack);
                 break;
+                
               case 'DRUM':
-                actionTrackData = actionData.track_data as DrumTrackRead;
-                actionTrackData.type = 'DRUM';
-                console.log('🟢 Drum actionTrackData:', actionTrackData);
-                loadTrack(actionTrackData);
+                const drumTrack = createCombinedTrack(trackData as DrumTrackRead, 'DRUM');
+                console.log('🟢 Constructed DRUM track:', drumTrack);
+                // For drum tracks, use loadDrumTrack instead of loadTrack
+                loadDrumTrack(drumTrack);
                 break;
+                
               default:
                 console.warn(`Unknown track type: ${trackType}`);
             }
-            return;
-            console.log(`Adding generated track with instrumentId: ${instrumentId}`);
-            
-            // Find the result object that contains the notes
-            const generatedTracks = messages
-              .filter(msg => !msg.isUser && msg.text)
-              .flatMap(msg => {
-                try {
-                  // Try to extract tracks data from response text
-                  const responseObj = JSON.parse(msg.text);
-                  return responseObj.tracks || [];
-                } catch (e) {
-                  return [];
-                }
-              });
-            
-            // Find matching track data
-            const trackData = generatedTracks.find(t => t.track_id === trackId) || 
-                             { notes: [] };
-            
-            // Create a single action for this track
-            const action = {
-              execute: async () => {
-                // Add track with the soundfont
-                console.log(`Adding generated track with instrumentId: ${instrumentId}`);
-                const payload: MidiTrackPayload = {
-                  instrumentId: instrumentId,
-                  instrumentName: "instrumentName",
-                  instrumentStorageKey: storageKey
-                }
-                const newTrack = await handleAddTrack('MIDI', payload);
-                
-                // Get notes directly from the action data if available
-                const notesFromAction = actionData.notes || [];
-                if (newTrack && notesFromAction && notesFromAction.length > 0) {
-                  console.log(`Adding ${notesFromAction.length} notes directly from action data to track ${newTrack.id}`);
-                  
-                  // Get the midiManager from the store
-                  const { store } = useStudioStore.getState();
-                  if (store) {
-                    try {
-                      // Convert notes format as needed
-                      const notes = notesFromAction.map(note => ({
-                        id: Math.floor(Math.random() * 100000), // Use random IDs to avoid conflicts
-                        row: note.pitch,
-                        column: note.start * 2,
-                        length: note.duration * 2,
-                        velocity: note.velocity || 80 // Default velocity if missing
-                      }));
-                      
-                      console.log('Converting notes with format:', notes[0]);
-                      await store.getMidiManager().updateTrack(newTrack.id, notes);
-                      console.log(`Successfully added ${notes.length} notes to track ${newTrack.id}`);
-
-                      // ---> ADDED: Update track duration based on added notes <--- 
-                      if (notes.length > 0) {
-                        // Calculate the maximum end tick
-                        const maxEndTick = Math.max(...notes.map(n => (n.column || 0) + (n.length || 0)));
-                        console.log(`Calculated maxEndTick for AI track ${newTrack.id}: ${maxEndTick}`);
-                        
-                        // Get the update function from the store
-                        const { updateTrackState } = useStudioStore.getState();
-                        if (updateTrackState) {
-                          // Update duration and ensure trim_end covers the new duration
-                          updateTrackState(newTrack.id, {
-                            duration_ticks: maxEndTick
-                          });
-                          console.log(`Updated duration_ticks and trim_end_ticks for track ${newTrack.id}`);
-                        } else {
-                           console.error("Could not find updateTrackState to update duration.");
-                        }
-                      }
-                      // ---> END ADDED CODE <--- 
-
-                    } catch (error) {
-                      console.error("Failed to add notes to track:", error);
-                    }
-                  }
-                } else if (newTrack && hasNotes && trackData.notes?.length > 0) {
-                  // Fallback to trackData if needed
-                  console.log(`Fallback: Adding ${trackData.notes.length} notes from track data to track ${newTrack.id}`);
-                  
-                  // Get the midiManager from the store
-                  const { store } = useStudioStore.getState();
-                  if (store) {
-                    try {
-                      // Convert notes format as needed
-                      const notes = trackData.notes.map(note => ({
-                        id: Math.floor(Math.random() * 100000),
-                        row: note.pitch,
-                        column: Math.round(note.time * 4),
-                        length: Math.round(note.duration * 4),
-                        velocity: note.velocity || 80
-                      }));
-                      
-                      await store.getMidiManager().updateTrack(newTrack.id, notes);
-
-                       // ---> ADDED: Update track duration based on added notes (Fallback Path) <--- 
-                       if (notes.length > 0) {
-                        const maxEndTick = Math.max(...notes.map(n => (n.column || 0) + (n.length || 0)));
-                        console.log(`Calculated maxEndTick (fallback) for AI track ${newTrack.id}: ${maxEndTick}`);
-                        const { updateTrackState } = useStudioStore.getState();
-                        if (updateTrackState) {
-                          updateTrackState(newTrack.id, {
-                            duration_ticks: maxEndTick
-                          });
-                          console.log(`Updated duration_ticks and trim_end_ticks (fallback) for track ${newTrack.id}`);
-                        } else {
-                           console.error("Could not find updateTrackState (fallback) to update duration.");
-                        }
-                      }
-                      // ---> END ADDED CODE <--- 
-
-                    } catch (error) {
-                      console.warn("Failed to add notes to track using fallback method", error);
-                    }
-                  } else {
-                    console.warn(`No notes available for track ${newTrack.id}`);
-                  }
-                }
-              },
-              undo: async () => {
-                // Find track by name
-                const tracks = useStudioStore.getState().tracks;
-                const trackToRemove = tracks.find(t => t.id === trackId);
-                if (trackToRemove) {
-                  console.log(`Removing AI-generated track: ${trackId}`);
-                  const { handleTrackDelete } = useStudioStore.getState();
-                  await handleTrackDelete(trackToRemove.id);
-                }
-              },
-              type: 'ADD_GENERATED_TRACK'
-            };
-            
-            // Execute the action
-            await historyManager.executeAction(action);
-            
-            // Update history UI state
-            useStudioStore.setState({
-              canUndo: historyManager.canUndo(),
-              canRedo: historyManager.canRedo()
-            });
           } catch (error) {
             console.error('Failed to add AI generated track:', error);
           }
@@ -852,28 +690,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     }
   };
   
-  // We've replaced the addGeneratedTracks function with the action-based approach
-  // that handles one track at a time through handleAction with add_generated_track type
-  
-  // Update an existing track with AI-edited content
-  const updateTrackWithAIEdit = (trackId: string, trackData: any) => {
-    // This is a placeholder function that would integrate with your track updating system
-    if (trackData.notes) {
-      // Find track by ID
-      const track = tracks.find(t => t.id === trackId);
-      
-      if (track) {
-        // In a real implementation, you would:
-        // 1. Update the track's notes from trackData.notes
-        // 2. Update instrument if needed
-        // 3. Handle any other track updates
-        
-        console.log(`Updated track ${track.name} with ${trackData.notes.length} notes`);
-      } else {
-        console.log(`Track ${trackId} not found`);
-      }
-    }
-  };
   
   // Handle pressing Enter key in the input field
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -930,7 +746,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   };
 
   const shouldShowContextMenu = (text: string, position: number): boolean => {
-    if (position === 0 || mode != 'Edit') return false;
+    if (position === 0 || mode !== 'Edit') return false;
     return text[position - 1] === '@' && 
            (position === 1 || text[position - 2] === ' ');
   };
@@ -949,10 +765,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // Also track cursor position on selection/click
-  const handleSelectionChange = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
-    setCursorPosition(e.currentTarget.selectionStart);
-  };
 
   // Handlers for AI Model Chip
   const handleModelChipClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -983,14 +795,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         elevation={4}
         sx={{
           height: '100%',
-          width: 350,
+          width: CHAT_WINDOW_WIDTH,
           bgcolor: alpha(theme.palette.background.paper, 0.95),
           color: 'text.primary',
           display: 'flex',
           flexDirection: 'column',
           borderLeft: `1px solid ${theme.palette.divider}`,
           transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 225ms cubic-bezier(0, 0, 0.2, 1)',
+          transition: `transform ${ANIMATION_DURATION}ms cubic-bezier(0, 0, 0.2, 1)`,
           visibility: isVisible ? 'visible' : 'hidden'
         }}
       >
@@ -1058,11 +870,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
               )
             )
           )}
-          {/* {isLoading && (
-            <Box sx={{ alignSelf: 'flex-start', p: 1 }}>
-              <CircularProgress size={24} color="inherit"/>
-            </Box>
-          )} */}
           <div ref={messagesEndRef} />
         </Box>
 
@@ -1122,16 +929,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
               placeholder={isLoading ? `Generating${animatedDots}` : "Ask me anything about your project..."}
               value={prompt}
               onChange={handleTextChange}
-              onKeyDown={(e) => {
-                if (contextAnchorEl) {
-                  return;
-                }
-                
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
+              onKeyDown={handleKeyPress}
               disabled={isLoading}
               sx={{
                 '& .MuiOutlinedInput-root': {

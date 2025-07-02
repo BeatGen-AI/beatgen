@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
-import { Group, Rect, Circle, Line, Text } from 'react-konva';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Group, Rect, Line } from 'react-konva';
 import { CombinedTrack } from 'src/platform/types/project';
 import { DrumTrackRead, SamplerTrackRead } from 'src/platform/types/dto/track_models/drum_track';
+import { MUSIC_CONSTANTS } from '../../../../constants/musicConstants';
 
 export interface DrumTrackRendererProps {
   track: CombinedTrack;
@@ -12,21 +13,12 @@ export interface DrumTrackRendererProps {
   color: string;
 }
 
-// Standard drum kit mapping
-const DRUM_NAMES: { [key: number]: string } = {
-  36: 'BD',  // Bass Drum
-  38: 'SN',  // Snare
-  42: 'HH',  // Hi-Hat Closed
-  46: 'OH',  // Hi-Hat Open
-  49: 'CR',  // Crash
-  51: 'RD',  // Ride
-  45: 'TM',  // Tom
-  47: 'T2',  // Tom 2
-  48: 'T3',  // Tom 3
-};
+// Constants for pattern conversion
+const PREVIEW_COLS = 64; // Show 4 bars (16 steps * 4)
+const TICKS_PER_STEP = MUSIC_CONSTANTS.pulsesPerQuarterNote / 4; // 120 ticks per step
 
 /**
- * Renders drum pattern visualization for drum tracks.
+ * Renders drum pattern visualization for drum tracks using DrumGridPreview.
  */
 export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
   track,
@@ -42,9 +34,24 @@ export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
     return null;
   }
   
-  // Get drum hits from track
-  // Get sampler tracks and their MIDI notes
-  const samplerTracksWithNotes = useMemo(() => {
+  // State for live pattern from DrumMachine
+  const [livePattern, setLivePattern] = useState<boolean[][] | null>(null);
+  
+  // Listen for drum pattern changes from DrumMachine
+  useEffect(() => {
+    const handlePatternChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ trackId: string; pattern: boolean[][] }>;
+      if (customEvent.detail?.trackId === track.id && customEvent.detail.pattern) {
+        setLivePattern(customEvent.detail.pattern);
+      }
+    };
+
+    document.addEventListener('drumPatternChanged', handlePatternChange);
+    return () => document.removeEventListener('drumPatternChanged', handlePatternChange);
+  }, [track.id]);
+
+  // Get sampler tracks from drum track
+  const samplerTracks = useMemo(() => {
     if (track.track_type === 'DRUM') {
       const drumTrack = track.track as DrumTrackRead;
       return drumTrack.sampler_tracks || [];
@@ -52,180 +59,105 @@ export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
     return [];
   }, [track]);
 
-  // Create drum hits from sampler tracks' MIDI notes
-  const drumHits = useMemo(() => {
-    const hits: Array<{ id: string; pitch: number; tick: number; duration: number; velocity: number }> = [];
+  // Only show empty pattern as fallback - don't compute from MIDI
+  // The DrumMachine is the source of truth for the pattern
+  const fallbackPattern = useMemo(() => {
+    if (samplerTracks.length === 0) return null;
     
-    samplerTracksWithNotes.forEach((samplerTrack, index) => {
-      if (samplerTrack.midi_notes_json?.notes) {
-        const notes = samplerTrack.midi_notes_json.notes as Array<any>;
-        notes.forEach((note: any, noteIndex: number) => {
-          hits.push({
-            id: `${samplerTrack.id}-${noteIndex}`,
-            pitch: index, // Use sampler track index as "pitch" for lane positioning
-            tick: note.tick || 0,
-            duration: note.duration || 480, // Default to quarter note
-            velocity: note.velocity || 100
-          });
-        });
-      }
-    });
-    
-    return hits;
-  }, [samplerTracksWithNotes]);
+    // Create empty pattern matching the number of sampler tracks
+    return samplerTracks.map(() => 
+      new Array(PREVIEW_COLS).fill(false)
+    );
+  }, [samplerTracks]);
   
-  // Get unique drum types and create lanes
-  const drumLanes = useMemo(() => {
-    const lanes = new Map<number, { y: number; name: string }>();
-    
-    samplerTracksWithNotes.forEach((samplerTrack, index) => {
-      const laneHeight = height / Math.max(samplerTracksWithNotes.length, 1);
-      lanes.set(index, {
-        y: index * laneHeight + laneHeight / 2,
-        name: samplerTrack.name || `Track ${index + 1}`
-      });
-    });
-    
-    return lanes;
-  }, [drumHits, height]);
+  // Use live pattern if available, otherwise use empty fallback
+  const displayPattern = livePattern || fallbackPattern;
   
-  // Calculate hit positions
-  const hitCircles = useMemo(() => {
-    return drumHits.map(hit => {
-      const lane = drumLanes.get(hit.pitch);
-      if (!lane) return null;
-      
-      const x = hit.tick * pixelsPerTick;
-      const radius = Math.min(8, height / (drumLanes.size * 2));
-      
-      return {
-        id: hit.id,
-        x,
-        y: lane.y,
-        radius,
-        velocity: hit.velocity,
-        pitch: hit.pitch
-      };
-    }).filter(Boolean);
-  }, [drumHits, drumLanes, pixelsPerTick, height]);
+  // Calculate grid dimensions
+  const numRows = displayPattern?.length || samplerTracks.length || 1;
+  const numCols = PREVIEW_COLS;
+  const padding = 2; // Padding around the grid
+  const gap = 1; // Gap between cells
   
-  // Calculate step grid (16th notes)
-  const stepGrid = useMemo(() => {
-    const stepSize = pixelsPerTick * 120; // 16th note = 120 ticks
-    const steps = Math.floor(width / stepSize);
-    return Array.from({ length: steps + 1 }).map((_, i) => i * stepSize);
-  }, [width, pixelsPerTick]);
+  // Calculate cell dimensions accounting for gaps
+  const totalGapWidth = (numCols - 1) * gap;
+  const totalGapHeight = (numRows - 1) * gap;
+  const cellWidth = (width - (2 * padding) - totalGapWidth) / numCols;
+  const cellHeight = (height - (2 * padding) - totalGapHeight) / numRows;
   
   return (
     <Group>
-      {/* Track background */}
+      {/* Background with border */}
       <Rect
         x={0}
         y={0}
         width={width}
         height={height}
-        fill={`${color}15`}
+        fill="rgba(0,0,0,0.2)"
+        stroke={color}
+        strokeWidth={1}
+        cornerRadius={2}
       />
       
-      {/* Drum lane separators and labels */}
-      {Array.from(drumLanes.entries()).map(([pitch, lane], index) => {
-        const laneHeight = height / drumLanes.size;
-        const y = index * laneHeight;
+      {/* Grid cells */}
+      {(() => {
+        // Use display pattern if available, otherwise create empty grid
+        const gridPattern = displayPattern || [new Array(PREVIEW_COLS).fill(false)];
         
-        return (
-          <Group key={pitch}>
-            {/* Lane separator */}
-            <Line
-              points={[0, y + laneHeight, width, y + laneHeight]}
-              stroke={`${color}20`}
-              strokeWidth={1}
-            />
+        return gridPattern.map((row, rowIndex) => 
+          row.map((isActive, colIndex) => {
+            const x = padding + colIndex * (cellWidth + gap);
+            const y = padding + rowIndex * (cellHeight + gap);
             
-            {/* Lane label */}
-            <Text
-              x={5}
-              y={y + laneHeight / 2 - 6}
-              text={lane.name}
-              fontSize={10}
-              fontFamily="monospace"
-              fill={color}
-              opacity={0.6}
-            />
-          </Group>
+            return (
+              <React.Fragment key={`cell-${rowIndex}-${colIndex}`}>
+                <Rect
+                  x={x}
+                  y={y}
+                  width={cellWidth}
+                  height={cellHeight}
+                  fill={isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.05)'}
+                  cornerRadius={1}
+                />
+                {/* Add glow effect for active cells */}
+                {isActive && (
+                  <Rect
+                    x={x - 1}
+                    y={y - 1}
+                    width={cellWidth + 2}
+                    height={cellHeight + 2}
+                    fill="transparent"
+                    stroke="rgba(255, 255, 255, 0.6)"
+                    strokeWidth={0.5}
+                    cornerRadius={1}
+                    shadowColor="white"
+                    shadowBlur={2}
+                    shadowOpacity={0.4}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })
         );
-      })}
+      })()}
       
-      {/* Step grid */}
-      {stepGrid.map((x, i) => {
-        const isBeat = i % 4 === 0;
-        const isMeasure = i % 16 === 0;
+      {/* Beat/measure grid lines (optional - for better visibility) */}
+      {Array.from({ length: Math.floor(numCols / 4) + 1 }).map((_, i) => {
+        const x = padding + i * 4 * (cellWidth + gap);
+        const isMeasure = i % 4 === 0;
+        
+        if (x > width - padding) return null; // Don't draw lines outside bounds
         
         return (
           <Line
-            key={i}
-            points={[x, 0, x, height]}
+            key={`beat-${i}`}
+            points={[x, padding, x, height - padding]}
             stroke={color}
-            strokeWidth={isMeasure ? 1 : isBeat ? 0.5 : 0.25}
-            opacity={isMeasure ? 0.3 : isBeat ? 0.2 : 0.1}
+            strokeWidth={isMeasure ? 1 : 0.5}
+            opacity={isMeasure ? 0.3 : 0.1}
           />
         );
       })}
-      
-      {/* Drum hits */}
-      {hitCircles.map(hit => {
-        if (!hit) return null;
-        
-        // Calculate opacity and size based on velocity
-        const velocityScale = 0.5 + (hit.velocity / 127) * 0.5;
-        const radius = hit.radius * velocityScale;
-        
-        return (
-          <Group key={hit.id}>
-            {/* Hit circle */}
-            <Circle
-              x={hit.x}
-              y={hit.y}
-              radius={radius}
-              fill={color}
-              opacity={0.8}
-            />
-            
-            {/* Hit accent for high velocity */}
-            {hit.velocity > 100 && (
-              <Circle
-                x={hit.x}
-                y={hit.y}
-                radius={radius + 2}
-                stroke={color}
-                strokeWidth={1}
-                fill="transparent"
-                opacity={0.5}
-              />
-            )}
-          </Group>
-        );
-      })}
-      
-      {/* Pattern repeat indicator */}
-      {drumHits.length > 0 && (
-        <Group>
-          {/* Find pattern length (simplified - just show every 4 beats) */}
-          {Array.from({ length: Math.floor(width / (pixelsPerTick * 1920)) }).map((_, i) => {
-            const x = i * pixelsPerTick * 1920; // Every measure
-            return (
-              <Rect
-                key={i}
-                x={x}
-                y={0}
-                width={2}
-                height={height}
-                fill={color}
-                opacity={0.3}
-              />
-            );
-          })}
-        </Group>
-      )}
     </Group>
   );
 };

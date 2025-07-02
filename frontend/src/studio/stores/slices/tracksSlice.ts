@@ -146,8 +146,54 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   // Update all tracks and recalculate indices
   const updateTracks = (newTracks: CombinedTrack[]) => {
       set(produce((draft: RootState) => {
-          draft.tracks = newTracks;
+          // Create a fresh array with cloned tracks to avoid frozen object issues
+          draft.tracks = newTracks.map((track, index) => ({
+              ...track,
+              track_number: index,
+              // Ensure each track has instances
+              instances: track.instances && track.instances.length > 0 
+                  ? track.instances 
+                  : [{
+                      id: `${track.id}_instance_1`,
+                      x_position: track.x_position || 0,
+                      y_position: track.y_position || 0,
+                      trim_start_ticks: track.trim_start_ticks || 0,
+                      trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
+                  }]
+          }));
       }));
+      
+      // After updating tracks, register instances with MidiManager
+      const midiManager = rootGet().store?.getMidiManager();
+      console.log('[updateTracks] MidiManager available:', !!midiManager);
+      if (midiManager) {
+          // Use the tracks from state after the update
+          rootGet().tracks.forEach(track => {
+              // Only process MIDI-based tracks
+              if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER' || track.track_type === 'DRUM') {
+                  console.log(`[updateTracks] Processing ${track.track_type} track ${track.id} with ${track.instances?.length || 0} instances`);
+                  // Ensure track exists in MidiManager
+                  if (!midiManager.hasTrack(track.id)) {
+                      midiManager.createTrack(track.id, track.track_type.toLowerCase(), track.name);
+                  }
+                  
+                  // Register all instances
+                  if (track.instances && track.instances.length > 0) {
+                      track.instances.forEach(instance => {
+                          midiManager.registerInstance(track.id, instance.id);
+                      });
+                      
+                      // Set the first instance as active if there's no active instance yet
+                      if (!getActiveInstance(track.id)) {
+                          setActiveInstance(track.id, track.instances[0].id);
+                      }
+                      
+                      // Migrate notes without instance IDs to the first instance
+                      midiManager.migrateNotesToFirstInstance(track.id, track.instances[0].id);
+                  }
+              }
+          });
+      }
   };
 
   // Action to recalculate and add/update the index property for UI ordering
