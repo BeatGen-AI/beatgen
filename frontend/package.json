@@ -65,7 +65,7 @@
   "devDependencies": {
     "@eslint/js": "^9.21.0",
     "@testing-library/jest-dom": "^6.1.5",
-    "@testing-library/react": "^14.1.2",
+    "@testing-library/react": "^16.3.0",
     "@types/event-source-polyfill": "^1.0.5",
     "@types/node": "^22.14.1",
     "@types/react": "^19.0.10",
