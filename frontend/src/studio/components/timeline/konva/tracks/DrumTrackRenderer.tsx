@@ -5,6 +5,8 @@ import { DrumTrackRead, SamplerTrackRead } from 'src/platform/types/dto/track_mo
 import { MUSIC_CONSTANTS } from '../../../../constants/musicConstants';
 import { useStudioStore } from '../../../../stores/studioStore';
 import { Note } from '../../../../../types/note';
+import DrumPatternPreview from '../components/DrumPatternPreview';
+import { getVisibleTimeRange } from '../../../../utils/timelinePositioning';
 
 export interface DrumTrackRendererProps {
   track: CombinedTrack;
@@ -135,17 +137,21 @@ export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
   // Use live pattern if available, otherwise use empty fallback
   const displayPattern = livePattern || fallbackPattern;
   
-  // Calculate grid dimensions
-  const numRows = displayPattern?.length || samplerTracks.length || 1;
-  const numCols = PREVIEW_COLS;
-  const padding = 2; // Padding around the grid
-  const gap = 1; // Gap between cells
+  // Create empty pattern if no pattern is available
+  const finalPattern = useMemo(() => {
+    if (displayPattern && displayPattern.length > 0) {
+      return displayPattern;
+    }
+    
+    // Create empty pattern based on sampler tracks
+    const numRows = samplerTracks.length || 1;
+    return Array(numRows).fill(null).map(() => Array(PREVIEW_COLS).fill(false));
+  }, [displayPattern, samplerTracks]);
   
-  // Calculate cell dimensions accounting for gaps
-  const totalGapWidth = (numCols - 1) * gap;
-  const totalGapHeight = (numRows - 1) * gap;
-  const cellWidth = (width - (2 * padding) - totalGapWidth) / numCols;
-  const cellHeight = (height - (2 * padding) - totalGapHeight) / numRows;
+  // Calculate visible time range for beat markers
+  const visibleRange = useMemo(() => {
+    return getVisibleTimeRange(width, contentOffset, pixelsPerTick);
+  }, [width, contentOffset, pixelsPerTick]);
   
   return (
     <Group>
@@ -161,59 +167,31 @@ export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
         cornerRadius={2}
       />
       
-      {/* Grid cells */}
-      {(() => {
-        // Use display pattern if available, otherwise create empty grid
-        const gridPattern = displayPattern || [new Array(PREVIEW_COLS).fill(false)];
-        
-        return gridPattern.map((row, rowIndex) => 
-          row.map((isActive, colIndex) => {
-            const x = padding + colIndex * (cellWidth + gap);
-            const y = padding + rowIndex * (cellHeight + gap);
-            
-            return (
-              <React.Fragment key={`cell-${rowIndex}-${colIndex}`}>
-                <Rect
-                  x={x}
-                  y={y}
-                  width={cellWidth}
-                  height={cellHeight}
-                  fill={isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.05)'}
-                  cornerRadius={1}
-                />
-                {/* Add glow effect for active cells */}
-                {isActive && (
-                  <Rect
-                    x={x - 1}
-                    y={y - 1}
-                    width={cellWidth + 2}
-                    height={cellHeight + 2}
-                    fill="transparent"
-                    stroke="rgba(255, 255, 255, 0.6)"
-                    strokeWidth={0.5}
-                    cornerRadius={1}
-                    shadowColor="white"
-                    shadowBlur={2}
-                    shadowOpacity={0.4}
-                  />
-                )}
-              </React.Fragment>
-            );
-          })
-        );
-      })()}
+      {/* Drum pattern using timeline positioning */}
+      <DrumPatternPreview
+        pattern={finalPattern}
+        width={width}
+        height={height}
+        pixelsPerTick={pixelsPerTick}
+        contentOffset={contentOffset}
+        ticksPerStep={TICKS_PER_STEP}
+        color={color}
+      />
       
-      {/* Beat/measure grid lines (optional - for better visibility) */}
-      {Array.from({ length: Math.floor(numCols / 4) + 1 }).map((_, i) => {
-        const x = padding + i * 4 * (cellWidth + gap);
+      {/* Beat/measure grid lines using timeline positioning */}
+      {Array.from({ length: Math.floor(PREVIEW_COLS / 4) + 1 }).map((_, i) => {
+        const stepIndex = i * 4;
+        const ticks = stepIndex * TICKS_PER_STEP;
+        const x = (ticks * pixelsPerTick) + contentOffset;
         const isMeasure = i % 4 === 0;
         
-        if (x > width - padding) return null; // Don't draw lines outside bounds
+        // Only render lines within visible bounds
+        if (x < 0 || x > width) return null;
         
         return (
           <Line
             key={`beat-${i}`}
-            points={[x, padding, x, height - padding]}
+            points={[x, 2, x, height - 2]}
             stroke={color}
             strokeWidth={isMeasure ? 1 : 0.5}
             opacity={isMeasure ? 0.3 : 0.1}
