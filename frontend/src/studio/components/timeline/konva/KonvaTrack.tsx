@@ -206,11 +206,6 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         if (onMouseDown) {
           // Use instance ID directly
           const idToUse = instanceId || track.id;
-          console.log('🎯 KonvaTrack calling onMouseDown callback', {
-            idToUse,
-            instanceIdIsZero: instanceId === 0,
-            instanceIdType: typeof instanceId
-          });
           onMouseDown(idToUse, e);
         }
       }}
