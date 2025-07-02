@@ -213,92 +213,6 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     </IconButton>
                 </Box>
 
-                {/* Tool Icons */}
-                {showToolbar && (
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <IconButton
-                            size="small"
-                            color="inherit"
-                            onClick={() => onToolChange?.('select')}
-                            sx={{
-                                borderRadius: '8px',
-                                backgroundColor: selectedTool === 'select' ? theme.palette.action.selected : 'transparent',
-                                '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
-                                },
-                            }}
-                            title="Select Tool"
-                            disableRipple
-                        >
-                            <SelectIcon />
-                        </IconButton>
-                        <IconButton
-                            size="small"
-                            color="inherit"
-                            onClick={() => onToolChange?.('pen')}
-                            sx={{
-                                borderRadius: '8px',
-                                backgroundColor: selectedTool === 'pen' ? theme.palette.action.selected : 'transparent',
-                                '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
-                                },
-                            }}
-                            title="Pen Tool"
-                            disableRipple
-                        >
-                            <PenIcon />
-                        </IconButton>
-                        <IconButton
-                            size="small"
-                            color="inherit"
-                            onClick={() => onToolChange?.('highlighter')}
-                            sx={{
-                                borderRadius: '8px',
-                                backgroundColor: selectedTool === 'highlighter' ? theme.palette.action.selected : 'transparent',
-                                '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
-                                },
-                            }}
-                            title="Highlighter Tool"
-                            disableRipple
-                        >
-                            <HighlighterIcon />
-                        </IconButton>
-                        <IconButton
-                            size="small"
-                            color="inherit"
-                            onClick={() => onToolChange?.('eraser')}
-                            sx={{
-                                borderRadius: '8px',
-                                backgroundColor: selectedTool === 'eraser' ? theme.palette.action.selected : 'transparent',
-                                '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
-                                },
-                            }}
-                            title="Eraser Tool"
-                            disableRipple
-                        >
-                            <EraserIcon />
-                        </IconButton>
-                        <Tooltip title={`Grid snap: ${getGridSnapOptionName(gridSnapSize)}`}>
-                            <IconButton
-                                size="small"
-                                color="inherit"
-                                onClick={handleGridClick}
-                                sx={{
-                                    borderRadius: '8px',
-                                    backgroundColor: snapToGrid ? theme.palette.action.selected : 'transparent',
-                                    '&:hover': {
-                                        backgroundColor: theme.palette.action.hover,
-                                    },
-                                }}
-                                disableRipple
-                            >
-                                {snapToGrid ? <GridIcon /> : <GridOffIcon />}
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
-                )}
 
                 <Box sx={{
                     display: 'flex',
@@ -387,6 +301,25 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     alignItems: 'center',
                     gap: 1
                 }}>
+                    {showToolbar && (
+                        <Tooltip title={`Grid snap: ${getGridSnapOptionName(gridSnapSize)}`}>
+                            <IconButton
+                                size="small"
+                                color="inherit"
+                                onClick={handleGridClick}
+                                sx={{
+                                    borderRadius: '8px',
+                                    backgroundColor: snapToGrid ? theme.palette.action.selected : 'transparent',
+                                    '&:hover': {
+                                        backgroundColor: theme.palette.action.hover,
+                                    },
+                                }}
+                                disableRipple
+                            >
+                                {snapToGrid ? <GridIcon /> : <GridOffIcon />}
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     <IconButton
                         size="small"
                         color="inherit"
