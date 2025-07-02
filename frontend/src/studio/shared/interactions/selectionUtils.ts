@@ -42,16 +42,16 @@ export function getItemsInRect<T extends SelectableItem>(
     const xOverlap = item.x < rectRight && itemRight > rectX;
     const yOverlap = item.y < rectBottom && itemBottom > rectY;
 
-    console.log('getItemsInRect - checking item:', {
-      itemId: item.id,
-      item: { x: item.x, y: item.y, width: item.width, height: itemHeight },
-      itemBounds: { left: item.x, right: itemRight, top: item.y, bottom: itemBottom },
-      rect: { x: rectX, y: rectY, width: rectWidth, height: rectHeight },
-      rectBounds: { left: rectX, right: rectRight, top: rectY, bottom: rectBottom },
-      xOverlap,
-      yOverlap,
-      intersects: xOverlap && yOverlap
-    });
+    // console.log('getItemsInRect - checking item:', {
+    //   itemId: item.id,
+    //   item: { x: item.x, y: item.y, width: item.width, height: itemHeight },
+    //   itemBounds: { left: item.x, right: itemRight, top: item.y, bottom: itemBottom },
+    //   rect: { x: rectX, y: rectY, width: rectWidth, height: rectHeight },
+    //   rectBounds: { left: rectX, right: rectRight, top: rectY, bottom: rectBottom },
+    //   xOverlap,
+    //   yOverlap,
+    //   intersects: xOverlap && yOverlap
+    // });
 
     return xOverlap && yOverlap;
   });
