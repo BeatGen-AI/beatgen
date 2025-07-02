@@ -165,7 +165,7 @@ export class TransportController implements Transport {
                             
                             // For audio tracks, get the player from audio engine
                             if (track.track_type === 'AUDIO') {
-                                const audioTrack = this.audioEngine.getTrack(track.id);
+                                const audioTrack = this.audioEngine.getAllTracks().find(t => t.id === track.id);
                                 if (!audioTrack || !audioTrack.player) return;
                                 
                                 // Calculate the offset when this instance should start playing
