@@ -7,6 +7,8 @@ import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { CombinedTrack, DrumTrackRead, SamplerTrackRead, RootState } from '../../stores/types';
 import { DrumMachineModal, DrumMachineModalProps } from '../modals/drum-machine/DrumMachineModal';
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
+import { useStudioStore } from '../../stores/studioStore';
+import { Note } from '../../../types/note';
 
 export interface DrumTrackState extends CombinedTrack {
   type: 'DRUM';
@@ -363,8 +365,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   // Expanded drum names with state
   const [drumNames, setDrumNames] = useState<string[]>([]);
   
-  // Grid setup - MAX_COLUMNS steps by drumNames.length drum sounds
-  const [grid, setGrid] = useState<boolean[][]>([]);
+  // Grid is now computed from samplerTracks - see useMemo above
 
   // Store MIDI notes for each drum sound - this will sync with the piano roll
   const [drumNotes, setDrumNotes] = useState<NoteState[][]>([]);
@@ -416,7 +417,66 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   
   // Effect to fetch the sampler track IDs when tracks change
   
-  // Effect to initialize and synchronize grid/names/notes based on samplerTrackIds
+  // Get live MIDI notes from MidiManager for all sampler tracks
+  const { store } = useStudioStore();
+  const midiManager = store?.getMidiManager();
+  
+  // Subscribe to MIDI notes for all sampler tracks and compute grid from live data
+  const [allTrackNotes, setAllTrackNotes] = useState<{ [trackId: string]: Note[] }>({});
+  
+  useEffect(() => {
+    if (!midiManager || samplerTracks.length === 0) {
+      setAllTrackNotes({});
+      return;
+    }
+    
+    const unsubscribers: (() => void)[] = [];
+    const notesMap: { [trackId: string]: Note[] } = {};
+    
+    // Subscribe to each sampler track's notes
+    samplerTracks.forEach(track => {
+      const trackId = track.id;
+      
+      // Get initial notes
+      const initialNotes = midiManager.getTrackNotes(trackId) || [];
+      notesMap[trackId] = initialNotes;
+      
+      // Subscribe to updates
+      const unsubscribe = midiManager.subscribeToTrack(trackId, (_, updatedNotes) => {
+        setAllTrackNotes(prev => ({
+          ...prev,
+          [trackId]: updatedNotes
+        }));
+      });
+      
+      unsubscribers.push(unsubscribe);
+    });
+    
+    setAllTrackNotes(notesMap);
+    
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+    };
+  }, [midiManager, samplerTracks]);
+  
+  // Compute grid from live MIDI notes
+  const grid = useMemo(() => {
+    return samplerTracks.map((track) => {
+      const gridRow = Array(MAX_COLUMNS).fill(false);
+      const trackNotes = allTrackNotes[track.id] || [];
+      
+      trackNotes.forEach(note => {
+        const column = Math.floor(note.column / TICKS_PER_STEP);
+        if (column >= 0 && column < MAX_COLUMNS) {
+          gridRow[column] = true;
+        }
+      });
+      
+      return gridRow;
+    });
+  }, [samplerTracks, allTrackNotes]);
+
+  // Effect to initialize and synchronize names/notes based on samplerTracks
   useEffect(() => {
     const numRows = samplerTracks.length;
     console.log(`>>> DrumMachine (${trackId}): Syncing state with ${numRows} samplerTracks:`, samplerTracks);
@@ -428,29 +488,11 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
         return track ? track.name : `Sampler ${i + 1}`; // Use index as fallback
       });
 
-      // Initialize grid from existing MIDI notes
-      const newGrid = samplerTracks.map((track, rowIndex) => {
-        const gridRow = Array(MAX_COLUMNS).fill(false);
-        
-        // Check if track has MIDI notes and populate grid
-        if (track.midi_notes_json?.notes) {
-          track.midi_notes_json.notes.forEach(note => {
-            const column = Math.floor(note.column / TICKS_PER_STEP);
-            if (column >= 0 && column < MAX_COLUMNS) {
-              gridRow[column] = true;
-            }
-          });
-        }
-        
-        return gridRow;
-      });
-
       // Initialize drum notes from MIDI data
       const newDrumNotes = samplerTracks.map((track) => {
         return track.midi_notes_json?.notes || [];
       });
 
-      setGrid(newGrid);
       setDrumNotes(newDrumNotes);
       setDrumNames(newNames);
 
@@ -472,7 +514,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
          rndRef.current.updateSize({ width: containerSize.width, height: 200 });
       }
     }
-  // Depend on samplerTrackIds and allTracks (for names)
+  // Depend on samplerTracks for names/notes sync
   }, [ samplerTracks ]); // Added trackId for logging clarity
   
   // Existing function to close INTERNAL piano roll
@@ -609,7 +651,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
     });
   };
   
-  // Refactored toggleCell
+  // Clean toggleCell - no optimistic updates, single source of truth from store
   const toggleCell = (samplerTrackId: string, colIndex: number) => {
     const rowIndex = samplerTracks.findIndex(t => t.id === samplerTrackId);
     // Add safety check for grid row existence
@@ -618,23 +660,10 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
         return;
     }
 
-    // 1. Determine the CURRENT value and the NEW value BEFORE updating state
-    const currentCellValue = grid[rowIndex][colIndex] ?? false; // Read from current grid state
+    // Determine the CURRENT value and the NEW value from the computed grid
+    const currentCellValue = grid[rowIndex][colIndex] ?? false;
     const newCellValue = !currentCellValue;
     console.log(`Toggling cell: row=${rowIndex}, col=${colIndex}, current=${currentCellValue}, new=${newCellValue}`);
-
-    // 2. Update the local pattern state optimistically using the calculated new value
-    setGrid(prevGrid =>
-        prevGrid.map((row, rIdx) => {
-            if (rIdx === rowIndex) {
-                // Create a new row array for immutability
-                const newRow = [...row];
-                newRow[colIndex] = newCellValue; // Set the determined new value
-                return newRow;
-            }
-            return row;
-        })
-    );
 
     const samplerTrack = samplerTracks[rowIndex]; 
     if (!samplerTrack) return; 
@@ -644,6 +673,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
     const midiNoteValue = samplerTrack.base_midi_note || 60; 
 
     console.log(`>>> DrumMachine (${trackId}): toggleCell - samplerTrackId: ${samplerTrackId}, colIndex: ${colIndex}, newCellValue: ${newCellValue} <<<`);
+    
     if (newCellValue) {
       // Create note object WITH an ID
       const currentId = nextNoteId; 
