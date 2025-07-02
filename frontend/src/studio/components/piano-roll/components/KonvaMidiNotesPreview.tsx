@@ -79,7 +79,7 @@ const KonvaMidiNotesPreview: React.FC<KonvaMidiNotesPreviewProps> = ({
       const noteHeight = noteHeightScale * 0.9; // Slight gap between notes
       
       return {
-        key: `${trackId}-${note.id === -1 ? `note-${index}-${note.column}-${note.row}` : note.id}`,
+        key: `${trackId}-${`note-${index}-${note.column}-${note.row}`}`,
         x,
         y,
         width: Math.max(1, noteWidth), // Minimum 1 pixel width
