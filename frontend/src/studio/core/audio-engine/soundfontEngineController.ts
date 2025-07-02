@@ -134,50 +134,50 @@ export class SoundfontEngineController implements TrackPlayer{
     /**
      * Start or resume playback
      */
-    async play(startTimeInSeconds?: number): Promise<void> {
-        console.log(`SoundfontEngineController: Starting playback. Requested startTimeInSeconds: ${startTimeInSeconds}`);
-        if (startTimeInSeconds !== undefined) {
-            // MidiSoundfontPlayer.seek expects milliseconds
-            await this.midiPlayer.seek(startTimeInSeconds * 1000); 
-        }
-        await this.midiPlayer.play();
-    }
+    // async play(startTimeInSeconds?: number): Promise<void> {
+    //     console.log(`SoundfontEngineController: Starting playback. Requested startTimeInSeconds: ${startTimeInSeconds}`);
+    //     if (startTimeInSeconds !== undefined) {
+    //         // MidiSoundfontPlayer.seek expects milliseconds
+    //         await this.midiPlayer.seek(startTimeInSeconds * 1000); 
+    //     }
+    //     await this.midiPlayer.play();
+    // }
     
-    /**
-     * Pause playback
-     */
-    pause(): Promise<void> {
-        console.log('SoundfontEngineController: Pausing playback');
-        const trackIds = this.midiPlayer.getTrackIds();
+    // /**
+    //  * Pause playback
+    //  */
+    // pause(): Promise<void> {
+    //     console.log('SoundfontEngineController: Pausing playback');
+    //     const trackIds = this.midiPlayer.getTrackIds();
         
-        // More extensive debugging information
-        console.log('MidiPlayer detailed state:', {
-            isPlaying: this.midiPlayer.isPlayerPlaying(),
-            currentTick: this.midiPlayer.getCurrentTick(),
-            trackIds: trackIds,
-            trackCount: trackIds.length
-        });
+    //     // More extensive debugging information
+    //     console.log('MidiPlayer detailed state:', {
+    //         isPlaying: this.midiPlayer.isPlayerPlaying(),
+    //         currentTick: this.midiPlayer.getCurrentTick(),
+    //         trackIds: trackIds,
+    //         trackCount: trackIds.length
+    //     });
         
-        this.midiPlayer.pause();
-        return Promise.resolve();
-    }
+    //     this.midiPlayer.pause();
+    //     return Promise.resolve();
+    // }
     
-    /**
-     * Stop playback and reset position
-     */
-    async stop(): Promise<void> {
-        console.log('SoundfontEngineController: Stopping playback');
-        await this.midiPlayer.stop();
-    }
+    // /**
+    //  * Stop playback and reset position
+    //  */
+    // async stop(): Promise<void> {
+    //     console.log('SoundfontEngineController: Stopping playback');
+    //     await this.midiPlayer.stop();
+    // }
     
-    /**
-     * Seek to a specific position
-     * @param position Position in milliseconds or seconds
-     */
-    async seek(positionInMilliseconds: number): Promise<void> {
-        console.log(`SoundfontEngineController: Seeking to ${positionInMilliseconds}ms`);
-        await this.midiPlayer.seek(positionInMilliseconds);
-    }
+    // /**
+    //  * Seek to a specific position
+    //  * @param position Position in milliseconds or seconds
+    //  */
+    // async seek(positionInMilliseconds: number): Promise<void> {
+    //     console.log(`SoundfontEngineController: Seeking to ${positionInMilliseconds}ms`);
+    //     await this.midiPlayer.seek(positionInMilliseconds);
+    // }
     
     // Track operations
     
@@ -389,9 +389,10 @@ export class SoundfontEngineController implements TrackPlayer{
     /**
      * Pause playback
      */
-    pause(): void {
+    pause(): Promise<void> {
         console.log('SoundfontEngineController: Pausing playback');
         this.midiPlayer.pause();
+        return Promise.resolve();
     }
     
     /**

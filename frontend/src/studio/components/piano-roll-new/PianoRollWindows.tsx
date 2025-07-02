@@ -20,7 +20,7 @@ const PianoRollWindows: React.FC = memo(() => {
   const addMidiNote = useStudioStore(state => state.addMidiNote);
   const removeMidiNote = useStudioStore(state => state.removeMidiNote);
   const updateMidiNote = useStudioStore(state => state.updateMidiNote);
-  const noteVersion = useStudioStore(state => state.noteVersion); // Subscribe to note changes
+  //const noteVersion = useStudioStore(state => state.noteVersion); // Subscribe to note changes
   
   // Tool state from store
   const selectedTool = useStudioStore(state => state.selectedTool);
@@ -52,7 +52,7 @@ const PianoRollWindows: React.FC = memo(() => {
   // Depend on the raw openTrackIds array and the tracks array
   }, [openTrackIds, tracks, closePianoRoll]);
 
-  console.log('Piano Roll Windows - Render (Individual Selectors) - Open IDs:', openTrackIds, 'Note Version:', noteVersion);
+  //console.log('Piano Roll Windows - Render (Individual Selectors) - Open IDs:', openTrackIds, 'Note Version:', noteVersion);
 
   const handleNotesChange = useCallback(async (trackId: string, newNotes: NoteState[]) => {
     const prevNotes = prevNotesByTrack[trackId] || [];
@@ -119,10 +119,10 @@ const PianoRollWindows: React.FC = memo(() => {
         await executeHistoryAction(groupAction);
         
         // Increment note version once for the whole group
-        const incrementNoteVersion = useStudioStore.getState().incrementNoteVersion;
-        if (incrementNoteVersion) {
-          incrementNoteVersion();
-        }
+        // const incrementNoteVersion = useStudioStore.getState().incrementNoteVersion;
+        // if (incrementNoteVersion) {
+        //   incrementNoteVersion();
+        // }
       }
     } else {
       // Single change - use the existing individual action handlers
@@ -226,10 +226,10 @@ const PianoRollWindows: React.FC = memo(() => {
               scaleNotes={[]} 
               onClose={() => closePianoRoll(trackId)}
               // Tool state props
-              selectedTool={selectedTool}
-              snapToGrid={snapToGrid}
-              onToolChange={setSelectedTool}
-              onToggleSnapToGrid={toggleSnapToGrid}
+              //selectedTool={selectedTool}
+              //snapToGrid={snapToGrid}
+              //onToolChange={setSelectedTool}
+              //onToggleSnapToGrid={toggleSnapToGrid}
             />
           </div>
         );

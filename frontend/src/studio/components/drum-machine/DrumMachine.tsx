@@ -493,7 +493,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
         return track.midi_notes_json?.notes || [];
       });
 
-      setDrumNotes(newDrumNotes);
+      //setDrumNotes(newDrumNotes);
       setDrumNames(newNames);
 
       // Adjust container height based on the number of rows
@@ -506,7 +506,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
     } else {
       // Handle case where there are no sampler tracks (e.g., initially or after deletion)
       console.log(`DrumMachine (${trackId}): No samplerTrackIds found. Clearing state.`);
-      setGrid([]);
+      //setGrid([]);
       setDrumNotes([]);
       setDrumNames([]);
       setContainerSize(prev => ({ ...prev, height: 200 })); // Reset to min height
@@ -565,7 +565,6 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
     // Update the grid for this drum
     const newGrid = [...grid];
     newGrid[drumIndex] = newGridRow;
-    setGrid(newGrid);
   };
   
   // Function to create a note for a grid cell - Reverted to generate ID
@@ -630,7 +629,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
       // THEN update local state (keep existing logic from reset file)
       // This part assumes the reset file had this logic based on index
       const newDrumNames = [...drumNames]; newDrumNames.splice(index, 1); setDrumNames(newDrumNames);
-      const newGrid = [...grid]; newGrid.splice(index, 1); setGrid(newGrid);
+      //const newGrid = [...grid]; newGrid.splice(index, 1); setGrid(newGrid);
       const newDrumNotes = [...drumNotes]; newDrumNotes.splice(index, 1); setDrumNotes(newDrumNotes);
       if (openPianoRolls.has(index)) closeInternalPianoRoll(index); // Keep if reset had internal rolls
       const newOpenPianoRolls = new Set<number>(); openPianoRolls.forEach(rollIndex => { if (rollIndex < index) newOpenPianoRolls.add(rollIndex); else if (rollIndex > index) newOpenPianoRolls.add(rollIndex - 1); }); setOpenPianoRolls(newOpenPianoRolls);
