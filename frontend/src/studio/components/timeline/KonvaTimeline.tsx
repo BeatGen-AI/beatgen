@@ -157,6 +157,21 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     }
   }, [zoomLevel]);
   
+  // Sync grid snap size with prop
+  useEffect(() => {
+    if (propGridSnapSize !== undefined && propGridSnapSize !== gridSnapSize) {
+      setGridSnapSize(propGridSnapSize);
+      
+      // If setting to NONE, disable grid snapping
+      if (propGridSnapSize === GridSnapOption.NONE) {
+        setGridSnapEnabled(false);
+      } else if (!gridSnapEnabled && propGridSnapSize !== GridSnapOption.NONE) {
+        // If selecting a size other than NONE and grid was disabled, enable it
+        setGridSnapEnabled(true);
+      }
+    }
+  }, [propGridSnapSize]);
+  
   // Calculate pixels per tick (moved before calculateContentWidth)
   const pixelsPerTick = useMemo(() => {
     const beatsPerMeasure = timeSignature[0];
