@@ -40,7 +40,6 @@ export interface KonvaTimelineProps {
   // Selection and tool integration
   selectedTool?: Tool;
   onToolChange?: (tool: Tool) => void;
-  showToolbar?: boolean;
   gridSnapSize?: GridSnapOption;
   onTrackSelect?: (trackIds: string[]) => void;
   onTrackDelete?: (trackId: string) => void;
@@ -103,7 +102,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   onTimeChange = () => {},
   selectedTool = 'select',
   onToolChange,
-  showToolbar = false,
   gridSnapSize: propGridSnapSize,
   onTrackSelect,
   onTrackDelete,
@@ -149,6 +147,10 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   const konvaBaseRef = useRef<any>(null);
   const playbackCursorRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Refs for pinch zoom handling
+  const touchStartDistanceRef = useRef<number | null>(null);
+  const touchStartZoomRef = useRef<number>(1);
   
   // Sync internal zoom with prop
   useEffect(() => {
@@ -687,6 +689,11 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       
+      // Get the mouse position relative to the timeline for zoom centering
+      const rect = containerRef.current?.getBoundingClientRect();
+      const mouseX = rect ? e.clientX - rect.left + scrollX : scrollX;
+      const timelineX = mouseX / internalZoom;
+      
       const scaleBy = 1.1;
       const direction = e.deltaY < 0 ? 1 : -1;
       const newScale = direction > 0 ? internalZoom * scaleBy : internalZoom / scaleBy;
@@ -694,14 +701,57 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       
       setInternalZoom(clampedScale);
       onZoomChange?.(clampedScale);
+      
+      // Adjust scroll position to keep the mouse position centered
+      if (containerRef.current) {
+        const newMouseX = timelineX * clampedScale;
+        const newScrollX = newMouseX - (mouseX - scrollX);
+        containerRef.current.scrollLeft = newScrollX;
+      }
     }
-  }, [internalZoom, onZoomChange]);
+  }, [internalZoom, onZoomChange, scrollX]);
   
   // Handle ruler click
   const handleRulerClick = useCallback((timeInSeconds: number) => {
     // Time is already in seconds, just pass it through
     onTimeChange(timeInSeconds);
   }, [onTimeChange]);
+  
+  // Handle touch events for pinch zoom
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2) {
+      // Calculate initial horizontal distance between touches
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const horizontalDistance = Math.abs(touch2.clientX - touch1.clientX);
+      
+      touchStartDistanceRef.current = horizontalDistance;
+      touchStartZoomRef.current = internalZoom;
+    }
+  }, [internalZoom]);
+  
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2 && touchStartDistanceRef.current !== null) {
+      e.preventDefault(); // Prevent browser zoom
+      
+      // Calculate current horizontal distance between touches
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const currentHorizontalDistance = Math.abs(touch2.clientX - touch1.clientX);
+      
+      // Calculate scale based on horizontal distance only
+      const scale = currentHorizontalDistance / touchStartDistanceRef.current;
+      const newZoom = touchStartZoomRef.current * scale;
+      const clampedZoom = Math.max(0.25, Math.min(4, newZoom));
+      
+      setInternalZoom(clampedZoom);
+      onZoomChange?.(clampedZoom);
+    }
+  }, [onZoomChange]);
+  
+  const handleTouchEnd = useCallback(() => {
+    touchStartDistanceRef.current = null;
+  }, []);
   
   // Imperative handle
   useImperativeHandle(ref, () => ({
@@ -751,9 +801,18 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
           right: 0,
           bottom: 0,
           overflow: 'auto',
-          backgroundColor: studioMode === 'dark' ? '#000000' : '#ffffff'
+          backgroundColor: studioMode === 'dark' ? '#000000' : '#ffffff',
+          // Prevent ALL zoom and pinch gestures - only allow horizontal panning
+          touchAction: 'pan-x',
+          // Prevent zoom on iOS Safari
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none'
         }}
         onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onScroll={(e) => {
           const target = e.currentTarget;
           const newScrollX = target.scrollLeft;

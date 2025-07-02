@@ -190,6 +190,73 @@ function Studio({ projectId }: StudioProps) {
     }
   }, []); // Empty dependency array to run once on mount
 
+  // Prevent browser zoom when studio is mounted
+  useEffect(() => {
+    // Add styles to prevent zoom - only allow horizontal panning
+    document.body.style.touchAction = 'pan-x';
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    document.body.style.msUserSelect = 'none';
+    
+    // Add meta viewport tag to prevent zoom
+    const metaViewport = document.querySelector('meta[name="viewport"]');
+    const originalContent = metaViewport?.getAttribute('content') || '';
+    
+    if (metaViewport) {
+      metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    }
+    
+    // Handle zoom with keyboard shortcuts
+    const handleKeydown = (e: KeyboardEvent) => {
+      // Handle Cmd/Ctrl + Plus/Minus/0
+      if ((e.metaKey || e.ctrlKey) && (e.key === '+' || e.key === '-' || e.key === '0' || e.key === '=')) {
+        e.preventDefault();
+        
+        let newZoom = zoomLevel;
+        
+        if (e.key === '+' || e.key === '=') {
+          // Zoom in by 0.1
+          newZoom = zoomLevel + 0.1;
+        } else if (e.key === '-') {
+          // Zoom out by 0.1
+          newZoom = zoomLevel - 0.1;
+        } else if (e.key === '0') {
+          // Reset zoom
+          newZoom = 1;
+        }
+        
+        // Clamp zoom level
+        const clampedZoom = Math.max(0.25, Math.min(4, newZoom));
+        setZoomLevel(clampedZoom);
+      }
+    };
+    
+    // Prevent wheel zoom globally when Cmd/Ctrl is pressed
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      // Restore original body styles
+      document.body.style.touchAction = '';
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
+      document.body.style.msUserSelect = '';
+      
+      // Restore original viewport settings
+      if (metaViewport && originalContent) {
+        metaViewport.setAttribute('content', originalContent);
+      }
+      document.removeEventListener('keydown', handleKeydown);
+      document.removeEventListener('wheel', handleWheel);
+    };
+  }, [zoomLevel, setZoomLevel]);
+
   // Initialize audio engine
   useEffect(() => {
     console.log('>>> Studio useEffect <<<');
@@ -432,6 +499,11 @@ function Studio({ projectId }: StudioProps) {
         color: 'text.primary',
         display: 'flex',
         flexDirection: 'column',
+        // Prevent zoom - only allow horizontal pan
+        touchAction: 'pan-x',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
       }}>
         <StudioControlBar
           ref={controlBarRef}
@@ -464,7 +536,6 @@ function Studio({ projectId }: StudioProps) {
           onAutoSaveRetry={() => autoSave.forceSave()}
           selectedTool={selectedTool}
           snapToGrid={snapToGrid}
-          showToolbar={true}
           gridSnapSize={gridSnapSize}
           onToolChange={setSelectedTool}
           onToggleSnapToGrid={toggleSnapToGrid}
@@ -637,7 +708,6 @@ function Studio({ projectId }: StudioProps) {
               zoomLevel={zoomLevel}
               bpm={bpm}
               timeSignature={timeSignature}
-              showToolbar={false}
               gridSnapSize={gridSnapSize}
               onTrackPositionChange={handleTrackPositionChange}
               onZoomChange={setZoomLevel}

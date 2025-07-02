@@ -35,7 +35,6 @@ interface StudioControlBarProps {
     // Tool system props
     selectedTool?: Tool;
     snapToGrid?: boolean;
-    showToolbar?: boolean;
     gridSnapSize?: GridSnapOption;
 
     // Handlers
@@ -76,7 +75,6 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     autoSaveMessage,
     selectedTool = 'select',
     snapToGrid = true,
-    showToolbar = true,
     gridSnapSize = GridSnapOption.STEP,
     onUndo,
     onRedo,
@@ -301,25 +299,23 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     alignItems: 'center',
                     gap: 1
                 }}>
-                    {showToolbar && (
-                        <Tooltip title={`Grid snap: ${getGridSnapOptionName(gridSnapSize)}`}>
-                            <IconButton
-                                size="small"
-                                color="inherit"
-                                onClick={handleGridClick}
-                                sx={{
-                                    borderRadius: '8px',
-                                    backgroundColor: snapToGrid ? theme.palette.action.selected : 'transparent',
-                                    '&:hover': {
-                                        backgroundColor: theme.palette.action.hover,
-                                    },
-                                }}
-                                disableRipple
-                            >
-                                {snapToGrid ? <GridIcon /> : <GridOffIcon />}
-                            </IconButton>
-                        </Tooltip>
-                    )}
+                    <Tooltip title={`Grid snap: ${getGridSnapOptionName(gridSnapSize)}`}>
+                        <IconButton
+                            size="small"
+                            color="inherit"
+                            onClick={handleGridClick}
+                            sx={{
+                                borderRadius: '8px',
+                                backgroundColor: snapToGrid ? theme.palette.action.selected : 'transparent',
+                                '&:hover': {
+                                    backgroundColor: theme.palette.action.hover,
+                                },
+                            }}
+                            disableRipple
+                        >
+                            {snapToGrid ? <GridIcon /> : <GridOffIcon />}
+                        </IconButton>
+                    </Tooltip>
                     <IconButton
                         size="small"
                         color="inherit"
