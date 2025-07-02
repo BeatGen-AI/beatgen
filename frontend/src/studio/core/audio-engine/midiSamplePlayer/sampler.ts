@@ -192,7 +192,10 @@ class MidiSampler {
         // Schedule all notes
         for (const note of this.notes) {
             // Calculate note time based on grid position
-            const noteTimeInSeconds = note.column / (bpm * 8);
+            // Convert ticks to beats, then beats to seconds
+            const ppq = 480; // MUSIC_CONSTANTS.pulsesPerQuarterNote
+            const beats = note.column / ppq;
+            const noteTimeInSeconds = beats * (60 / bpm);
             
             // Only schedule notes that should play after the effective start time
             if (noteTimeInSeconds >= effectiveStartTime) {

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Konva Timeline Resize Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        #instructions {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #333;
+            border-radius: 5px;
+        }
+        #instructions h2 {
+            margin-top: 0;
+        }
+        #instructions ol {
+            margin: 10px 0;
+        }
+        #instructions li {
+            margin: 5px 0;
+        }
+        .highlight {
+            color: #4a90e2;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        <h2>Konva Timeline Resize Test Instructions</h2>
+        <p>This test verifies that resize handles are now functional in the Konva-based timeline.</p>
+        
+        <h3>What was fixed:</h3>
+        <ol>
+            <li>Added <span class="highlight">onResizeStart</span> prop to KonvaTrack component</li>
+            <li>Connected resize handle mouse events to call <span class="highlight">onResizeStart</span></li>
+            <li>Modified KonvaTimeline to pass resize handler that calls <span class="highlight">interaction.startResize</span></li>
+            <li>Exposed <span class="highlight">startResize</span> method from useKonvaInteractions hook</li>
+        </ol>
+        
+        <h3>How to test:</h3>
+        <ol>
+            <li>Open the Studio with Konva timeline enabled</li>
+            <li>Add or select a track in the timeline</li>
+            <li>Click on the track to select it (you should see selection outline)</li>
+            <li>Hover over the <span class="highlight">left or right edge</span> of the selected track</li>
+            <li>The cursor should change to <span class="highlight">resize cursor (↔)</span></li>
+            <li>Click and drag the edge to resize the track</li>
+            <li>The track should resize with <span class="highlight">grid snapping</span> if enabled</li>
+            <li>Check console for resize logs: <span class="highlight">"[KonvaTimeline] onResizeStart called"</span></li>
+        </ol>
+        
+        <h3>Expected behavior:</h3>
+        <ul>
+            <li>Left resize: Changes both position and width (trim from start)</li>
+            <li>Right resize: Changes only width (trim from end)</li>
+            <li>Grid snapping should work during resize</li>
+            <li>Multiple selected tracks should resize together</li>
+        </ul>
+    </div>
+</body>
+</html>

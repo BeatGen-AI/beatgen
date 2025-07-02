@@ -363,21 +363,65 @@ export class SamplerController implements TrackPlayer {
      * Delegates actual scheduling and playback to individual MidiSampler instances.
      * @param startTime The transport time to start from (in seconds).
      * @param bpm Current BPM for timing calculations.
+     * @param tracks Optional track information with instances
+     * @param midiManager Optional MidiManager for instance-aware playback
      */
-    async play(startTime: number = 0, bpm: number = 120): Promise<void> {
+    async play(startTime: number = 0, bpm: number = 120, tracks?: any[], midiManager?: any): Promise<void> {
         console.log(`SamplerController: Starting playback for all samplers from ${startTime}s`);
-        const samplerTracks = this.getActiveSamplerIds();
-
-        for (const trackId of samplerTracks) {
-            const sampler = this.samplers.get(trackId);
-            if (sampler) {
-                try {
-                    // Ensure sampler has latest notes (it should via subscription)
-                    // const notes = sampler.getNotes(); // Optional: log note count
-                    // console.log(`Starting playback for sampler track ${trackId} with ${notes?.length ?? 0} notes`);
-                    sampler.playMidi(bpm, startTime); // Delegate playback to the sampler
-                } catch (error) {
-                    console.error(`SamplerController: Error starting playback for track ${trackId}:`, error);
+        
+        // If tracks and midiManager are provided, use instance-aware playback
+        if (tracks && midiManager) {
+            for (const track of tracks) {
+                if (track.track_type === 'SAMPLER' && track.instances) {
+                    const sampler = this.samplers.get(track.id);
+                    if (!sampler) continue;
+                    
+                    // Collect all notes from all instances
+                    const allNotes = [];
+                    
+                    // Process each instance
+                    for (const instance of track.instances) {
+                        try {
+                            // Get notes for this specific instance with position adjustment
+                            const instanceNotes = midiManager.getInstanceNotesForPlayback(
+                                track.id,
+                                instance.id,
+                                instance.x_position,
+                                instance.trim_start_ticks,
+                                instance.trim_end_ticks
+                            );
+                            
+                            if (instanceNotes.length > 0) {
+                                console.log(`Sampler track ${track.id} instance ${instance.id}: ${instanceNotes.length} notes at x_position ${instance.x_position}`);
+                                // The notes already have their columns adjusted by instance position
+                                allNotes.push(...instanceNotes);
+                            }
+                        } catch (error) {
+                            console.error(`SamplerController: Error processing instance ${instance.id} of track ${track.id}:`, error);
+                        }
+                    }
+                    
+                    // Play all collected notes
+                    if (allNotes.length > 0) {
+                        console.log(`Playing sampler track ${track.id} with ${allNotes.length} total notes from ${track.instances.length} instances`);
+                        // Notes already have correct timing, no offset needed
+                        sampler.setOffset(0);
+                        sampler.setNotes(allNotes);
+                        sampler.playMidi(bpm, startTime);
+                    }
+                }
+            }
+        } else {
+            // Fallback to old approach
+            const samplerTracks = this.getActiveSamplerIds();
+            for (const trackId of samplerTracks) {
+                const sampler = this.samplers.get(trackId);
+                if (sampler) {
+                    try {
+                        sampler.playMidi(bpm, startTime);
+                    } catch (error) {
+                        console.error(`SamplerController: Error starting playback for track ${trackId}:`, error);
+                    }
                 }
             }
         }

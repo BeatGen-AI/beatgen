@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import { Store } from '../../core/state/store';
-import { ProjectWithTracks, CombinedTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead } from 'src/platform/types/project';
+import { ProjectWithTracks, CombinedTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, CombinedTrackEntity } from 'src/platform/types/project';
 import { getProject } from '../../../platform/api/projects';
 import { Actions } from '../../core/state/history/actions';
 import { DEFAULT_SAMPLER_CONFIG, TRACK_CONFIG } from '../config';
@@ -107,15 +107,14 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         const combinedSamplerTrack: CombinedTrack = {
           id: samplerTrack.id,
           name: samplerTrack.name,
-          type: 'SAMPLER',
+          track_type: 'SAMPLER',
+          track_number: track.track_number,
           volume: track.volume, // Inherit properties from parent drum track? Or use sampler's own?
           pan: track.pan,       // Assuming sampler tracks don't have their own top-level vol/pan in API
           mute: track.mute,
-          x_position: track.x_position, // Samplers might not have independent positions?
-          y_position: track.y_position, 
-          trim_start_ticks: track.trim_start_ticks ?? 0, // Use parent track's trim/duration
-          trim_end_ticks: track.trim_end_ticks ?? 0,
           duration_ticks: track.duration_ticks ?? 0,
+          // Use instance_metadata from parent track
+          instances: track.instances || [],
           track: { // Construct the nested 'track' part for the sampler
             ...samplerTrack, // Spread the specific SamplerTrackRead data
             id: samplerTrack.id, // Redundant but ensures consistency
@@ -244,29 +243,24 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
       }
 
       const processLogic = async (store: Store): Promise<CombinedTrack | null> => {
-          const trackType = apiTrack.type as TrackType;
+          const trackType = apiTrack.track_type as TrackType;
           if (!TRACK_CONFIG[trackType]) { 
             console.error("Invalid track type from API:", trackType);
             return null;
           }
-          const position = {
-              x: apiTrack.x_position ?? 0,
-              y: apiTrack.y_position ?? (index * GRID_CONSTANTS.trackHeight)
-          };
-
-          const combinedTrackData: Omit<CombinedTrack, 'track'> & { track?: any } = {
+          const combinedTrackData: CombinedTrackEntity = {
               id: apiTrack.id,
               name: apiTrack.name,
-              type: trackType,
+              track_number: apiTrack.track_number,
+              track_type: trackType,
               volume: apiTrack.volume ?? 80,
               pan: apiTrack.pan ?? 0,
               mute: apiTrack.mute ?? false,
-              x_position: position.x,
-              y_position: position.y,
-              trim_start_ticks: apiTrack.trim_start_ticks ?? 0,
-              trim_end_ticks: apiTrack.trim_end_ticks ?? 0, 
               duration_ticks: apiTrack.duration_ticks ?? 0,
+              // Map instance_metadata to instances
+              instances: apiTrack.instance_metadata || [],
               dirty: false, // Loaded tracks are clean (already saved)
+              track: apiTrack.track,
           };
 
           // 2. Populate the nested .track property based on type
@@ -322,7 +316,11 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           audioEngine.setTrackVolume(finalCombinedTrack.id, finalCombinedTrack.volume);
           audioEngine.setTrackPan(finalCombinedTrack.id, finalCombinedTrack.pan);
           audioEngine.setTrackMute(finalCombinedTrack.id, finalCombinedTrack.mute);
-          audioEngine.setTrackPosition(finalCombinedTrack.id, finalCombinedTrack.x_position, finalCombinedTrack.y_position);
+          // Set position based on first instance if available
+          const firstInstance = finalCombinedTrack.instances?.[0];
+          if (firstInstance) {
+              audioEngine.setTrackPosition(finalCombinedTrack.id, firstInstance.x_position, firstInstance.y_position);
+          }
           
           // Load audio file specifically for audio tracks during initial processing
           if (trackType === 'AUDIO' && finalCombinedTrack.track && 'audio_file_storage_key' in finalCombinedTrack.track) {
@@ -364,10 +362,10 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         const midiManager = store.getMidiManager();
 
         for (const track of tracks) {
-          console.log(`Connecting track ${track.id} (type: ${track.type})`);
+          console.log(`Connecting track ${track.id} (type: ${track.track_type})`);
           try {
               // --- MIDI Connection --- 
-              if (track.type === 'MIDI' && track.track && 'instrument_id' in track.track) {
+              if (track.track_type === 'MIDI' && track.track && 'instrument_id' in track.track) {
                   const instrumentId = track.track.instrument_id;
                   if (instrumentId) {
                       await store.connectTrackToSoundfont(track.id, instrumentId);
@@ -383,10 +381,18 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       console.log(`No MIDI notes to load for track ${track.id}`);
                       midiManager.updateTrack(track.id, []);
                   }
+                  
+                  // Register all instances with MidiManager
+                  if (track.instances) {
+                      track.instances.forEach((instance, index) => {
+                          console.log(`Registering MIDI track ${track.id} instance ${instance.id}`);
+                          midiManager.registerInstance(track.id, instance.id);
+                      });
+                  }
               }
               
               // --- Audio Connection --- 
-              else if (track.type === 'AUDIO') {
+              else if (track.track_type === 'AUDIO') {
                   console.log(`Attempting to connect audio track ${track.id}... checking Dexie.`);
                   const fileFromDb = await db.getAudioFile(track.id);
                   if (fileFromDb?.data) {
@@ -404,7 +410,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
               }
 
               // --- Sampler Connection --- 
-              else if (track.type === 'SAMPLER') {
+              else if (track.track_type === 'SAMPLER') {
                   if (!samplerController || !midiManager) {
                       console.warn(`SamplerController/MidiManager missing for sampler track ${track.id}`);
                       continue;
@@ -441,9 +447,17 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                   console.log(`Converted ${convertedNotes.length} notes for sampler track ${track.id}: ${JSON.stringify(convertedNotes)}`);
                   midiManager.updateTrack(track.id, convertedNotes);
                   samplerController.registerTrackSubscription(track.id, midiManager);
+                  
+                  // Register all instances with MidiManager
+                  if (track.instances) {
+                      track.instances.forEach((instance, index) => {
+                          console.log(`Registering sampler track ${track.id} instance ${instance.id}`);
+                          midiManager.registerInstance(track.id, instance.id);
+                      });
+                  }
               }
           } catch (error) {
-               console.error(`Error connecting track ${track.id} (type: ${track.type}):`, error);
+               console.error(`Error connecting track ${track.id} (type: ${track.track_type}):`, error);
           }
         }
       }
@@ -458,10 +472,10 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
       let storageKey: string | undefined | null = null;
       let fileType: string = 'audio'; // Default or determine based on track type
 
-      if (track.type === 'AUDIO' && track.track && 'audio_file_storage_key' in track.track) {
+      if (track.track_type === 'AUDIO' && track.track && 'audio_file_storage_key' in track.track) {
         storageKey = track.track.audio_file_storage_key;
         fileType = track.track.audio_file_format || fileType;
-      } else if (track.type === 'SAMPLER' && track.track && 'audio_storage_key' in track.track) {
+      } else if (track.track_type === 'SAMPLER' && track.track && 'audio_storage_key' in track.track) {
         storageKey = track.track.audio_storage_key;
         fileType = track.track.audio_file_format || fileType; // Distinguish sampler audio if needed
       }
@@ -526,16 +540,16 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
 
         // Associate sampler tracks with drum tracks
         tracksToProcess.forEach((track) => {
-          if (track.type === 'SAMPLER' && track.track && 'drum_track_id' in track.track) {
+          if (track.track_type === 'SAMPLER' && track.track && 'drum_track_id' in track.track) {
             console.log(`Processing sampler track ${track.id} with drum_track_id ${track.track.drum_track_id}`);
             const samplerTrackData = track.track as SamplerTrackRead; // Cast for type safety
             const drumTrackId = samplerTrackData.drum_track_id;
             const samplerTrackId = track.id;
 
             if (drumTrackId) {
-              const drumTrack = tracksToProcess.find(t => t.id === drumTrackId && t.type === 'DRUM');
+              const drumTrack = tracksToProcess.find(t => t.id === drumTrackId && t.track_type === 'DRUM');
               // Explicitly check if the found track is a drum track before accessing drum-specific properties
-              if (drumTrack && drumTrack.type === 'DRUM' && drumTrack.track) {
+              if (drumTrack && drumTrack.track_type === 'DRUM' && drumTrack.track) {
                  const drumTrackData = drumTrack.track as DrumTrackRead; // Now safe to cast
                  // Ensure samplerTrackIds array exists
                  if (!drumTrackData.sampler_track_ids) {

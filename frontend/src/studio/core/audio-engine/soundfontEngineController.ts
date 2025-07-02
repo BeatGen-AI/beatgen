@@ -134,50 +134,50 @@ export class SoundfontEngineController implements TrackPlayer{
     /**
      * Start or resume playback
      */
-    async play(startTimeInSeconds?: number): Promise<void> {
-        console.log(`SoundfontEngineController: Starting playback. Requested startTimeInSeconds: ${startTimeInSeconds}`);
-        if (startTimeInSeconds !== undefined) {
-            // MidiSoundfontPlayer.seek expects milliseconds
-            await this.midiPlayer.seek(startTimeInSeconds * 1000); 
-        }
-        await this.midiPlayer.play();
-    }
+    // async play(startTimeInSeconds?: number): Promise<void> {
+    //     console.log(`SoundfontEngineController: Starting playback. Requested startTimeInSeconds: ${startTimeInSeconds}`);
+    //     if (startTimeInSeconds !== undefined) {
+    //         // MidiSoundfontPlayer.seek expects milliseconds
+    //         await this.midiPlayer.seek(startTimeInSeconds * 1000); 
+    //     }
+    //     await this.midiPlayer.play();
+    // }
     
-    /**
-     * Pause playback
-     */
-    pause(): Promise<void> {
-        console.log('SoundfontEngineController: Pausing playback');
-        const trackIds = this.midiPlayer.getTrackIds();
+    // /**
+    //  * Pause playback
+    //  */
+    // pause(): Promise<void> {
+    //     console.log('SoundfontEngineController: Pausing playback');
+    //     const trackIds = this.midiPlayer.getTrackIds();
         
-        // More extensive debugging information
-        console.log('MidiPlayer detailed state:', {
-            isPlaying: this.midiPlayer.isPlayerPlaying(),
-            currentTick: this.midiPlayer.getCurrentTick(),
-            trackIds: trackIds,
-            trackCount: trackIds.length
-        });
+    //     // More extensive debugging information
+    //     console.log('MidiPlayer detailed state:', {
+    //         isPlaying: this.midiPlayer.isPlayerPlaying(),
+    //         currentTick: this.midiPlayer.getCurrentTick(),
+    //         trackIds: trackIds,
+    //         trackCount: trackIds.length
+    //     });
         
-        this.midiPlayer.pause();
-        return Promise.resolve();
-    }
+    //     this.midiPlayer.pause();
+    //     return Promise.resolve();
+    // }
     
-    /**
-     * Stop playback and reset position
-     */
-    async stop(): Promise<void> {
-        console.log('SoundfontEngineController: Stopping playback');
-        await this.midiPlayer.stop();
-    }
+    // /**
+    //  * Stop playback and reset position
+    //  */
+    // async stop(): Promise<void> {
+    //     console.log('SoundfontEngineController: Stopping playback');
+    //     await this.midiPlayer.stop();
+    // }
     
-    /**
-     * Seek to a specific position
-     * @param position Position in milliseconds or seconds
-     */
-    async seek(positionInMilliseconds: number): Promise<void> {
-        console.log(`SoundfontEngineController: Seeking to ${positionInMilliseconds}ms`);
-        await this.midiPlayer.seek(positionInMilliseconds);
-    }
+    // /**
+    //  * Seek to a specific position
+    //  * @param position Position in milliseconds or seconds
+    //  */
+    // async seek(positionInMilliseconds: number): Promise<void> {
+    //     console.log(`SoundfontEngineController: Seeking to ${positionInMilliseconds}ms`);
+    //     await this.midiPlayer.seek(positionInMilliseconds);
+    // }
     
     // Track operations
     
@@ -315,6 +315,101 @@ export class SoundfontEngineController implements TrackPlayer{
             console.error(`Failed to connect track ${trackId} to soundfont ${instrumentId}:`, error);
             throw error;
         }
+    }
+    
+    /**
+     * Transport integration - play method for soundfont tracks
+     * @param startTime Transport position to start from (in seconds)
+     * @param tracks Optional track information with instances
+     * @param midiManager Optional MidiManager for instance-aware playback
+     */
+    async play(startTime: number = 0, tracks?: any[], midiManager?: any): Promise<void> {
+        console.log(`SoundfontEngineController: Starting playback from ${startTime}s`);
+        
+        // If tracks and midiManager are provided, set up instance-aware playback
+        if (tracks && midiManager) {
+            // Process each MIDI track's instances
+            tracks.forEach(track => {
+                if (track.track_type !== 'MIDI') return;
+                
+                // Skip tracks without instances
+                if (!track.instances || track.instances.length === 0) return;
+                
+                // Aggregate all notes from all instances
+                const allNotes = [];
+                
+                console.log(`Processing MIDI track ${track.id} with ${track.instances.length} instances (all sharing notes)`);
+                
+                // Process each instance of the track
+                track.instances.forEach((instance, idx) => {
+                    try {
+                        console.log(`Getting notes for instance ${instance.id}:`, {
+                            x_position: instance.x_position,
+                            trim_start: instance.trim_start_ticks,
+                            trim_end: instance.trim_end_ticks
+                        });
+                        
+                        const instanceNotes = midiManager.getInstanceNotesForPlayback(
+                            track.id,
+                            instance.id,
+                            instance.x_position,
+                            instance.trim_start_ticks,
+                            instance.trim_end_ticks
+                        );
+                        
+                        console.log(`MIDI track ${track.id} instance ${instance.id}: ${instanceNotes.length} notes`);
+                        
+                        // Add all notes from this instance to the aggregate
+                        allNotes.push(...instanceNotes);
+                    } catch (error) {
+                        console.error(`Error preparing instance ${instance.id} of MIDI track ${track.id}:`, error);
+                    }
+                });
+                
+                // Update the track's sequencer with ALL aggregated notes
+                const existingTrack = this.midiPlayer.getTrack(track.id);
+                console.log(`MIDI track ${track.id}: existingTrack=${!!existingTrack}, totalNotes=${allNotes.length}`);
+                
+                if (existingTrack && allNotes.length > 0) {
+                    console.log(`Updating MIDI track ${track.id} with ${allNotes.length} total notes from ${track.instances.length} instances`);
+                    existingTrack.updateWithNotes(allNotes);
+                } else if (!existingTrack) {
+                    console.warn(`No existing track player for MIDI track ${track.id}`);
+                } else {
+                    console.warn(`No notes found for MIDI track ${track.id} after processing all instances`);
+                }
+            });
+        }
+        
+        // Start playback from the specified time
+        await this.midiPlayer.seek(startTime * 1000); // Convert to milliseconds
+        await this.midiPlayer.play();
+    }
+    
+    /**
+     * Pause playback
+     */
+    pause(): Promise<void> {
+        console.log('SoundfontEngineController: Pausing playback');
+        this.midiPlayer.pause();
+        return Promise.resolve();
+    }
+    
+    /**
+     * Stop playback and reset
+     */
+    async stop(): Promise<void> {
+        console.log('SoundfontEngineController: Stopping playback');
+        await this.midiPlayer.stop();
+    }
+    
+    /**
+     * Seek to a specific position
+     * @param position Position in seconds
+     */
+    async seek(position: number): Promise<void> {
+        console.log(`SoundfontEngineController: Seeking to ${position}s`);
+        await this.midiPlayer.seek(position * 1000); // Convert to ms
     }
     
     /**

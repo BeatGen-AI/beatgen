@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Resize Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #333;
+            border-radius: 5px;
+        }
+        .status { 
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        .good { background: #2a4a2a; }
+        .bad { background: #4a2a2a; }
+        .info { background: #2a2a4a; }
+    </style>
+</head>
+<body>
+    <h1>Timeline Resize Test</h1>
+    
+    <div class="test-section">
+        <h2>1. Grid Menu Visibility</h2>
+        <div class="status info">
+            Check if the toolbar is visible at the top of the timeline with:
+            - Tool selection buttons (Select, Pen, Highlighter, Eraser)
+            - Grid icon button with dropdown menu
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Snap-to-Grid During Resize</h2>
+        <div class="status info">
+            Test procedure:
+            1. Add some tracks to the timeline
+            2. Try resizing a single track - should snap to grid
+            3. Select multiple tracks (Shift+click)
+            4. Resize any selected track - all should resize together
+            5. Change grid size in dropdown - resize snap should change
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Known Issues</h2>
+        <div class="status bad">
+            - Timeline was directly manipulating DOM (now fixed)
+            - Two different resize code paths may behave differently
+            - Need to verify actualSnapSize is passed correctly
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Expected Behavior</h2>
+        <div class="status good">
+            ✓ Grid menu visible with snap options (None, Steps, Beats, Bar)
+            ✓ Resize snaps during drag (not just on release)
+            ✓ Both individual and group resize respect grid snap
+            ✓ Changing grid size immediately affects resize behavior
+            ✓ Setting to "None" disables snapping
+        </div>
+    </div>
+
+    <script>
+        console.log('Test page loaded. Open the app at https://localhost:5173 to test resize functionality.');
+    </script>
+</body>
+</html>

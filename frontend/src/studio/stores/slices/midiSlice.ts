@@ -10,11 +10,14 @@ import { Actions } from '../../core/state/history/actions';
 // Define the actions for this slice
 // This slice might not hold state directly, as MidiManager is the source of truth
 export interface MidiSlice {
-  addMidiNote: (trackId: string, note: NoteState) => void;
+  noteVersion: number; // Increments whenever notes change (add/remove/update/undo/redo)
+  addMidiNote: (trackId: string, note: NoteState, instanceId?: string) => void;
   removeMidiNote: (trackId: string, noteId: number) => void;
   updateMidiNote: (trackId: string, note: NoteState) => void;
   getTrackNotes: (trackId: string) => Note[] | null;
-  removeSamplerNote: (trackId: string, tickPosition: number, midiRow: number) => Promise<void>;
+  getInstanceNotes: (trackId: string, instanceId: string) => Note[] | null;
+  removeSamplerNote: (trackId: string, tickPosition: number, midiRow: number, instanceId?: string) => Promise<void>;
+  incrementNoteVersion: () => void; // Helper to increment version
 }
 
 // Create the slice function
@@ -27,14 +30,27 @@ export const createMidiSlice: StoreSliceCreator<MidiSlice> = (set, get) => {
     // Fix: Assume store has a getMidiManager() method
     return store?.getMidiManager ? store.getMidiManager() : null; 
   };
+  
+  // Helper to increment note version
+  const incrementNoteVersion = () => {
+    set((state) => ({
+      noteVersion: (state.noteVersion || 0) + 1
+    }));
+  };
 
   // Add a MIDI note to a track and record history
-  const addMidiNote = async (trackId: string, note: NoteState): Promise<void> => {
+  const addMidiNote = async (trackId: string, note: NoteState, instanceId?: string): Promise<void> => {
     const { store, _withErrorHandling, executeHistoryAction } = rootGet();
     const midiManager = getMidiManager();
     if (!store || !_withErrorHandling || !executeHistoryAction) { return; }
     
     const internalNoteData = convertFromNoteState({ ...note, id: -1 }, trackId); 
+    
+    // Add instanceId to the note if provided
+    if (instanceId) {
+      internalNoteData.instanceId = instanceId;
+    }
+    
     // History action needs a stable ID for undo. 
     // This still assumes MidiManager assigns ID internally upon add.
     // The Action's execute/undo might need modification to handle this properly.
@@ -47,6 +63,9 @@ export const createMidiSlice: StoreSliceCreator<MidiSlice> = (set, get) => {
         // Create action - Its execute method will call midiManager.addNoteToTrack
         const action = new Actions.AddNote(get, trackId, tempNoteIdString, internalNoteData);
         await executeHistoryAction(action);
+        
+        // Increment note version after successful add
+        incrementNoteVersion();
     };
     await _withErrorHandling(addLogic, 'addMidiNote')();
   };
@@ -66,15 +85,25 @@ export const createMidiSlice: StoreSliceCreator<MidiSlice> = (set, get) => {
         // Create action - Its execute method will call midiManager.removeNoteFromTrack
         const action = new Actions.DeleteNote(get, trackId, noteId.toString(), { ...originalNote }); 
         await executeHistoryAction(action);
+        
+        // Increment note version after successful remove
+        incrementNoteVersion();
     };
     await _withErrorHandling(removeLogic, 'removeMidiNote')();
   };
 
-  const removeSamplerNote = async (trackId: string, tickPosition: number, midiRow: number): Promise<void> => {
-    console.log(`>>> removeSamplerNote: trackId: ${trackId}, tickPosition: ${tickPosition}, midiRow: ${midiRow} <<<`);
+  const removeSamplerNote = async (trackId: string, tickPosition: number, midiRow: number, instanceId?: string): Promise<void> => {
+    console.log(`>>> removeSamplerNote: trackId: ${trackId}, tickPosition: ${tickPosition}, midiRow: ${midiRow}, instanceId: ${instanceId} <<<`);
     const { store, _withErrorHandling, executeHistoryAction } = rootGet();
     if (!store || !_withErrorHandling || !executeHistoryAction) { return; }
-    const notes = getTrackNotes(trackId);
+    
+    let notes: Note[] | null;
+    if (instanceId) {
+      notes = getInstanceNotes(trackId, instanceId);
+    } else {
+      notes = getTrackNotes(trackId);
+    }
+    
     if (!notes) { return; }
     const noteToRemove = notes.find(n => n.column === tickPosition && n.row === midiRow);
     if (!noteToRemove) { return; }
@@ -118,12 +147,16 @@ export const createMidiSlice: StoreSliceCreator<MidiSlice> = (set, get) => {
         // Execute the appropriate action (its execute method will call midiManager.updateNote)
         if (action) {
              await executeHistoryAction(action);
+             // Increment note version after successful update
+             incrementNoteVersion();
         } else {
             // Only velocity changed or no change - no history recorded for now
             // If direct update without history is needed for velocity-only changes, call midiManager here:
             if (oldNoteForCompare.velocity !== newNoteForCompare.velocity) {
                  console.log("Velocity changed, updating MidiManager directly (no history)");
                  await midiManager.updateNote(trackId, newNoteForCompare); // Direct update for non-historized change
+                 // Increment note version for velocity changes too
+                 incrementNoteVersion();
             } else {
                  console.warn(`No move/resize change detected for updateMidiNote (ID: ${noteId}), no history recorded.`);
             }
@@ -148,12 +181,33 @@ export const createMidiSlice: StoreSliceCreator<MidiSlice> = (set, get) => {
     }
   };
 
+  // Get notes for a specific instance
+  const getInstanceNotes = (trackId: string, instanceId: string): Note[] | null => {
+    const midiManager = getMidiManager();
+    if (!midiManager) {
+      console.error("Cannot getInstanceNotes: MidiManager not available");
+      return null;
+    }
+    try {
+      // Directly call MidiManager method
+      return midiManager.getInstanceNotes(trackId, instanceId);
+    } catch (error) {
+      console.error(`Error in getInstanceNotes for track ${trackId}, instance ${instanceId}:`, error);
+      return null;
+    }
+  };
+
   return {
+    // State
+    noteVersion: 0, // Initialize with 0
+    
     // Actions that interact with MidiManager
     addMidiNote,
     removeMidiNote,
     updateMidiNote,
     getTrackNotes,
+    getInstanceNotes,
     removeSamplerNote,
+    incrementNoteVersion,
   };
 };

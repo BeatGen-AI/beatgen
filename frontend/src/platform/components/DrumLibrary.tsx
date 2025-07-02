@@ -9,7 +9,7 @@ import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/paginatio
 
 // API and types
 import { getDrumTracks, deleteDrumTrack } from '../api/sounds';
-import { DrumTrackRead } from '../types/track_models/drum_track';
+import { DrumTrackRead } from '../types/dto/track_models/drum_track';
 import DrumTrackCard from './DisplayCards/DrumTrackCard';
 
 interface DrumLibraryProps {

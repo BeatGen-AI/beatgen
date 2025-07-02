@@ -1,14 +1,16 @@
-import React, { useEffect, useRef, useState, useMemo, useLayoutEffect } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useLayoutEffect, useCallback } from 'react';
 import { Box, Button } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 
 // Import components
 import TrackControlsSidebar from './components/sidebar/TrackControlsSidebar';
-import { Timeline, TimelineRef } from './components/timeline/Timeline';
+import { KonvaTimeline, KonvaTimelineRef } from './components/timeline/KonvaTimeline';
+import { CombinedTrack } from '../platform/types/project';
 import AddTrackMenu from './components/sidebar/AddTrackMenu';
 import { GRID_CONSTANTS } from './constants/gridConstants';
 import { useStudioStore } from './stores/studioStore';
+import { usePianoRollStore } from './stores/usePianoRollStore';
 
 // Import piano roll components
 import PianoRollWindows from './components/piano-roll-new/PianoRollWindows';
@@ -27,6 +29,7 @@ import { useAppTheme } from '../platform/theme/ThemeContext';
 import { studioLightTheme, studioDarkTheme } from '../platform/theme/ThemeContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconChevronLeftPipe, IconChevronRightPipe } from '@tabler/icons-react';
+import { GridSnapOption } from './components/piano-roll2/gridConstants';
 
 // Studio Component Props
 interface StudioProps {
@@ -39,7 +42,6 @@ const COLLAPSED_SIDEBAR_WIDTH = '40px'; // Width of the sidebar when collapsed
 function Studio({ projectId }: StudioProps) {
   // Add console log here
   console.log('>>> Studio Component Rendering <<<'); 
-
   // Initialize DB session management
   useStudioDBSession();
   
@@ -71,6 +73,13 @@ function Studio({ projectId }: StudioProps) {
     addMenuAnchor,
     autoSaveStatus,
     autoSaveMessage,
+    selectedTrackIds,
+    
+    // Tool state
+    selectedTool,
+    snapToGrid,
+    setSelectedTool,
+    toggleSnapToGrid,
     
     // Actions
     initializeAudio,
@@ -84,6 +93,7 @@ function Studio({ projectId }: StudioProps) {
     undo,
     redo,
     setAutoSaveStatus,
+    setSelectedTrackIds,
     handleTrackVolumeChange,
     handleTrackPanChange,
     handleTrackMuteToggle,
@@ -91,11 +101,19 @@ function Studio({ projectId }: StudioProps) {
     handleTrackDelete,
     handleAddTrack,
     handleTrackPositionChange,
+    handleTrackResizeEnd,
     handleTrackNameChange,
     handleInstrumentChange,
+    // Group operations for clipboard functionality
+    duplicateTrack,
+    duplicateMultipleTracks,
+    deleteMultipleTracks,
+    updateMultipleTrackPositions,
+    resizeMultipleTracks,
     uploadAudioFile,
     setAddMenuAnchor,
     openDrumMachines,
+    openDrumMachine,
     closeDrumMachine,
     setDrumPattern,
     addSamplerTrackToDrumTrack,
@@ -107,9 +125,19 @@ function Studio({ projectId }: StudioProps) {
     removeMidiNote,
     updateMidiNote,
     replaceTrackAudioFile,
+    // Instance handlers
+    handleInstancePositionChange,
+    handleInstanceResizeEnd,
+    updateMultipleInstancePositions,
+    resizeMultipleInstances,
+    deleteTrackInstance,
+    deleteMultipleInstances,
   } = useStudioStore();
   
-  const scrollRef = useRef<TimelineRef>(null);
+  // Get piano roll functions
+  const openPianoRoll = usePianoRollStore(state => state.openPianoRoll);
+  
+  const scrollRef = useRef<KonvaTimelineRef>(null);
   const animationFrameRef = useRef<number | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default to open
@@ -117,6 +145,7 @@ function Studio({ projectId }: StudioProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [trackIdForFileUpload, setTrackIdForFileUpload] = useState<string | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [gridSnapSize, setGridSnapSize] = useState(GridSnapOption.STEP);
 
   const handleChatToggle = () => {
     setIsChatOpen(prev => !prev);
@@ -159,6 +188,73 @@ function Studio({ projectId }: StudioProps) {
       console.log('Control Bar Height:', height);
     }
   }, []); // Empty dependency array to run once on mount
+
+  // Prevent browser zoom when studio is mounted
+  useEffect(() => {
+    // Add styles to prevent zoom - only allow horizontal panning
+    document.body.style.touchAction = 'pan-x';
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    //document.body.style.msUserSelect = 'none';
+    
+    // Add meta viewport tag to prevent zoom
+    const metaViewport = document.querySelector('meta[name="viewport"]');
+    const originalContent = metaViewport?.getAttribute('content') || '';
+    
+    if (metaViewport) {
+      metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    }
+    
+    // Handle zoom with keyboard shortcuts
+    const handleKeydown = (e: KeyboardEvent) => {
+      // Handle Cmd/Ctrl + Plus/Minus/0
+      if ((e.metaKey || e.ctrlKey) && (e.key === '+' || e.key === '-' || e.key === '0' || e.key === '=')) {
+        e.preventDefault();
+        
+        let newZoom = zoomLevel;
+        
+        if (e.key === '+' || e.key === '=') {
+          // Zoom in by 0.1
+          newZoom = zoomLevel + 0.1;
+        } else if (e.key === '-') {
+          // Zoom out by 0.1
+          newZoom = zoomLevel - 0.1;
+        } else if (e.key === '0') {
+          // Reset zoom
+          newZoom = 1;
+        }
+        
+        // Clamp zoom level
+        const clampedZoom = Math.max(0.25, Math.min(4, newZoom));
+        setZoomLevel(clampedZoom);
+      }
+    };
+    
+    // Prevent wheel zoom globally when Cmd/Ctrl is pressed
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      // Restore original body styles
+      document.body.style.touchAction = '';
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
+      //document.body.style.msUserSelect = '';
+      
+      // Restore original viewport settings
+      if (metaViewport && originalContent) {
+        metaViewport.setAttribute('content', originalContent);
+      }
+      document.removeEventListener('keydown', handleKeydown);
+      document.removeEventListener('wheel', handleWheel);
+    };
+  }, [zoomLevel, setZoomLevel]);
 
   // Initialize audio engine
   useEffect(() => {
@@ -220,18 +316,12 @@ function Studio({ projectId }: StudioProps) {
 
   const handleZoomIn = () => {
     setZoomLevel(Math.min(zoomLevel + GRID_CONSTANTS.studioZoomStep, GRID_CONSTANTS.studioZoomMax));
-    // Update measureWidth in gridStore based on zoom level
-    const newMeasureWidth = DEFAULT_MEASURE_WIDTH * (Math.min(zoomLevel + GRID_CONSTANTS.studioZoomStep, GRID_CONSTANTS.studioZoomMax));
-    useGridStore.getState().setMidiMeasurePixelWidth(newMeasureWidth);
-    useGridStore.getState().setAudioMeasurePixelWidth(newMeasureWidth);
+    // Grid store should maintain constant base measure width - zoom is applied by timeline components
   };
 
   const handleZoomOut = () => {
     setZoomLevel(Math.max(zoomLevel - GRID_CONSTANTS.studioZoomStep, GRID_CONSTANTS.studioZoomMin));
-    // Update measureWidth in gridStore based on zoom level
-    const newMeasureWidth = DEFAULT_MEASURE_WIDTH * (Math.max(zoomLevel - GRID_CONSTANTS.studioZoomStep, GRID_CONSTANTS.studioZoomMin));
-    useGridStore.getState().setMidiMeasurePixelWidth(newMeasureWidth);
-    useGridStore.getState().setAudioMeasurePixelWidth(newMeasureWidth);
+    // Grid store should maintain constant base measure width - zoom is applied by timeline components
   };
 
   const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -292,22 +382,102 @@ function Studio({ projectId }: StudioProps) {
   const handleScroll = React.useCallback(() => {
     if (!scrollRef.current) return;
 
-    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    // KonvaTimeline uses viewport-based scrolling
+    const viewport = scrollRef.current.getViewport();
+    const totalWidth = measureCount * GRID_CONSTANTS.measureWidth * zoomLevel;
 
-    if (scrollLeft + clientWidth >= scrollWidth - 100) {
+    if (viewport.x + viewport.width >= totalWidth - 100) {
       setMeasureCount(measureCount + 20);
     }
-  }, [measureCount, setMeasureCount]);
+  }, [measureCount, setMeasureCount, zoomLevel]);
 
-  useEffect(() => {
-    const scrollContainer = scrollRef.current;
-    if (!scrollContainer) return;
+  // Since KonvaTimeline handles its own scrolling, we don't need the scroll event listener
+  // The viewport changes are handled internally by KonvaTimeline
 
-    const debounceScroll = () => requestAnimationFrame(handleScroll);
-    scrollContainer.addEventListener("scroll", debounceScroll);
+  // Clipboard operation handlers
+  const handleCopyTracks = useCallback((tracks: CombinedTrack[]) => {
+    console.log('Copying tracks:', tracks.map(t => t.name));
+    // The interaction manager handles the clipboard state
+  }, []);
 
-    return () => scrollContainer.removeEventListener("scroll", debounceScroll);
-  }, [handleScroll]);
+  const handleCutTracks = useCallback((tracks: CombinedTrack[]) => {
+    console.log('Cutting tracks:', tracks.map(t => t.name));
+    // For cut operation, the interaction manager handles the clipboard state
+    // We don't delete here - deletion happens on paste if it's a cut operation
+    // The useClipboard hook manages this internally
+  }, []);
+
+  const handlePasteTracks = useCallback((tracks: CombinedTrack[], position?: { x: number; y: number }) => {
+    console.log('Pasting tracks:', tracks.map(t => t.name), 'at position:', position);
+    
+    // For paste operation, we need to duplicate the tracks
+    const trackIds = tracks.map(t => t.id);
+    
+    // Calculate offset for pasting
+    let offsetX = 0;
+    if (position) {
+      // Calculate the leftmost position of the tracks being pasted
+      // Get minimum X position from first instances
+      const minX = Math.min(...tracks.map(t => t.instances?.[0]?.x_position ?? 0));
+      offsetX = position.x - minX;
+    } else {
+      // No position provided (e.g., keyboard paste)
+      // Default offset to place copies after the originals
+      offsetX = 0;
+    }
+    
+    // Use duplicateMultipleTracks which handles the GroupAction
+    duplicateMultipleTracks(trackIds, offsetX);
+  }, [duplicateMultipleTracks]);
+
+  const handleDeleteTracks = useCallback((trackIds: string[]) => {
+    console.log('Deleting tracks:', trackIds);
+    deleteMultipleTracks(trackIds);
+    // Clear selection after delete
+    setSelectedTrackIds([]);
+  }, [deleteMultipleTracks, setSelectedTrackIds]);
+
+  const handleDuplicateTracks = useCallback((trackIds: string[]) => {
+    console.log('Duplicating tracks:', trackIds);
+    duplicateMultipleTracks(trackIds);
+  }, [duplicateMultipleTracks]);
+  
+  // Handle track resize - Timeline already handles group resize logic
+  const handleTrackResize = useCallback((trackId: string, deltaPixels: number, direction: 'left' | 'right') => {
+    // Timeline's interaction manager handles group resize internally
+    // We just need to pass through to the single track handler
+    console.log('Track resize:', trackId, 'delta:', deltaPixels, 'direction:', direction);
+    handleTrackResizeEnd(trackId, deltaPixels, direction);
+  }, [handleTrackResizeEnd]);
+
+  // Instance delete handlers
+  const handleInstanceDelete = useCallback((trackId: string, instanceId: string) => {
+    console.log('Deleting instance:', instanceId, 'from track:', trackId);
+    deleteTrackInstance(trackId, instanceId);
+  }, [deleteTrackInstance]);
+
+  const handleDeleteInstances = useCallback((instances: Array<{trackId: string, instanceId: string}>) => {
+    console.log('Deleting multiple instances:', instances);
+    // Use the group action for multiple instance deletion
+    deleteMultipleInstances(instances);
+  }, [deleteMultipleInstances]);
+
+  // Handle track click to open piano roll or drum machine
+  const handleTrackClick = useCallback((trackId: string, instanceId: string) => {
+    console.log('Track clicked:', trackId, 'Instance:', instanceId);
+    
+    // Find the track to check its type
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) return;
+    
+    
+    // Open appropriate editor based on track type
+    if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER') {
+      openPianoRoll(trackId);
+    } else if (track.track_type === 'DRUM') {
+      openDrumMachine(trackId);
+    }
+  }, [tracks, openPianoRoll, openDrumMachine]);
 
   // Determine the theme for the studio based on studioMode
   const currentStudioTheme = useMemo(() => {
@@ -322,6 +492,11 @@ function Studio({ projectId }: StudioProps) {
         color: 'text.primary',
         display: 'flex',
         flexDirection: 'column',
+        // Prevent zoom - only allow horizontal pan
+        touchAction: 'pan-x',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
       }}>
         <StudioControlBar
           ref={controlBarRef}
@@ -352,6 +527,12 @@ function Studio({ projectId }: StudioProps) {
           onChatToggle={handleChatToggle}
           onSettingsToggle={handleSettingsToggle}
           onAutoSaveRetry={() => autoSave.forceSave()}
+          selectedTool={selectedTool}
+          snapToGrid={snapToGrid}
+          gridSnapSize={gridSnapSize}
+          onToolChange={setSelectedTool}
+          onToggleSnapToGrid={toggleSnapToGrid}
+          onGridSnapSizeChange={setGridSnapSize}
         />
 
         {/* Main Content Area */}
@@ -510,34 +691,64 @@ function Studio({ projectId }: StudioProps) {
           }} />
 
           {/* Timeline Area */}
-          <Timeline
-            tracks={tracks}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            measureCount={measureCount}
-            zoomLevel={zoomLevel}
-            bpm={bpm}
-            timeSignature={timeSignature}
-            onTrackPositionChange={handleTrackPositionChange}
-            onTimeChange={(newTime) => {
-              // Update global state only when user explicitly changes time
-              setCurrentTime(newTime);
-              
-              // Update transport position
-              if (store && store.getTransport()) {
-                store.getTransport().setPosition(newTime);
-              }
-              
-              // Use imperative API to update cursor position
-              if (scrollRef.current?.playbackCursor) {
-                scrollRef.current.playbackCursor.seek(newTime);
-              }
-            }}
-            gridLineStyle={{
-              borderRight: `${GRID_CONSTANTS.borderWidth} solid ${GRID_CONSTANTS.borderColor}`
-            }}
-            ref={scrollRef}
-          />
+          <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+            <KonvaTimeline
+              tracks={tracks}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
+              measureCount={measureCount}
+              zoomLevel={zoomLevel}
+              bpm={bpm}
+              timeSignature={timeSignature}
+              gridSnapSize={gridSnapSize}
+              onTrackPositionChange={handleTrackPositionChange}
+              onZoomChange={setZoomLevel}
+              onTimeChange={(newTime) => {
+                // Update global state only when user explicitly changes time
+                setCurrentTime(newTime);
+                
+                // Update transport position
+                if (store && store.getTransport()) {
+                  store.getTransport().setPosition(newTime);
+                }
+                
+                // Use imperative API to update cursor position
+                if (scrollRef.current?.playbackCursor) {
+                  scrollRef.current.playbackCursor.seek(newTime);
+                }
+              }}
+              selectedTrackIds={selectedTrackIds}
+              onTrackSelect={(instanceIds) => {
+                // Convert instance IDs to track IDs for the store
+                // Instance IDs follow the pattern: trackId_instance_timestamp
+                const trackIds = [...new Set(instanceIds.map(instanceId => {
+                  // Extract track ID from instance ID
+                  const parts = instanceId.split('_instance_');
+                  return parts[0]; // The track ID is before '_instance_'
+                }))];
+                setSelectedTrackIds(trackIds);
+              }}
+              onTrackDelete={handleTrackDelete}
+              onTrackResizeEnd={handleTrackResize}
+              selectedTool={selectedTool}
+              onToolChange={setSelectedTool}
+              onCopyTracks={handleCopyTracks}
+              onCutTracks={handleCutTracks}
+              onPasteTracks={handlePasteTracks}
+              onDeleteTracks={handleDeleteTracks}
+              onDuplicateTracks={handleDuplicateTracks}
+              updateMultipleTrackPositions={updateMultipleTrackPositions}
+              resizeMultipleTracks={resizeMultipleTracks}
+              onInstancePositionChange={handleInstancePositionChange}
+              onInstanceResizeEnd={handleInstanceResizeEnd}
+              updateMultipleInstancePositions={updateMultipleInstancePositions}
+              resizeMultipleInstances={resizeMultipleInstances}
+              onInstanceDelete={handleInstanceDelete}
+              onDeleteInstances={handleDeleteInstances}
+              onTrackClick={handleTrackClick}
+              ref={scrollRef}
+            />
+          </Box>
           
           {/* AI Assistant Chat Window - slides in from right */}
           <ChatWindow 

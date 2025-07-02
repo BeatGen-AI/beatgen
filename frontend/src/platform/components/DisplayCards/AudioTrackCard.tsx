@@ -7,7 +7,7 @@ import {
 } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
 import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
-import { AudioTrackRead as Sound } from '../../../platform/types/track_models/audio_track'; 
+import { AudioTrackRead as Sound } from '../../../platform/types/dto/track_models/audio_track'; 
 import { formatTime, formatFileSize } from '../../../studio/utils/audioProcessing';
 import { WaveformDisplay } from '../../../studio/components/track/WaveformDisplay';
 

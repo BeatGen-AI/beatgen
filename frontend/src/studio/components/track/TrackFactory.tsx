@@ -4,6 +4,7 @@ import { TrackPreviewProps } from './types';
 import AudioTrackPreview from './audio/AudioTrackPreview';
 import MidiTrackPreview from './midi/MidiTrackPreview';
 import DrumTrackPreview from './drum/DrumTrackPreview';
+import { Tool } from '../../shared/interactions';
 
 /**
  * TrackFactory is responsible for creating the appropriate track component
@@ -14,8 +15,46 @@ import DrumTrackPreview from './drum/DrumTrackPreview';
  * This allows the Track component to work with any track type without
  * knowing the internal implementation details of each specialized track component.
  */
-export const TrackFactory: React.FC<TrackPreviewProps> = (props) => {
-  const { track, trackIndex = 0, trackColor: providedTrackColor, onResizeEnd } = props;
+interface TrackFactoryProps extends TrackPreviewProps {
+  isSelected?: boolean;
+  selectedTool?: Tool;
+  isGroupDrag?: boolean;
+  isPrimaryDrag?: boolean;
+  isGroupResize?: boolean;
+  isPrimaryResize?: boolean;
+  resizeDelta?: { x: number; y: number };
+  resizeDirection?: 'left' | 'right' | null;
+  resizeInitialDimensions?: { x: number; width: number; trimStart: number; trimEnd: number };
+  onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
+  onTrackDoubleClick?: (trackId: string) => void;
+  interaction?: any;
+  gridSnapEnabled?: boolean;
+  gridSnapSize?: number;
+  actualSnapSize?: number;
+}
+
+export const TrackFactory: React.FC<TrackFactoryProps> = (props) => {
+  const { 
+    track, 
+    trackIndex = 0, 
+    trackColor: providedTrackColor, 
+    onResizeEnd,
+    isSelected,
+    selectedTool,
+    isGroupDrag,
+    isPrimaryDrag,
+    isGroupResize,
+    isPrimaryResize,
+    resizeDelta,
+    resizeDirection,
+    resizeInitialDimensions,
+    onTrackClick,
+    onTrackDoubleClick,
+    interaction,
+    gridSnapEnabled,
+    gridSnapSize,
+    actualSnapSize
+  } = props;
   const trackColor = providedTrackColor || getTrackColor(trackIndex);
   
   // Ensure track exists
@@ -33,15 +72,36 @@ export const TrackFactory: React.FC<TrackPreviewProps> = (props) => {
     return null;
   }
   
+  const commonProps = {
+    ...props,
+    trackColor,
+    onResizeEnd,
+    isSelected,
+    selectedTool,
+    isGroupDrag,
+    isPrimaryDrag,
+    isGroupResize,
+    isPrimaryResize,
+    resizeDelta,
+    resizeDirection,
+    resizeInitialDimensions,
+    onTrackClick,
+    onTrackDoubleClick,
+    interaction,
+    gridSnapEnabled,
+    gridSnapSize,
+    actualSnapSize
+  };
+
   switch(trackType) {
     case 'AUDIO':
-      return <AudioTrackPreview {...props} trackColor={trackColor} onResizeEnd={onResizeEnd} />;
+      return <AudioTrackPreview {...commonProps} />;
     case 'MIDI':
-      return <MidiTrackPreview {...props} trackColor={trackColor} onResizeEnd={onResizeEnd} />;
+      return <MidiTrackPreview {...commonProps} />;
     case 'SAMPLER':
-      return <MidiTrackPreview {...props} trackColor={trackColor} onResizeEnd={onResizeEnd} />;
+      return <MidiTrackPreview {...commonProps} />;
     case 'DRUM':
-      return <DrumTrackPreview {...props} trackColor={trackColor} onResizeEnd={onResizeEnd} />;
+      return <DrumTrackPreview {...commonProps} />;
     default:
       console.error(`Unknown track type: ${trackType}`);
       return null;

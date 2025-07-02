@@ -7,7 +7,7 @@ import {
 } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
 import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon, MusicNote as MusicNoteIcon } from '@mui/icons-material';
-import { MidiTrackRead } from '../../../platform/types/track_models/midi_track'; 
+import { MidiTrackRead } from '../../../platform/types/dto/track_models/midi_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
 import { convertJsonToNotes } from '../../../types/note';

@@ -4,7 +4,7 @@
 set -e
 
 MODELS_DIR="backend/app2/models"
-TYPES_DIR="frontend/src/platform/types"
+TYPES_DIR="frontend/src/platform/types/dto"
 BASE_MODULE="app2.models"
 
 echo "Generating TypeScript types for all models in $MODELS_DIR recursively..."

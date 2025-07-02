@@ -1,4 +1,4 @@
-import { DrumSamplePublicRead } from '../types/public_models/drum_samples';
+import { DrumSamplePublicRead } from '../types/dto/public_models/drum_samples';
 import { apiClient } from './client';
 
 // export interface Soundfont {

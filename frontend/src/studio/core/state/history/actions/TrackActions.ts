@@ -13,7 +13,8 @@ import { AudioTrackOptions, GetFn, RootState, TrackOptions } from '../../../../s
 import { ActionType } from '.';
 // Fix: Import TRACK_CONFIG
 import { TRACK_CONFIG } from '../../../../stores/config'; 
-import { DrumTrackRead } from 'src/platform/types/track_models/drum_track';
+import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
+import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 
 /**
  * Action for changing track position without callbacks
@@ -46,22 +47,20 @@ export class TrackPositionAction extends TrackAction {
         const isCurrentlyPlaying = this.get().isPlaying;
         
         if (isCurrentlyPlaying && this.store.getTransport().handleTrackPositionChange) {
-            console.log(`Playback active during ${operation} - syncing track`);
             this.store.getTransport().handleTrackPositionChange(this.trackId, position.x);
         }
         
         const track = this.get().findTrackById(this.trackId);
-        if (track && (track.type === 'MIDI' || track.type === 'DRUM' || track.type === 'SAMPLER')) {
+        if (track && (track.track_type === 'MIDI' || track.track_type === 'DRUM' || track.track_type === 'SAMPLER')) {
             const bpm = this.get().bpm;
             const timeSignature = this.get().timeSignature;
-            const PPQ = 480; 
+            const PPQ = MUSIC_CONSTANTS.pulsesPerQuarterNote; 
             const offsetBeats = position.x / PPQ;
             const beatDurationMs = (60 / bpm) * 1000;
             const offsetMs = offsetBeats * beatDurationMs;
             
             this.store.getSoundfontController()?.setTrackOffset?.(this.trackId, offsetMs);
             this.store.getSamplerController()?.setTrackOffset?.(this.trackId, offsetMs);
-            console.log(`Set track ${this.trackId} offset: ${position.x} ticks -> ${offsetMs}ms`);
         }
     }
     
@@ -101,13 +100,11 @@ export class AddTrackAction extends BaseAction {
     }
     
     async execute(): Promise<void> {
-        console.log('AddTrackAction: Execute started for', this.trackData.id);
         
         // Step 1: Update Zustand state FIRST
         let trackAddedToState = false;
         this.get()._updateState('tracks', (prevTracks) => {
             if (prevTracks.some(t => t.id === this.trackData.id)) {
-                console.warn(`AddTrackAction execute: Track ${this.trackData.id} already exists in state.`);
                 return prevTracks; 
             }
             trackAddedToState = true;
@@ -116,27 +113,24 @@ export class AddTrackAction extends BaseAction {
 
         if (!trackAddedToState) return; 
         this.get().updateTrackIndices(); 
-        console.log('AddTrackAction: State updated for', this.trackData.id);
 
         // Step 2: Initialize Engine Backend
-        const typeConfig = TRACK_CONFIG[this.trackData.type];
+        const typeConfig = TRACK_CONFIG[this.trackData.track_type];
         if (!typeConfig) {
-            console.error(`Invalid track type ${this.trackData.type} in AddTrackAction execute`);
+            console.error(`Invalid track type ${this.trackData.track_type} in AddTrackAction execute`);
             return; // Cannot initialize engine
         }
         
         // Use the stored initialFile if available
         const fileToLoad = this.initialFile; 
         const trackSpecificData = this.trackData.track as any;
-        const instrumentId = this.trackData.type === 'MIDI' ? trackSpecificData?.instrument_id as string | undefined : undefined;
+        const instrumentId = this.trackData.track_type === 'MIDI' ? trackSpecificData?.instrument_id as string | undefined : undefined;
 
-        console.log("instrumentId: ", instrumentId);
         
         try {
-            console.log(`AddTrackAction: Calling initEngine for ${this.trackData.id} (type: ${this.trackData.type})`);
             // Pass the stored file object (or undefined)
             let options: TrackOptions;
-            switch (this.trackData.type) {
+            switch (this.trackData.track_type) {
                 case 'AUDIO':
                     options = {
                         ...this.trackData.track,
@@ -161,26 +155,25 @@ export class AddTrackAction extends BaseAction {
                     };
             }
             await typeConfig.initEngine(this.store, this.trackData.id, this.get, options); 
-            console.log(`AddTrackAction: initEngine completed for ${this.trackData.id}`);
         } catch (engineInitError) {
             console.error(`AddTrackAction: Error during initEngine for ${this.trackData.id}:`, engineInitError);
             // Consider potential rollback or error state update here?
         }
 
         // Step 3: Set other engine parameters (potentially redundant but ensures state)
-        console.log('AddTrackAction: Setting other engine params for', this.trackData.id);
         try {
             this.store.getAudioEngine().setTrackVolume(this.trackData.id, this.trackData.volume ?? 80);
             this.store.getAudioEngine().setTrackPan(this.trackData.id, this.trackData.pan ?? 0);
             this.store.getAudioEngine().setTrackMute(this.trackData.id, this.trackData.mute ?? false);
+            // Set position based on first instance if available
+            const firstInstance = this.trackData.instances?.[0];
             this.store.getAudioEngine().setTrackPosition(
                 this.trackData.id,
-                this.trackData.x_position ?? 0,
-                this.trackData.y_position ?? 0
+                firstInstance?.x_position ?? 0,
+                firstInstance?.y_position ?? 0
             );
             // Connect soundfont if applicable (might be handled by initEngine for midi? Check config)
-            if ((this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') && instrumentId) {
-                 console.log('AddTrackAction: Re-connecting to soundfont during execute (check if redundant):', this.trackData.id);
+            if ((this.trackData.track_type === 'MIDI' || this.trackData.track_type === 'DRUM') && instrumentId) {
                  await this.store.connectTrackToSoundfont(this.trackData.id, instrumentId);
             }
         } catch (paramError) {
@@ -191,21 +184,17 @@ export class AddTrackAction extends BaseAction {
     }
     
     async undo(): Promise<void> {
-        console.log('AddTrackAction: Undo started for', this.trackData.id);
         // Step 1: Remove from State
         this.get()._updateState('tracks', state => state.filter(t => t.id !== this.trackData.id));
         this.get().updateTrackIndices();
-        console.log('AddTrackAction: State updated for undo', this.trackData.id);
 
         // Step 2: Remove from Engine and Controllers
         try {
-             console.log('AddTrackAction: Removing from engine/controllers for undo', this.trackData.id);
              await this.store.getAudioEngine().removeTrack(this.trackData.id);
-             if (this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') {
+             if (this.trackData.track_type === 'MIDI' || this.trackData.track_type === 'DRUM') {
                  this.store.getSoundfontController()?.removeTrack?.(this.trackData.id);
-             } else if (this.trackData.type === 'SAMPLER') {
+             } else if (this.trackData.track_type === 'SAMPLER') {
                  this.store.getSamplerController()?.removeSampler?.(this.trackData.id);
-                 console.log('AddTrackAction: Cleaned up sampler track', this.trackData.id);
              }
         } catch (removeError) {
             console.error(`AddTrackAction: Error during engine/controller removal on undo for ${this.trackData.id}:`, removeError);
@@ -229,9 +218,9 @@ export class DeleteTrackAction extends BaseAction {
     
     async execute(): Promise<void> {
         await this.store.getAudioEngine().removeTrack(this.trackData.id);
-        if (this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') {
+        if (this.trackData.track_type === 'MIDI' || this.trackData.track_type === 'DRUM') {
             this.store.getSoundfontController()?.removeTrack?.(this.trackData.id);
-        } else if (this.trackData.type === 'SAMPLER') {
+        } else if (this.trackData.track_type === 'SAMPLER') {
             this.store.getSamplerController()?.removeSampler?.(this.trackData.id);
         }
         
@@ -241,7 +230,7 @@ export class DeleteTrackAction extends BaseAction {
         this.log('Execute', { 
             trackId: this.trackData.id, 
             name: this.trackData.name,
-            type: this.trackData.type
+            type: this.trackData.track_type
         });
     }
     
@@ -254,20 +243,22 @@ export class DeleteTrackAction extends BaseAction {
         const grainSize = trackSpecificData.grainSize as number | undefined;
         const overlap = trackSpecificData.overlap as number | undefined;
 
-        if (this.trackData.type === 'AUDIO' && audioFile) {
+        if (this.trackData.track_type === 'AUDIO' && audioFile) {
             await this.store.loadAudioFile(this.trackData.id, audioFile);
         } else {
             await this.store.getAudioEngine().createTrack(this.trackData.id, this.trackData.name);
         }
         
-        this.store.getAudioEngine().setTrackPosition(this.trackData.id, this.trackData.x_position ?? 0, this.trackData.y_position ?? 0);
+        // Set position based on first instance if available
+        const firstInstance = this.trackData.instances?.[0];
+        this.store.getAudioEngine().setTrackPosition(this.trackData.id, firstInstance?.x_position ?? 0, firstInstance?.y_position ?? 0);
         this.store.getAudioEngine().setTrackVolume(this.trackData.id, this.trackData.volume ?? 80);
         this.store.getAudioEngine().setTrackPan(this.trackData.id, this.trackData.pan ?? 0);
         this.store.getAudioEngine().setTrackMute(this.trackData.id, this.trackData.mute ?? false);
         
-        if ((this.trackData.type === 'MIDI' || this.trackData.type === 'DRUM') && instrumentId) {
+        if ((this.trackData.track_type === 'MIDI' || this.trackData.track_type === 'DRUM') && instrumentId) {
             try { await this.store.connectTrackToSoundfont(this.trackData.id, instrumentId); } catch (error) { console.error(`Failed to connect track ${this.trackData.id} to soundfont:`, error); }
-        } else if (this.trackData.type === 'SAMPLER' && sampleFile) { 
+        } else if (this.trackData.track_type === 'SAMPLER' && sampleFile) { 
             try {
                 await this.store.connectTrackToSampler(
                     this.trackData.id, 
@@ -397,15 +388,27 @@ export class TrackResizeAction extends TrackAction {
         positionXTicks: number,
         operation: string
     ): void {
-        const currentY = this.get().findTrackById(this.trackId)?.y_position ?? 0;
-        this.get().updateTrackState(this.trackId, {
-            trim_start_ticks: trimStartTicks,
-            trim_end_ticks: trimEndTicks,
-            x_position: positionXTicks, 
-            position: { x: positionXTicks, y: currentY }
-        });
+        
+        // This action should not be used anymore - use InstanceResizeAction instead
+        console.warn('TrackResizeAction is deprecated - use InstanceResizeAction instead');
+        // For now, update the first instance if it exists
+        const track = this.get().findTrackById(this.trackId);
+        if (track && track.instances?.[0]) {
+            const firstInstance = track.instances[0];
+            this.get().updateTrackState(this.trackId, {
+                instances: [{
+                    ...firstInstance,
+                    trim_start_ticks: trimStartTicks,
+                    trim_end_ticks: trimEndTicks,
+                    x_position: positionXTicks
+                }]
+            });
+        }
         
         this.store.getAudioEngine().setTrackTrim(this.trackId, trimStartTicks, trimEndTicks);
+        // Get current Y position from first instance
+        const currentTrack = this.get().findTrackById(this.trackId);
+        const currentY = currentTrack?.instances?.[0]?.y_position ?? 0;
         this.store.getAudioEngine().setTrackPosition(
             this.trackId, 
             positionXTicks,
@@ -466,7 +469,8 @@ export class TrackResizeAction extends TrackAction {
         });
     }
 }
-    // Example structure - adjust based on your ActionBase and state access needs
+
+// Example structure - adjust based on your ActionBase and state access needs
 export class UpdateDrumTrackSamplers extends BaseAction {
     readonly type = 'DRUM_TRACK_SAMPLER_UPDATE';
     drumTrackId: string;
@@ -486,7 +490,6 @@ export class UpdateDrumTrackSamplers extends BaseAction {
     }
 
     async execute() {
-        console.log(`Applying UpdateDrumTrackSamplers for ${this.drumTrackId}`);
         const { _updateNestedTrackData } = this.get();
         if (_updateNestedTrackData) {
             _updateNestedTrackData(this.drumTrackId, { sampler_track_ids: this.newSamplerIds } as Partial<DrumTrackRead>);
@@ -496,7 +499,6 @@ export class UpdateDrumTrackSamplers extends BaseAction {
     }
 
     async undo() {
-        console.log(`Reverting UpdateDrumTrackSamplers for ${this.drumTrackId}`);
         const { _updateNestedTrackData } = this.get();
         if (_updateNestedTrackData) {
             _updateNestedTrackData(this.drumTrackId, { sampler_track_ids: this.oldSamplerIds } as Partial<DrumTrackRead>);

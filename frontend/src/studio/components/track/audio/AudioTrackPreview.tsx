@@ -6,6 +6,7 @@ import { getTrackColor } from '../../../constants/gridConstants';
 import BaseTrackPreview from '../base/BaseTrackPreview';
 import WaveformDisplay from '../WaveformDisplay';
 import { TrackPreviewProps } from '../types';
+import { Tool } from '../../../shared/interactions';
 
 /**
  * AudioTrackPreview is a specialized track component for audio tracks.
@@ -13,7 +14,17 @@ import { TrackPreviewProps } from '../types';
  * handles audio track width calculations based on audio duration and BPM.
  */
 
-export const AudioTrackPreview: React.FC<TrackPreviewProps> = (props) => {
+interface AudioTrackPreviewProps extends TrackPreviewProps {
+  isSelected?: boolean;
+  selectedTool?: Tool;
+  isGroupDrag?: boolean;
+  isPrimaryDrag?: boolean;
+  onTrackClick?: (trackId: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
+  onTrackDoubleClick?: (trackId: string) => void;
+  interaction?: any;
+}
+
+export const AudioTrackPreview: React.FC<AudioTrackPreviewProps> = (props) => {
   const { 
     track, 
     bpm, 
@@ -21,6 +32,13 @@ export const AudioTrackPreview: React.FC<TrackPreviewProps> = (props) => {
     trackColor: providedTrackColor,
     trackWidth: providedTrackWidth,
     onResizeEnd,
+    isSelected,
+    selectedTool,
+    isGroupDrag,
+    isPrimaryDrag,
+    onTrackClick,
+    onTrackDoubleClick,
+    interaction,
     ...restProps 
   } = props;
   
@@ -90,6 +108,13 @@ export const AudioTrackPreview: React.FC<TrackPreviewProps> = (props) => {
       renderTrackContent={renderTrackContent}
       trackIndex={trackIndex}
       onResizeEnd={onResizeEnd}
+      isSelected={isSelected}
+      selectedTool={selectedTool}
+      isGroupDrag={isGroupDrag}
+      isPrimaryDrag={isPrimaryDrag}
+      onTrackClick={onTrackClick}
+      onTrackDoubleClick={onTrackDoubleClick}
+      interaction={interaction}
     />
   );
 };

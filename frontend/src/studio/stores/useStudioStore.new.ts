@@ -18,7 +18,7 @@
 // } from 'src/platform/types/project';
 // import { Position } from '../components/track';
 // import { CombinedTrack } from 'src/platform/types/project';
-// import { SamplerTrackBase } from 'src/platform/types/track_models/sampler_track';
+// import { SamplerTrackBase } from 'src/platform/types/dto/track_models/sampler_track';
 // import { Action } from '../core/state/history/actions/BaseAction';
 
 // // =================== TYPE DEFINITIONS ===================

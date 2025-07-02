@@ -9,7 +9,7 @@ import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/paginatio
 
 // API and types
 import { getSamplerTracks, deleteSamplerTrack } from '../api/sounds';
-import { SamplerTrackRead } from '../types/track_models/sampler_track';
+import { SamplerTrackRead } from '../types/dto/track_models/sampler_track';
 import SamplerTrackCard from './DisplayCards/SamplerTrackCard';
 
 interface SamplerLibraryProps {

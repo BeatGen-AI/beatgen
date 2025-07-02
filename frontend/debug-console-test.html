@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Console Debug Test</title>
+</head>
+<body>
+    <h1>Debug Console Test</h1>
+    <p>Check the browser console for debug messages.</p>
+    <button onclick="testConsole()">Test Console Output</button>
+    
+    <script>
+        function testConsole() {
+            console.log('🔧 Basic console.log test');
+            console.warn('⚠️ Warning test');
+            console.error('❌ Error test');
+            console.info('ℹ️ Info test');
+            console.debug('🐛 Debug test');
+            
+            // Test with timestamps like our code
+            console.log('🔧 Selected tool changed to: select', 'isSelectionMode:', true);
+            console.log('🖱️ MOUSE DOWN EVENT:', { 
+                tool: 'select', 
+                timestamp: new Date().toISOString()
+            });
+            console.log('🔳 SELECTION RECTANGLE:', { 
+                x: 100, y: 100, width: 50, height: 50,
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        // Auto-run tests
+        window.onload = function() {
+            console.log('🎯 Console test page loaded');
+            testConsole();
+        };
+    </script>
+</body>
+</html>

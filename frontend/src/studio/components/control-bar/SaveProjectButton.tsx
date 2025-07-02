@@ -66,7 +66,7 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
       const preparedTrack = {...track};
       
       // For MIDI and sampler tracks, add MIDI notes from the manager
-      if (track.type === 'MIDI' || track.type === 'SAMPLER') {
+      if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER') {
         const midiNotes = studioStore.getTrackNotes(track.id) || [];
         
         // Add MIDI notes JSON to the track data
@@ -153,7 +153,7 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
 
         if (projectId) {
           // Update existing project
-          if (preparedTracks.some(track => track.type === 'AUDIO' || track.type === 'SAMPLER')) {
+          if (preparedTracks.some(track => track.track_type === 'AUDIO' || track.track_type === 'SAMPLER')) {
             // Use saveProjectWithSounds if we have audio or sampler tracks
             savedProject = await saveProjectWithSounds(projectId, projectData, preparedTracks);
           } else {

@@ -26,7 +26,10 @@ export class AddNoteAction extends NoteAction {
         }
 
         try {
-            await midiManager.addNoteToTrack(this.trackId, { ...this.note, id: parseInt(this.noteId) });
+            await midiManager.addNoteToTrack(
+                this.trackId, 
+                { ...this.note, id: parseInt(this.noteId) },
+            );
             this.markTrackAsDirty(); // Mark track as dirty when note is added
             
             this.log('Execute', {

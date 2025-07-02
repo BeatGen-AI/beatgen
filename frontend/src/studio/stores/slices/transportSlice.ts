@@ -42,7 +42,9 @@ export const createTransportSlice: StoreSliceCreator<TransportSlice> = (set, get
         switch(command) {
             case 'play':
                 if (!currentIsPlaying) {
-                    await transport.play();
+                    // Pass tracks to enable instance-aware playback
+                    const tracks = rootGet().tracks;
+                    await transport.play(tracks);
                     setTransportState({ isPlaying: true });
                 }
                 break;

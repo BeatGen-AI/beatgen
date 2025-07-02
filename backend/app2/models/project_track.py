@@ -6,6 +6,8 @@ from typing import Optional, TYPE_CHECKING
 import uuid
 from sqlmodel import Field, Relationship
 from sqlalchemy import Column, Enum as SAEnum
+from pydantic import ConfigDict
+from datetime import datetime
 
 from app2.models.base import ProjectTrackBase, all_optional
 from app2.types.track_types import TrackType
@@ -36,8 +38,6 @@ class ProjectTrack(ProjectTrackBase, table=True):
     # We need a composite primary key but can't use foreign keys for each track type
     # as the foreign key would depend on track_type
     track_id: uuid.UUID = Field(default=None, primary_key=True)
-
-    track_type: TrackType = Field(sa_column=Column(SAEnum(TrackType), nullable=False))
 
     # Relationships
     project: Optional["Project"] = Relationship(
@@ -87,22 +87,43 @@ class ProjectTrack(ProjectTrackBase, table=True):
 class ProjectTrackRead(ProjectTrackBase):
     """Base DTO for Project-Track relationships"""
 
+    model_config = ConfigDict(
+        extra='forbid',  # Don't allow extra fields
+        arbitrary_types_allowed=False,  # Stricter type checking
+        json_encoders={
+            datetime: lambda dt: dt.isoformat() + "Z"
+        }
+    )
+
     project_id: uuid.UUID
     track_id: uuid.UUID
-    track_type: TrackType
 
 
 class ProjectTrackCreate(ProjectTrackBase):
     """Model for creating a new project-track relationship"""
 
+    model_config = ConfigDict(
+        extra='forbid',
+        arbitrary_types_allowed=False,
+        json_encoders={
+            datetime: lambda dt: dt.isoformat() + "Z"
+        }
+    )
+
     project_id: uuid.UUID
     track_id: uuid.UUID
-    track_type: TrackType
 
 
 class ProjectTrackUpdate(all_optional(ProjectTrackRead, "ProjectTrackUpdate")):
     """Model for updating project-track settings"""
 
+    model_config = ConfigDict(
+        extra='forbid',
+        arbitrary_types_allowed=False,
+        json_encoders={
+            datetime: lambda dt: dt.isoformat() + "Z"
+        }
+    )
+
     track_id: uuid.UUID
     project_id: uuid.UUID
-    track_type: TrackType

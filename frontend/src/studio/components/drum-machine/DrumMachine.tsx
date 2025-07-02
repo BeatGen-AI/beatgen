@@ -6,7 +6,9 @@ import { usePianoRollStore } from '../../stores/usePianoRollStore';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { CombinedTrack, DrumTrackRead, SamplerTrackRead, RootState } from '../../stores/types';
 import { DrumMachineModal, DrumMachineModalProps } from '../modals/drum-machine/DrumMachineModal';
-import { DrumSamplePublicRead } from 'src/platform/types/public_models/drum_samples';
+import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
+import { useStudioStore } from '../../stores/studioStore';
+import { Note } from '../../../types/note';
 
 export interface DrumTrackState extends CombinedTrack {
   type: 'DRUM';
@@ -29,9 +31,9 @@ const DARK_THEME = {
 // Define our note state interface (normalized values independent of zoom) - aligned with PianoRoll's NoteState
 export interface NoteState {
   id: number;
-  length: number;  // Length in ticks (1/960th of a beat)
+  length: number;  // Length in ticks (480 ticks per beat)
   row: number;     // Row index (0-131 for our 132 keys)
-  column: number;  // Column position in ticks (1/960th of a beat)
+  column: number;  // Column position in ticks (480 ticks per beat)
   velocity?: number;
 }
 
@@ -363,8 +365,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   // Expanded drum names with state
   const [drumNames, setDrumNames] = useState<string[]>([]);
   
-  // Grid setup - MAX_COLUMNS steps by drumNames.length drum sounds
-  const [grid, setGrid] = useState<boolean[][]>([]);
+  // Grid is now computed from samplerTracks - see useMemo above
 
   // Store MIDI notes for each drum sound - this will sync with the piano roll
   const [drumNotes, setDrumNotes] = useState<NoteState[][]>([]);
@@ -416,7 +417,66 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   
   // Effect to fetch the sampler track IDs when tracks change
   
-  // Effect to initialize and synchronize grid/names/notes based on samplerTrackIds
+  // Get live MIDI notes from MidiManager for all sampler tracks
+  const { store } = useStudioStore();
+  const midiManager = store?.getMidiManager();
+  
+  // Subscribe to MIDI notes for all sampler tracks and compute grid from live data
+  const [allTrackNotes, setAllTrackNotes] = useState<{ [trackId: string]: Note[] }>({});
+  
+  useEffect(() => {
+    if (!midiManager || samplerTracks.length === 0) {
+      setAllTrackNotes({});
+      return;
+    }
+    
+    const unsubscribers: (() => void)[] = [];
+    const notesMap: { [trackId: string]: Note[] } = {};
+    
+    // Subscribe to each sampler track's notes
+    samplerTracks.forEach(track => {
+      const trackId = track.id;
+      
+      // Get initial notes
+      const initialNotes = midiManager.getTrackNotes(trackId) || [];
+      notesMap[trackId] = initialNotes;
+      
+      // Subscribe to updates
+      const unsubscribe = midiManager.subscribeToTrack(trackId, (_, updatedNotes) => {
+        setAllTrackNotes(prev => ({
+          ...prev,
+          [trackId]: updatedNotes
+        }));
+      });
+      
+      unsubscribers.push(unsubscribe);
+    });
+    
+    setAllTrackNotes(notesMap);
+    
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+    };
+  }, [midiManager, samplerTracks]);
+  
+  // Compute grid from live MIDI notes
+  const grid = useMemo(() => {
+    return samplerTracks.map((track) => {
+      const gridRow = Array(MAX_COLUMNS).fill(false);
+      const trackNotes = allTrackNotes[track.id] || [];
+      
+      trackNotes.forEach(note => {
+        const column = Math.floor(note.column / TICKS_PER_STEP);
+        if (column >= 0 && column < MAX_COLUMNS) {
+          gridRow[column] = true;
+        }
+      });
+      
+      return gridRow;
+    });
+  }, [samplerTracks, allTrackNotes]);
+
+  // Effect to initialize and synchronize names/notes based on samplerTracks
   useEffect(() => {
     const numRows = samplerTracks.length;
     console.log(`>>> DrumMachine (${trackId}): Syncing state with ${numRows} samplerTracks:`, samplerTracks);
@@ -428,39 +488,12 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
         return track ? track.name : `Sampler ${i + 1}`; // Use index as fallback
       });
 
-      // Synchronize the grid, notes, and names
-      setGrid(prevGrid => {
-        const currentLength = prevGrid.length;
-        if (numRows > currentLength) {
-          // Add new rows
-          const rowsToAdd = numRows - currentLength;
-          const newRows = Array(rowsToAdd).fill(null).map(() => Array(MAX_COLUMNS).fill(false));
-          return [...prevGrid, ...newRows];
-        } else if (numRows < currentLength) {
-          // Remove extra rows
-          return prevGrid.slice(0, numRows);
-        } else {
-          // Length matches, no change needed
-          return prevGrid;
-        }
+      // Initialize drum notes from MIDI data
+      const newDrumNotes = samplerTracks.map((track) => {
+        return track.midi_notes_json?.notes || [];
       });
 
-      setDrumNotes(prevNotes => {
-        const currentLength = prevNotes.length;
-        if (numRows > currentLength) {
-          // Add new empty note arrays
-          const rowsToAdd = numRows - currentLength;
-          const newRows = Array(rowsToAdd).fill(null).map(() => []);
-          return [...prevNotes, ...newRows];
-        } else if (numRows < currentLength) {
-          // Remove extra note arrays
-          return prevNotes.slice(0, numRows);
-        } else {
-          // Length matches, no change needed
-          return prevNotes;
-        }
-      });
-
+      //setDrumNotes(newDrumNotes);
       setDrumNames(newNames);
 
       // Adjust container height based on the number of rows
@@ -473,7 +506,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
     } else {
       // Handle case where there are no sampler tracks (e.g., initially or after deletion)
       console.log(`DrumMachine (${trackId}): No samplerTrackIds found. Clearing state.`);
-      setGrid([]);
+      //setGrid([]);
       setDrumNotes([]);
       setDrumNames([]);
       setContainerSize(prev => ({ ...prev, height: 200 })); // Reset to min height
@@ -481,7 +514,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
          rndRef.current.updateSize({ width: containerSize.width, height: 200 });
       }
     }
-  // Depend on samplerTrackIds and allTracks (for names)
+  // Depend on samplerTracks for names/notes sync
   }, [ samplerTracks ]); // Added trackId for logging clarity
   
   // Existing function to close INTERNAL piano roll
@@ -532,7 +565,6 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
     // Update the grid for this drum
     const newGrid = [...grid];
     newGrid[drumIndex] = newGridRow;
-    setGrid(newGrid);
   };
   
   // Function to create a note for a grid cell - Reverted to generate ID
@@ -597,7 +629,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
       // THEN update local state (keep existing logic from reset file)
       // This part assumes the reset file had this logic based on index
       const newDrumNames = [...drumNames]; newDrumNames.splice(index, 1); setDrumNames(newDrumNames);
-      const newGrid = [...grid]; newGrid.splice(index, 1); setGrid(newGrid);
+      //const newGrid = [...grid]; newGrid.splice(index, 1); setGrid(newGrid);
       const newDrumNotes = [...drumNotes]; newDrumNotes.splice(index, 1); setDrumNotes(newDrumNotes);
       if (openPianoRolls.has(index)) closeInternalPianoRoll(index); // Keep if reset had internal rolls
       const newOpenPianoRolls = new Set<number>(); openPianoRolls.forEach(rollIndex => { if (rollIndex < index) newOpenPianoRolls.add(rollIndex); else if (rollIndex > index) newOpenPianoRolls.add(rollIndex - 1); }); setOpenPianoRolls(newOpenPianoRolls);
@@ -618,7 +650,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
     });
   };
   
-  // Refactored toggleCell
+  // Clean toggleCell - no optimistic updates, single source of truth from store
   const toggleCell = (samplerTrackId: string, colIndex: number) => {
     const rowIndex = samplerTracks.findIndex(t => t.id === samplerTrackId);
     // Add safety check for grid row existence
@@ -627,23 +659,10 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
         return;
     }
 
-    // 1. Determine the CURRENT value and the NEW value BEFORE updating state
-    const currentCellValue = grid[rowIndex][colIndex] ?? false; // Read from current grid state
+    // Determine the CURRENT value and the NEW value from the computed grid
+    const currentCellValue = grid[rowIndex][colIndex] ?? false;
     const newCellValue = !currentCellValue;
     console.log(`Toggling cell: row=${rowIndex}, col=${colIndex}, current=${currentCellValue}, new=${newCellValue}`);
-
-    // 2. Update the local pattern state optimistically using the calculated new value
-    setGrid(prevGrid =>
-        prevGrid.map((row, rIdx) => {
-            if (rIdx === rowIndex) {
-                // Create a new row array for immutability
-                const newRow = [...row];
-                newRow[colIndex] = newCellValue; // Set the determined new value
-                return newRow;
-            }
-            return row;
-        })
-    );
 
     const samplerTrack = samplerTracks[rowIndex]; 
     if (!samplerTrack) return; 
@@ -653,6 +672,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
     const midiNoteValue = samplerTrack.base_midi_note || 60; 
 
     console.log(`>>> DrumMachine (${trackId}): toggleCell - samplerTrackId: ${samplerTrackId}, colIndex: ${colIndex}, newCellValue: ${newCellValue} <<<`);
+    
     if (newCellValue) {
       // Create note object WITH an ID
       const currentId = nextNoteId; 
@@ -821,8 +841,8 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
       <Rnd
         ref={rndRef}
         default={{
-          x: 0,
-          y: 0,
+          x: window.innerWidth / 2 - containerSize.width / 2,
+          y: window.innerHeight / 2 - containerSize.height / 2,
           width: containerSize.width,
           height: containerSize.height
         }}

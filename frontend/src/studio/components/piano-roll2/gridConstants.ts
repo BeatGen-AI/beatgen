@@ -51,17 +51,17 @@ export const getSnapSizeInPixels = (option: GridSnapOption, effectiveGridSize: n
   const beatSize = effectiveGridSize * 4; // Assuming a beat is 4 steps
   switch (option) {
     case GridSnapOption.NONE: return 1; // No snapping, minimum value 1 pixel
-    case GridSnapOption.STEP_1_6: return Math.max(1, Math.round(effectiveGridSize / 6));
-    case GridSnapOption.STEP_1_4: return Math.max(1, Math.round(effectiveGridSize / 4));
-    case GridSnapOption.STEP_1_3: return Math.max(1, Math.round(effectiveGridSize / 3));
-    case GridSnapOption.STEP_1_2: return Math.max(1, Math.round(effectiveGridSize / 2));
-    case GridSnapOption.STEP: return Math.max(1, effectiveGridSize);
-    case GridSnapOption.BEAT_1_6: return Math.max(1, Math.round(beatSize / 6));
-    case GridSnapOption.BEAT_1_4: return Math.max(1, Math.round(beatSize / 4)); // Same as STEP
-    case GridSnapOption.BEAT_1_3: return Math.max(1, Math.round(beatSize / 3));
-    case GridSnapOption.BEAT_1_2: return Math.max(1, Math.round(beatSize / 2));
-    case GridSnapOption.BEAT: return Math.max(1, beatSize);
-    case GridSnapOption.BAR: return Math.max(1, beatSize * 4); // Bar is 4 beats
+    case GridSnapOption.STEP_1_6: return effectiveGridSize / 6;
+    case GridSnapOption.STEP_1_4: return effectiveGridSize / 4;
+    case GridSnapOption.STEP_1_3: return effectiveGridSize / 3;
+    case GridSnapOption.STEP_1_2: return effectiveGridSize / 2;
+    case GridSnapOption.STEP: return effectiveGridSize;
+    case GridSnapOption.BEAT_1_6: return beatSize / 6;
+    case GridSnapOption.BEAT_1_4: return beatSize / 4; // Same as STEP
+    case GridSnapOption.BEAT_1_3: return beatSize / 3;
+    case GridSnapOption.BEAT_1_2: return beatSize / 2;
+    case GridSnapOption.BEAT: return beatSize;
+    case GridSnapOption.BAR: return beatSize * 4; // Bar is 4 beats
     default: {
        // Exhaustive check
       const _exhaustiveCheck: never = option;

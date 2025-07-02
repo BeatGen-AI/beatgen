@@ -215,8 +215,8 @@ export class MidiSoundfontPlayer {
     // const trackList = Array.from(this.tracks.values());
     
     // Setup timing metrics
-    let lastProcessTime = performance.now();
-    let processingCycleCount = 0;
+    const lastProcessTime = performance.now();
+    const processingCycleCount = 0;
     
     // this.processingInterval = setInterval(async () => {
     //   // Timing diagnostics - measure actual elapsed time
