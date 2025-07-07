@@ -97,7 +97,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     handleProjectParamChange,
     loadTrack,
     loadDrumTrack,
-    tracks
+    tracks,
+    updateTrackState
   } = useStudioStore();
   
   // Add state to handle visibility after animation
@@ -478,7 +479,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   // Helper function to create a CombinedTrack with instance metadata
   const createCombinedTrack = (
     trackData: MidiTrackRead | SamplerTrackRead | DrumTrackRead,
-    trackType: 'MIDI' | 'SAMPLER' | 'DRUM'
+    trackType: 'MIDI' | 'SAMPLER' | 'DRUM',
+    isDirty: boolean = true  // AI-generated tracks should be marked as dirty by default
   ): CombinedTrack => {
     const defaultName = `New ${trackType.charAt(0) + trackType.slice(1).toLowerCase()} Track`;
     
@@ -489,6 +491,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       volume: 80,
       pan: 0,
       mute: false,
+      dirty: isDirty,  // Set the dirty flag directly on creation
       duration_ticks: MUSIC_CONSTANTS.pulsesPerQuarterNote * 16,
       track_number: 0,
       instance_metadata: [createDefaultInstance(
@@ -506,7 +509,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   };
 
   const handleAction = async (action: string, actionData: any) => {
-    const { store } = useStudioStore.getState();
+    const { store, updateTrackState } = useStudioStore.getState();
     
     switch (action) {
       case 'change_bpm':
@@ -521,7 +524,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
             const drumTrackData = actionData.track_data as DrumTrackRead;
             const combinedDrumTrack = createCombinedTrack(drumTrackData, 'DRUM');
             console.log('🟢 Constructed CombinedTrack:', combinedDrumTrack);
-            loadDrumTrack(combinedDrumTrack);
+            console.log('🟢 Track dirty flag before load:', combinedDrumTrack.dirty);
+            await loadDrumTrack(combinedDrumTrack);
+            
+            // Use a small delay to ensure tracks are fully loaded in state
+            setTimeout(() => {
+              // Mark the AI-generated track as dirty so it will be saved
+              updateTrackState(combinedDrumTrack.id, { dirty: true });
+              console.log('🟢 Track marked as dirty after load');
+              
+              // Also mark sampler tracks as dirty if this is a drum track
+              if (drumTrackData.sampler_track_ids && drumTrackData.sampler_track_ids.length > 0) {
+                console.log('🟢 Marking sampler tracks as dirty:', drumTrackData.sampler_track_ids);
+                drumTrackData.sampler_track_ids.forEach((samplerId: string) => {
+                  updateTrackState(samplerId, { dirty: true });
+                });
+              }
+            }, 100);
           } catch (error) {
             console.error('Failed to add AI generated drum track:', error);
           }
@@ -539,20 +558,53 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
               case 'MIDI':
                 const midiTrack = createCombinedTrack(trackData as MidiTrackRead, 'MIDI');
                 console.log('🟢 Constructed MIDI track:', midiTrack);
-                loadTrack(midiTrack);
+                console.log('🟢 Track dirty flag before load:', midiTrack.dirty);
+                await loadTrack(midiTrack);
+                
+                // Use a small delay to ensure tracks are fully loaded in state
+                setTimeout(() => {
+                  // Mark the AI-generated track as dirty so it will be saved
+                  updateTrackState(midiTrack.id, { dirty: true });
+                  console.log('🟢 Track marked as dirty after load');
+                }, 100);
                 break;
                 
               case 'SAMPLER':
                 const samplerTrack = createCombinedTrack(trackData as SamplerTrackRead, 'SAMPLER');
                 console.log('🟢 Constructed SAMPLER track:', samplerTrack);
-                loadTrack(samplerTrack);
+                console.log('🟢 Track dirty flag before load:', samplerTrack.dirty);
+                await loadTrack(samplerTrack);
+                
+                // Use a small delay to ensure tracks are fully loaded in state
+                setTimeout(() => {
+                  // Mark the AI-generated track as dirty so it will be saved
+                  updateTrackState(samplerTrack.id, { dirty: true });
+                  console.log('🟢 Track marked as dirty after load');
+                }, 100);
                 break;
                 
               case 'DRUM':
                 const drumTrack = createCombinedTrack(trackData as DrumTrackRead, 'DRUM');
                 console.log('🟢 Constructed DRUM track:', drumTrack);
+                console.log('🟢 Track dirty flag before load:', drumTrack.dirty);
                 // For drum tracks, use loadDrumTrack instead of loadTrack
-                loadDrumTrack(drumTrack);
+                await loadDrumTrack(drumTrack);
+                
+                // Use a small delay to ensure tracks are fully loaded in state
+                setTimeout(() => {
+                  // Mark the AI-generated track as dirty so it will be saved
+                  updateTrackState(drumTrack.id, { dirty: true });
+                  console.log('🟢 Track marked as dirty after load');
+                  
+                  // Also mark sampler tracks as dirty if this is a drum track
+                  const drumTrackData = trackData as DrumTrackRead;
+                  if (drumTrackData.sampler_track_ids && drumTrackData.sampler_track_ids.length > 0) {
+                    console.log('🟢 Marking sampler tracks as dirty:', drumTrackData.sampler_track_ids);
+                    drumTrackData.sampler_track_ids.forEach((samplerId: string) => {
+                      updateTrackState(samplerId, { dirty: true });
+                    });
+                  }
+                }, 100);
                 break;
                 
               default:
