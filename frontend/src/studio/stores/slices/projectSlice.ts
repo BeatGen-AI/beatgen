@@ -112,6 +112,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           volume: track.volume, // Inherit properties from parent drum track? Or use sampler's own?
           pan: track.pan,       // Assuming sampler tracks don't have their own top-level vol/pan in API
           mute: track.mute,
+          dirty: (track as any).dirty ?? false, // Preserve dirty flag from parent drum track
           duration_ticks: track.duration_ticks ?? 0,
           // Use instance_metadata from parent track
           instances: track.instances || [],
@@ -248,6 +249,10 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
             console.error("Invalid track type from API:", trackType);
             return null;
           }
+          // Check if the incoming track has a dirty flag set
+          const incomingDirtyFlag = (apiTrack as any).dirty;
+          console.log('🔍 processTrack - incoming dirty flag:', incomingDirtyFlag, 'for track:', apiTrack.name);
+          
           const combinedTrackData: CombinedTrackEntity = {
               id: apiTrack.id,
               name: apiTrack.name,
@@ -259,7 +264,8 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
               duration_ticks: apiTrack.duration_ticks ?? 0,
               // Map instance_metadata to instances
               instances: apiTrack.instance_metadata || [],
-              dirty: false, // Loaded tracks are clean (already saved)
+              // Preserve the dirty flag if it's already set on the incoming track, otherwise default to false
+              dirty: (apiTrack as any).dirty ?? false,
               track: apiTrack.track,
           };
 
