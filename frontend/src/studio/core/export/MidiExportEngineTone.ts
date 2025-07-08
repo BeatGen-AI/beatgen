@@ -83,7 +83,7 @@ export class MidiExportEngineTone extends BaseExportEngine {
             const scheduledTime = absoluteNoteStart - options.startTime;
             
             // Convert MIDI note to frequency
-            const frequency = Tone.Frequency(note.row, "midi");
+            const frequency = Tone.Frequency(note.row, "midi").toFrequency();
             
             // Trigger the synth note
             synth.triggerAttackRelease(
@@ -107,7 +107,7 @@ export class MidiExportEngineTone extends BaseExportEngine {
       });
       
       return {
-        audioBuffer: renderedBuffer,
+        audioBuffer: renderedBuffer.get() as AudioBuffer,
         trackId: track.id,
         duration: duration
       };

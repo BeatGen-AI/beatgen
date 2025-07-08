@@ -59,7 +59,7 @@ export class MidiExportEngine extends BaseExportEngine {
       const soundfontBlob = await sampleManager.getSampleBlob(
         instrumentId,
         midiTrack.instrument_storage_key,
-        'soundfont',
+        'sample',
         midiTrack.instrument_name
       );
       
@@ -73,7 +73,7 @@ export class MidiExportEngine extends BaseExportEngine {
       
       // Create offline audio context
       const duration = options.endTime - options.startTime;
-      const offlineContext = new OfflineAudioContext(
+      const offlineContext = new (window as any).OfflineAudioContext(
         2, // stereo
         Math.floor(duration * options.sampleRate),
         options.sampleRate

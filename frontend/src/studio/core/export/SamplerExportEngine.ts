@@ -31,7 +31,7 @@ export class SamplerExportEngine extends BaseExportEngine {
     const notes: Note[] = samplerTrack.notes || [];
     
     // Get audio file for the sampler
-    const audioFile = await db.getAudioFile(track.id);
+    const audioFile = await db.audioFiles.get(track.id);
     if (!audioFile || !audioFile.data) {
       throw new ExportError(
         `Sampler track ${track.id} has no audio file loaded`,
@@ -104,7 +104,7 @@ export class SamplerExportEngine extends BaseExportEngine {
       this.checkCancelled();
       
       return {
-        audioBuffer: renderedBuffer,
+        audioBuffer: renderedBuffer.get() as AudioBuffer,
         trackId: track.id,
         duration: duration
       };

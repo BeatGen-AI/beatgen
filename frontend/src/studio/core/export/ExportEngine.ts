@@ -100,7 +100,7 @@ export class ToneExportEngine extends BaseExportEngine {
       this.checkCancelled();
       
       return {
-        audioBuffer: renderedBuffer,
+        audioBuffer: renderedBuffer.get() as AudioBuffer,
         trackId: track.id,
         duration: duration
       };

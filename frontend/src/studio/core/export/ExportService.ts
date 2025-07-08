@@ -15,7 +15,7 @@ export class ExportService {
    */
   async exportToWAV(
     tracks: CombinedTrack[],
-    options: Omit<ExportOptions, 'format'>,
+    options: Omit<ExportOptions, 'format' | 'bitDepth'> & { bitDepth?: 16 | 24 | 32 },
     progressCallback?: ExportProgressCallback
   ): Promise<Blob> {
     const exportOptions: ExportOptions = {
@@ -58,7 +58,7 @@ export class ExportService {
       try {
         const blob = await this.exportSingleTrack(
           track,
-          options,
+          { ...options, stems: false },
           (progress) => {
             if (progressCallback) {
               progressCallback({
