@@ -37,22 +37,38 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
     const root = window.document.documentElement;
     const originalHasDark = root.classList.contains('dark');
     
-    // Apply or remove dark class based on studioMode
+    // Apply or remove dark class based on studioMode immediately
     if (studioMode === 'dark' && !originalHasDark) {
       root.classList.add('dark');
     } else if (studioMode === 'light' && originalHasDark) {
       root.classList.remove('dark');
     }
     
-    // Cleanup: restore original state when dialog closes
+    // Don't restore immediately on cleanup - let the dialog close first
     return () => {
-      if (originalHasDark && !root.classList.contains('dark')) {
+      // We'll handle restoration when dialog fully closes
+    };
+  }, [open, studioMode]);
+  
+  // Separate effect to handle restoration after dialog closes
+  useEffect(() => {
+    if (open) return; // Only run when dialog is closed
+    
+    // Restore original dark mode after animation completes
+    const timeoutId = setTimeout(() => {
+      const root = window.document.documentElement;
+      const currentHasDark = root.classList.contains('dark');
+      const shouldHaveDark = uiMode === 'dark';
+      
+      if (shouldHaveDark && !currentHasDark) {
         root.classList.add('dark');
-      } else if (!originalHasDark && root.classList.contains('dark')) {
+      } else if (!shouldHaveDark && currentHasDark) {
         root.classList.remove('dark');
       }
-    };
-  }, [open, studioMode, uiMode]);
+    }, 200); // Wait for closing animation
+    
+    return () => clearTimeout(timeoutId);
+  }, [open, uiMode]);
   
   // Export settings
   const [format, setFormat] = useState<'wav' | 'mp3' | 'flac'>('wav');

@@ -282,6 +282,7 @@ export interface RootState {
   autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   autoSaveMessage?: string;
   selectedTrackIds: string[];
+  showExportDialog: boolean;
   setZoomLevel: (zoomLevel: number) => void;
   setMeasureCount: (measureCount: number) => void;
   setAddMenuAnchor: (el: HTMLElement | null) => void;
@@ -289,6 +290,7 @@ export interface RootState {
   closeDrumMachine: (trackId: string) => void;
   setAutoSaveStatus: (status: 'idle' | 'saving' | 'saved' | 'error', message?: string) => void;
   setSelectedTrackIds: (trackIds: string[]) => void;
+  setShowExportDialog: (show: boolean) => void;
 
   // Tool State
   selectedTool: Tool;
