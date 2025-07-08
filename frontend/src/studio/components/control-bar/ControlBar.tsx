@@ -8,7 +8,7 @@ import KeySelector from './KeySelector';
 import { SaveProjectButton } from './SaveProjectButton';
 import { SaveStatusIndicator } from '../ui/SaveStatusIndicator';
 import { useStudioStore } from '../../stores/studioStore';
-import { IconPlayerPlayFilled, IconPlayerSkipBackFilled, IconPlayerPauseFilled, IconArrowForwardUp, IconArrowBackUp, IconZoomIn, IconZoomOut, IconInputAi, IconChevronsRight, IconArrowLeft } from '@tabler/icons-react';
+import { IconPlayerPlayFilled, IconPlayerSkipBackFilled, IconPlayerPauseFilled, IconArrowForwardUp, IconArrowBackUp, IconZoomIn, IconZoomOut, IconInputAi, IconChevronsRight, IconArrowLeft, IconFileExport } from '@tabler/icons-react';
 import { IconSettings } from '@tabler/icons-react';
 import { CropFree as SelectIcon, Edit as PenIcon, Highlight as HighlighterIcon, Delete as EraserIcon, GridOn as GridIcon, GridOff as GridOffIcon, Check as CheckIcon } from '@mui/icons-material';
 import { Tool } from '../../shared/interactions';
@@ -54,6 +54,7 @@ interface StudioControlBarProps {
     onToolChange?: (tool: Tool) => void;
     onToggleSnapToGrid?: () => void;
     onGridSnapSizeChange?: (size: GridSnapOption) => void;
+    onExportClick?: () => void;
 }
 
 // Wrap with forwardRef and memo
@@ -92,6 +93,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     onToolChange,
     onToggleSnapToGrid,
     onGridSnapSizeChange,
+    onExportClick,
 }, ref) => {
     const theme = useTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
@@ -376,6 +378,22 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         message={autoSaveMessage}
                         onRetryClick={onAutoSaveRetry}
                     />
+                    <Tooltip title="Export project">
+                        <IconButton
+                            size="small"
+                            color="inherit"
+                            onClick={onExportClick}
+                            sx={{
+                                borderRadius: '8px',
+                                '&:hover': {
+                                    backgroundColor: theme.palette.action.hover,
+                                },
+                            }}
+                            disableRipple
+                        >
+                            <IconFileExport />
+                        </IconButton>
+                    </Tooltip>
                     <IconButton
                         size="small"
                         color="inherit"

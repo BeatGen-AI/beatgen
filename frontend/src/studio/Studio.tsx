@@ -25,6 +25,7 @@ import { DEFAULT_MEASURE_WIDTH, useGridStore } from './core/state/gridStore';
 import ChatWindow from './components/ai-assistant/ChatWindow';
 import DrumMachineWindows from './components/drum-machine/DrumMachineWindows';
 import { StudioSettingsModal } from './components/modals/StudioSettingsModal';
+import { ExportDialog } from './components/export/ExportDialog';
 import { useAppTheme } from '../platform/theme/ThemeContext';
 import { studioLightTheme, studioDarkTheme } from '../platform/theme/ThemeContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -74,6 +75,7 @@ function Studio({ projectId }: StudioProps) {
     autoSaveStatus,
     autoSaveMessage,
     selectedTrackIds,
+    showExportDialog,
     
     // Tool state
     selectedTool,
@@ -132,6 +134,7 @@ function Studio({ projectId }: StudioProps) {
     resizeMultipleInstances,
     deleteTrackInstance,
     deleteMultipleInstances,
+    setShowExportDialog,
   } = useStudioStore();
   
   // Get piano roll functions
@@ -533,6 +536,7 @@ function Studio({ projectId }: StudioProps) {
           onToolChange={setSelectedTool}
           onToggleSnapToGrid={toggleSnapToGrid}
           onGridSnapSizeChange={setGridSnapSize}
+          onExportClick={() => setShowExportDialog(true)}
         />
 
         {/* Main Content Area */}
@@ -775,6 +779,12 @@ function Studio({ projectId }: StudioProps) {
           onChange={handleFileSelected}
           accept="audio/*" 
           style={{ display: 'none' }}
+        />
+        
+        {/* Export Dialog */}
+        <ExportDialog 
+          open={showExportDialog} 
+          onClose={() => setShowExportDialog(false)} 
         />
       </Box>
     </MuiThemeProvider>
