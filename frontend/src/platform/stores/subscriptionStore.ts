@@ -9,6 +9,7 @@ interface SubscriptionStore {
 
   // Actions
   fetchStatus: () => Promise<void>;
+  cancelSubscription: (atPeriodEnd?: boolean) => Promise<void>;
   clearError: () => void;
   resetStore: () => void;
 }
@@ -33,6 +34,27 @@ export const useSubscriptionStore = create<SubscriptionStore>((set) => ({
         error: error instanceof Error ? error.message : 'Failed to fetch subscription status',
         isLoading: false 
       });
+    }
+  },
+
+  // Cancel subscription
+  cancelSubscription: async (atPeriodEnd = true) => {
+    console.log('subscriptionStore: Canceling subscription...');
+    set({ isLoading: true, error: null });
+    try {
+      const response = await subscriptionApi.cancelSubscription(atPeriodEnd);
+      console.log('subscriptionStore: Cancellation response:', response);
+      
+      // Immediately fetch the updated status
+      const status = await subscriptionApi.getStatus();
+      set({ status, isLoading: false });
+    } catch (error) {
+      console.error('subscriptionStore: Error canceling subscription:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to cancel subscription',
+        isLoading: false 
+      });
+      throw error; // Re-throw to allow component to handle
     }
   },
 

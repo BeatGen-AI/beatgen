@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSubscriptionStore, selectIsSubscribed, selectCurrentPlan } from '../../stores/subscriptionStore';
 import { subscriptionApi } from '../../api/subscriptions';
 import { Loader2, Crown, AlertCircle, ExternalLink } from 'lucide-react';
@@ -6,12 +6,25 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 
 export const SubscriptionStatus: React.FC = () => {
-  const { status, isLoading, error, fetchStatus } = useSubscriptionStore();
+  const { status, isLoading, error, fetchStatus, cancelSubscription } = useSubscriptionStore();
   const isSubscribed = useSubscriptionStore(selectIsSubscribed);
   const currentPlan = useSubscriptionStore(selectCurrentPlan);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStatus();
@@ -23,6 +36,39 @@ export const SubscriptionStatus: React.FC = () => {
       window.location.href = portal_url;
     } catch (error) {
       console.error('Error opening customer portal:', error);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    try {
+      setIsCanceling(true);
+      setCancelError(null);
+      
+      await cancelSubscription(true); // Cancel at period end
+      
+      setShowCancelDialog(false);
+    } catch (error) {
+      console.error('Error canceling subscription:', error);
+      setCancelError(error instanceof Error ? error.message : 'Failed to cancel subscription');
+    } finally {
+      setIsCanceling(false);
+    }
+  };
+
+  const handleReactivateSubscription = async () => {
+    try {
+      setIsCanceling(true);
+      setCancelError(null);
+      
+      // To reactivate, we update the subscription to not cancel at period end
+      // This would require a new API endpoint, for now we'll redirect to portal
+      const { portal_url } = await subscriptionApi.createPortalSession();
+      window.location.href = portal_url;
+    } catch (error) {
+      console.error('Error reactivating subscription:', error);
+      setCancelError(error instanceof Error ? error.message : 'Failed to reactivate subscription');
+    } finally {
+      setIsCanceling(false);
     }
   };
 
@@ -79,6 +125,7 @@ export const SubscriptionStatus: React.FC = () => {
   };
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -155,15 +202,78 @@ export const SubscriptionStatus: React.FC = () => {
           </div>
         )}
 
-        <Button 
-          onClick={handleManageSubscription} 
-          className="w-full"
-          variant="outline"
-        >
-          Manage Subscription
-          <ExternalLink className="ml-2 h-4 w-4" />
-        </Button>
+        <div className="flex flex-col gap-2">
+          {status.cancel_at_period_end ? (
+            <Button 
+              onClick={handleReactivateSubscription} 
+              className="w-full"
+              variant="default"
+              disabled={isCanceling}
+            >
+              {isCanceling ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Reactivate Subscription
+            </Button>
+          ) : (
+            <>
+              <Button 
+                onClick={() => setShowCancelDialog(true)} 
+                className="w-full"
+                variant="destructive"
+                disabled={status.status === 'canceled'}
+              >
+                Cancel Subscription
+              </Button>
+              <Button 
+                onClick={handleManageSubscription} 
+                className="w-full"
+                variant="outline"
+              >
+                Manage Billing
+                <ExternalLink className="ml-2 h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+
+        {cancelError && (
+          <Alert variant="destructive" className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{cancelError}</AlertDescription>
+          </Alert>
+        )}
       </CardContent>
     </Card>
+
+    <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to cancel your subscription? You'll continue to have access
+            until {status.current_period_end ? format(new Date(status.current_period_end), 'MMMM d, yyyy') : 'the end of your billing period'}.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isCanceling}>Keep Subscription</AlertDialogCancel>
+          <AlertDialogAction 
+            onClick={handleCancelSubscription}
+            disabled={isCanceling}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {isCanceling ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Canceling...
+              </>
+            ) : (
+              'Cancel Subscription'
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 };

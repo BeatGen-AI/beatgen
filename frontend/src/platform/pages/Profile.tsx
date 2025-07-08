@@ -4,9 +4,10 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
-import { Loader2, AlertCircle, UserCircle, Save, ArrowLeft, UploadCloud } from 'lucide-react';
+import { Loader2, AlertCircle, UserCircle, Save, ArrowLeft, UploadCloud, CreditCard } from 'lucide-react';
 import { updateUserProfile, UserProfile, uploadAvatar } from '../api/auth';
 import { useNavigate } from '@tanstack/react-router';
+import { SubscriptionStatus } from '../components/subscription';
 
 const ProfilePage: React.FC = () => {
   const { profile, loading: authLoading, user, signOut, refreshProfile } = useAuth();
@@ -136,8 +137,10 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto max-w-2xl py-8 px-4 sm:px-6 lg:px-8">
-      <div className="bg-card text-card-foreground p-6 sm:p-8 rounded-xl shadow-xl">
+    <div className="container mx-auto max-w-4xl py-8 px-4 sm:px-6 lg:px-8">
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Profile Section */}
+        <div className="bg-card text-card-foreground p-6 sm:p-8 rounded-xl shadow-xl">
         <div className="flex flex-col items-center space-y-4 mb-6">
           <input 
             type="file"
@@ -256,6 +259,12 @@ const ProfilePage: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* Subscription Section */}
+      <div className="h-fit">
+        <SubscriptionStatus />
+      </div>
+    </div>
     </div>
   );
 };
