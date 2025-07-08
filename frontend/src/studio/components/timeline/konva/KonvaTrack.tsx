@@ -287,7 +287,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         <Rect
           x={-50}
           y={0}
-          width={40}
+          width={track.track_type.length * 8 + 2}
           height={16}
           fill={finalTrackColor}
           cornerRadius={3}
@@ -297,7 +297,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         <Text
           x={-50}
           y={3}
-          width={40}
+          width={track.track_type.length * 8 + 2}
           text={track.track_type}
           fontSize={10}
           fontFamily="Sen"
@@ -465,21 +465,6 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
               }
             }}
           />
-          
-          {/* Visual resize indicators */}
-          {(isResizingLeft || isResizingRight || isResizing) && isValidWidth && (
-            <Text
-              x={displayWidth / 2}
-              y={height / 2 - 6}
-              text={`${Math.round(displayWidth)}px`}
-              fontSize={12}
-              fontFamily="Sen"
-              fill="white"
-              align="center"
-              width={displayWidth}
-              listening={false}
-            />
-          )}
         </>
       )}
     </Group>
