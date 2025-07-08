@@ -80,3 +80,20 @@ def get_session():
             raise
         finally:
             session.close()
+
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def get_async_session():
+    """Get an async database session context manager - use in service methods"""
+    session = Session(engine)
+    try:
+        yield session
+        session.commit()
+    except Exception as e:
+        logger.error(f"Session error: {str(e)}")
+        session.rollback()
+        raise
+    finally:
+        session.close()

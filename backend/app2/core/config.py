@@ -87,6 +87,22 @@ class AudioConfig(BaseModel):
     PPQ: int = 480
 
 
+class StripeConfig(BaseModel):
+    """Stripe payment configuration"""
+    
+    SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
+    PUBLISHABLE_KEY: str = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+    WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    
+    # Price IDs for subscription plans
+    STARTER_MONTHLY_PRICE_ID: str = os.getenv("STRIPE_STARTER_MONTHLY_PRICE_ID", "")
+    STARTER_YEARLY_PRICE_ID: str = os.getenv("STRIPE_STARTER_YEARLY_PRICE_ID", "")
+    CREATOR_MONTHLY_PRICE_ID: str = os.getenv("STRIPE_CREATOR_MONTHLY_PRICE_ID", "")
+    CREATOR_YEARLY_PRICE_ID: str = os.getenv("STRIPE_CREATOR_YEARLY_PRICE_ID", "")
+    PRO_MONTHLY_PRICE_ID: str = os.getenv("STRIPE_PRO_MONTHLY_PRICE_ID", "")
+    PRO_YEARLY_PRICE_ID: str = os.getenv("STRIPE_PRO_YEARLY_PRICE_ID", "")
+
+
 class Settings(BaseModel):
     """Main settings container"""
 
@@ -96,6 +112,7 @@ class Settings(BaseModel):
     cors: CORSConfig = CORSConfig()
     db: DatabaseConfig = DatabaseConfig()
     audio: AudioConfig = AudioConfig()
+    stripe: StripeConfig = StripeConfig()
 
     class Config:
         env_file = ".env"

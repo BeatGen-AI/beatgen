@@ -12,6 +12,7 @@ import {
   IconLogout,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
+  IconSparkles,
 } from '@tabler/icons-react';
 import {
   DropdownMenu,
@@ -29,6 +30,9 @@ import {
   TooltipTrigger,
 } from "../../components/ui/tooltip";
 import { useAuth } from '../auth/auth-context';
+import { PricingDialog, PlanBadge } from './subscription';
+import { useSubscriptionStore, selectCurrentPlan } from '../stores/subscriptionStore';
+import { useEffect } from 'react';
 
 export const logoColors = [
   '#e539a9', // Bright Pink
@@ -53,6 +57,26 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
 }) => {
   const navigate = useNavigate();
   const { signOut, profile, user } = useAuth();
+  const [showPricingDialog, setShowPricingDialog] = useState(false);
+  const fetchStatus = useSubscriptionStore(state => state.fetchStatus);
+  const currentPlan = useSubscriptionStore(selectCurrentPlan);
+  const subscriptionStatus = useSubscriptionStore(state => state.status);
+  const subscriptionError = useSubscriptionStore(state => state.error);
+  
+  // Fetch subscription status when component mounts
+  useEffect(() => {
+    if (user) {
+      console.log('SimpleSidebar: Fetching subscription status for user:', user.email);
+      fetchStatus();
+    }
+  }, [user, fetchStatus]);
+  
+  // Debug logs
+  useEffect(() => {
+    console.log('SimpleSidebar: Subscription status:', subscriptionStatus);
+    console.log('SimpleSidebar: Current plan:', currentPlan);
+    console.log('SimpleSidebar: Subscription error:', subscriptionError);
+  }, [subscriptionStatus, currentPlan, subscriptionError]);
 
   const menuItems = [
     { text: 'Home', icon: <IconHomeFilled />, path: '/' },
@@ -136,18 +160,24 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
                   <IconUserCircle className={`w-6 h-6 ${isExpanded ? 'mr-2' : ''}`} />
                 )}
                 {isExpanded && (
-                  <span className="text-left truncate">
-                    {profile?.display_name || profile?.username || 'My Profile'}
-                  </span>
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="text-left truncate">
+                      {profile?.display_name || profile?.username || 'My Profile'}
+                    </span>
+                    <PlanBadge tier={currentPlan?.tier} className="ml-auto" />
+                  </div>
                 )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" side="right" align="start">
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium">
-                    {profile?.display_name || profile?.username || user?.email || 'User'}
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">
+                      {profile?.display_name || profile?.username || user?.email || 'User'}
+                    </p>
+                    <PlanBadge tier={currentPlan?.tier} />
+                  </div>
                   <p className="text-xs text-gray-500">
                     {user?.email || 'No email available'}
                   </p>
@@ -219,7 +249,35 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
         </div>
 
         {/* Footer */}
-        <div className={`border-t border-gray-200 dark:border-neutral-700 ${isExpanded ? 'p-4' : 'p-2'}`}>
+        <div className={`border-t border-gray-200 dark:border-neutral-700 ${isExpanded ? 'p-4' : 'p-2'} space-y-2`}>
+          {/* Upgrade Button */}
+          {!isExpanded ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="default"
+                  className="w-full justify-center p-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                  onClick={() => setShowPricingDialog(true)}
+                >
+                  <IconSparkles className="w-5 h-5 text-white" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Upgrade to Premium</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button
+              variant="default"
+              className="w-full justify-start p-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+              onClick={() => setShowPricingDialog(true)}
+            >
+              <IconSparkles className="w-5 h-5 mr-3 text-white" />
+              <span className="text-white font-semibold">Upgrade</span>
+            </Button>
+          )}
+          
+          {/* Logout Button */}
           {!isExpanded ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -253,6 +311,12 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
           )}
         </div>
       </div>
+      
+      {/* Pricing Dialog */}
+      <PricingDialog 
+        open={showPricingDialog} 
+        onOpenChange={setShowPricingDialog} 
+      />
     </TooltipProvider>
   );
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   IconHomeFilled,
@@ -10,6 +10,7 @@ import {
   IconUserCircle,
   IconSettings,
   IconLogout,
+  IconSparkles,
 } from '@tabler/icons-react';
 import {
   DropdownMenu,
@@ -34,6 +35,9 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useAuth } from '../auth/auth-context';
+import { PricingDialog, PlanBadge } from './subscription';
+import { useSubscriptionStore, selectCurrentPlan } from '../stores/subscriptionStore';
+import { useEffect } from 'react';
 
 export const logoColors = [
   '#e539a9', // Bright Pink
@@ -51,6 +55,26 @@ const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { open } = useSidebar();
   const { signOut, profile, user } = useAuth();
+  const [showPricingDialog, setShowPricingDialog] = useState(false);
+  const fetchStatus = useSubscriptionStore(state => state.fetchStatus);
+  const currentPlan = useSubscriptionStore(selectCurrentPlan);
+  const subscriptionStatus = useSubscriptionStore(state => state.status);
+  const subscriptionError = useSubscriptionStore(state => state.error);
+  
+  // Fetch subscription status when component mounts
+  useEffect(() => {
+    if (user) {
+      console.log('Fetching subscription status for user:', user.email);
+      fetchStatus();
+    }
+  }, [user, fetchStatus]);
+  
+  // Debug logs
+  useEffect(() => {
+    console.log('Subscription status:', subscriptionStatus);
+    console.log('Current plan:', currentPlan);
+    console.log('Subscription error:', subscriptionError);
+  }, [subscriptionStatus, currentPlan, subscriptionError]);
 
   const menuItems = [
     { text: 'Home', icon: <IconHomeFilled />, path: '/' },
@@ -96,15 +120,23 @@ const Sidebar: React.FC = () => {
                 ) : (
                   <IconUserCircle className="h-6 w-6 shrink-0" />
                 )}
-                {open && <span>{profile?.display_name || profile?.username || 'My Profile'}</span>}
+                {open && (
+                  <div className="flex items-center gap-2 flex-1">
+                    <span>{profile?.display_name || profile?.username || 'My Profile'}</span>
+                    <PlanBadge tier={currentPlan?.tier} className="ml-auto" />
+                  </div>
+                )}
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" side="right" align="start" sideOffset={open ? 5 : 10}>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    {profile?.display_name || profile?.username || user?.email || 'User'}
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium leading-none">
+                      {profile?.display_name || profile?.username || user?.email || 'User'}
+                    </p>
+                    <PlanBadge tier={currentPlan?.tier} />
+                  </div>
                   <p className="text-xs leading-none text-muted-foreground">
                     {profile?.username || user?.email || 'User'}
                   </p>
@@ -157,6 +189,30 @@ const Sidebar: React.FC = () => {
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
+        
+        <SidebarSeparator className="my-2" />
+        
+        {/* Upgrade Button */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              className="translate-x-1.5"
+              onClick={() => setShowPricingDialog(true)}
+              tooltip="Upgrade to Premium"
+            >
+              <IconSparkles 
+                className="shrink-0" 
+                style={{ color: '#e539a9' }} // Using the bright pink from logoColors
+              />
+              <span style={{ 
+                color: '#e539a9',
+                fontWeight: 600 
+              }}>
+                Upgrade
+              </span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
@@ -175,6 +231,12 @@ const Sidebar: React.FC = () => {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      
+      {/* Pricing Dialog */}
+      <PricingDialog 
+        open={showPricingDialog} 
+        onOpenChange={setShowPricingDialog} 
+      />
     </ShadcnSidebar>
   );
 };
