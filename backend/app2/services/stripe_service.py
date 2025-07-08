@@ -215,6 +215,48 @@ class StripeService:
                 "trial_end": subscription.trial_end.isoformat() if subscription.trial_end else None,
             }
     
+    async def reactivate_subscription(self, user: User) -> Dict[str, Any]:
+        """Reactivate a subscription that's set to cancel at period end"""
+        async with get_async_session() as session:
+            # Get active subscription that's set to cancel
+            stmt = select(Subscription).where(
+                Subscription.user_id == user.id,
+                Subscription.status.in_(["active", "trialing"]),
+                Subscription.cancel_at_period_end == True
+            )
+            result = session.exec(stmt)
+            subscription = result.first()
+            
+            if not subscription:
+                raise ValueError("No subscription pending cancellation found")
+            
+            try:
+                # Use module-level API
+                import stripe as stripe_module
+                stripe_module.api_key = settings.stripe.SECRET_KEY
+                
+                # Update subscription to not cancel
+                stripe_sub = stripe_module.Subscription.modify(
+                    subscription.stripe_subscription_id,
+                    cancel_at_period_end=False
+                )
+                
+                # Update database
+                subscription.cancel_at_period_end = False
+                subscription.updated_at = datetime.utcnow()
+                
+                session.add(subscription)
+                session.commit()
+                
+                return {
+                    "status": "reactivated",
+                    "message": "Your subscription has been reactivated"
+                }
+                
+            except stripe.StripeError as e:
+                logger.error(f"Stripe error reactivating subscription: {str(e)}")
+                raise
+    
     async def create_portal_session(self, user: User, return_url: str) -> str:
         """Create a Stripe customer portal session"""
         customer_id = await self.create_or_get_customer(user)

@@ -88,6 +88,21 @@ async def cancel_subscription(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/reactivate")
+async def reactivate_subscription(
+    current_user: User = Depends(get_current_user_model)
+) -> Dict[str, Any]:
+    """Reactivate a subscription that's set to cancel at period end"""
+    try:
+        result = await stripe_service.reactivate_subscription(user=current_user)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error reactivating subscription: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/portal-session")
 async def create_portal_session(
     return_url: Optional[str] = Query(None),

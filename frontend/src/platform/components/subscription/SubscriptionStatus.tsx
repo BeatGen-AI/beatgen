@@ -60,13 +60,21 @@ export const SubscriptionStatus: React.FC = () => {
       setIsCanceling(true);
       setCancelError(null);
       
-      // To reactivate, we update the subscription to not cancel at period end
-      // This would require a new API endpoint, for now we'll redirect to portal
-      const { portal_url } = await subscriptionApi.createPortalSession();
-      window.location.href = portal_url;
+      // Reactivate the subscription
+      await subscriptionApi.reactivateSubscription();
+      await fetchStatus(); // Refresh the subscription status
+      
+      // Clear any error state
+      setCancelError(null);
     } catch (error) {
       console.error('Error reactivating subscription:', error);
-      setCancelError(error instanceof Error ? error.message : 'Failed to reactivate subscription');
+      // If reactivation fails, fall back to portal
+      if (error instanceof Error && error.message.includes('No configuration provided')) {
+        // Stripe portal not configured, show helpful message
+        setCancelError('Please configure your billing settings first. Contact support for assistance.');
+      } else {
+        setCancelError(error instanceof Error ? error.message : 'Failed to reactivate subscription');
+      }
     } finally {
       setIsCanceling(false);
     }

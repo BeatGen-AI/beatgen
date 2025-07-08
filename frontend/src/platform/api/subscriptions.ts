@@ -62,4 +62,12 @@ export const subscriptionApi = {
     });
     return response.data;
   },
+
+  async reactivateSubscription(): Promise<{
+    status: string;
+    message: string;
+  }> {
+    const response = await apiClient.post('/subscriptions/reactivate');
+    return response.data;
+  },
 };
