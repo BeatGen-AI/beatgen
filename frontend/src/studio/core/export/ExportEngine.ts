@@ -19,7 +19,7 @@ import { SamplerTrack } from '../../../platform/types/dto/track_models/sampler_t
 import AudioFilePlayer from '../audio-engine/audioFilePlayer/audioEngine';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { BaseExportEngine } from './BaseExportEngine';
-import { MidiExportEngineTone } from './MidiExportEngineTone';
+import { MidiExportEngineOffline } from './MidiExportEngineOffline';
 import { SamplerExportEngine } from './SamplerExportEngine';
 
 /**
@@ -146,7 +146,7 @@ export class ToneExportEngine extends BaseExportEngine {
  */
 export class ExportEngine {
   private toneEngine: ToneExportEngine;
-  private midiEngine: MidiExportEngineTone;
+  private midiEngine: MidiExportEngineOffline;
   private samplerEngine: SamplerExportEngine;
   private cancelled = false;
   private progressCallback?: ExportProgressCallback;
@@ -154,7 +154,7 @@ export class ExportEngine {
   constructor(progressCallback?: ExportProgressCallback) {
     this.progressCallback = progressCallback;
     this.toneEngine = new ToneExportEngine(progressCallback);
-    this.midiEngine = new MidiExportEngineTone(progressCallback);
+    this.midiEngine = new MidiExportEngineOffline(progressCallback);
     this.samplerEngine = new SamplerExportEngine(progressCallback);
   }
   

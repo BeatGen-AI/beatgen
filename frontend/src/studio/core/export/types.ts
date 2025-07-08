@@ -13,6 +13,7 @@ export interface ExportOptions {
   stems: boolean; // export individual tracks
   normalize: boolean;
   dither?: boolean; // for bit depth conversion
+  bpm?: number; // BPM for MIDI rendering
 }
 
 export interface ExportProgress {

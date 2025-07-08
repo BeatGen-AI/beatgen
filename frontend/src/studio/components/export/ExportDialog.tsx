@@ -82,7 +82,8 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
         startTime: 0,
         endTime: projectDuration,
         normalize,
-        stems: exportStems
+        stems: exportStems,
+        bpm
       };
       
       const progressCallback = (progress: ExportProgress) => {

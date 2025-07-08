@@ -66,12 +66,10 @@ export const MidiTrackRenderer: React.FC<MidiTrackRendererProps> = ({
   const notes = useMemo(() => {
     // If track exists in MidiManager, use live notes (even if empty)
     if (hasTrack) {
-      console.log(`MidiTrackRenderer: Using ${liveNotes.length} live notes for track ${track.id}`);
       return liveNotes;
     }
     
     // Otherwise use static notes from track data
-    console.log(`MidiTrackRenderer: Using ${staticNotes.length} static notes for track ${track.id} (track not in MidiManager)`);
     return staticNotes;
   }, [liveNotes, staticNotes, track.id, hasTrack]);
   
