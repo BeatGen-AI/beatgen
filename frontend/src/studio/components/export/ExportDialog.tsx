@@ -1,52 +1,58 @@
-import React, { useState, useCallback } from 'react';
-import {
-  Box,
-  Modal,
-  IconButton,
-  Typography,
-  Button,
-  LinearProgress,
-  FormControl,
-  FormLabel,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  Checkbox,
-  useTheme,
-  Stack,
-  Alert,
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import DownloadIcon from '@mui/icons-material/Download';
+import React, { useState, useCallback, useEffect } from 'react';
+import { X, Download } from 'lucide-react';
 import { useStudioStore } from '../../stores/studioStore';
 import { ExportService } from '../../core/export/ExportService';
 import { ExportOptions, ExportProgress } from '../../core/export/types';
+import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../../../components/ui/dialog';
+import { Button } from '../../../components/ui/button';
+import { Label } from '../../../components/ui/label';
+import { RadioGroup, RadioGroupItem } from '../../../components/ui/radio-group';
+import { Checkbox } from '../../../components/ui/checkbox';
+import { Progress } from '../../../components/ui/progress';
+import { Alert, AlertDescription } from '../../../components/ui/alert';
 
 interface ExportDialogProps {
   open: boolean;
   onClose: () => void;
 }
 
-const modalStyle = {
-  position: 'absolute' as 'absolute',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
-  width: 500,
-  bgcolor: 'background.paper',
-  borderRadius: 2,
-  boxShadow: 24,
-  p: 0,
-  maxHeight: '90vh',
-  overflow: 'auto',
-};
-
 export function ExportDialog({ open, onClose }: ExportDialogProps) {
-  const theme = useTheme();
   const { tracks, projectTitle, bpm } = useStudioStore();
+  const { studioMode, mode: uiMode } = useAppTheme();
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [exportService] = useState(() => new ExportService());
+  
+  // Apply studio dark mode to document element when dialog is open
+  useEffect(() => {
+    if (!open) return;
+    
+    const root = window.document.documentElement;
+    const originalHasDark = root.classList.contains('dark');
+    
+    // Apply or remove dark class based on studioMode
+    if (studioMode === 'dark' && !originalHasDark) {
+      root.classList.add('dark');
+    } else if (studioMode === 'light' && originalHasDark) {
+      root.classList.remove('dark');
+    }
+    
+    // Cleanup: restore original state when dialog closes
+    return () => {
+      if (originalHasDark && !root.classList.contains('dark')) {
+        root.classList.add('dark');
+      } else if (!originalHasDark && root.classList.contains('dark')) {
+        root.classList.remove('dark');
+      }
+    };
+  }, [open, studioMode, uiMode]);
   
   // Export settings
   const [format, setFormat] = useState<'wav' | 'mp3' | 'flac'>('wav');
@@ -76,16 +82,6 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
         10 // Minimum 10 seconds
       );
       
-      const options: Omit<ExportOptions, 'format'> = {
-        sampleRate,
-        bitDepth,
-        startTime: 0,
-        endTime: projectDuration,
-        normalize,
-        stems: exportStems,
-        bpm
-      };
-      
       const progressCallback = (progress: ExportProgress) => {
         setExportProgress(progress);
       };
@@ -94,7 +90,16 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
       
       if (exportStems) {
         // Export individual stems
-        result = await exportService.exportStems(tracks, options, progressCallback);
+        const stemsOptions: Omit<ExportOptions, 'stems'> = {
+          sampleRate,
+          bitDepth,
+          startTime: 0,
+          endTime: projectDuration,
+          normalize,
+          format,
+          bpm
+        };
+        result = await exportService.exportStems(tracks, stemsOptions, progressCallback);
         
         // Download each stem
         result.forEach((blob, trackId) => {
@@ -108,8 +113,17 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
         });
       } else {
         // Export single file
+        const singleOptions: Omit<ExportOptions, 'format'> = {
+          sampleRate,
+          bitDepth,
+          startTime: 0,
+          endTime: projectDuration,
+          normalize,
+          stems: exportStems,
+          bpm
+        };
         if (format === 'wav') {
-          result = await exportService.exportToWAV(tracks, options, progressCallback);
+          result = await exportService.exportToWAV(tracks, singleOptions, progressCallback);
         } else {
           // TODO: Implement MP3 and FLAC export
           throw new Error(`${format.toUpperCase()} export not yet implemented`);
@@ -120,10 +134,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
         ExportService.downloadBlob(result as Blob, filename);
       }
       
-      // Success
-      setTimeout(() => {
-        onClose();
-      }, 1000);
+      // Success - don't auto-close, let user see the completion message
       
     } catch (error) {
       console.error('Export failed:', error);
@@ -153,192 +164,192 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
     if (isExporting) {
       exportService.cancel();
     }
+    setExportProgress(null); // Reset progress when closing
     onClose();
   }, [isExporting, exportService, onClose]);
   
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setExportProgress(null); // Reset progress when dialog closes
+      if (isExporting) {
+        exportService.cancel();
+      }
+      onClose();
+    }
+  }, [isExporting, exportService, onClose]);
+
   return (
-    <Modal
-      open={open}
-      onClose={handleCancel}
-      aria-labelledby="export-dialog-title"
-    >
-      <Box sx={modalStyle}>
-        {/* Header */}
-        <Box sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          p: 2,
-          borderBottom: 1,
-          borderColor: 'divider',
-        }}>
-          <Typography id="export-dialog-title" variant="h6">
-            Export Project
-          </Typography>
-          <IconButton
-            onClick={handleCancel}
-            size="small"
-            sx={{ color: 'text.secondary' }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </Box>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Export Project</DialogTitle>
+        </DialogHeader>
         
-        {/* Content */}
-        <Box sx={{ p: 3 }}>
-          <Stack spacing={3}>
-            {/* Format Selection */}
-            <FormControl component="fieldset">
-              <FormLabel component="legend">Format</FormLabel>
-              <RadioGroup
-                value={format}
-                onChange={(e) => setFormat(e.target.value as any)}
-              >
-                <FormControlLabel
-                  value="wav"
-                  control={<Radio size="small" />}
-                  label="WAV (Lossless)"
-                />
-                <FormControlLabel
-                  value="mp3"
-                  control={<Radio size="small" />}
-                  label="MP3 (Coming soon)"
-                  disabled
-                />
-                <FormControlLabel
-                  value="flac"
-                  control={<Radio size="small" />}
-                  label="FLAC (Coming soon)"
-                  disabled
-                />
-              </RadioGroup>
-            </FormControl>
-            
-            {/* Quality Settings */}
-            {format === 'wav' && (
-              <>
-                <FormControl component="fieldset">
-                  <FormLabel component="legend">Sample Rate</FormLabel>
-                  <RadioGroup
-                    value={sampleRate.toString()}
-                    onChange={(e) => setSampleRate(parseInt(e.target.value) as any)}
+        <div className="space-y-6 py-6 text-foreground">
+          {/* Export Settings - Always visible */}
+          <div className={isExporting ? "opacity-50 pointer-events-none" : ""}>
+            <>
+              {/* Format Selection */}
+              <div className="space-y-3">
+                <Label>Format</Label>
+                <RadioGroup 
+                  value={format} 
+                  onValueChange={(value) => setFormat(value as 'wav' | 'mp3' | 'flac')}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="wav" id="wav" />
+                    <Label htmlFor="wav" className="font-normal">
+                      WAV (Uncompressed)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="mp3" id="mp3" disabled />
+                    <Label htmlFor="mp3" className="font-normal text-muted-foreground">
+                      MP3 (Coming soon)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="flac" id="flac" disabled />
+                    <Label htmlFor="flac" className="font-normal text-muted-foreground">
+                      FLAC (Coming soon)
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              
+              <div className="h-2"></div>
+              
+              {/* Sample Rate */}
+              <div className="space-y-3">
+                <Label>Sample Rate</Label>
+                <RadioGroup 
+                  value={sampleRate.toString()} 
+                  onValueChange={(value) => setSampleRate(parseInt(value) as 44100 | 48000 | 96000)}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="44100" id="sr44100" />
+                    <Label htmlFor="sr44100" className="font-normal">
+                      44.1 kHz (CD Quality)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="48000" id="sr48000" />
+                    <Label htmlFor="sr48000" className="font-normal">
+                      48 kHz (Studio Quality)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="96000" id="sr96000" />
+                    <Label htmlFor="sr96000" className="font-normal">
+                      96 kHz (High Resolution)
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              
+              {format === 'wav' && <div className="h-2"></div>}
+              
+              {/* Bit Depth (WAV only) */}
+              {format === 'wav' && (
+                <div className="space-y-3">
+                  <Label>Bit Depth</Label>
+                  <RadioGroup 
+                    value={bitDepth.toString()} 
+                    onValueChange={(value) => setBitDepth(parseInt(value) as 16 | 24 | 32)}
                   >
-                    <FormControlLabel
-                      value="44100"
-                      control={<Radio size="small" />}
-                      label="44.1 kHz (CD Quality)"
-                    />
-                    <FormControlLabel
-                      value="48000"
-                      control={<Radio size="small" />}
-                      label="48 kHz (Professional)"
-                    />
-                    <FormControlLabel
-                      value="96000"
-                      control={<Radio size="small" />}
-                      label="96 kHz (High Resolution)"
-                    />
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="16" id="bd16" />
+                      <Label htmlFor="bd16" className="font-normal">
+                        16-bit (CD Quality)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="24" id="bd24" />
+                      <Label htmlFor="bd24" className="font-normal">
+                        24-bit (Studio Quality)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="32" id="bd32" />
+                      <Label htmlFor="bd32" className="font-normal">
+                        32-bit Float (Maximum Quality)
+                      </Label>
+                    </div>
                   </RadioGroup>
-                </FormControl>
-                
-                <FormControl component="fieldset">
-                  <FormLabel component="legend">Bit Depth</FormLabel>
-                  <RadioGroup
-                    value={bitDepth.toString()}
-                    onChange={(e) => setBitDepth(parseInt(e.target.value) as any)}
-                  >
-                    <FormControlLabel
-                      value="16"
-                      control={<Radio size="small" />}
-                      label="16-bit (CD Quality)"
-                    />
-                    <FormControlLabel
-                      value="24"
-                      control={<Radio size="small" />}
-                      label="24-bit (Professional)"
-                    />
-                    <FormControlLabel
-                      value="32"
-                      control={<Radio size="small" />}
-                      label="32-bit Float (Maximum Quality)"
-                    />
-                  </RadioGroup>
-                </FormControl>
-              </>
-            )}
-            
-            {/* Export Options */}
-            <Box>
-              <FormControlLabel
-                control={
-                  <Checkbox
+                </div>
+              )}
+              
+              <div className="h-2"></div>
+              
+              {/* Options */}
+              <div className="space-y-4">
+                <Label>Options</Label>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="normalize" 
                     checked={normalize}
-                    onChange={(e) => setNormalize(e.target.checked)}
-                    size="small"
+                    onCheckedChange={(checked) => setNormalize(checked as boolean)}
                   />
-                }
-                label="Normalize audio to prevent clipping"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
+                  <Label htmlFor="normalize" className="font-normal">
+                    Normalize audio levels
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="stems" 
                     checked={exportStems}
-                    onChange={(e) => setExportStems(e.target.checked)}
-                    size="small"
+                    onCheckedChange={(checked) => setExportStems(checked as boolean)}
                   />
-                }
-                label="Export individual tracks (stems)"
-              />
-            </Box>
-            
-            {/* Progress */}
-            {exportProgress && (
-              <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {exportProgress.currentTrack || exportProgress.message}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {Math.round(exportProgress.percent)}%
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={exportProgress.percent}
-                  sx={{ height: 6, borderRadius: 3 }}
-                />
-                {exportProgress.stage === 'error' && (
-                  <Alert severity="error" sx={{ mt: 2 }}>
-                    {exportProgress.message}
-                  </Alert>
-                )}
-              </Box>
-            )}
-          </Stack>
-        </Box>
+                  <Label htmlFor="stems" className="font-normal">
+                    Export individual tracks (stems)
+                  </Label>
+                </div>
+              </div>
+            </>
+          </div>
+          
+          {/* Export Progress - At the bottom */}
+          {exportProgress && (
+            <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center justify-between text-sm text-foreground">
+                <span className="font-medium">{exportProgress.message}</span>
+                <span className="font-mono">{exportProgress.percent.toFixed(1)}%</span>
+              </div>
+              {exportProgress.currentTrack && (
+                <p className="text-sm text-muted-foreground">
+                  {exportProgress.currentTrack}
+                </p>
+              )}
+              <Progress value={exportProgress.percent} className="w-full mt-2" />
+              {exportProgress.stage === 'error' && (
+                <Alert variant="destructive" className="mt-2">
+                  <AlertDescription>{exportProgress.message}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+        </div>
         
-        {/* Footer */}
-        <Box sx={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: 1,
-          p: 2,
-          borderTop: 1,
-          borderColor: 'divider',
-        }}>
-          <Button variant="outlined" onClick={handleCancel} disabled={isExporting}>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>
             {isExporting ? 'Cancel' : 'Close'}
           </Button>
-          <Button
-            variant="contained"
-            onClick={handleExport}
-            disabled={isExporting || tracks.length === 0}
-            startIcon={!isExporting && <DownloadIcon />}
+          <Button 
+            onClick={handleExport} 
+            disabled={isExporting}
+            className="gap-2"
           >
-            {isExporting ? 'Processing...' : 'Export'}
+            {isExporting ? (
+              'Exporting...'
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                Export
+              </>
+            )}
           </Button>
-        </Box>
-      </Box>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
