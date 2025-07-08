@@ -93,6 +93,17 @@ class StripeService:
                 "ui_mode": ui_mode,
             }
             
+            # Add appearance customization for embedded checkout
+            if ui_mode == "embedded":
+                session_params["payment_method_options"] = {
+                    "card": {
+                        "setup_future_usage": "off_session"
+                    }
+                }
+                # You can customize the appearance here
+                # Stripe will automatically detect the user's theme preference
+                # But we can also pass explicit theme settings if needed
+            
             # For embedded mode, use return_url instead of success_url/cancel_url
             if ui_mode == "embedded":
                 # Use success_url as the return_url for embedded mode

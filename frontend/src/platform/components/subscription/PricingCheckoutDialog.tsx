@@ -52,7 +52,7 @@ export const PricingCheckoutDialog: React.FC<PricingCheckoutDialogProps> = ({ op
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[80vw] h-[80vh] max-w-none max-h-none p-0 flex flex-col">
+      <DialogContent className="w-[80vw] h-[60vh] !max-w-none sm:!max-w-none max-h-none p-0 flex flex-col">
         {!selectedPriceId ? (
           <div className="flex flex-col h-full overflow-hidden">
             <DialogHeader className="px-6 py-4 border-b shrink-0">
