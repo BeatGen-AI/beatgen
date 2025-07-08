@@ -92,7 +92,7 @@ export const PricingCheckoutDialog: React.FC<PricingCheckoutDialogProps> = ({ op
                   return (
                     <Card 
                       key={plan.id} 
-                      className={`${plan.tier === 'pro' ? 'border-primary' : ''} ${isCurrentPlanTier ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                      className={`flex flex-col h-full ${plan.tier === 'pro' ? 'border-primary' : ''} ${isCurrentPlanTier ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                     >
                       <CardHeader>
                         <div className="flex items-center justify-between">
@@ -114,7 +114,7 @@ export const PricingCheckoutDialog: React.FC<PricingCheckoutDialogProps> = ({ op
                           )}
                         </CardDescription>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="flex-1">
                         <ul className="space-y-2">
                           <li className="flex items-start gap-2">
                             <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
