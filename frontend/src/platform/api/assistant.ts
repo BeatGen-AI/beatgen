@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import { EventSourcePolyfill } from 'event-source-polyfill';
-import { AssistantAction } from '@/studio/types/assistant';
+import { AssistantAction } from '@/platform/types/dto/assistant';
 
 // Types for request/response
 export interface AssistantRequestOptions {
@@ -14,6 +14,9 @@ export interface AssistantRequestOptions {
       start_bar: number;
       end_bar: number;
     };
+    source?: string;
+    auto_create_project?: boolean;
+    model?: string;
   };
 }
 
