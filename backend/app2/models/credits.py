@@ -63,6 +63,20 @@ class CreditTransaction(SQLModel, table=True):
     balance_after: int  # Balance after this transaction
     
     description: Optional[str] = None
+    
+    # AI Generation specific fields (null for non-AI transactions)
+    model_provider: Optional[str] = None  # openai, anthropic, deepseek, etc
+    model_name: Optional[str] = None  # gpt-4, claude-3, deepseek-v2, etc
+    request_tokens: Optional[int] = None  # Input tokens used
+    response_tokens: Optional[int] = None  # Output tokens generated
+    total_tokens: Optional[int] = None  # Total tokens (request + response)
+    
+    # Generation metadata
+    request_id: Optional[str] = None  # Link to the specific generation request
+    generation_type: Optional[str] = None  # music, chat, edit
+    prompt_preview: Optional[str] = None  # First 200 chars of the prompt
+    
+    # Additional metadata as JSON for flexibility
     transaction_metadata: dict = Field(default={}, sa_column=Column(JSON))
     
     created_at: datetime = Field(default_factory=datetime.utcnow)

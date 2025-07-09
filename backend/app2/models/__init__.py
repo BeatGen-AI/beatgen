@@ -58,3 +58,8 @@ from app2.models.subscription import (
     Subscription,
     PaymentEvent,
 )
+from app2.models.credits import (
+    UserCredits,
+    CreditTransaction,
+    CreditTransactionType,
+)

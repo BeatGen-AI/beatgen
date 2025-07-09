@@ -79,14 +79,14 @@ ANTHROPIC_CLAUDE_4_OPUS = ModelInfo(
 GOOGLE_GEMINI_PRO = ModelInfo(
     provider_name="google-gla",
     display_name="Gemini Pro 2.5",
-    model_name="gemini-2.5-pro-exp-03-25",
+    model_name="gemini-2.5-pro",
     api_key_env_var="GEMINI_API_KEY"
 )
 
 GOOGLE_GEMINI_FLASH = ModelInfo(
     provider_name="google-gla",
     display_name="Gemini Flash 2.5",
-    model_name="gemini-2.5-flash-preview-04-17",
+    model_name="gemini-2.5-flash",
     api_key_env_var="GEMINI_API_KEY"
 )
 

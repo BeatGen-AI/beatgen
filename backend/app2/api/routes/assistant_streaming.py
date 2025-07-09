@@ -43,6 +43,7 @@ from app2.llm.agents.music_agent import SongRequest, music_agent
 from pydantic import BaseModel
 from app2.infrastructure.database.sqlmodel_client import engine
 from sqlmodel import Session
+from app2.services.credits_service import credits_service
 
 # Set up logger
 logger = get_api_logger("assistant_streaming")
@@ -360,6 +361,47 @@ async def process_generate_request(
     try:
         logger.info(f"Processing generate request: {request_id}")
         
+        # Get user ID
+        user_id = context.user_id
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User ID not found in request context"
+            )
+        
+        # Check credits before processing
+        user_credits_info = await credits_service.get_user_credits(user_id)
+        if not user_credits_info:
+            # Initialize credits if not found
+            from app2.models.user import User
+            user = session.get(User, user_id)
+            if user:
+                await credits_service.initialize_user_credits(user)
+                user_credits_info = await credits_service.get_user_credits(user_id)
+        
+        # Check if user has enough credits (unless they have unlimited)
+        if user_credits_info and not user_credits_info.get("is_unlimited", False):
+            current_balance = user_credits_info.get("balance", 0)
+            if isinstance(current_balance, str):  # Handle "unlimited" string
+                current_balance = 999999
+            
+            if current_balance < 1:
+                await sse_queue.error(
+                    message="Insufficient credits",
+                    error_data={
+                        "error": "insufficient_credits",
+                        "required": 1,
+                        "current_balance": current_balance,
+                        "message": "You need at least 1 credit to generate music. Please upgrade your plan or wait for your monthly allocation."
+                    }
+                )
+                return
+        
+        await sse_queue.status(
+            message="Credits verified, generating music...",
+            details=f"Current balance: {user_credits_info.get('balance', 0)}"
+        )
+        
         selected_model_info = available_models.get_model_by_name(context.model)
         selected_model_info.api_key = selected_model_info.get_api_key()
         logger.info(f"Selected model: {selected_model_info}")
@@ -402,6 +444,65 @@ async def process_generate_request(
         # and sse_queue has a method to send the final structured data.
         # We'll use model_dump() to serialize the Pydantic model.
         # The event name "final_composition" is arbitrary, adjust as needed for frontend.
+        
+        # Check if generation was successful and deduct credits
+        if response and response.get("success"):
+            # Extract model info from selected_model_info
+            model_provider = None
+            if selected_model_info:
+                if selected_model_info.provider_name == "openai":
+                    model_provider = "openai"
+                elif selected_model_info.provider_name == "anthropic":
+                    model_provider = "anthropic"
+                elif selected_model_info.provider_name == "openrouter":
+                    # Check the model name for the actual provider
+                    if "deepseek" in selected_model_info.model_name.lower():
+                        model_provider = "deepseek"
+                    elif "llama" in selected_model_info.model_name.lower():
+                        model_provider = "meta"
+                    else:
+                        model_provider = "openrouter"
+                elif selected_model_info.provider_name == "google-gla":
+                    model_provider = "google"
+                else:
+                    model_provider = selected_model_info.provider_name
+            
+            credit_deducted = await credits_service.use_credits(
+                user_id=user_id,
+                amount=1,
+                description="AI music generation",
+                metadata={
+                    "request_id": request_id,
+                    "prompt": context.prompt[:100],  # Store first 100 chars of prompt
+                    "song_title": response.get("song_title", "Untitled"),
+                    "duration_bars": response.get("duration_bars", 4),
+                    "tempo": response.get("tempo"),
+                    "key": response.get("key"),
+                    "model": context.model
+                },
+                # AI-specific parameters
+                model_provider=model_provider,
+                model_name=selected_model_info.model_name if selected_model_info else context.model,
+                request_tokens=response.get("request_tokens"),  # If the agent provides this
+                response_tokens=response.get("response_tokens"),  # If the agent provides this
+                request_id=request_id,
+                generation_type="music",
+                prompt_preview=context.prompt[:200] if context.prompt else None
+            )
+            
+            if credit_deducted:
+                # Get updated balance
+                updated_credits = await credits_service.get_user_credits(user_id)
+                new_balance = updated_credits.get("balance", 0) if updated_credits else 0
+                
+                await sse_queue.status(
+                    message="Music generated successfully! Credit deducted.",
+                    details=f"New balance: {new_balance}"
+                )
+                logger.info(f"Deducted 1 credit for user {user_id}. New balance: {new_balance}")
+            else:
+                # This shouldn't happen since we checked before, but log it
+                logger.warning(f"Failed to deduct credit for user {user_id} after generation")
         
         # Now signal that the entire process is complete
         await sse_queue.complete({})

@@ -37,6 +37,15 @@ class CreditTransactionResponse(BaseModel):
     description: str
     created_at: str
     metadata: Dict[str, Any] | None
+    # AI-specific fields
+    model_provider: str | None
+    model_name: str | None
+    request_tokens: int | None
+    response_tokens: int | None
+    total_tokens: int | None
+    request_id: str | None
+    generation_type: str | None
+    prompt_preview: str | None
 
 
 @router.get("/status", response_model=CreditsResponse)

@@ -1,4 +1,4 @@
-from typing import List, Any, AsyncGenerator, Dict, Optional, Sequence
+from typing import List, Any, AsyncGenerator, Dict, Optional, Sequence, Union, Tuple
 
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
@@ -178,4 +178,23 @@ class OpenAIAdapter(ProviderAdapter):
             return stream_generator()
         else:
             result = await self.agent.run(**common_params) # type: ignore[pydantic-ai]
-            return result.output 
+            
+            # Extract usage information
+            usage_dict = None
+            if hasattr(result, 'usage') and result.usage():
+                usage_data = result.usage()
+                if hasattr(usage_data, 'model_dump'):
+                    usage_dict = usage_data.model_dump()
+                elif hasattr(usage_data, 'dict'):
+                    usage_dict = usage_data.dict()
+                elif isinstance(usage_data, dict):
+                    usage_dict = usage_data
+                else:
+                    # Fallback: Manually construct from known Usage attributes
+                    usage_dict = {
+                        "request_tokens": getattr(usage_data, 'request_tokens', 0),
+                        "response_tokens": getattr(usage_data, 'response_tokens', 0),
+                        "total_tokens": getattr(usage_data, 'total_tokens', 0)
+                    }
+            
+            return (result.output, usage_dict) 

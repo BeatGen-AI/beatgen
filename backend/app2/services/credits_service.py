@@ -222,7 +222,21 @@ class CreditsService:
             logger.info(f"Allocated {new_credits} credits to user {user_id} (rollover: {rollover_amount})")
             return user_credits
     
-    async def use_credits(self, user_id: str, amount: int, description: str, metadata: Optional[Dict] = None) -> bool:
+    async def use_credits(
+        self, 
+        user_id: str, 
+        amount: int, 
+        description: str, 
+        metadata: Optional[Dict] = None,
+        # New AI-specific parameters
+        model_provider: Optional[str] = None,
+        model_name: Optional[str] = None,
+        request_tokens: Optional[int] = None,
+        response_tokens: Optional[int] = None,
+        request_id: Optional[str] = None,
+        generation_type: Optional[str] = None,
+        prompt_preview: Optional[str] = None
+    ) -> bool:
         """Use credits for a user action"""
         async with get_async_session() as session:
             # Get user credits
@@ -237,6 +251,7 @@ class CreditsService:
             # Check if pro plan (unlimited)
             if user_credits.subscription_tier == "pro":
                 # Pro users have unlimited credits, just record the usage
+                total_tokens = (request_tokens or 0) + (response_tokens or 0) if request_tokens or response_tokens else None
                 transaction = CreditTransaction(
                     user_id=user_id,
                     user_credits_id=user_credits.id,
@@ -244,7 +259,16 @@ class CreditsService:
                     amount=-amount,
                     balance_after=user_credits.balance,  # Balance stays the same for pro
                     description=description,
-                    transaction_metadata=metadata
+                    transaction_metadata=metadata,
+                    # AI-specific fields
+                    model_provider=model_provider,
+                    model_name=model_name,
+                    request_tokens=request_tokens,
+                    response_tokens=response_tokens,
+                    total_tokens=total_tokens,
+                    request_id=request_id,
+                    generation_type=generation_type,
+                    prompt_preview=prompt_preview[:200] if prompt_preview else None
                 )
                 session.add(transaction)
                 user_credits.total_used += amount
@@ -263,6 +287,7 @@ class CreditsService:
             user_credits.updated_at = datetime.utcnow()
             
             # Record transaction
+            total_tokens = (request_tokens or 0) + (response_tokens or 0) if request_tokens or response_tokens else None
             transaction = CreditTransaction(
                 user_id=user_id,
                 user_credits_id=user_credits.id,
@@ -270,7 +295,16 @@ class CreditsService:
                 amount=-amount,
                 balance_after=user_credits.balance,
                 description=description,
-                transaction_metadata=metadata
+                transaction_metadata=metadata,
+                # AI-specific fields
+                model_provider=model_provider,
+                model_name=model_name,
+                request_tokens=request_tokens,
+                response_tokens=response_tokens,
+                total_tokens=total_tokens,
+                request_id=request_id,
+                generation_type=generation_type,
+                prompt_preview=prompt_preview[:200] if prompt_preview else None
             )
             
             session.add(transaction)
@@ -326,7 +360,16 @@ class CreditsService:
                     "balance_after": t.balance_after,
                     "description": t.description,
                     "created_at": t.created_at.isoformat(),
-                    "metadata": t.transaction_metadata
+                    "metadata": t.transaction_metadata,
+                    # AI-specific fields
+                    "model_provider": t.model_provider,
+                    "model_name": t.model_name,
+                    "request_tokens": t.request_tokens,
+                    "response_tokens": t.response_tokens,
+                    "total_tokens": t.total_tokens,
+                    "request_id": t.request_id,
+                    "generation_type": t.generation_type,
+                    "prompt_preview": t.prompt_preview
                 }
                 for t in transactions
             ]

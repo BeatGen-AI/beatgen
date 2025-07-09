@@ -1,31 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { creditsApi, CreditsStatus } from '../../api/credits';
+import React from 'react';
 import { Coins, Infinity } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useCredits } from '../../hooks/useCredits';
 
 export const CreditsDisplay: React.FC = () => {
-  const [credits, setCredits] = useState<CreditsStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchCredits = async () => {
-      try {
-        const status = await creditsApi.getStatus();
-        setCredits(status);
-      } catch (error) {
-        console.error('Failed to fetch credits:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchCredits();
-    
-    // Refetch credits every 30 seconds
-    const interval = setInterval(fetchCredits, 30000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  const { credits, isLoading } = useCredits();
 
   if (isLoading) {
     return (

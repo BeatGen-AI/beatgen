@@ -62,23 +62,13 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
   const [showPricingDialog, setShowPricingDialog] = useState(false);
   const fetchStatus = useSubscriptionStore(state => state.fetchStatus);
   const currentPlan = useSubscriptionStore(selectCurrentPlan);
-  const subscriptionStatus = useSubscriptionStore(state => state.status);
-  const subscriptionError = useSubscriptionStore(state => state.error);
   
   // Fetch subscription status when component mounts
   useEffect(() => {
     if (user) {
-      console.log('SimpleSidebar: Fetching subscription status for user:', user.email);
       fetchStatus();
     }
   }, [user, fetchStatus]);
-  
-  // Debug logs
-  useEffect(() => {
-    console.log('SimpleSidebar: Subscription status:', subscriptionStatus);
-    console.log('SimpleSidebar: Current plan:', currentPlan);
-    console.log('SimpleSidebar: Subscription error:', subscriptionError);
-  }, [subscriptionStatus, currentPlan, subscriptionError]);
 
   const menuItems = [
     { text: 'Home', icon: <IconHomeFilled />, path: '/' },
