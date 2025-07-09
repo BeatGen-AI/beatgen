@@ -57,9 +57,7 @@ interface ChatWindowProps {
 }
 
 // Define available AI models (placeholder)
-const AVAILABLE_MODELS = ["Deepseek R1", "Deepseek V3", "Claude 4 Sonnet",
-   "Claude 4 Opus", 
-   "Claude 3.7 Sonnet",  "GPT-4.1", "GPT-4o", "o3", "o3-mini", "Gemini Pro 2.5", "Gemini Flash 2.5", "Llama 4 Maverick", "Llama 4 Scout"];
+const AVAILABLE_MODELS = ["Deepseek R1", "Deepseek V3", "Claude 4 Sonnet", "Claude 4 Opus", "Claude 3.7 Sonnet",  "GPT-4.1", "GPT-4o", "o3", "o3-mini", "Gemini Pro 2.5", "Gemini Flash 2.5", "Llama 4 Maverick", "Llama 4 Scout"];
 
 // UI Constants
 const CHAT_WINDOW_WIDTH = 350;
@@ -219,7 +217,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       onAction: (action) => {
         console.log('Action received:', action);
         // Process the action right away
-        handleAction(action.action_type, action.data);
+        handleAction(action.type, action.data);
         
         // Add action message
         setMessages(prev => [
@@ -227,7 +225,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           { 
             text: '', 
             isUser: false,
-            action: action.action_type,
+            action: action.type,
             actionData: action.data
           }
         ]);
@@ -457,7 +455,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           prompt,
           mode: apiMode,
           model: selectedModel,
-          context: { // Pass selected model and track_id in context
+          context: { // Pass selected model in context
             model: selectedModel,
             track_id: trackId
           }
