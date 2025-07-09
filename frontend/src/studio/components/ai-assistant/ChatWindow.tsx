@@ -219,7 +219,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       onAction: (action) => {
         console.log('Action received:', action);
         // Process the action right away
-        handleAction(action.type, action.data);
+        handleAction(action.action_type, action.data);
         
         // Add action message
         setMessages(prev => [
@@ -227,7 +227,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           { 
             text: '', 
             isUser: false,
-            action: action.type,
+            action: action.action_type,
             actionData: action.data
           }
         ]);
@@ -457,9 +457,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           prompt,
           mode: apiMode,
           model: selectedModel,
-          track_id: trackId,
-          context: { // Pass selected model in context
-            model: selectedModel 
+          context: { // Pass selected model and track_id in context
+            model: selectedModel,
+            track_id: trackId
           }
         },
         setupStreamCallbacks()
