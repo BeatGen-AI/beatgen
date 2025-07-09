@@ -16,31 +16,31 @@ export interface SubscriptionPlan {
 }
 
 // Get price IDs from environment variables based on environment
-const isDevEnv = import.meta.env.VITE_APP_ENV === 'prod';
+const isProdEnv = import.meta.env.VITE_APP_ENV !== 'dev';
 
-const STARTER_MONTHLY_PRICE_ID = isDevEnv 
-  ? import.meta.env.DEV_VITE_STRIPE_STARTER_MONTHLY_PRICE_ID || ''
-  : import.meta.env.PROD_VITE_STRIPE_STARTER_MONTHLY_PRICE_ID || '';
+const STARTER_MONTHLY_PRICE_ID = isProdEnv 
+  ? import.meta.env.PROD_VITE_STRIPE_STARTER_MONTHLY_PRICE_ID || ''
+  : import.meta.env.DEV_VITE_STRIPE_STARTER_MONTHLY_PRICE_ID || '';
 
-const STARTER_YEARLY_PRICE_ID = isDevEnv 
-  ? import.meta.env.DEV_VITE_STRIPE_STARTER_YEARLY_PRICE_ID || ''
-  : import.meta.env.PROD_VITE_STRIPE_STARTER_YEARLY_PRICE_ID || '';
+const STARTER_YEARLY_PRICE_ID = isProdEnv 
+  ? import.meta.env.PROD_VITE_STRIPE_STARTER_YEARLY_PRICE_ID || ''
+  : import.meta.env.DEV_VITE_STRIPE_STARTER_YEARLY_PRICE_ID || '';
 
-const CREATOR_MONTHLY_PRICE_ID = isDevEnv 
-  ? import.meta.env.DEV_VITE_STRIPE_CREATOR_MONTHLY_PRICE_ID || ''
-  : import.meta.env.PROD_VITE_STRIPE_CREATOR_MONTHLY_PRICE_ID || '';
+const CREATOR_MONTHLY_PRICE_ID = isProdEnv 
+  ? import.meta.env.PROD_VITE_STRIPE_CREATOR_MONTHLY_PRICE_ID || ''
+  : import.meta.env.DEV_VITE_STRIPE_CREATOR_MONTHLY_PRICE_ID || '';
 
-const CREATOR_YEARLY_PRICE_ID = isDevEnv 
-  ? import.meta.env.DEV_VITE_STRIPE_CREATOR_YEARLY_PRICE_ID || ''
-  : import.meta.env.PROD_VITE_STRIPE_CREATOR_YEARLY_PRICE_ID || '';
+const CREATOR_YEARLY_PRICE_ID = isProdEnv 
+  ? import.meta.env.PROD_VITE_STRIPE_CREATOR_YEARLY_PRICE_ID || ''
+  : import.meta.env.DEV_VITE_STRIPE_CREATOR_YEARLY_PRICE_ID || '';
 
-const PRO_MONTHLY_PRICE_ID = isDevEnv 
-  ? import.meta.env.DEV_VITE_STRIPE_PRO_MONTHLY_PRICE_ID || ''
-  : import.meta.env.PROD_VITE_STRIPE_PRO_MONTHLY_PRICE_ID || '';
+const PRO_MONTHLY_PRICE_ID = isProdEnv 
+  ? import.meta.env.PROD_VITE_STRIPE_PRO_MONTHLY_PRICE_ID || ''
+  : import.meta.env.DEV_VITE_STRIPE_PRO_MONTHLY_PRICE_ID || '';
 
-const PRO_YEARLY_PRICE_ID = isDevEnv 
-  ? import.meta.env.DEV_VITE_STRIPE_PRO_YEARLY_PRICE_ID || ''
-  : import.meta.env.PROD_VITE_STRIPE_PRO_YEARLY_PRICE_ID || '';
+const PRO_YEARLY_PRICE_ID = isProdEnv 
+  ? import.meta.env.PROD_VITE_STRIPE_PRO_YEARLY_PRICE_ID || ''
+  : import.meta.env.DEV_VITE_STRIPE_PRO_YEARLY_PRICE_ID || '';
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   // Starter plans

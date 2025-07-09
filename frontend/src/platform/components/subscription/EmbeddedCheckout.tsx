@@ -8,15 +8,12 @@ import { subscriptionApi } from '../../api/subscriptions';
 import { Loader2 } from 'lucide-react';
 
 // Initialize Stripe with publishable key from environment
-const isDevEnv = import.meta.env.VITE_APP_ENV === 'prod';
-console.log('isDevEnv', isDevEnv);
-console.log('import.meta.env.DEV_VITE_STRIPE_PUBLISHABLE_KEY', import.meta.env.DEV_VITE_STRIPE_PUBLISHABLE_KEY);
-const stripePublishableKey = isDevEnv 
-  ? import.meta.env.DEV_VITE_STRIPE_PUBLISHABLE_KEY
-  : import.meta.env.PROD_VITE_STRIPE_PUBLISHABLE_KEY;
-console.log('stripePublishableKey', stripePublishableKey);
+const isProdEnv = import.meta.env.VITE_APP_ENV !== 'dev';
+const stripePublishableKey = isProdEnv 
+  ? import.meta.env.PROD_VITE_STRIPE_PUBLISHABLE_KEY
+  : import.meta.env.DEV_VITE_STRIPE_PUBLISHABLE_KEY;
 if (!stripePublishableKey || stripePublishableKey === 'pk_test_YOUR_PUBLISHABLE_KEY_HERE') {
-  const envPrefix = isDevEnv ? 'DEV_VITE' : 'PROD_VITE';
+  const envPrefix = isProdEnv ? 'PROD_VITE' : 'DEV_VITE';
   console.error(`Stripe publishable key is not configured. Please add ${envPrefix}_STRIPE_PUBLISHABLE_KEY to your .env file`);
 }
 
