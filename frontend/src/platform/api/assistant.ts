@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import { EventSourcePolyfill } from 'event-source-polyfill';
-import { AssistantAction } from '@/studio/types/assistant-actions';
+import { AssistantAction } from '@/studio/types/assistant';
 
 // Types for request/response
 export interface AssistantRequestOptions {

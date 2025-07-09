@@ -32,8 +32,6 @@ const PLAN_CONFIG = {
 export const PlanBadge: React.FC<PlanBadgeProps> = ({ tier, className = '' }) => {
   const planTier = tier?.toUpperCase() || 'FREE';
   const config = PLAN_CONFIG[planTier as keyof typeof PLAN_CONFIG] || PLAN_CONFIG.FREE;
-  
-  console.log('PlanBadge - tier:', tier, 'planTier:', planTier, 'config:', config);
 
   return (
     <Badge 
