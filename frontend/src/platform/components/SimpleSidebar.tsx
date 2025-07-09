@@ -13,6 +13,7 @@ import {
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
   IconSparkles,
+  IconCoins,
 } from '@tabler/icons-react';
 import {
   DropdownMenu,
@@ -32,6 +33,7 @@ import {
 import { useAuth } from '../auth/auth-context';
 import { PricingDialog, PlanBadge } from './subscription';
 import { useSubscriptionStore, selectCurrentPlan } from '../stores/subscriptionStore';
+import { CreditsDisplay } from './credits/CreditsDisplay';
 import { useEffect } from 'react';
 
 export const logoColors = [
@@ -85,6 +87,7 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
     { text: 'Midi Tracks', icon: <IconPiano />, path: '/midi-tracks' },
     { text: 'Sampler Tracks', icon: <IconWaveSine />, path: '/sampler-tracks' },
     { text: 'Drum Tracks', icon: <IconDisc />, path: '/drum-tracks' },
+    { text: 'Credits', icon: <IconCoins />, path: '/credits' },
   ];
 
   return (
@@ -204,6 +207,9 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Credits Display */}
+          <CreditsDisplay />
 
           {/* Navigation Menu */}
           <nav className="space-y-1">

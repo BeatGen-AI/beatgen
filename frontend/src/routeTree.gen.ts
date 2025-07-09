@@ -23,6 +23,7 @@ import { Route as MidiTracksImport } from './routes/midi-tracks'
 import { Route as LoginImport } from './routes/login'
 import { Route as HomeImport } from './routes/home'
 import { Route as DrumTracksImport } from './routes/drum-tracks'
+import { Route as CreditsImport } from './routes/credits'
 import { Route as CheckoutImport } from './routes/checkout'
 import { Route as AudioTracksImport } from './routes/audio-tracks'
 import { Route as IndexImport } from './routes/index'
@@ -105,6 +106,12 @@ const DrumTracksRoute = DrumTracksImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
+const CreditsRoute = CreditsImport.update({
+  id: '/credits',
+  path: '/credits',
+  getParentRoute: () => rootRoute,
+} as any)
+
 const CheckoutRoute = CheckoutImport.update({
   id: '/checkout',
   path: '/checkout',
@@ -170,6 +177,13 @@ declare module '@tanstack/react-router' {
       path: '/checkout'
       fullPath: '/checkout'
       preLoaderRoute: typeof CheckoutImport
+      parentRoute: typeof rootRoute
+    }
+    '/credits': {
+      id: '/credits'
+      path: '/credits'
+      fullPath: '/credits'
+      preLoaderRoute: typeof CreditsImport
       parentRoute: typeof rootRoute
     }
     '/drum-tracks': {
@@ -305,6 +319,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
+  '/credits': typeof CreditsRoute
   '/drum-tracks': typeof DrumTracksRoute
   '/home': typeof HomeRoute
   '/login': typeof LoginRoute
@@ -327,6 +342,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
+  '/credits': typeof CreditsRoute
   '/drum-tracks': typeof DrumTracksRoute
   '/home': typeof HomeRoute
   '/login': typeof LoginRoute
@@ -350,6 +366,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
+  '/credits': typeof CreditsRoute
   '/drum-tracks': typeof DrumTracksRoute
   '/home': typeof HomeRoute
   '/login': typeof LoginRoute
@@ -374,6 +391,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audio-tracks'
     | '/checkout'
+    | '/credits'
     | '/drum-tracks'
     | '/home'
     | '/login'
@@ -395,6 +413,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audio-tracks'
     | '/checkout'
+    | '/credits'
     | '/drum-tracks'
     | '/home'
     | '/login'
@@ -416,6 +435,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audio-tracks'
     | '/checkout'
+    | '/credits'
     | '/drum-tracks'
     | '/home'
     | '/login'
@@ -439,6 +459,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AudioTracksRoute: typeof AudioTracksRoute
   CheckoutRoute: typeof CheckoutRouteWithChildren
+  CreditsRoute: typeof CreditsRoute
   DrumTracksRoute: typeof DrumTracksRoute
   HomeRoute: typeof HomeRoute
   LoginRoute: typeof LoginRoute
@@ -460,6 +481,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AudioTracksRoute: AudioTracksRoute,
   CheckoutRoute: CheckoutRouteWithChildren,
+  CreditsRoute: CreditsRoute,
   DrumTracksRoute: DrumTracksRoute,
   HomeRoute: HomeRoute,
   LoginRoute: LoginRoute,
@@ -490,6 +512,7 @@ export const routeTree = rootRoute
         "/",
         "/audio-tracks",
         "/checkout",
+        "/credits",
         "/drum-tracks",
         "/home",
         "/login",
@@ -518,6 +541,9 @@ export const routeTree = rootRoute
       "children": [
         "/checkout/return"
       ]
+    },
+    "/credits": {
+      "filePath": "credits.tsx"
     },
     "/drum-tracks": {
       "filePath": "drum-tracks.tsx"

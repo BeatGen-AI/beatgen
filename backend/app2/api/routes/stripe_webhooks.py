@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Request, HTTPException, Header
 from typing import Optional
 from sqlmodel import select
+from datetime import datetime
 import logging
 
 from app2.core.config import settings
 from app2.services.stripe_service import StripeService, stripe_client
+from app2.services.credits_service import credits_service
 from app2.models.subscription import StripeCustomer, PaymentEvent, SubscriptionPlan
 from app2.infrastructure.database.sqlmodel_client import get_async_session
 
@@ -116,21 +118,57 @@ async def handle_subscription_created(subscription_data):
     logger.info(f"Subscription data keys: {list(subscription_data.keys())}")
     logger.info(f"Has current_period_start: {'current_period_start' in subscription_data}")
     # The webhook data already has everything we need, so just use it directly
-    await stripe_service.sync_subscription_from_stripe(subscription_data)
+    subscription = await stripe_service.sync_subscription_from_stripe(subscription_data)
+    
+    # Allocate credits for the new subscription
+    if subscription and subscription.user_id:
+        # Get the plan tier from the subscription
+        plan_tier = "free"  # Default
+        if subscription.plan:
+            plan_tier = subscription.plan.tier
+        
+        logger.info(f"Allocating credits for user {subscription.user_id} with tier {plan_tier}")
+        await credits_service.update_subscription_tier(str(subscription.user_id), plan_tier)
 
 
 async def handle_subscription_updated(subscription_data):
     """Handle subscription updates (plan changes, status changes, etc.)"""
     logger.info(f"Subscription updated: {subscription_data['id']} - Status: {subscription_data['status']}")
     # The webhook data already has everything we need, so just use it directly
-    await stripe_service.sync_subscription_from_stripe(subscription_data)
+    subscription = await stripe_service.sync_subscription_from_stripe(subscription_data)
+    
+    # Update credits if subscription is active and has a plan
+    if subscription and subscription.user_id:
+        if subscription_data['status'] in ['active', 'trialing']:
+            # Get the plan tier from the subscription
+            plan_tier = "free"  # Default
+            if subscription.plan:
+                plan_tier = subscription.plan.tier
+            
+            logger.info(f"Updating credits for user {subscription.user_id} with tier {plan_tier}")
+            await credits_service.update_subscription_tier(str(subscription.user_id), plan_tier)
+        elif subscription_data['status'] == 'canceled' and subscription_data.get('canceled_at'):
+            # If subscription is immediately canceled (not at period end)
+            logger.info(f"Subscription immediately canceled for user {subscription.user_id}")
+            await credits_service.handle_subscription_cancellation(
+                str(subscription.user_id), 
+                datetime.fromtimestamp(subscription_data['canceled_at'])
+            )
 
 
 async def handle_subscription_deleted(subscription_data):
     """Handle subscription deletion/cancellation"""
     logger.info(f"Subscription deleted: {subscription_data['id']}")
     # The webhook data already has everything we need, so just use it directly
-    await stripe_service.sync_subscription_from_stripe(subscription_data)
+    subscription = await stripe_service.sync_subscription_from_stripe(subscription_data)
+    
+    # When subscription is deleted, remove all credits
+    if subscription and subscription.user_id:
+        logger.info(f"Removing credits for user {subscription.user_id} due to subscription deletion")
+        await credits_service.handle_subscription_cancellation(
+            str(subscription.user_id), 
+            datetime.utcnow()  # Credits are removed immediately when subscription is deleted
+        )
 
 
 async def handle_payment_succeeded(event):
@@ -192,7 +230,16 @@ async def handle_checkout_completed(checkout_session):
             
             # Convert to dict and sync
             subscription_dict = subscription.to_dict()
-            await stripe_service.sync_subscription_from_stripe(subscription_dict)
+            synced_subscription = await stripe_service.sync_subscription_from_stripe(subscription_dict)
+            
+            # Allocate initial credits
+            if synced_subscription and synced_subscription.user_id:
+                plan_tier = "free"  # Default
+                if synced_subscription.plan:
+                    plan_tier = synced_subscription.plan.tier
+                
+                logger.info(f"Allocating initial credits for user {synced_subscription.user_id} with tier {plan_tier}")
+                await credits_service.update_subscription_tier(str(synced_subscription.user_id), plan_tier)
             
             # Also record the successful payment event
             if checkout_session.get('customer'):

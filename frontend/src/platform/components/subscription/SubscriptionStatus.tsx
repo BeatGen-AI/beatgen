@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useSubscriptionStore, selectIsSubscribed, selectCurrentPlan } from '../../stores/subscriptionStore';
 import { subscriptionApi } from '../../api/subscriptions';
-import { Loader2, Crown, AlertCircle, ExternalLink } from 'lucide-react';
+import { creditsApi, CreditsStatus } from '../../api/credits';
+import { Loader2, Crown, AlertCircle, ExternalLink, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useNavigate } from '@tanstack/react-router';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,10 +27,27 @@ export const SubscriptionStatus: React.FC = () => {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [credits, setCredits] = useState<CreditsStatus | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  useEffect(() => {
+    const fetchCredits = async () => {
+      try {
+        const creditStatus = await creditsApi.getStatus();
+        setCredits(creditStatus);
+      } catch (error) {
+        console.error('Failed to fetch credits:', error);
+      }
+    };
+
+    if (status) {
+      fetchCredits();
+    }
+  }, [status]);
 
   const handleManageSubscription = async () => {
     try {
@@ -183,6 +202,37 @@ export const SubscriptionStatus: React.FC = () => {
             </Alert>
           )}
         </div>
+
+        {credits && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium flex items-center gap-2">
+                <Coins className="h-4 w-4" />
+                Credits
+              </h4>
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => navigate({ to: '/credits' })}
+                className="h-auto p-0"
+              >
+                View Details
+              </Button>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Balance</span>
+              <span className="font-medium">
+                {credits.is_unlimited ? 'Unlimited' : `${credits.balance} credits`}
+              </span>
+            </div>
+            {!credits.is_unlimited && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Monthly allocation</span>
+                <span className="font-medium">{credits.monthly_allocation} credits</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {currentPlan?.features && (
           <div className="space-y-2">

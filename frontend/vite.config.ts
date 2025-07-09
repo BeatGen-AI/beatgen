@@ -107,6 +107,12 @@ export default defineConfig(({ command }) => {
           changeOrigin: true,
           secure: false,
           agent: new https.Agent({ minVersion: 'TLSv1.2' })
+        },
+        '/credits/': {
+          target: 'https://localhost:8000',
+          changeOrigin: true,
+          secure: false,
+          agent: new https.Agent({ minVersion: 'TLSv1.2' })
         }
       },
       https: isDev ? {
