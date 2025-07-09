@@ -18,14 +18,14 @@ export const PricingPage: React.FC = () => {
   const handleSelectPlan = (priceId: string) => {
     if (!user) {
       // Redirect to login if not authenticated
-      navigate({ to: '/login', search: { redirect: '/pricing' } });
+      navigate({ to: '/login', search: { redirect: '/pricing' } as any });
       return;
     }
 
     // Navigate to checkout page with the selected plan
     navigate({ 
       to: '/checkout',
-      search: { price_id: priceId }
+      search: { price_id: priceId } as any
     });
   };
 

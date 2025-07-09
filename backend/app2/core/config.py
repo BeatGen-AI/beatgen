@@ -90,17 +90,42 @@ class AudioConfig(BaseModel):
 class StripeConfig(BaseModel):
     """Stripe payment configuration"""
     
-    SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
-    PUBLISHABLE_KEY: str = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
-    WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    SECRET_KEY: str
+    PUBLISHABLE_KEY: str
+    WEBHOOK_SECRET: str
     
     # Price IDs for subscription plans
-    STARTER_MONTHLY_PRICE_ID: str = os.getenv("STRIPE_STARTER_MONTHLY_PRICE_ID", "")
-    STARTER_YEARLY_PRICE_ID: str = os.getenv("STRIPE_STARTER_YEARLY_PRICE_ID", "")
-    CREATOR_MONTHLY_PRICE_ID: str = os.getenv("STRIPE_CREATOR_MONTHLY_PRICE_ID", "")
-    CREATOR_YEARLY_PRICE_ID: str = os.getenv("STRIPE_CREATOR_YEARLY_PRICE_ID", "")
-    PRO_MONTHLY_PRICE_ID: str = os.getenv("STRIPE_PRO_MONTHLY_PRICE_ID", "")
-    PRO_YEARLY_PRICE_ID: str = os.getenv("STRIPE_PRO_YEARLY_PRICE_ID", "")
+    STARTER_MONTHLY_PRICE_ID: str
+    STARTER_YEARLY_PRICE_ID: str
+    CREATOR_MONTHLY_PRICE_ID: str
+    CREATOR_YEARLY_PRICE_ID: str
+    PRO_MONTHLY_PRICE_ID: str
+    PRO_YEARLY_PRICE_ID: str
+
+    @model_validator(mode='before')
+    @classmethod
+    def _set_stripe_config(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Get environment from APP_ENV
+            app_env = os.getenv("APP_ENV", "dev")
+            
+            # Choose prefix based on environment
+            prefix = "PROD_STRIPE" if app_env == "prod" else "DEV_STRIPE"
+            
+            # Set Stripe configuration based on environment
+            data.setdefault('SECRET_KEY', os.getenv(f"{prefix}_SECRET_KEY", ""))
+            data.setdefault('PUBLISHABLE_KEY', os.getenv(f"{prefix}_PUBLISHABLE_KEY", ""))
+            data.setdefault('WEBHOOK_SECRET', os.getenv(f"{prefix}_WEBHOOK_SECRET", ""))
+            
+            # Set price IDs based on environment
+            data.setdefault('STARTER_MONTHLY_PRICE_ID', os.getenv(f"{prefix}_STARTER_MONTHLY_PRICE_ID", ""))
+            data.setdefault('STARTER_YEARLY_PRICE_ID', os.getenv(f"{prefix}_STARTER_YEARLY_PRICE_ID", ""))
+            data.setdefault('CREATOR_MONTHLY_PRICE_ID', os.getenv(f"{prefix}_CREATOR_MONTHLY_PRICE_ID", ""))
+            data.setdefault('CREATOR_YEARLY_PRICE_ID', os.getenv(f"{prefix}_CREATOR_YEARLY_PRICE_ID", ""))
+            data.setdefault('PRO_MONTHLY_PRICE_ID', os.getenv(f"{prefix}_PRO_MONTHLY_PRICE_ID", ""))
+            data.setdefault('PRO_YEARLY_PRICE_ID', os.getenv(f"{prefix}_PRO_YEARLY_PRICE_ID", ""))
+            
+        return data
 
 
 class Settings(BaseModel):
@@ -132,3 +157,7 @@ logger.info(
 )  # Don't log full URL/keys
 logger.info(f"Loaded Settings - CORS Origins: {settings.cors.ORIGINS}")
 logger.info(f"Loaded Settings - DB URL: {'Set' if settings.db.URL else 'Not Set'}")
+stripe_env = "PROD_STRIPE" if settings.app.APP_ENV == "prod" else "DEV_STRIPE"
+logger.info(f"Loaded Settings - Stripe Environment: {stripe_env}")
+logger.info(f"Loaded Settings - Stripe Secret Key: {'Set' if settings.stripe.SECRET_KEY else 'Not Set'}")
+logger.info(f"Loaded Settings - Stripe Publishable Key: {'Set' if settings.stripe.PUBLISHABLE_KEY else 'Not Set'}")

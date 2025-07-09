@@ -478,7 +478,8 @@ async def process_generate_request(
                     "duration_bars": response.get("duration_bars", 4),
                     "tempo": response.get("tempo"),
                     "key": response.get("key"),
-                    "model": context.model
+                    "model": context.model,
+                    "stage_tokens": response.get("stage_tokens", {})  # Stage-by-stage token breakdown
                 },
                 # AI-specific parameters
                 model_provider=model_provider,

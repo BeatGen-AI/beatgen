@@ -15,6 +15,7 @@ export default defineConfig(({ command }) => {
   const isDev = command === 'serve';
 
   return {
+    envPrefix: ['VITE_', 'DEV_VITE_', 'PROD_VITE_'], // Allow VITE_, DEV_VITE_, and PROD_VITE_ prefixes
     plugins: [
       react(),
       tailwindcss(),

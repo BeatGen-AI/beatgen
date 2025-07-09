@@ -125,7 +125,26 @@ class MusicGenerationAgent:
         # Token tracking
         self.total_request_tokens: int = 0
         self.total_response_tokens: int = 0
+        self.stage_tokens: Dict[str, Dict[str, int]] = {}  # Track tokens by stage
 
+    def _track_stage_tokens(self, stage_name: str, append: bool = False):
+        """Track token usage for a specific stage"""
+        if hasattr(self, 'chat_session') and self.chat_session:
+            usage = self.chat_session.get_last_call_usage()
+            
+            if append and stage_name in self.stage_tokens:
+                # Add to existing stage tokens
+                self.stage_tokens[stage_name]["request_tokens"] += usage.get('request_tokens', 0)
+                self.stage_tokens[stage_name]["response_tokens"] += usage.get('response_tokens', 0)
+                self.stage_tokens[stage_name]["total_tokens"] += usage.get('total_tokens', 0)
+            else:
+                # Create new entry or overwrite
+                self.stage_tokens[stage_name] = {
+                    "request_tokens": usage.get('request_tokens', 0),
+                    "response_tokens": usage.get('response_tokens', 0),
+                    "total_tokens": usage.get('total_tokens', 0)
+                }
+            logger.info(f"Stage '{stage_name}' tokens - Request: {usage.get('request_tokens', 0)}, Response: {usage.get('response_tokens', 0)}")
         
     async def _init_real_data(self, session: Session):
         _drum_file_repository = get_drum_sample_public_repository(session)
@@ -377,6 +396,7 @@ Do NOT output JSON in this step, just your conversational reasoning."""
                     logger.debug(f"INSTRUMENT EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
                     await self.chat_session.queue.add_chunk(text_chunk)
             logger.info("Finished streaming instrument selection explanation.")
+            self._track_stage_tokens("select_instruments_explanation")
         except Exception as e:
             logger.error(f"Error streaming instrument selection explanation: {e}")
             await self.chat_session.queue.error("Failed to stream instrument selection explanation.")
@@ -536,6 +556,7 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
                     logger.debug(f"MELODY EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
                     await self.chat_session.queue.add_chunk(text_chunk)
             logger.info("Finished streaming melody explanation.")
+            self._track_stage_tokens("generate_melody_explanation")
         except Exception as e:
             logger.error(f"Error streaming melody explanation: {e}")
             await self.chat_session.queue.error("Failed to stream melody explanation.")
@@ -553,6 +574,8 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
                 current_params=params,
                 selected_instruments=selected_instruments 
             )
+            # Track melody JSON generation tokens
+            self._track_stage_tokens("generate_melody_json")
 
             if not melody_data or not melody_data.bars:
                 logger.error("Melody generation returned empty or invalid result from generate_melody_notes.")
@@ -833,6 +856,7 @@ Do NOT output JSON in this step, just your conversational reasoning."""
                     logger.debug(f"DRUM SOUND EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
                     await self.chat_session.queue.add_chunk(text_chunk)
             logger.info("Finished streaming drum sound selection explanation.")
+            self._track_stage_tokens("select_drum_sounds_explanation")
         except Exception as e:
             logger.error(f"Error streaming drum sound selection explanation: {e}")
             await self.chat_session.queue.error("Failed to stream drum sound explanation.")
@@ -1201,6 +1225,7 @@ Output only the JSON object."""
             user_prompt=user_prompt_with_research,
             duration_bars=request.duration_bars
         )
+        self._track_stage_tokens("determine_musical_parameters")
 
         # --- Sanitize key and mode after LLM output ---
         sanitized_key, sanitized_mode = self._sanitize_key_and_mode(params.key, params.mode)
@@ -1211,21 +1236,26 @@ Output only the JSON object."""
 
         # 3. Select Instruments
         selected_instruments = await self.select_instruments(determined_params=params)
+        self._track_stage_tokens("select_instruments_json")
 
         # 3. Generate Chords and Send SSE
         await self._generate_chords_and_send_sse(params, selected_instruments, queue)
+        self._track_stage_tokens("generate_chords")
 
         # 4. Generate Melody (assuming for primary melody role for now)
         await self._generate_melody_and_send_sse(params, selected_instruments, queue)
+        # Note: melody tracking happens inside the method after actual generation (both explanation and JSON)
 
         # 5. Select Drum Sounds (now with drum research context)
         selected_drum_sounds = await self.select_drum_sounds(
             determined_params=params, 
             drum_research_result=drum_research_result
         )
+        self._track_stage_tokens("select_drum_sounds_json")
         
         # 6. Generate Drum Beat
         await self._generate_drum_beat_patterns_and_send_sse(params, selected_drum_sounds, queue, drum_research_result)
+        self._track_stage_tokens("generate_drum_beat")
         
         logger.info(f"MusicGenerationAgent run finished. Title: {params.song_title}")
         
@@ -1246,7 +1276,8 @@ Output only the JSON object."""
             "tracks_generated": len(selected_instruments.instrument_selections) + 1,  # instruments + drums
             "request_tokens": self.total_request_tokens,
             "response_tokens": self.total_response_tokens,
-            "total_tokens": self.total_request_tokens + self.total_response_tokens
+            "total_tokens": self.total_request_tokens + self.total_response_tokens,
+            "stage_tokens": self.stage_tokens  # Include stage-by-stage token breakdown
         }
 
 # Example of how this agent might be instantiated and used (conceptual)
