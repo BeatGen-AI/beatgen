@@ -63,7 +63,7 @@ const FadeCardHeader = React.forwardRef<
 FadeCardHeader.displayName = "FadeCardHeader"
 
 const FadeCardTitle = React.forwardRef<
-  HTMLParagraphElement,
+  HTMLHeadingElement,
   React.HTMLAttributes<HTMLHeadingElement>
 >(({ className, ...props }, ref) => (
   <h3
