@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   IconMenu2,
@@ -7,6 +7,8 @@ import {
   IconFolder,
   IconSettings,
   IconLogout,
+  IconSparkles,
+  IconCoins,
 } from '@tabler/icons-react';
 import {
   DropdownMenu,
@@ -18,6 +20,9 @@ import {
 } from "../../components/ui/dropdown-menu";
 import { Button } from "../../components/ui/button";
 import { useAuth } from '../auth/auth-context';
+import { PricingDialog, PlanBadge } from './subscription';
+import { CreditsDisplay } from './credits/CreditsDisplay';
+import { useSubscriptionStore, selectCurrentPlan } from '../stores/subscriptionStore';
 
 const logoColors = [
   '#e539a9', // Bright Pink
@@ -31,6 +36,16 @@ const logoColors = [
 const MobileTopNav: React.FC = () => {
   const navigate = useNavigate();
   const { signOut, profile, user } = useAuth();
+  const [showPricingDialog, setShowPricingDialog] = useState(false);
+  const fetchStatus = useSubscriptionStore(state => state.fetchStatus);
+  const currentPlan = useSubscriptionStore(selectCurrentPlan);
+  
+  // Fetch subscription status when component mounts
+  useEffect(() => {
+    if (user) {
+      fetchStatus();
+    }
+  }, [user, fetchStatus]);
 
   const menuItems = [
     { text: 'Home', icon: <IconHome className="w-4 h-4" />, path: '/' },
@@ -62,6 +77,21 @@ const MobileTopNav: React.FC = () => {
               </span>
             </DropdownMenuItem>
           ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem 
+            onClick={() => setShowPricingDialog(true)}
+            className="flex items-center"
+          >
+            <IconSparkles className="w-4 h-4" style={{ color: '#e539a9' }} />
+            <span className="ml-2" style={{ color: '#e539a9', fontWeight: 600 }}>Upgrade</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={() => navigate({ to: '/credits' })}
+            className="flex items-center"
+          >
+            <IconCoins className="w-4 h-4" style={{ color: '#f59e0b' }} />
+            <span className="ml-2">Credits</span>
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem 
             onClick={async () => {
@@ -102,14 +132,24 @@ const MobileTopNav: React.FC = () => {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium">
-                {profile?.display_name || profile?.username || user?.email || 'User'}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">
+                  {profile?.display_name || profile?.username || user?.email || 'User'}
+                </p>
+                <PlanBadge tier={currentPlan?.tier} />
+              </div>
               <p className="text-xs text-gray-500">
                 {user?.email || 'No email available'}
               </p>
             </div>
           </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          
+          {/* Credits Display */}
+          <div className="px-2 py-1">
+            <CreditsDisplay />
+          </div>
+          
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => navigate({ to: '/profile' })}>
             <IconUserCircle className="mr-2 h-4 w-4" />
@@ -131,6 +171,12 @@ const MobileTopNav: React.FC = () => {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      
+      {/* Pricing Dialog */}
+      <PricingDialog 
+        open={showPricingDialog} 
+        onOpenChange={setShowPricingDialog} 
+      />
     </div>
   );
 };
