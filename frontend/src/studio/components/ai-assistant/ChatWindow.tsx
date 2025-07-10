@@ -455,9 +455,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           prompt,
           mode: apiMode,
           model: selectedModel,
-          track_id: trackId,
           context: { // Pass selected model in context
-            model: selectedModel 
+            model: selectedModel,
+            track_id: trackId
           }
         },
         setupStreamCallbacks()

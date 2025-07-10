@@ -24,7 +24,7 @@ export type ActionType =
  * Base class for all assistant actions
  */
 export interface AssistantAction {
-  action_type: ActionType;
+  type: ActionType;
   data: ActionData;
 }
 /**

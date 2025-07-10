@@ -1,48 +1,52 @@
 import { apiClient } from './client';
 import { EventSourcePolyfill } from 'event-source-polyfill';
+import { AssistantAction } from '@/platform/types/dto/assistant';
 
-// Common Types
-export interface AssistantAction {
-  type: string;
-  data: {
-    [key: string]: any;
+// Types for request/response
+export interface AssistantRequestOptions {
+  mode: 'chat' | 'generate' | 'edit';
+  prompt: string;
+  model: string;
+  context?: {
+    project_id?: string;
+    track_id?: string;
+    selected_region?: {
+      start_bar: number;
+      end_bar: number;
+    };
+    source?: string;
+    auto_create_project?: boolean;
+    model?: string;
   };
 }
 
-export interface Note {
-  time: number;
-  duration: number;
-  pitch: number;
-  velocity: number;
+export interface RequestCreationResponse {
+  request_id: string;
+  message: string;
+}
+
+export interface MessageStatus {
+  id: string;
+  status: 'pending' | 'streaming' | 'complete' | 'error';
+  content?: string;
+  error?: string;
+}
+
+export interface StreamingMessage {
+  id: string;
+  content: string;
+  isComplete: boolean;
+}
+
+export interface ChatResponse {
+  response: string;
 }
 
 export interface TrackData {
-  track_id?: string;
-  notes: Note[];
-  instrument?: string;
-  name?: string;
-  storage_key?: string;  // Key for the instrument soundfont
-}
-
-// Request Types
-export interface AssistantRequestOptions {
-  prompt: string;
-  mode: 'generate' | 'edit' | 'chat';
-  model: string;
-  track_id?: string;
-  project_id?: string;
-  style?: string;
-  context?: {
-    [key: string]: any;
-  };
-}
-
-// Response Types
-export interface RequestCreationResponse {
-  request_id: string;
-  status: string;
-  mode: string;
-  estimated_time?: number;
+  type: 'midi' | 'audio' | 'drum' | 'sampler';
+  id: string;
+  name: string;
+  [key: string]: any;
 }
 
 export interface GenerateResponse {
@@ -91,24 +95,8 @@ export const requestAssistant = async (
   options: AssistantRequestOptions
 ): Promise<RequestCreationResponse> => {
   try {
-    
-    // Log the request with additional details
-    console.log(`🚀 POST REQUEST - Creating ${options.mode} request:`, {
-      options,
-      url: '/assistant/request',
-      baseUrl: apiClient.defaults.baseURL
-    });
-    
     // Make API call
     const response = await apiClient.post('/assistant/request', options);
-    
-    // Log the response with additional details
-    console.log('🟢 POST RESPONSE - Received request creation response:', {
-      data: response.data,
-      status: response.status,
-      requestId: response.data.request_id
-    });
-    
     return response.data;
   } catch (error) {
     console.error('Error creating assistant request:', error);
@@ -117,39 +105,24 @@ export const requestAssistant = async (
 };
 
 /**
- * Stream response for an existing request ID
+ * Stream assistant response using Server-Sent Events
  * 
  * This is the second step in the POST-then-SSE pattern.
- * First create a request with requestAssistant(), then stream the response.
+ * Use this after getting a request ID from requestAssistant().
  * 
  * @param requestId Request ID from requestAssistant()
- * @param callbacks Callbacks for different event types
- * @returns A function to close the connection
+ * @param callbacks Callbacks for handling different event types
+ * @returns Object with close function to stop streaming
  */
 export const streamAssistantResponse = (
   requestId: string,
   callbacks: StreamCallbacks
 ): { close: () => void } => {
   try {
-    // Construct the URL with base URL from apiClient
-    const baseUrl = apiClient.defaults.baseURL || '';
-    const url = `${baseUrl}/assistant/stream/${requestId}`;
-    
-    // Log the streaming request with detailed info
-    console.log(`🔷 GET REQUEST - Starting streaming for request:`, { 
-      requestId, 
-      url,
-      fullUrl: `${window.location.origin}${url}`,
-      baseUrl: apiClient.defaults.baseURL
-    });
+    const url = `/assistant/stream/${requestId}`;
     
     // Get auth token from localStorage with correct key
     const token = localStorage.getItem('access_token');
-    console.log('🔑 AUTH - Token for streaming request:', {
-      tokenExists: !!token,
-      tokenLength: token ? token.length : 0,
-      tokenPreview: token ? `${token.substring(0, 10)}...` : 'none'
-    });
     
     // Create the EventSource with auth header using polyfill
     const eventSource = new EventSourcePolyfill(url, { 
@@ -161,37 +134,31 @@ export const streamAssistantResponse = (
     
     // Event handlers
     eventSource.addEventListener('connected', (event: StreamEvent) => {
-      console.log('SSE Connection established');
       callbacks.onConnected?.();
     });
     
     eventSource.addEventListener('stage', (event: StreamEvent) => {
       const data = JSON.parse(event.data);
-      console.log('Assistant stage:', data);
       callbacks.onStage?.(data);
     });
     
     eventSource.addEventListener('status', (event: StreamEvent) => {
       const data = JSON.parse(event.data);
-      console.log('Assistant status:', data);
       callbacks.onStatus?.(data);
     });
     
     eventSource.addEventListener('tool_call', (event: StreamEvent) => {
       const data = JSON.parse(event.data);
-      console.log('Tool call:', data);
       callbacks.onToolCall?.(data);
     });
     
     eventSource.addEventListener('action', (event: StreamEvent) => {
       const data = JSON.parse(event.data);
-      console.log('Action:', data);
       callbacks.onAction?.(data);
     });
     
     eventSource.addEventListener('complete', (event: StreamEvent) => {
       const data = JSON.parse(event.data);
-      console.log('Assistant complete:', data);
       callbacks.onComplete?.(data);
       eventSource.close();
     });
@@ -204,7 +171,6 @@ export const streamAssistantResponse = (
     });
     
     eventSource.addEventListener('cancelled', (event: StreamEvent) => {
-      console.log('Assistant request cancelled');
       callbacks.onCancelled?.();
       eventSource.close();
     });
@@ -214,29 +180,25 @@ export const streamAssistantResponse = (
       callbacks.onHeartbeat?.();
     });
     
-    // Add streaming text event handlers with enhanced logging
+    // Add streaming text event handlers
     eventSource.addEventListener('response_start', (event: StreamEvent) => {
       const data = JSON.parse(event.data);
-      console.log('🚀 RESPONSE_START EVENT RECEIVED:', data);
       callbacks.onEvent?.('response_start', data);
     });
     
     eventSource.addEventListener('response_chunk', (event: StreamEvent) => {
       const data = JSON.parse(event.data);
-      console.log('📝 RESPONSE_CHUNK EVENT RECEIVED:', data);
       callbacks.onEvent?.('response_chunk', data);
     });
     
     eventSource.addEventListener('response_end', (event: StreamEvent) => {
       const data = JSON.parse(event.data);
-      console.log('✅ RESPONSE_END EVENT RECEIVED:', data);
       callbacks.onEvent?.('response_end', data);
     });
     
     // Return a function to close the connection
     return {
       close: () => {
-        console.log('Closing assistant stream connection');
         eventSource.close();
       }
     };
@@ -255,12 +217,8 @@ export const streamAssistantResponse = (
  */
 export const cancelAssistantRequest = async (requestId: string): Promise<boolean> => {
   try {
-    console.log(`Cancelling request:`, requestId);
-    
     // Make API call
     const response = await apiClient.delete(`/assistant/request/${requestId}`);
-    
-    console.log('Cancel response:', response.data);
     return true;
   } catch (error) {
     console.error('Error cancelling request:', error);
@@ -297,171 +255,6 @@ export const interactWithAssistant = async (
   } catch (error) {
     console.error('Error in assistant interaction:', error);
     callbacks.onError?.(error);
-    return { 
-      requestId: '', 
-      close: () => {} 
-    };
+    throw error;
   }
 };
-
-// Legacy support functions
-
-/**
- * Interface for streaming edit event callbacks (legacy)
- */
-// export interface EditStreamCallbacks extends StreamCallbacks {
-//   // Maintained for backward compatibility
-// }
-
-// /**
-//  * Interact with the AI assistant using streaming updates (legacy)
-//  * 
-//  * @deprecated Use interactWithAssistant() instead
-//  */
-// export const streamAssistant = (
-//   prompt: string,
-//   mode: 'generate' | 'edit' | 'chat',
-//   callbacks: StreamCallbacks,
-//   model?: string,
-//   trackId?: string,
-//   context?: Record<string, any>
-// ): { close: () => void } => {
-//   // Create options object for the new API
-//   const options: AssistantRequestOptions = {
-//     prompt,
-//     mode,
-//     track_id: trackId,
-//     context
-//   };
-  
-//   // Use the new combined function
-//   interactWithAssistant(options, callbacks)
-//     .catch(error => {
-//       console.error('Legacy streamAssistant error:', error);
-//       callbacks.onError?.(error);
-//     });
-  
-//   // Return a placeholder close function that will be replaced
-//   // once interactWithAssistant resolves
-//   let realClose: () => void = () => {};
-  
-//   return {
-//     close: () => realClose()
-//   };
-// };
-
-// /**
-//  * Edit a track with streaming updates (legacy)
-//  * 
-//  * @deprecated Use interactWithAssistant() instead
-//  */
-// export const editTrackStream = (
-//   prompt: string,
-//   trackId: string,
-//   callbacks: EditStreamCallbacks,
-//   model?: string,
-//   editType?: string,
-//   context?: Record<string, any>
-// ): { close: () => void } => {
-//   return streamAssistant(
-//     prompt,
-//     editType === 'generate' ? 'generate' : 'edit',
-//     callbacks,
-//     model,
-//     trackId,
-//     context
-//   );
-// };
-
-// /**
-//  * Generate tracks using the AI assistant (legacy)
-//  * 
-//  * @deprecated Use interactWithAssistant() instead
-//  */
-// export const generateTracks = async (
-//   prompt: string,
-//   style?: string,
-//   numTracks: number = 1,
-//   context?: Record<string, any>
-// ): Promise<GenerateResponse> => {
-//   try {
-//     // Use the new API instead
-//     const options: AssistantRequestOptions = {
-//       prompt,
-//       mode: 'generate',
-//       style,
-//       context: {
-//         ...context,
-//         num_tracks: numTracks
-//       }
-//     };
-    
-//     // Create a Promise that will resolve when we get the complete event
-//     return new Promise((resolve, reject) => {
-//       interactWithAssistant(options, {
-//         onComplete: (response) => {
-//           resolve(response);
-//         },
-//         onError: (error) => {
-//           reject(error);
-//         }
-//       }).catch(reject);
-//     });
-//   } catch (error) {
-//     console.error('Error generating tracks with AI:', error);
-    
-//     // Return a fallback response
-//     return {
-//       response: "Sorry, I encountered an error generating tracks. Please try again later.",
-//       tracks: []
-//     };
-//   }
-// };
-
-// /**
-//  * Edit a track using the AI assistant (legacy)
-//  * 
-//  * @deprecated Use interactWithAssistant() instead
-//  */
-// export const editTrack = async (
-//   prompt: string,
-//   trackId: string,
-//   editType?: string,
-//   context?: Record<string, any>
-// ): Promise<EditResponse> => {
-//     try {
-//       // Use the new API instead
-//       const options: AssistantRequestOptions = {
-//         prompt,
-//         mode: 'edit',
-//         track_id: trackId,
-//         context: {
-//           ...context,
-//           edit_type: editType
-//         }
-//       };
-      
-//       // Create a Promise that will resolve when we get the complete event
-//       return new Promise((resolve, reject) => {
-//         interactWithAssistant(options, {
-//           onComplete: (response) => {
-//             resolve(response);
-//           },
-//           onError: (error) => {
-//             reject(error);
-//           }
-//         }).catch(reject);
-//       });
-//     } catch (error) {
-//         console.error('Error editing track with AI:', error);
-        
-//         // Return a fallback response with an empty track
-//         return {
-//           response: "Sorry, I encountered an error editing the track. Please try again later.",
-//           track: {
-//               track_id: trackId,
-//               notes: []
-//           }
-//         };
-//     }
-// };

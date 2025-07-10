@@ -1,5 +1,5 @@
 import asyncio
-from typing import Optional, Any, Dict, Type, List, Union, AsyncGenerator, Sequence
+from typing import Optional, Any, Dict, Type, List, Union, AsyncGenerator, Sequence, Tuple
 
 from pydantic_ai.messages import ModelMessage
 
@@ -15,7 +15,7 @@ from .adapters.gemini_adapter import GeminiAdapter
 # from .adapters.gemini_adapter import GeminiAdapter
 
 from .config import get_provider_config
-from .streaming import AnyStreamEvent, TextDeltaEvent
+from .streaming import AnyStreamEvent, TextDeltaEvent, StreamEndEvent
 
 import json
 from json_repair import repair_json
@@ -59,6 +59,13 @@ class ChatSession:
         self.current_base_url = base_url
         self.current_provider_kwargs = provider_kwargs
         self.is_cancelled = False # Initialize cancellation flag
+        
+        # Token tracking
+        self.total_request_tokens: int = 0
+        self.total_response_tokens: int = 0
+        self.total_tokens: int = 0
+        self.last_request_tokens: int = 0
+        self.last_response_tokens: int = 0
 
         self.adapter: Optional[ProviderAdapter] = self._load_adapter(
             provider_name,
@@ -219,6 +226,21 @@ class ChatSession:
                                     yield actual_delta_to_yield 
                                 
                                 last_yielded_text = current_chunk_from_adapter 
+                            elif isinstance(event, StreamEndEvent):
+                                # Capture token usage from StreamEndEvent
+                                if event.final_usage:
+                                    usage_dict = self._safe_extract_tokens(event.final_usage)
+                                    stream_request_tokens = usage_dict.get('request_tokens', 0)
+                                    stream_response_tokens = usage_dict.get('response_tokens', 0)
+                                    
+                                    # Update instance totals
+                                    self.last_request_tokens = stream_request_tokens
+                                    self.last_response_tokens = stream_response_tokens
+                                    self.total_request_tokens += stream_request_tokens
+                                    self.total_response_tokens += stream_response_tokens
+                                    self.total_tokens = self.total_request_tokens + self.total_response_tokens
+                                    
+                                    logger.info(f"ChatSession token usage - Request: {stream_request_tokens}, Response: {stream_response_tokens}, Total: {self.total_tokens}") 
                             
                         response_content_for_history = "".join(full_response_text_chunks)
                     except Exception as e_stream_inner: # Catch other errors within the stream_wrapper
@@ -232,13 +254,33 @@ class ChatSession:
                 
                 return stream_wrapper()
             else: # Not streaming (stream=False)
-                response_content_for_history = await self.adapter.send_message_async(
+                adapter_result = await self.adapter.send_message_async(
                     user_prompt=user_prompt_content,
                     history=pydantic_ai_formatted_history,
                     stream=False,
                     model_settings=final_model_settings,
                     usage_limits=final_usage_limits
                 )
+                
+                # Handle the new return format from adapters
+                if isinstance(adapter_result, tuple) and len(adapter_result) == 2:
+                    response_content_for_history, usage_info = adapter_result
+                    if usage_info:
+                        usage_dict = self._safe_extract_tokens(usage_info)
+                        request_tokens = usage_dict.get('request_tokens', 0)
+                        response_tokens = usage_dict.get('response_tokens', 0)
+                        
+                        self.last_request_tokens = request_tokens
+                        self.last_response_tokens = response_tokens
+                        self.total_request_tokens += request_tokens
+                        self.total_response_tokens += response_tokens
+                        self.total_tokens = self.total_request_tokens + self.total_response_tokens
+                        
+                        logger.info(f"ChatSession non-streaming token usage - Request: {request_tokens}, Response: {response_tokens}, Total: {self.total_tokens}")
+                else:
+                    # Fallback for adapters that haven't been updated yet
+                    response_content_for_history = adapter_result
+                
                 # Add the assistant's response to our internal history only if not cancelled during await
                 if not self.is_cancelled: # Check after the await
                     self.message_history.add_message(role="assistant", content=response_content_for_history)
@@ -378,5 +420,54 @@ class ChatSession:
 
         # The existing self.message_history is preserved and will be used by the new adapter.
         print(f"Provider switched successfully to {self.current_provider_name}.")
+
+    def get_token_usage(self) -> Dict[str, int]:
+        """Get the accumulated token usage for this session."""
+        return {
+            "request_tokens": self.total_request_tokens,
+            "response_tokens": self.total_response_tokens,
+            "total_tokens": self.total_tokens
+        }
+
+    def get_last_call_usage(self) -> Dict[str, int]:
+        """Get token usage for the last LLM call only."""
+        return {
+            "request_tokens": self.last_request_tokens,
+            "response_tokens": self.last_response_tokens,
+            "total_tokens": self.last_request_tokens + self.last_response_tokens
+        }
+
+    def reset_token_usage(self) -> None:
+        """Reset all token counters to zero."""
+        self.total_request_tokens = 0
+        self.total_response_tokens = 0
+        self.total_tokens = 0
+        self.last_request_tokens = 0
+        self.last_response_tokens = 0
+
+    def _safe_extract_tokens(self, usage_data: Any) -> Dict[str, int]:
+        """Safely extract token counts from various usage data formats."""
+        default = {"request_tokens": 0, "response_tokens": 0, "total_tokens": 0}
+        
+        if not usage_data:
+            return default
+            
+        try:
+            if hasattr(usage_data, 'model_dump'):
+                return usage_data.model_dump()
+            elif hasattr(usage_data, 'dict'):
+                return usage_data.dict()
+            elif isinstance(usage_data, dict):
+                return usage_data
+            else:
+                # Try to extract known attributes
+                return {
+                    "request_tokens": getattr(usage_data, 'request_tokens', 0),
+                    "response_tokens": getattr(usage_data, 'response_tokens', 0),
+                    "total_tokens": getattr(usage_data, 'total_tokens', 0)
+                }
+        except Exception as e:
+            logger.warning(f"Failed to extract token usage: {e}")
+            return default
 
     # --- End of class --- 

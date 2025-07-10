@@ -15,6 +15,7 @@ export default defineConfig(({ command }) => {
   const isDev = command === 'serve';
 
   return {
+    envPrefix: ['VITE_', 'DEV_VITE_', 'PROD_VITE_'], // Allow VITE_, DEV_VITE_, and PROD_VITE_ prefixes
     plugins: [
       react(),
       tailwindcss(),
@@ -91,6 +92,24 @@ export default defineConfig(({ command }) => {
           agent: new https.Agent({ minVersion: 'TLSv1.2' })
         },
         '/health': { 
+          target: 'https://localhost:8000',
+          changeOrigin: true,
+          secure: false,
+          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+        },
+        '/subscriptions': {
+          target: 'https://localhost:8000',
+          changeOrigin: true,
+          secure: false,
+          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+        },
+        '/webhooks': {
+          target: 'https://localhost:8000',
+          changeOrigin: true,
+          secure: false,
+          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+        },
+        '/credits/': {
           target: 'https://localhost:8000',
           changeOrigin: true,
           secure: false,

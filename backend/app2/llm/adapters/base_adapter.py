@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Any, AsyncGenerator, Dict, Optional, Sequence
+from typing import List, Any, AsyncGenerator, Dict, Optional, Sequence, Union, Tuple
 
 from pydantic_ai import Agent
 from pydantic_ai.messages import (
@@ -63,7 +63,7 @@ class ProviderAdapter(ABC):
         stream: bool = False,
         model_settings: Optional[Dict[str, Any]] = None,
         usage_limits: Optional[Dict[str, Any]] = None
-    ) -> Any:
+    ) -> Union[Any, Tuple[Any, Optional[Dict[str, Any]]]]:
         """
         Sends messages to the LLM and gets a response.
 
@@ -75,8 +75,9 @@ class ProviderAdapter(ABC):
             usage_limits: Usage limits for the request.
 
         Returns:
-            If stream is False, returns the complete response content (e.g., string or Pydantic model).
-            If stream is True, returns an AsyncGenerator yielding response chunks.
+            If stream is False, returns tuple of (response_content, usage_dict)
+                where usage_dict contains: request_tokens, response_tokens, total_tokens
+            If stream is True, returns an AsyncGenerator yielding response events
         """
         pass
 

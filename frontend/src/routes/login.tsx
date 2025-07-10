@@ -22,8 +22,19 @@ const GoogleIcon = () => (
   </svg>
 );
 
+// Type definition for our search parameters
+interface LoginSearchParams {
+  redirect?: string;
+}
+
 // Login route - this will render at the path '/login'
 export const Route = createFileRoute('/login')({
+  // Type-safe search parameters
+  validateSearch: (search: { redirect?: string }): LoginSearchParams => {
+    return {
+      redirect: search.redirect,
+    };
+  },
   component: LoginPage,
   // Redirect if already logged in
   ...publicRoute('/home'),

@@ -171,3 +171,33 @@ async def get_current_user(
     except Exception as e:
         logger.error(f"Authentication error: {str(e)}")
         raise UnauthorizedException("Could not validate credentials")
+
+
+async def get_current_user_model(
+    user_info: Dict[str, Any] = Depends(get_current_user),
+    user_repository: UserRepository = Depends(get_user_repository),
+):
+    """
+    Get the current authenticated user as a User model
+
+    Args:
+        user_info: The user info from the token
+        user_repository: The user repository
+
+    Returns:
+        The User model
+
+    Raises:
+        UnauthorizedException: If the user is not found
+    """
+    from app2.models.user import User
+    
+    user_id = user_info.get("id")
+    if not user_id:
+        raise UnauthorizedException("User ID not found in token")
+    
+    try:
+        user = await user_repository.find_by_id(user_id)
+        return user
+    except Exception:
+        raise UnauthorizedException("User not found")

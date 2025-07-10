@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     from app2.models.track_models.midi_track import MidiTrack
     from app2.models.track_models.sampler_track import SamplerTrack
     from app2.models.track_models.drum_track import DrumTrack
+    from app2.models.subscription import StripeCustomer, Subscription
+    from app2.models.credits import UserCredits
 
 
 # Database model
@@ -34,6 +36,19 @@ class User(UserBase, table=True):
     midi_tracks: List["MidiTrack"] = Relationship(back_populates="user")
     sampler_tracks: List["SamplerTrack"] = Relationship(back_populates="user")
     drum_tracks: List["DrumTrack"] = Relationship(back_populates="user")
+    
+    # Subscription relationships
+    stripe_customer: Optional["StripeCustomer"] = Relationship(
+        back_populates="user", 
+        sa_relationship_kwargs={"uselist": False}
+    )
+    subscriptions: List["Subscription"] = Relationship(back_populates="user")
+    
+    # Credits relationship
+    credits: Optional["UserCredits"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"uselist": False}
+    )
 
 
 # API Models
