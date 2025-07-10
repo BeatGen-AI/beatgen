@@ -15,7 +15,6 @@ import {
   CircularProgress,
   Box,
   Divider,
-  Paper,
   Alert,
   Snackbar
 } from '@mui/material';
@@ -38,6 +37,7 @@ import {
 import { Project } from '../types/project';
 import { IconTrashFilled } from '@tabler/icons-react';
 import { Button } from "../../components/ui/button"
+import { FadeCard, FadeCardHeader, FadeCardTitle, FadeCardContent } from "../../components/ui/fade-card"
 import ProjectsDisplay from '../components/ProjectsDisplay';
 import AudioTracksDisplay from '../components/AudioTracksDisplay';
 import MidiLibrary from '../components/MidiLibrary';
@@ -260,7 +260,7 @@ export default function HomePage() {
 
         {/* Main content for guests */}
         <main style={{ flexGrow: 1, padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <Paper elevation={2} sx={{ p: 4, maxWidth: 600, width: '100%', textAlign: 'center' }}>
+          <FadeCard className="p-8 max-w-[600px] w-full text-center">
             <Typography variant="h4" sx={{ mb: 2, color: logoColors[1] }}>
               Generate Your Song
             </Typography>
@@ -281,7 +281,7 @@ export default function HomePage() {
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               Sign up to save your generated songs as projects
             </Typography>
-          </Paper>
+          </FadeCard>
         </main>
 
         {/* Generate Song Modal */}
@@ -305,7 +305,7 @@ export default function HomePage() {
             </Alert>
           )}
 
-          <Paper elevation={2} sx={{ p: 3, mt: 0, borderRadius: 2 }}>
+          <FadeCard className="p-6 mt-0">
             <Box sx={{ mb: 2 }}>
               {/* Desktop layout - side by side */}
               <Box sx={{ display: { xs: 'none', md: 'flex' }, justifyContent: 'space-between', alignItems: 'center' }}>
@@ -389,10 +389,10 @@ export default function HomePage() {
               onCloseSnackbar={handleCloseSnackbar}
               sectionColor={logoColors[1]}
             />
-          </Paper>
+          </FadeCard>
 
           {/* My Sounds Section is now replaced by AudioTracksDisplay */}
-          <Paper elevation={2} sx={{ p: 3, mt: 4, borderRadius: 2 }}>
+          <FadeCard className="p-6 mt-8">
             <Typography 
               variant="h5" 
               component="h2" 
@@ -404,10 +404,10 @@ export default function HomePage() {
               Audio Tracks
             </Typography>
             <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={logoColors[2]} />
-          </Paper>
+          </FadeCard>
 
           {/* Midi Tracks Section */}
-          <Paper elevation={2} sx={{ p: 3, mt: 4, borderRadius: 2 }}>
+          <FadeCard className="p-6 mt-8">
             <Typography 
               variant="h5" 
               component="h2" 
@@ -419,10 +419,10 @@ export default function HomePage() {
               MIDI Tracks
             </Typography>
             <MidiLibrary sectionColor={logoColors[3]} />
-          </Paper>
+          </FadeCard>
 
           {/* Sampler Tracks Section */}
-          <Paper elevation={2} sx={{ p: 3, mt: 4, borderRadius: 2 }}>
+          <FadeCard className="p-6 mt-8">
             <Typography 
               variant="h5" 
               component="h2" 
@@ -434,10 +434,10 @@ export default function HomePage() {
               Sampler Tracks
             </Typography>
             <SamplerLibrary sectionColor={logoColors[4]} />
-          </Paper>
+          </FadeCard>
 
           {/* Drum Tracks Section */}
-          <Paper elevation={2} sx={{ p: 3, mt: 4, borderRadius: 2, mb: 4 }}>
+          <FadeCard className="p-6 mt-8 mb-8">
             <Typography 
               variant="h5" 
               component="h2" 
@@ -449,7 +449,7 @@ export default function HomePage() {
               Drum Tracks
             </Typography>
             <DrumLibrary sectionColor={logoColors[5]} />
-          </Paper>
+          </FadeCard>
 
           {/* Snackbar for notifications */}
           <Snackbar 
