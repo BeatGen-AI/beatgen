@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Dict, Type, Union
 import uuid
 from sqlmodel import Session # Added Union
+from dataclasses import dataclass
 
 
 # Schemas from the music_gen_service will be crucial
@@ -93,6 +94,30 @@ from app2.sse.request_manager import request_manager
 
 logger = get_service_logger("music_agent")
 
+
+# --- Music Generation Context ---
+@dataclass
+class MusicGenerationContext:
+    """Stores essential context across music generation stages"""
+    # Core request info
+    user_prompt: str
+    duration_bars: int
+    
+    # Research results
+    general_research: Optional[str] = None
+    chord_research: Optional[str] = None
+    drum_research: Optional[str] = None
+    
+    # Generated parameters
+    musical_params: Optional[FullMusicalParameters] = None
+    selected_instruments: Optional[SelectInstruments] = None
+    selected_drums: Optional[SelectDrumSounds] = None
+    
+    # Model configuration
+    model_info: Optional[ModelInfo] = None
+    queue: Optional[SSEQueueManager] = None
+
+
 # --- Music Generation Agent State Keys ---
 class MusicAgentStateKeys:
     SONG_REQUEST = "song_request"
@@ -126,25 +151,33 @@ class MusicGenerationAgent:
         self.total_request_tokens: int = 0
         self.total_response_tokens: int = 0
         self.stage_tokens: Dict[str, Dict[str, int]] = {}  # Track tokens by stage
+        
+        # Context for sharing info across stages
+        self.context: Optional[MusicGenerationContext] = None
 
-    def _track_stage_tokens(self, stage_name: str, append: bool = False):
+    def _track_stage_tokens(self, stage_name: str, tokens: Optional[Dict[str, int]] = None, append: bool = False):
         """Track token usage for a specific stage"""
-        if hasattr(self, 'chat_session') and self.chat_session:
-            usage = self.chat_session.get_last_call_usage()
-            
-            if append and stage_name in self.stage_tokens:
-                # Add to existing stage tokens
-                self.stage_tokens[stage_name]["request_tokens"] += usage.get('request_tokens', 0)
-                self.stage_tokens[stage_name]["response_tokens"] += usage.get('response_tokens', 0)
-                self.stage_tokens[stage_name]["total_tokens"] += usage.get('total_tokens', 0)
-            else:
-                # Create new entry or overwrite
-                self.stage_tokens[stage_name] = {
-                    "request_tokens": usage.get('request_tokens', 0),
-                    "response_tokens": usage.get('response_tokens', 0),
-                    "total_tokens": usage.get('total_tokens', 0)
-                }
-            logger.info(f"Stage '{stage_name}' tokens - Request: {usage.get('request_tokens', 0)}, Response: {usage.get('response_tokens', 0)}")
+        if tokens:
+            # Use provided tokens
+            usage = tokens
+        else:
+            # Legacy behavior - kept for compatibility but shouldn't be used
+            logger.warning("_track_stage_tokens called without explicit tokens")
+            usage = {"request_tokens": 0, "response_tokens": 0, "total_tokens": 0}
+        
+        if append and stage_name in self.stage_tokens:
+            # Add to existing stage tokens
+            self.stage_tokens[stage_name]["request_tokens"] += usage.get('request_tokens', 0)
+            self.stage_tokens[stage_name]["response_tokens"] += usage.get('response_tokens', 0)
+            self.stage_tokens[stage_name]["total_tokens"] += usage.get('total_tokens', 0)
+        else:
+            # Create new entry or overwrite
+            self.stage_tokens[stage_name] = {
+                "request_tokens": usage.get('request_tokens', 0),
+                "response_tokens": usage.get('response_tokens', 0),
+                "total_tokens": usage.get('total_tokens', 0)
+            }
+        logger.info(f"Stage '{stage_name}' tokens - Request: {usage.get('request_tokens', 0)}, Response: {usage.get('response_tokens', 0)}")
         
     async def _init_real_data(self, session: Session):
         _drum_file_repository = get_drum_sample_public_repository(session)
@@ -157,14 +190,94 @@ class MusicGenerationAgent:
         self._drum_sample_map = {ds.display_name: ds for ds in self._available_drum_samples}
         self._drum_sample_id_map = {str(ds.id): ds for ds in self._available_drum_samples}
 
-    # --- Helper for Focused LLM Calls (No longer uses RunContext) ---
-    async def _focused_llm_call(self, prompt: str, output_type: Type[BaseModel]) -> BaseModel:
-        """Helper to make an isolated LLM call for structured output using ChatSession."""
-        logger.info(f"DEBUG: _focused_llm_call using self.chat_session for schema: {output_type.__name__}")
+    def _create_fresh_chat_session(self, system_prompt: str) -> ChatSession:
+        """Creates a new ChatSession with current model configuration."""
+        if not self.context or not self.context.model_info:
+            raise ValueError("Context not initialized with model info")
         
-        if self.chat_session.is_cancelled:
-            logger.info(f"_focused_llm_call: Operation cancelled before starting for {output_type.__name__}.")
-            raise asyncio.CancelledError(f"LLM call for {output_type.__name__} cancelled pre-execution.")
+        return ChatSession(
+            provider_name=self.context.model_info.provider_name,
+            model_name=self.context.model_info.model_name,
+            queue=self.context.queue,
+            system_prompt=system_prompt,
+            api_key=self.context.model_info.api_key,
+            base_url=self.context.model_info.base_url,
+            **getattr(self.context.model_info, 'provider_kwargs', {})
+        )
+
+    def _accumulate_tokens(self, chat_session: ChatSession):
+        """Accumulate tokens from a chat session into agent totals."""
+        # DEPRECATED: This method causes double counting when used with _track_stage_tokens
+        # Tokens should only be tracked via _track_stage_tokens
+        logger.warning("_accumulate_tokens called - this method is deprecated to avoid double counting")
+        return
+
+    def _get_parameter_determination_prompt(self) -> str:
+        """System prompt for determining musical parameters."""
+        research_summary = ""
+        if self.context and self.context.general_research:
+            research_summary = f"\n\nResearch insights:\n{self.context.general_research[:1000]}"
+        if self.context and self.context.chord_research:
+            research_summary += f"\n\nChord progression research:\n{self.context.chord_research[:500]}"
+        
+        return f"""You are an AI music composer determining musical parameters.
+Your task: Analyze the user's request and determine key musical parameters.
+
+Context:{research_summary}
+
+Focus on: key, mode, tempo, chord progression, and instrument suggestions.
+When asked to explain, provide clear reasoning for your choices.
+When asked for JSON, provide only the requested JSON structure."""
+
+    def _get_instrument_selection_prompt(self) -> str:
+        """System prompt for instrument selection."""
+        if not self.context or not self.context.musical_params:
+            return "You are an AI music composer selecting instruments."
+        
+        return f"""You are an AI music composer selecting instruments.
+
+Current composition:
+- Title: {self.context.musical_params.song_title}
+- Key: {self.context.musical_params.key} {self.context.musical_params.mode}
+- Tempo: {self.context.musical_params.tempo} BPM
+- Chord Progression: {self.context.musical_params.chord_progression}
+- Style: {self.context.general_research[:500] if self.context.general_research else 'No specific style research'}
+
+Your task: Select appropriate instruments from available options.
+Consider how instruments complement each other and fit the musical style."""
+
+    def _get_drum_selection_prompt(self) -> str:
+        """System prompt for drum sound selection."""
+        if not self.context or not self.context.musical_params:
+            return "You are an AI music composer selecting drum sounds."
+            
+        drum_context = ""
+        if self.context.drum_research:
+            drum_context = f"\n\nDrum research:\n{self.context.drum_research[:500]}"
+        
+        return f"""You are an AI music composer selecting drum sounds.
+
+Current composition:
+- Tempo: {self.context.musical_params.tempo} BPM
+- Style: {self.context.musical_params.song_title}{drum_context}
+
+Your task: Select appropriate drum sounds for the rhythm section.
+Choose sounds that fit the tempo and style of the composition."""
+
+    # --- Helper for Focused LLM Calls (No longer uses RunContext) ---
+    async def _focused_llm_call(self, prompt: str, output_type: Type[BaseModel], 
+                               chat_session: Optional[ChatSession] = None) -> BaseModel:
+        """Helper to make an isolated LLM call for structured output."""
+        
+        # Create fresh session if not provided
+        if not chat_session:
+            system_prompt = "You are an AI assistant that provides structured JSON responses."
+            chat_session = self._create_fresh_chat_session(system_prompt)
+            created_session = True
+        else:
+            created_session = False
+        
+        logger.info(f"DEBUG: _focused_llm_call for schema: {output_type.__name__}, fresh_session={created_session}")
 
         llm_call_model_settings: Dict[str, Any] = {}
         max_retries = 1 # Max number of retries (so 1 retry means 2 attempts total)
@@ -180,11 +293,8 @@ class MusicGenerationAgent:
             raw_llm_output_data_str: Optional[str] = None
             last_error = None # Reset last_error for this attempt
 
-            if self.chat_session.is_cancelled:
-                logger.info(f"_focused_llm_call: Operation cancelled before attempt {attempt + 1} for {output_type.__name__}.")
-                raise asyncio.CancelledError(f"LLM call for {output_type.__name__} cancelled mid-retry.")
             try:
-                response_data = await self.chat_session.send_message_async(
+                response_data = await chat_session.send_message_async(
                     user_prompt_content=current_prompt,
                     stream=False,
                     model_settings=llm_call_model_settings,
@@ -265,6 +375,9 @@ class MusicGenerationAgent:
             # If last_error *was* a CancelledError, it should have been re-raised by send_message_async or our checks.
             # This path implies it was caught and we broke loop, or send_message_async returned None/unexpectedly.
 
+        # Note: Token accumulation happens via _track_stage_tokens in the calling methods
+        # to avoid double counting
+        
         return llm_output_obj # Return the validated object or the successfully constructed fallback
 
     # --- Music Generation Steps (formerly tools, now regular methods) ---
@@ -273,9 +386,9 @@ class MusicGenerationAgent:
         """Determines core musical parameters via LLM call, streaming explanation first."""
         logger.info(f"Step 'determine_musical_parameters' called with user_prompt: '{user_prompt}', duration_bars: {duration_bars}")
 
-        if self.chat_session.is_cancelled:
-            logger.info("determine_musical_parameters: Cancelled at method start.")
-            raise asyncio.CancelledError("determine_musical_parameters cancelled at start.")
+        # Create fresh session with parameter-specific prompt
+        system_prompt = self._get_parameter_determination_prompt()
+        chat_session = self._create_fresh_chat_session(system_prompt)
 
         # 1. Stream Explanation
         explanation_prompt = f"""Based on the user request: '{user_prompt}' for a song of {duration_bars} bars, please explain your reasoning for the following musical parameters:
@@ -290,38 +403,26 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
         
         logger.info("Streaming explanation for musical parameters...")
         try:
-            async for text_chunk in await self.chat_session.send_message_async(
+            async for text_chunk in await chat_session.send_message_async(
                 user_prompt_content=explanation_prompt,
                 stream=True
             ):
-                # chat_session.send_message_async's streaming wrapper will check is_cancelled before yielding
-                # and will break its own loop if cancelled.
                 if isinstance(text_chunk, str): 
                     logger.debug(f"STREAMING TEXT CHUNK: '{text_chunk}'") 
-                    await self.chat_session.queue.add_chunk(text_chunk)
-                # If the loop finishes early due to cancellation, chat_session.is_cancelled will be true.
-            
-            if self.chat_session.is_cancelled: # Check after stream attempt
-                logger.info("determine_musical_parameters: Streaming explanation was cancelled.")
-                raise asyncio.CancelledError("Streaming explanation for musical parameters cancelled.")
+                    await self.context.queue.add_chunk(text_chunk)
 
             logger.info("Finished streaming explanation.")
-        except asyncio.CancelledError: # Catch if send_message_async itself raises it
+        except asyncio.CancelledError:
             logger.info("determine_musical_parameters: Streaming explanation task explicitly cancelled.")
-            raise # Re-raise to be handled by the caller (e.g., the run method)
+            raise
         except Exception as e:
             logger.error(f"Error streaming explanation for musical parameters: {e}")
-            await self.chat_session.queue.error("Failed to stream parameter explanation.") 
-            # Decide if this error is fatal for this step
-            raise # Re-raise to stop this step
+            await self.context.queue.error("Failed to stream parameter explanation.") 
+            raise
 
-        if self.chat_session.is_cancelled: # Check before next major action
-            logger.info("determine_musical_parameters: Cancelled after streaming explanation.")
-            raise asyncio.CancelledError("determine_musical_parameters cancelled post-explanation stream.")
-
-        await self.chat_session.queue.add_chunk("\n\n")
-        await self.chat_session.queue.add_chunk("---")
-        await self.chat_session.queue.add_chunk("\n\n")
+        await self.context.queue.add_chunk("\n\n")
+        await self.context.queue.add_chunk("---")
+        await self.context.queue.add_chunk("\n\n")
         # 2. Get JSON Data (Focused Call)
         logger.info("Requesting JSON for musical parameters...")
         schema_example_for_focused_call = json.dumps(LLMDeterminedMusicalParameters.model_json_schema())
@@ -332,12 +433,12 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
             f"Ensure you populate: 'chord_progression', 'key', 'mode' (major/minor), 'tempo', 'melody_instrument_suggestion', 'chords_instrument_suggestion', and 'song_title' (can be null). "
             f"Output only the JSON object."
         )
-        
-        if self.chat_session.is_cancelled: # Check before LLM call
-            logger.info("determine_musical_parameters: Cancelled before focused LLM call for params.")
-            raise asyncio.CancelledError("determine_musical_parameters LLM call for params cancelled.")
 
-        llm_simple_params = await self._focused_llm_call(focused_prompt_for_llm, LLMDeterminedMusicalParameters)
+        llm_simple_params = await self._focused_llm_call(
+            focused_prompt_for_llm, 
+            LLMDeterminedMusicalParameters,
+            chat_session=chat_session  # Pass existing session for context continuity
+        )
 
         # 3. Process JSON Data
         if not isinstance(llm_simple_params, LLMDeterminedMusicalParameters):
@@ -366,12 +467,24 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
                 duration_bars=duration_bars
             )
 
+        # Track stage tokens (full session cost)
+        self._track_stage_tokens("determine_musical_parameters", chat_session.get_token_usage())
+
         logger.info(f"Step 'determine_musical_parameters' returning: {full_params.model_dump_json(indent=2)}")
         return full_params
 
     async def select_instruments(self, determined_params: FullMusicalParameters) -> SelectInstruments:
         """Streams explanation, then selects specific instruments via LLM call."""
         logger.info(f"Step 'select_instruments' called for song: {determined_params.song_title if determined_params.song_title else 'Untitled'}")
+        
+        # Update context with musical params
+        if self.context:
+            self.context.musical_params = determined_params
+        
+        # Create fresh session
+        system_prompt = self._get_instrument_selection_prompt()
+        chat_session = self._create_fresh_chat_session(system_prompt)
+        
         soundfont_names_list = [sf.display_name for sf in self._available_soundfonts]
 
         # 1. Stream Explanation
@@ -388,23 +501,22 @@ Do NOT output JSON in this step, just your conversational reasoning."""
         logger.info("Streaming explanation for instrument selection...")
         logger.info(f"length of available soundfonts: {len(self._available_soundfonts)}")
         try:
-            async for text_chunk in await self.chat_session.send_message_async(
+            async for text_chunk in await chat_session.send_message_async(
                 user_prompt_content=explanation_prompt_instruments,
                 stream=True
             ):
                 if isinstance(text_chunk, str):
                     logger.debug(f"INSTRUMENT EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
-                    await self.chat_session.queue.add_chunk(text_chunk)
+                    await self.context.queue.add_chunk(text_chunk)
             logger.info("Finished streaming instrument selection explanation.")
-            self._track_stage_tokens("select_instruments_explanation")
         except Exception as e:
             logger.error(f"Error streaming instrument selection explanation: {e}")
-            await self.chat_session.queue.error("Failed to stream instrument selection explanation.")
-            # Potentially return a default/empty SelectInstruments or raise error if critical
+            await self.context.queue.error("Failed to stream instrument selection explanation.")
+            raise
 
-        await self.chat_session.queue.add_chunk("\n\n")
-        await self.chat_session.queue.add_chunk("---")
-        await self.chat_session.queue.add_chunk("\n\n")
+        await self.context.queue.add_chunk("\n\n")
+        await self.context.queue.add_chunk("---")
+        await self.context.queue.add_chunk("\n\n")
         # 2. Get JSON Data (Focused Call)
         logger.info("Requesting JSON for instrument selection...")
         focused_prompt = f"""
@@ -420,7 +532,11 @@ Ensure instrument_name in each selection exactly matches a name from the Availab
 Example of desired JSON structure: {json.dumps(SelectInstruments.model_json_schema(), indent=2)}
 Output only the JSON object."""
         
-        instrument_selections_raw = await self._focused_llm_call(focused_prompt, SelectInstruments)
+        instrument_selections_raw = await self._focused_llm_call(
+            focused_prompt, 
+            SelectInstruments,
+            chat_session=chat_session  # Pass existing session for context continuity
+        )
         
         # 3. Process JSON Data (existing logic)
         instrument_selections = SelectInstruments(instrument_selections=[]) 
@@ -456,6 +572,13 @@ Output only the JSON object."""
 
             validated_selections.append(InstrumentSelectionItem(instrument_name=first_available_chords.display_name, role="chords", explanation="Fallback for missing chords role."))
             logger.info(f"Fallback selected chords: {first_available_chords.display_name}")
+        
+        # Track stage tokens (already using full session cost)
+        self._track_stage_tokens("select_instruments", chat_session.get_token_usage())
+        
+        # Update context with selected instruments
+        if self.context:
+            self.context.selected_instruments = SelectInstruments(instrument_selections=validated_selections)
             
         return SelectInstruments(instrument_selections=validated_selections)
 
@@ -541,6 +664,19 @@ Output only the JSON object."""
         logger.info(f"Found melody instrument: {melody_instrument_name}")
 
         # 1. Stream Explanation for Melody
+        # Create a fresh session for melody explanation
+        melody_explanation_prompt = f"""You are an AI music composer creating a melody.
+
+Current composition:
+- Key: {params.key} {params.mode}
+- Tempo: {params.tempo} BPM
+- Chord Progression: {params.chord_progression}
+- Melody Instrument: {melody_instrument_name}
+
+Your task: Describe the style, mood, and characteristics of the melody you are about to compose."""
+        
+        explanation_session = self._create_fresh_chat_session(melody_explanation_prompt)
+        
         explanation_prompt_melody = f"""Now I'm going to create a melody.
 Based on the key of {params.key} {params.mode}, tempo {params.tempo} BPM, the chord progression '{params.chord_progression}', and using the '{melody_instrument_name}' for the melody, describe the style, mood, and characteristics of the melody you are about to compose.
 
@@ -548,25 +684,26 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
 
         logger.info("Streaming explanation for melody...")
         try:
-            async for text_chunk in await self.chat_session.send_message_async(
+            async for text_chunk in await explanation_session.send_message_async(
                 user_prompt_content=explanation_prompt_melody,
                 stream=True
             ):
                 if isinstance(text_chunk, str):
                     logger.debug(f"MELODY EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
-                    await self.chat_session.queue.add_chunk(text_chunk)
+                    await self.context.queue.add_chunk(text_chunk)
             logger.info("Finished streaming melody explanation.")
-            self._track_stage_tokens("generate_melody_explanation")
+            # Track tokens for the explanation phase
+            self._track_stage_tokens("generate_melody_explanation", explanation_session.get_token_usage())
         except Exception as e:
             logger.error(f"Error streaming melody explanation: {e}")
-            await self.chat_session.queue.error("Failed to stream melody explanation.")
+            await self.context.queue.error("Failed to stream melody explanation.")
             # Decide if we should return here or attempt note generation anyway
             # For now, let's return if explanation fails, as it might indicate a larger issue.
             return
 
-        await self.chat_session.queue.add_chunk("\n\n")
-        await self.chat_session.queue.add_chunk("---")
-        await self.chat_session.queue.add_chunk("\n\n")
+        await self.context.queue.add_chunk("\n\n")
+        await self.context.queue.add_chunk("---")
+        await self.context.queue.add_chunk("\n\n")
         # 2. Generate Melody Notes (Focused Call internally within generate_melody_notes)
         logger.info(f"Proceeding to generate actual melody notes for {melody_instrument_name}...")
         try:
@@ -574,8 +711,7 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
                 current_params=params,
                 selected_instruments=selected_instruments 
             )
-            # Track melody JSON generation tokens
-            self._track_stage_tokens("generate_melody_json")
+            # Note: melody tokens already tracked in generate_melody_notes
 
             if not melody_data or not melody_data.bars:
                 logger.error("Melody generation returned empty or invalid result from generate_melody_notes.")
@@ -694,15 +830,15 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
 
         logger.info(f"DEBUG: Creating fresh ChatSession for melody generation...")
         
-        # Clone settings from the agent's main chat session
-        melody_chat_session = ChatSession(
-            provider_name=self.chat_session.current_provider_name,
-            model_name=self.chat_session.current_model_name,
-            queue=self.chat_session.queue,
-            api_key=self.chat_session.current_api_key,
-            base_url=self.chat_session.current_base_url,
-            **self.chat_session.current_provider_kwargs
-        )
+        # Create fresh session for melody generation
+        melody_system_prompt = f"""You are an AI music composer creating melodic patterns.
+Key: {key} {mode}
+Tempo: {tempo} BPM
+Chord Progression: {chord_progression_str}
+
+Create interval-based melodies that follow the harmonic structure."""
+        
+        melody_chat_session = self._create_fresh_chat_session(melody_system_prompt)
         
         logger.info(f"DEBUG: Prompting for IntervalMelodyOutput with fresh context. Prompt length: {len(interval_prompt)} chars.")
         logger.info(f"DEBUG: Prompt start: {interval_prompt[:200]}...")
@@ -776,12 +912,8 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
         interval_melody_output = interval_melody_output_raw
         logger.info(f"LLM returned interval melody: {interval_melody_output.model_dump_json(indent=2)}...")
         
-        # Accumulate tokens from melody generation
-        if hasattr(melody_chat_session, 'get_token_usage'):
-            melody_usage = melody_chat_session.get_token_usage()
-            self.total_request_tokens += melody_usage.get('request_tokens', 0)
-            self.total_response_tokens += melody_usage.get('response_tokens', 0)
-            logger.info(f"Melody generation tokens - Request: {melody_usage.get('request_tokens', 0)}, Response: {melody_usage.get('response_tokens', 0)}")
+        # Track tokens for melody generation (full session cost)
+        self._track_stage_tokens("generate_melody", melody_chat_session.get_token_usage())
 
         final_melody_data_from_intervals = convert_interval_melody_to_absolute_melody(
             interval_melody=interval_melody_output,
@@ -832,6 +964,11 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
     async def select_drum_sounds(self, determined_params: FullMusicalParameters, drum_research_result: Optional[str] = None) -> SelectDrumSounds:
         """Streams explanation, then selects drum sounds via LLM call."""
         logger.info(f"Step 'select_drum_sounds' called for song: {determined_params.song_title if determined_params.song_title else 'Untitled'}")
+        
+        # Create fresh session
+        system_prompt = self._get_drum_selection_prompt()
+        chat_session = self._create_fresh_chat_session(system_prompt)
+        
         drum_sample_names = [ds.display_name for ds in self._available_drum_samples]
 
         # 1. Stream Explanation for Drum Sound Selection
@@ -848,22 +985,22 @@ Do NOT output JSON in this step, just your conversational reasoning."""
 
         logger.info("Streaming explanation for drum sound selection...")
         try:
-            async for text_chunk in await self.chat_session.send_message_async(
+            async for text_chunk in await chat_session.send_message_async(
                 user_prompt_content=explanation_prompt_drums,
                 stream=True
             ):
                 if isinstance(text_chunk, str):
                     logger.debug(f"DRUM SOUND EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
-                    await self.chat_session.queue.add_chunk(text_chunk)
+                    await self.context.queue.add_chunk(text_chunk)
             logger.info("Finished streaming drum sound selection explanation.")
-            self._track_stage_tokens("select_drum_sounds_explanation")
         except Exception as e:
             logger.error(f"Error streaming drum sound selection explanation: {e}")
-            await self.chat_session.queue.error("Failed to stream drum sound explanation.")
+            await self.context.queue.error("Failed to stream drum sound explanation.")
+            raise
 
-        await self.chat_session.queue.add_chunk("\n\n")
-        await self.chat_session.queue.add_chunk("---")
-        await self.chat_session.queue.add_chunk("\n\n")
+        await self.context.queue.add_chunk("\n\n")
+        await self.context.queue.add_chunk("---")
+        await self.context.queue.add_chunk("\n\n")
         # 2. Get JSON Data (Focused Call)
         logger.info("Requesting JSON for drum sound selection...")
         focused_prompt_context = f"For a song in {determined_params.key} {determined_params.mode} at {determined_params.tempo} BPM, with style hints from the title '{determined_params.song_title}', user prompt '{determined_params.original_user_prompt}', and chord progression '{determined_params.chord_progression}'."
@@ -882,7 +1019,11 @@ Provide your response *only* in the 'SelectDrumSounds' JSON structure (an object
 Example of desired JSON structure: {json.dumps(SelectDrumSounds.model_json_schema())}
 Output only the JSON object."""
         
-        drum_sound_selections_raw = await self._focused_llm_call(focused_prompt, SelectDrumSounds)
+        drum_sound_selections_raw = await self._focused_llm_call(
+            focused_prompt, 
+            SelectDrumSounds,
+            chat_session=chat_session  # Pass existing session for context continuity
+        )
         
         # 3. Process JSON Data (existing logic)
         drum_sound_selections = SelectDrumSounds(drum_sounds=[]) 
@@ -930,6 +1071,13 @@ Output only the JSON object."""
             if not validated_drums: # If name matching failed, just pick first few
                 validated_drums = [ds.display_name for ds in self._available_drum_samples[:min(4, len(self._available_drum_samples))]]
             logger.info(f"Fallback selected drums: {validated_drums}")
+        
+        # Track stage tokens (full session cost)
+        self._track_stage_tokens("select_drum_sounds", chat_session.get_token_usage())
+        
+        # Update context with selected drums
+        if self.context:
+            self.context.selected_drums = SelectDrumSounds(drum_sounds=validated_drums)
 
         return SelectDrumSounds(drum_sounds=validated_drums)
 
@@ -969,14 +1117,13 @@ Example of desired JSON structure: {json.dumps(CreateDrumBeat.model_json_schema(
 Output only the JSON object."""
         
         # Create a fresh ChatSession for this specific LLM call
-        drum_chat_session = ChatSession(
-            provider_name=self.chat_session.current_provider_name,
-            model_name=self.chat_session.current_model_name,
-            queue=self.chat_session.queue, # Use the main agent's queue
-            api_key=self.chat_session.current_api_key,
-            base_url=self.chat_session.current_base_url,
-            **self.chat_session.current_provider_kwargs
-        )
+        drum_system_prompt = f"""You are an AI music composer creating drum patterns.
+Tempo: {determined_params.tempo} BPM
+Style: {determined_params.song_title}
+
+Create rhythmic patterns that fit the composition style."""
+        
+        drum_chat_session = self._create_fresh_chat_session(drum_system_prompt)
 
         max_retries = 1 
         drum_beat_data_raw: Optional[CreateDrumBeat] = None
@@ -1060,12 +1207,8 @@ Output only the JSON object."""
         drum_beat_data = drum_beat_data_raw
         # END of new LLM call logic
         
-        # Accumulate tokens from drum generation
-        if hasattr(drum_chat_session, 'get_token_usage'):
-            drum_usage = drum_chat_session.get_token_usage()
-            self.total_request_tokens += drum_usage.get('request_tokens', 0)
-            self.total_response_tokens += drum_usage.get('response_tokens', 0)
-            logger.info(f"Drum generation tokens - Request: {drum_usage.get('request_tokens', 0)}, Response: {drum_usage.get('response_tokens', 0)}")
+        # Track tokens for drum generation (full session cost)
+        self._track_stage_tokens("generate_drum_beat", drum_chat_session.get_token_usage())
         
         # 3. Process JSON Data (existing logic)
         if not isinstance(drum_beat_data, CreateDrumBeat):
@@ -1170,32 +1313,11 @@ Output only the JSON object."""
         
         await self._init_real_data(db_session) # Initialize soundfonts and drum samples
 
-        # Initialize ChatSession for this run
-        # The system prompt can be tailored for the music agent's overall task
-        # For now, using a generic one or None if the adapter handles it.
-        system_prompt_for_agent = get_ai_composer_agent_initial_system_prompt()
-        
-        self.chat_session = ChatSession(
-            provider_name=model_info.provider_name,
-            model_name=model_info.model_name,
-            queue=queue, # Pass the SSEQueueManager directly to ChatSession
-            system_prompt=system_prompt_for_agent,
-            api_key=model_info.api_key,
-            base_url=model_info.base_url
-        )
-        
-        
-        logger.info(f"MusicGenerationAgent run started for prompt: '{request.user_prompt}', duration: {request.duration_bars} bars")
         logger.info(f"Available soundfonts length: {len(self._available_soundfonts)}")
         logger.info(f"Available drum samples length: {len(self._available_drum_samples)}")
         
         await queue.add_chunk(f"Doing research for prompt: '{request.user_prompt}'...\n\n")
-        # Pass chat_session to all internal methods that need it
-        # ... update all internal calls to use chat_session ...
-        # For brevity, only show the start of the method here. The rest of the method and all internal calls must be updated to use chat_session as needed.
-        logger.info(f"MusicGenerationAgent run started for prompt: '{request.user_prompt}', duration: {request.duration_bars} bars")
-        self._initial_song_request = request # Store for potential use by helper methods if ever needed
-
+        
         # --- 1. Research Step (NEW, like music_gen_service.py) ---
         logger.info("Starting research using MusicResearcher...")
         
@@ -1213,6 +1335,17 @@ Output only the JSON object."""
             self._music_researcher.research_drum_sounds(request.user_prompt)
         )
 
+        # Initialize context with all necessary info
+        self.context = MusicGenerationContext(
+            user_prompt=request.user_prompt,
+            duration_bars=request.duration_bars,
+            general_research=research_result.get("prompt_addition") if research_result and isinstance(research_result, dict) else None,
+            chord_research=chord_research_result,
+            drum_research=drum_research_result,
+            model_info=model_info,
+            queue=queue
+        )
+
         # 2. Determine Core Musical Parameters (now with research context)
         research_addition = ""
         if research_result and isinstance(research_result, dict) and research_result.get("prompt_addition"):
@@ -1225,7 +1358,7 @@ Output only the JSON object."""
             user_prompt=user_prompt_with_research,
             duration_bars=request.duration_bars
         )
-        self._track_stage_tokens("determine_musical_parameters")
+        # Note: stage tokens already tracked in determine_musical_parameters
 
         # --- Sanitize key and mode after LLM output ---
         sanitized_key, sanitized_mode = self._sanitize_key_and_mode(params.key, params.mode)
@@ -1236,11 +1369,11 @@ Output only the JSON object."""
 
         # 3. Select Instruments
         selected_instruments = await self.select_instruments(determined_params=params)
-        self._track_stage_tokens("select_instruments_json")
+        # Note: stage tokens already tracked in select_instruments
 
         # 3. Generate Chords and Send SSE
         await self._generate_chords_and_send_sse(params, selected_instruments, queue)
-        self._track_stage_tokens("generate_chords")
+        # Note: chord generation doesn't use LLM, just transforms
 
         # 4. Generate Melody (assuming for primary melody role for now)
         await self._generate_melody_and_send_sse(params, selected_instruments, queue)
@@ -1251,20 +1384,19 @@ Output only the JSON object."""
             determined_params=params, 
             drum_research_result=drum_research_result
         )
-        self._track_stage_tokens("select_drum_sounds_json")
+        # Note: stage tokens already tracked in select_drum_sounds
         
         # 6. Generate Drum Beat
         await self._generate_drum_beat_patterns_and_send_sse(params, selected_drum_sounds, queue, drum_research_result)
-        self._track_stage_tokens("generate_drum_beat")
+        # Note: stage tokens already tracked in generate_drum_beat_patterns
         
         logger.info(f"MusicGenerationAgent run finished. Title: {params.song_title}")
         
-        # Get final token usage from the chat session
-        if hasattr(self, 'chat_session') and self.chat_session:
-            final_usage = self.chat_session.get_token_usage()
-            self.total_request_tokens = final_usage.get('request_tokens', 0)
-            self.total_response_tokens = final_usage.get('response_tokens', 0)
-            logger.info(f"Total token usage - Request: {self.total_request_tokens}, Response: {self.total_response_tokens}")
+        # Calculate total tokens from stage tokens to avoid double counting
+        total_request = sum(stage.get("request_tokens", 0) for stage in self.stage_tokens.values())
+        total_response = sum(stage.get("response_tokens", 0) for stage in self.stage_tokens.values())
+        
+        logger.info(f"Total token usage - Request: {total_request}, Response: {total_response}")
         
         # Return success result with metadata about the generation
         return {
@@ -1274,9 +1406,9 @@ Output only the JSON object."""
             "key": f"{params.key} {params.mode}",
             "duration_bars": request.duration_bars,
             "tracks_generated": len(selected_instruments.instrument_selections) + 1,  # instruments + drums
-            "request_tokens": self.total_request_tokens,
-            "response_tokens": self.total_response_tokens,
-            "total_tokens": self.total_request_tokens + self.total_response_tokens,
+            "request_tokens": total_request,
+            "response_tokens": total_response,
+            "total_tokens": total_request + total_response,
             "stage_tokens": self.stage_tokens  # Include stage-by-stage token breakdown
         }
 
