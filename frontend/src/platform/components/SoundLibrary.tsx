@@ -143,7 +143,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
 
   // Custom empty state with the correct icon
   const emptyState = {
-    icon: <MusicNoteIcon sx={{ fontSize: 60, color: '#666' }} />,
+    icon: <MusicNoteIcon sx={{ fontSize: 60 }} />,
     title: "No sounds in your library",
     description: "Upload some sounds to get started"
   };

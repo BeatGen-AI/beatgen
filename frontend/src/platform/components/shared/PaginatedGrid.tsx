@@ -5,6 +5,7 @@ import {
   Grid, 
   CircularProgress,
   Alert,
+  Paper,
 } from '@mui/material';
 import { Button } from "../../../components/ui/button";
 
@@ -74,9 +75,12 @@ export function PaginatedGrid<T>({
   // Show loading spinner on initial load
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <Paper sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, mt: 2 }}>
+        <CircularProgress sx={{ mb: 2 }} />
+        <Typography variant="body1" color="text.secondary">
+          Loading...
+        </Typography>
+      </Paper>
     );
   }
   
@@ -92,24 +96,23 @@ export function PaginatedGrid<T>({
   // Show empty state when no items and not loading more
   if (items.length === 0 && !loadingMore) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center',
-        justifyContent: 'center',
-        py: 4,
-        height: '100%'
-      }}>
-        <Box sx={{ fontSize: 60, color: '#666', mb: 2 }}>
+      <Paper sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, mt: 2, textAlign: 'center' }}>
+        <Box sx={{ fontSize: 60, mb: 2 }}>
           {emptyState.icon}
         </Box>
-        <Typography variant="h6" gutterBottom sx={{ color: '#ccc' }}>
+        <Typography 
+          variant="h6" 
+          gutterBottom
+          style={{ 
+            color: sectionColor || '#666',
+          }}
+        >
           {emptyState.title}
         </Typography>
-        <Typography variant="body2" color="text.secondary" align="center">
+        <Typography variant="body1" color="text.secondary" paragraph>
           {emptyState.description}
         </Typography>
-      </Box>
+      </Paper>
     );
   }
   
@@ -118,9 +121,9 @@ export function PaginatedGrid<T>({
   const showMoreButton = !loading && canShowMore && displayedCount < totalItems;
   
   return (
-    <Box sx={{ mt: 2 }} className={className}>
+    <React.Fragment>
       {/* Grid of items */}
-      <Grid container spacing={2}>
+      <Grid container spacing={3} sx={{pt: 2}}>
         {displayedItems.map((item, index) => (
           <Grid item {...gridProps} key={getItemKey(item, index)}>
             {renderItem(item, index)}
@@ -147,7 +150,7 @@ export function PaginatedGrid<T>({
           <CircularProgress size={24} />
         </Box>
       )}
-    </Box>
+    </React.Fragment>
   );
 }
 

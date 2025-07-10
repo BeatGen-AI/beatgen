@@ -1,21 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { 
-  Container, 
-  Typography, 
-  Card, 
-  CardContent, 
-  Grid, 
-  IconButton, 
+  Container,
   Dialog, 
   DialogTitle, 
   DialogContent, 
   DialogActions,
   TextField,
   CircularProgress,
-  Box,
-  Divider,
-  Paper,
   Alert,
   Snackbar
 } from '@mui/material';
@@ -38,6 +30,7 @@ import {
 import { Project } from '../types/project';
 import { IconTrashFilled } from '@tabler/icons-react';
 import { Button } from "../../components/ui/button"
+import { FadeCard, FadeCardHeader, FadeCardTitle, FadeCardContent } from "../../components/ui/fade-card"
 import ProjectsDisplay from '../components/ProjectsDisplay';
 import AudioTracksDisplay from '../components/AudioTracksDisplay';
 import MidiLibrary from '../components/MidiLibrary';
@@ -242,46 +235,45 @@ export default function HomePage() {
   // If user is not authenticated, show a simpler layout for guests
   if (!userIsAuthenticated) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div className="flex flex-col min-h-screen">
         {/* Header for guests */}
-        <header style={{ padding: '1rem 2rem', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', color: logoColors[3] }}>
+        <header className="px-8 py-4 border-b border-gray-200 flex justify-between items-center">
+          <h1 className="text-xl font-bold" style={{ color: logoColors[3] }}>
             BeatGen Studio
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          </h1>
+          <div className="flex gap-2">
             <Button variant="outline" onClick={() => navigate({ to: '/login' })}>
               Login
             </Button>
             <Button variant="default" onClick={() => navigate({ to: '/register' })}>
               Sign Up
             </Button>
-          </Box>
+          </div>
         </header>
 
         {/* Main content for guests */}
-        <main style={{ flexGrow: 1, padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <Paper elevation={2} sx={{ p: 4, maxWidth: 600, width: '100%', textAlign: 'center' }}>
-            <Typography variant="h4" sx={{ mb: 2, color: logoColors[1] }}>
+        <main className="flex-1 p-8 flex flex-col items-center justify-center">
+          <FadeCard className="p-8 max-w-[600px] w-full text-center">
+            <h2 className="text-3xl font-medium mb-4" style={{ color: logoColors[1] }}>
               Generate Your Song
-            </Typography>
-            <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
+            </h2>
+            <p className="text-base mb-6 text-muted-foreground">
               Create music instantly with AI. Try our song generator for free!
-            </Typography>
+            </p>
             
             <Button
               variant="default"
               size="lg"
               onClick={() => setShowGenerateSongModal(true)}
-              // startIcon={<MusicNoteIcon />}
-              // sx={{ mb: 2 }}
+              className="mb-4"
             >
               Generate Song
             </Button>
             
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            <p className="text-sm text-muted-foreground">
               Sign up to save your generated songs as projects
-            </Typography>
-          </Paper>
+            </p>
+          </FadeCard>
         </main>
 
         {/* Generate Song Modal */}
@@ -290,7 +282,7 @@ export default function HomePage() {
           onClose={() => setShowGenerateSongModal(false)}
           onSaveAsProject={handleSaveGeneratedSong}
         />
-      </Box>
+      </div>
     );
   }
 
@@ -305,21 +297,19 @@ export default function HomePage() {
             </Alert>
           )}
 
-          <Paper elevation={2} sx={{ p: 3, mt: 0, borderRadius: 2 }}>
-            <Box sx={{ mb: 2 }}>
+          <FadeCard className="p-6 mt-0">
+            <div className="mb-2">
               {/* Desktop layout - side by side */}
-              <Box sx={{ display: { xs: 'none', md: 'flex' }, justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography 
-                  variant="h5" 
-                  component="h2" 
-                  sx={{ fontWeight: 'medium' }}
+              <div className="hidden md:flex justify-between items-center">
+                <h2 
+                  className="text-2xl font-medium"
                   style={{ 
                     color: logoColors[1], // Projects
                   }}
                 >
                   Projects
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                </h2>
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
                     className="flex items-center gap-2"
@@ -336,22 +326,20 @@ export default function HomePage() {
                     <AddIcon fontSize="small" />
                     New Project
                   </Button>
-                </Box>
-              </Box>
+                </div>
+              </div>
 
               {/* Mobile layout - stacked */}
-              <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', gap: 2 }}>
-                <Typography 
-                  variant="h5" 
-                  component="h2" 
-                  sx={{ fontWeight: 'medium' }}
+              <div className="flex md:hidden flex-col gap-4">
+                <h2 
+                  className="text-2xl font-medium"
                   style={{ 
                     color: logoColors[1], // Projects
                   }}
                 >
                   Projects
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                </h2>
+                <div className="flex flex-col gap-2">
                   <Button
                     variant="outline"
                     className="flex items-center gap-2 justify-center"
@@ -368,9 +356,9 @@ export default function HomePage() {
                     <AddIcon fontSize="small" />
                     New Project
                   </Button>
-                </Box>
-              </Box>
-            </Box>
+                </div>
+              </div>
+            </div>
             <ProjectsDisplay
               allFetchedProjects={allFetchedProjects}
               displayedProjectsCount={displayedProjectsCount}
@@ -389,67 +377,67 @@ export default function HomePage() {
               onCloseSnackbar={handleCloseSnackbar}
               sectionColor={logoColors[1]}
             />
-          </Paper>
+          </FadeCard>
 
           {/* My Sounds Section is now replaced by AudioTracksDisplay */}
-          <Paper elevation={2} sx={{ p: 3, mt: 4, borderRadius: 2 }}>
-            <Typography 
-              variant="h5" 
-              component="h2" 
-              sx={{ mb: 2, fontWeight: 'medium' }}
-              style={{
-                color: logoColors[2], // Audio Tracks
-              }}
-            >
-              Audio Tracks
-            </Typography>
+          <FadeCard className="p-6 mt-8">
+            <div className="mb-2">
+              <h2 
+                className="text-2xl font-medium"
+                style={{
+                  color: logoColors[2], // Audio Tracks
+                }}
+              >
+                Audio Tracks
+              </h2>
+            </div>
             <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={logoColors[2]} />
-          </Paper>
+          </FadeCard>
 
           {/* Midi Tracks Section */}
-          <Paper elevation={2} sx={{ p: 3, mt: 4, borderRadius: 2 }}>
-            <Typography 
-              variant="h5" 
-              component="h2" 
-              sx={{ mb: 2, fontWeight: 'medium' }}
-              style={{
-                color: logoColors[3], // MIDI Tracks
-              }}
-            >
-              MIDI Tracks
-            </Typography>
+          <FadeCard className="p-6 mt-8">
+            <div className="mb-2">
+              <h2 
+                className="text-2xl font-medium"
+                style={{
+                  color: logoColors[3], // MIDI Tracks
+                }}
+              >
+                MIDI Tracks
+              </h2>
+            </div>
             <MidiLibrary sectionColor={logoColors[3]} />
-          </Paper>
+          </FadeCard>
 
           {/* Sampler Tracks Section */}
-          <Paper elevation={2} sx={{ p: 3, mt: 4, borderRadius: 2 }}>
-            <Typography 
-              variant="h5" 
-              component="h2" 
-              sx={{ mb: 2, fontWeight: 'medium' }}
-              style={{
-                color: logoColors[4], // Sampler Tracks
-              }}
-            >
-              Sampler Tracks
-            </Typography>
+          <FadeCard className="p-6 mt-8">
+            <div className="mb-2">
+              <h2 
+                className="text-2xl font-medium"
+                style={{
+                  color: logoColors[4], // Sampler Tracks
+                }}
+              >
+                Sampler Tracks
+              </h2>
+            </div>
             <SamplerLibrary sectionColor={logoColors[4]} />
-          </Paper>
+          </FadeCard>
 
           {/* Drum Tracks Section */}
-          <Paper elevation={2} sx={{ p: 3, mt: 4, borderRadius: 2, mb: 4 }}>
-            <Typography 
-              variant="h5" 
-              component="h2" 
-              sx={{ mb: 2, fontWeight: 'medium' }}
-              style={{
-                color: logoColors[5], // Drum Tracks
-              }}
-            >
-              Drum Tracks
-            </Typography>
+          <FadeCard className="p-6 mt-8 mb-8">
+            <div className="mb-2">
+              <h2 
+                className="text-2xl font-medium"
+                style={{
+                  color: logoColors[5], // Drum Tracks
+                }}
+              >
+                Drum Tracks
+              </h2>
+            </div>
             <DrumLibrary sectionColor={logoColors[5]} />
-          </Paper>
+          </FadeCard>
 
           {/* Snackbar for notifications */}
           <Snackbar 

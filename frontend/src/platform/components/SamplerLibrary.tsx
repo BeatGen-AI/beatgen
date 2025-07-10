@@ -145,7 +145,7 @@ export default function SamplerLibrary({ onReload, sectionColor }: SamplerLibrar
 
   // Custom empty state with the correct icon
   const emptyState = {
-    icon: <GraphicEqIcon sx={{ fontSize: 60, color: '#666' }} />,
+    icon: <GraphicEqIcon sx={{ fontSize: 60 }} />,
     title: "No sampler tracks in your library",
     description: "Create sampler tracks in the studio to see them here"
   };

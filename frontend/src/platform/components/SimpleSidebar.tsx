@@ -199,7 +199,7 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
           </DropdownMenu>
 
           {/* Credits Display */}
-          <CreditsDisplay />
+          <CreditsDisplay isExpanded={isExpanded} />
 
           {/* Navigation Menu */}
           <nav className="space-y-1">

@@ -121,7 +121,7 @@ export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps
 
   // Custom empty state with the correct icon
   const emptyState = {
-    icon: <MusicNoteIcon sx={{ fontSize: 60, color: '#666' }} />,
+    icon: <MusicNoteIcon sx={{ fontSize: 60 }} />,
     title: "No MIDI tracks in your library",
     description: "Create MIDI tracks in the studio to see them here"
   };
