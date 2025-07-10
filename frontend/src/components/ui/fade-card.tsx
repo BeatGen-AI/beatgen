@@ -18,25 +18,26 @@ const FadeCard = React.forwardRef<
     
     {/* Fade to transparent overlay at the top - Light mode */}
     <div 
-      className="absolute inset-x-0 top-0 h-24 pointer-events-none dark:hidden"
+      className="absolute inset-x-0 top-0 h-96 pointer-events-none dark:hidden"
       style={{
         background: `linear-gradient(to bottom, 
           transparent 0px,
-          transparent 4px,
-          rgb(var(--card-rgb)) 40px
+          transparent 16px,
+          rgb(var(--card-rgb)) 160px
         )`
       }}
     />
     
     {/* Fade to black overlay at the top - Dark mode (stronger) */}
     <div 
-      className="absolute inset-x-0 top-0 h-32 pointer-events-none hidden dark:block"
+      className="absolute inset-x-0 top-0 pointer-events-none hidden dark:block"
       style={{
+        height: '512px',
         background: `linear-gradient(to bottom, 
           rgba(0, 0, 0, 0.8) 0px,
-          rgba(0, 0, 0, 0.4) 20px,
-          rgba(0, 0, 0, 0.1) 50px,
-          transparent 80px
+          rgba(0, 0, 0, 0.4) 80px,
+          rgba(0, 0, 0, 0.1) 200px,
+          transparent 320px
         )`
       }}
     />
