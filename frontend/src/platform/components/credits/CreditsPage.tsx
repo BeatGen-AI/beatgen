@@ -31,7 +31,7 @@ export const CreditsPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-8 max-w-4xl">
+      <div className="container mx-auto py-8 px-4 md:px-8 max-w-4xl">
         <div className="space-y-6">
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-64 w-full" />
@@ -42,7 +42,7 @@ export const CreditsPage: React.FC = () => {
 
   if (!credits) {
     return (
-      <div className="container mx-auto py-8 max-w-4xl">
+      <div className="container mx-auto py-8 px-4 md:px-8 max-w-4xl">
         <Alert variant="destructive">
           <AlertDescription>Failed to load credits information</AlertDescription>
         </Alert>
@@ -55,7 +55,7 @@ export const CreditsPage: React.FC = () => {
     : Math.min((Number(credits.balance) / credits.monthly_allocation) * 100, 100);
 
   return (
-    <div className="container mx-auto py-8 max-w-4xl space-y-6">
+    <div className="container mx-auto py-8 px-4 md:px-8 max-w-4xl space-y-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Credits</h1>
         <p className="text-muted-foreground mt-2">
