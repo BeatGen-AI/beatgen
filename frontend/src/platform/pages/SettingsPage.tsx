@@ -24,7 +24,7 @@ const SettingsPage: React.FC = () => {
     };
 
     return (
-        <div className="container mx-auto max-w-2xl py-4">
+        <div className="container mx-auto max-w-2xl py-4 px-4 md:px-8">
             <Card className="relative">
                 <CardHeader>
                     <div className="flex items-center mb-3">
