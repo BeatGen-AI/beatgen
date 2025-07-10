@@ -1,16 +1,14 @@
 import asyncio
-import json # Added for json.dumps used later
-import re # Added for splitting chord progression string
-from pydantic import BaseModel, Field
-from typing import List, Optional, Any, Dict, Type, Union
+import json
+import re
+from pydantic import BaseModel
+from typing import List, Optional, Any, Dict, Type
 import uuid
-from sqlmodel import Session # Added Union
+from sqlmodel import Session
 from dataclasses import dataclass
 
 
-# Schemas from the music_gen_service will be crucial
-# We\'\'\'ll need to adjust import paths based on final project structure
-# For now, assuming they can be imported like this:
+# Import schemas from music_gen_service
 from app2.sse.sse_queue_manager import SSEQueueManager
 from app2.llm.music_gen_service.llm_schemas import (
     DetermineMusicalParameters,
@@ -26,8 +24,6 @@ from app2.llm.music_gen_service.llm_schemas import (
     CreateDrumBeat,
     DrumBeatPatternItem,
     ChordProgressionOutput,
-    BaseCoerceModel,
-    SongComposition,
     SongRequest
 )
 # Utilities from music_gen_service
@@ -44,36 +40,25 @@ from app2.api.dependencies import (
 from app2.models.track_models.midi_track import MidiTrackRead
 from app2.types.assistant_actions import AssistantAction
 
-# We\'\'\'ll need to mock or adapt soundfont_service and drum_sample_service for now
-# from pydantic_ai_wrapper.music_gen_service.soundfont_service import soundfont_service
-# from pydantic_ai_wrapper.music_gen_service.drum_sample_service import drum_sample_service
-# from app2.llm.music_gen_service.midi2 import (
-#     transform_chord_progression_to_instrument_format,
-#     transform_drum_beats_to_midi_format 
-#     # Add other necessary midi transformations
-# )
 from app2.llm.music_gen_service.midi import (
     convert_interval_melody_to_absolute_melody,
     correct_notes_in_key,
     transform_chord_progression_to_instrument_format,
     transform_drum_beats_to_midi_format,
-    transform_melody_data_to_instrument_format 
-    # Add other necessary midi transformations
+    transform_melody_data_to_instrument_format
 )
-# from pydantic_ai_wrapper.music_gen_service.music_utils import get_mode_intervals # If needed
 
-# Schemas from music_gen_tools.py for descriptions
 from app2.llm.music_gen_service.music_gen_tools import (
     DETERMINE_MUSICAL_PARAMETERS_TOOL as DMP_TOOL_DEF,
     SELECT_INSTRUMENTS_TOOL as SI_TOOL_DEF,
-    CREATE_MELODY_TOOL as CM_TOOL_DEF, # We'll need a way to call LLM for notes
-    CREATE_DRUM_BEAT_TOOL as CDB_TOOL_DEF, # Similar, calls LLM for patterns
+    CREATE_MELODY_TOOL as CM_TOOL_DEF,
+    CREATE_DRUM_BEAT_TOOL as CDB_TOOL_DEF,
     SELECT_DRUM_SOUNDS_TOOL as SDS_TOOL_DEF
 )
 
 from app2.llm.music_gen_service.prompt_utils import (
     get_ai_composer_agent_initial_system_prompt,
-    get_melody_create_prompt # Added import
+    get_melody_create_prompt
 )
 
 # Import the new validation function
@@ -81,19 +66,14 @@ from app2.llm.music_gen_service.music_utils import get_scale_pitch_classes, vali
 # Import chord progression analysis function
 from app2.llm.music_gen_service.chord_progression_analysis import analyze_chord_progression
 
-from app2.llm.chat_wrapper import ChatSession # Keep this import
-from app2.llm.available_models import ModelInfo # Import the new dataclass
-from app2.llm.streaming import TextDeltaEvent # Import TextDeltaEvent
+from app2.llm.chat_wrapper import ChatSession
+from app2.llm.available_models import ModelInfo
+from app2.llm.streaming import TextDeltaEvent
 
 from app2.core.config import settings
-# Import request_manager to link ChatSession for cancellation
-from app2.sse.request_manager import request_manager 
-
-# --- Input and Output Schemas for the Main Agent Tool ---
-
+from app2.sse.request_manager import request_manager
 
 logger = get_service_logger("music_agent")
-
 
 # --- Music Generation Context ---
 @dataclass
@@ -147,10 +127,8 @@ class MusicGenerationAgent:
         #self._init_mock_data()
         self._music_researcher = MusicResearcher()
         
-        # Token tracking
-        self.total_request_tokens: int = 0
-        self.total_response_tokens: int = 0
-        self.stage_tokens: Dict[str, Dict[str, int]] = {}  # Track tokens by stage
+        # Token tracking by stage only (no more total accumulation)
+        self.stage_tokens: Dict[str, Dict[str, int]] = {}
         
         # Context for sharing info across stages
         self.context: Optional[MusicGenerationContext] = None
@@ -204,13 +182,6 @@ class MusicGenerationAgent:
             base_url=self.context.model_info.base_url,
             **getattr(self.context.model_info, 'provider_kwargs', {})
         )
-
-    def _accumulate_tokens(self, chat_session: ChatSession):
-        """Accumulate tokens from a chat session into agent totals."""
-        # DEPRECATED: This method causes double counting when used with _track_stage_tokens
-        # Tokens should only be tracked via _track_stage_tokens
-        logger.warning("_accumulate_tokens called - this method is deprecated to avoid double counting")
-        return
 
     def _get_parameter_determination_prompt(self) -> str:
         """System prompt for determining musical parameters."""
@@ -375,8 +346,7 @@ Choose sounds that fit the tempo and style of the composition."""
             # If last_error *was* a CancelledError, it should have been re-raised by send_message_async or our checks.
             # This path implies it was caught and we broke loop, or send_message_async returned None/unexpectedly.
 
-        # Note: Token accumulation happens via _track_stage_tokens in the calling methods
-        # to avoid double counting
+        # Token accumulation happens via _track_stage_tokens in the calling methods
         
         return llm_output_obj # Return the validated object or the successfully constructed fallback
 
@@ -608,7 +578,6 @@ Output only the JSON object."""
                     if processed_chord_progression:
                         logger.info(f"Generating notes for chord progression: '{processed_chord_progression}' in {params.key} {params.mode} using {chord_instrument_name}")
                         
-                        # Note: transform_chord_progression_to_instrument_format expects a dict-like object for instrument
                         chord_notes_data = transform_chord_progression_to_instrument_format(
                             chord_progression=processed_chord_progression,
                             instrument=chord_instrument_details,
@@ -697,8 +666,7 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
         except Exception as e:
             logger.error(f"Error streaming melody explanation: {e}")
             await self.context.queue.error("Failed to stream melody explanation.")
-            # Decide if we should return here or attempt note generation anyway
-            # For now, let's return if explanation fails, as it might indicate a larger issue.
+            # Return if explanation fails as it might indicate a larger issue
             return
 
         await self.context.queue.add_chunk("\n\n")
@@ -990,7 +958,7 @@ Do NOT output JSON in this step, just your conversational reasoning."""
                 stream=True
             ):
                 if isinstance(text_chunk, str):
-                    logger.debug(f"DRUM SOUND EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
+                    logger.debug(f"Drum explanation chunk: '{text_chunk}'") 
                     await self.context.queue.add_chunk(text_chunk)
             logger.info("Finished streaming drum sound selection explanation.")
         except Exception as e:
@@ -1218,7 +1186,7 @@ Create rhythmic patterns that fit the composition style."""
                 return CreateDrumBeat(drum_beats=[])
             except Exception:
                  # If even this fails, it means CreateDrumBeat model itself has issues or expects non-optional fields
-                 # For now, we'll let an error propagate if this very basic fallback fails.
+                 # Let error propagate if basic fallback fails
                  # A more robust solution might be to always ensure CreateDrumBeat can be initialized with no args.
                  raise # Or return a pre-constructed empty valid object
 
@@ -1358,9 +1326,7 @@ Create rhythmic patterns that fit the composition style."""
             user_prompt=user_prompt_with_research,
             duration_bars=request.duration_bars
         )
-        # Note: stage tokens already tracked in determine_musical_parameters
-
-        # --- Sanitize key and mode after LLM output ---
+        # Sanitize key and mode after LLM output
         sanitized_key, sanitized_mode = self._sanitize_key_and_mode(params.key, params.mode)
         if sanitized_key != params.key or sanitized_mode != params.mode:
             logger.info(f"Sanitized key/mode: '{params.key}'/'{params.mode}' -> '{sanitized_key}'/'{sanitized_mode}'")
@@ -1369,26 +1335,17 @@ Create rhythmic patterns that fit the composition style."""
 
         # 3. Select Instruments
         selected_instruments = await self.select_instruments(determined_params=params)
-        # Note: stage tokens already tracked in select_instruments
-
         # 3. Generate Chords and Send SSE
         await self._generate_chords_and_send_sse(params, selected_instruments, queue)
-        # Note: chord generation doesn't use LLM, just transforms
-
         # 4. Generate Melody (assuming for primary melody role for now)
         await self._generate_melody_and_send_sse(params, selected_instruments, queue)
-        # Note: melody tracking happens inside the method after actual generation (both explanation and JSON)
-
         # 5. Select Drum Sounds (now with drum research context)
         selected_drum_sounds = await self.select_drum_sounds(
             determined_params=params, 
             drum_research_result=drum_research_result
         )
-        # Note: stage tokens already tracked in select_drum_sounds
-        
         # 6. Generate Drum Beat
         await self._generate_drum_beat_patterns_and_send_sse(params, selected_drum_sounds, queue, drum_research_result)
-        # Note: stage tokens already tracked in generate_drum_beat_patterns
         
         logger.info(f"MusicGenerationAgent run finished. Title: {params.song_title}")
         
@@ -1412,24 +1369,5 @@ Create rhythmic patterns that fit the composition style."""
             "stage_tokens": self.stage_tokens  # Include stage-by-stage token breakdown
         }
 
-# Example of how this agent might be instantiated and used (conceptual)
-# async def main():
-#   from pydantic_ai_wrapper.chat_wrapper import ChatSession
-#   tool_chat_session = ChatSession(
-#       provider_name="openai", 
-#       model_name="gpt-3.5-turbo",
-#       # api_key="YOUR_KEY", # etc.
-#   )
-#   
-#   music_agent = MusicGenerationAgent(chat_session=tool_chat_session)
-#   
-#   request = SongRequest(user_prompt="Create an epic cinematic orchestral piece for a movie trailer, 20 bars long.")
-#   final_song = await music_agent.run(request)
-#   logger.info("--- Final Song Composition ---")
-#   logger.info(final_song.model_dump_json(indent=2))
-
-# if __name__ == "__main__":
-#   import asyncio
-#   # asyncio.run(main()) # Requires async main and proper setup
-
+# Singleton instance
 music_agent = MusicGenerationAgent()
