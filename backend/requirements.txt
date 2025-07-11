@@ -30,3 +30,6 @@ google-auth-oauthlib==1.2.2
 mutagen==1.47.0
 pydub==0.25.1
 sentry-sdk==2.33.0
+torch>=2.0.0
+transformers>=4.35.0
+sentence-transformers>=2.2.0

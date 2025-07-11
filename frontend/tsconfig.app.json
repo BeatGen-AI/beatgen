@@ -45,7 +45,10 @@
     "../old_code/api/**/*",
     "../old_code/pages/NewProject.tsx", 
     "src/vite-env.d.ts", 
-    "src/platform/pages"  
+    "src/platform/pages",
+    "src/platform/components/**/*",
+    "src/platform/types/**/*",
+    "src/components/**/*"
   ]
 
 }

@@ -335,7 +335,7 @@ class TrackService:
             raise ServiceException(f"Failed to get {track_type.value} track: {str(e)}")
 
     async def create_audio_track(
-        self, user_id: uuid.UUID, track_data: Dict[str, Any]
+        self, user_id: uuid.UUID, track_data: Dict[str, Any], generate_description: bool = True
     ) -> AudioTrackRead:
         """
         Create a new audio track
@@ -343,6 +343,7 @@ class TrackService:
         Args:
             user_id: The ID of the user
             track_data: The track data
+            generate_description: Whether to generate audio description automatically
 
         Returns:
             The created audio track
@@ -374,11 +375,84 @@ class TrackService:
             logger.info(
                 f"Created audio track with ID: {track.id} for user ID: {user_id}"
             )
+            
+            # Generate audio description if requested and track has audio file
+            if generate_description and hasattr(track, 'audio_file_storage_key') and track.audio_file_storage_key:
+                try:
+                    await self._generate_audio_description_async(track.id, track.audio_file_storage_key)
+                except Exception as desc_error:
+                    logger.warning(f"Failed to generate description for audio track {track.id}: {desc_error}")
+                    # Don't fail track creation if description generation fails
+            
             return AudioTrackRead.model_validate(track)
         except Exception as e:
             logger.error(f"Error creating audio track: {str(e)}")
             logger.error(traceback.format_exc())
             raise ServiceException(f"Failed to create audio track: {str(e)}")
+    
+    async def _generate_audio_description_async(self, track_id: uuid.UUID, storage_key: str) -> None:
+        """
+        Generate audio description for a track asynchronously.
+        
+        This method is called after track creation to generate descriptions
+        without blocking the main track creation flow.
+        """
+        try:
+            from audio_ml.audio_description_service import AudioDescriptionService
+            from datetime import datetime, timezone
+            
+            service = AudioDescriptionService()
+            
+            # For now, we'll use a placeholder implementation
+            # In a real implementation, we would:
+            # 1. Download the audio file from Supabase storage
+            # 2. Generate the description using the CLAP model
+            # 3. Store the results in the database
+            
+            logger.info(f"Starting async description generation for track {track_id}")
+            
+            # TODO: Implement actual file retrieval from Supabase storage
+            # For now, we'll just store a placeholder description
+            from app2.models.track_models.audio_track import AudioTrackUpdate
+            
+            # Create a simple placeholder description based on the storage key
+            description = "audio track"
+            if "kick" in storage_key.lower():
+                description = "kick drum"
+            elif "snare" in storage_key.lower():
+                description = "snare drum"
+            elif "hi" in storage_key.lower() or "hat" in storage_key.lower():
+                description = "hi-hat"
+            elif "cymbal" in storage_key.lower():
+                description = "cymbal"
+            elif "piano" in storage_key.lower():
+                description = "piano"
+            elif "bass" in storage_key.lower():
+                description = "bass"
+            elif "guitar" in storage_key.lower():
+                description = "guitar"
+            elif "drum" in storage_key.lower():
+                description = "drum"
+            
+            # Update the track with the description
+            update_data = AudioTrackUpdate(
+                description=description,
+                description_confidence=0.8,  # Placeholder confidence
+                description_model="placeholder",
+                description_candidates=[
+                    {"text": description, "confidence": 0.8, "rank": 1},
+                    {"text": "audio track", "confidence": 0.5, "rank": 2}
+                ],
+                description_generated_at=datetime.now(timezone.utc).isoformat()
+            )
+            
+            await self.audio_repository.update(track_id, update_data.model_dump(exclude_none=True))
+            
+            logger.info(f"Generated placeholder description for track {track_id}: '{description}'")
+            
+        except Exception as e:
+            logger.error(f"Error generating audio description for track {track_id}: {e}")
+            # Don't re-raise - this is a background operation
 
     async def create_midi_track(
         self, user_id: uuid.UUID, midi_track_data: MidiTrackCreate
