@@ -44,6 +44,9 @@ __pycache__/
 *.flac
 .aider*
 
+# ML model cache
+backend/audio_ml/model_cache/
+
 # SSL certificates
 .cert/
 
