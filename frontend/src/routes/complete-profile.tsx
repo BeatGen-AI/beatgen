@@ -9,7 +9,11 @@ import { Label } from "../components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert"
 import { Loader2, AlertCircle, CheckCircle2, XCircle } from "lucide-react"
 
-const API_BASE_URL = 'https://localhost:5173'
+// Use environment variables for API URL
+const isDev = import.meta.env.VITE_APP_ENV === 'dev' || import.meta.env.DEV;
+const API_BASE_URL = isDev 
+  ? import.meta.env.VITE_LOCAL_BACKEND_URL || '' 
+  : import.meta.env.VITE_PROD_BACKEND_BASE_URL || 'https://api.beatgen.com';
 
 // Create the route - this will render at the path '/complete-profile'
 export const Route = createFileRoute('/complete-profile')({
