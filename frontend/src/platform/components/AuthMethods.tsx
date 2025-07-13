@@ -23,6 +23,7 @@ const AuthMethods: React.FC<AuthMethodsProps> = ({ className }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [addingPassword, setAddingPassword] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
 
   const fetchIdentities = async () => {
     try {
@@ -44,18 +45,35 @@ const AuthMethods: React.FC<AuthMethodsProps> = ({ className }) => {
   const hasGoogleAuth = identities?.identities.some(id => id.provider === 'google') || false;
 
   const handleAddPassword = async () => {
+    // Clear any previous dialog errors
+    setDialogError(null);
+
+    // Check if passwords match
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setDialogError('Passwords do not match');
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    // Check minimum length
+    if (password.length < 8) {
+      setDialogError('Password must be at least 8 characters long');
+      return;
+    }
+
+    // Password complexity validation
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+    const complexityCount = [hasUpperCase, hasLowerCase, hasNumbers, hasSpecialChar].filter(Boolean).length;
+
+    if (complexityCount < 3) {
+      setDialogError('Password must contain at least 3 of the following: uppercase letters, lowercase letters, numbers, and special characters');
       return;
     }
 
     setAddingPassword(true);
-    setError(null);
 
     try {
       await addPassword(password);
@@ -63,9 +81,12 @@ const AuthMethods: React.FC<AuthMethodsProps> = ({ className }) => {
       setShowAddPassword(false);
       setPassword('');
       setConfirmPassword('');
+      setDialogError(null);
+      // Clear success message after a delay
+      setTimeout(() => setSuccess(null), 5000);
       await fetchIdentities();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to add password');
+      setDialogError(err.response?.data?.detail || 'Failed to add password');
     } finally {
       setAddingPassword(false);
     }
@@ -143,7 +164,15 @@ const AuthMethods: React.FC<AuthMethodsProps> = ({ className }) => {
               </div>
             </div>
             {!hasEmailAuth && (
-              <Dialog open={showAddPassword} onOpenChange={setShowAddPassword}>
+              <Dialog open={showAddPassword} onOpenChange={(open) => {
+                setShowAddPassword(open);
+                if (!open) {
+                  // Clear form and errors when dialog closes
+                  setPassword('');
+                  setConfirmPassword('');
+                  setDialogError(null);
+                }
+              }}>
                 <DialogTrigger asChild>
                   <Button size="sm" variant="outline">
                     <Plus className="h-4 w-4 mr-1" />
@@ -157,6 +186,13 @@ const AuthMethods: React.FC<AuthMethodsProps> = ({ className }) => {
                       Add a password to sign in with your email address
                     </DialogDescription>
                   </DialogHeader>
+                  {dialogError && (
+                    <Alert variant="destructive" className="mt-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Error</AlertTitle>
+                      <AlertDescription>{dialogError}</AlertDescription>
+                    </Alert>
+                  )}
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label htmlFor="password">Password</Label>
@@ -177,6 +213,19 @@ const AuthMethods: React.FC<AuthMethodsProps> = ({ className }) => {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="Confirm your password"
                       />
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>Password requirements:</p>
+                      <ul className="list-disc list-inside ml-2">
+                        <li>At least 8 characters long</li>
+                        <li>Must contain at least 3 of the following:</li>
+                        <ul className="list-disc list-inside ml-4">
+                          <li>Uppercase letters (A-Z)</li>
+                          <li>Lowercase letters (a-z)</li>
+                          <li>Numbers (0-9)</li>
+                          <li>Special characters (!@#$%^&*)</li>
+                        </ul>
+                      </ul>
                     </div>
                   </div>
                   <DialogFooter>

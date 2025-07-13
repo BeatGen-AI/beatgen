@@ -28,6 +28,7 @@ const ProfilePage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [addingPassword, setAddingPassword] = useState(false);
+  const [passwordDialogError, setPasswordDialogError] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -66,18 +67,20 @@ const ProfilePage: React.FC = () => {
   };
 
   const handleAddPassword = async () => {
+    // Clear previous dialog errors
+    setPasswordDialogError(null);
+
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setPasswordDialogError('Passwords do not match');
       return;
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setPasswordDialogError('Password must be at least 6 characters');
       return;
     }
 
     setAddingPassword(true);
-    setError(null);
 
     try {
       await addPassword(password);
@@ -85,9 +88,10 @@ const ProfilePage: React.FC = () => {
       setShowAddPassword(false);
       setPassword('');
       setConfirmPassword('');
+      setPasswordDialogError(null);
       setHasPasswordAuth(true);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to add password');
+      setPasswordDialogError(err.response?.data?.detail || 'Failed to add password');
     } finally {
       setAddingPassword(false);
     }
@@ -338,7 +342,15 @@ const ProfilePage: React.FC = () => {
     </div>
 
     {/* Add Password Dialog */}
-    <Dialog open={showAddPassword} onOpenChange={setShowAddPassword}>
+    <Dialog open={showAddPassword} onOpenChange={(open) => {
+      setShowAddPassword(open);
+      if (!open) {
+        // Clear form and errors when dialog closes
+        setPassword('');
+        setConfirmPassword('');
+        setPasswordDialogError(null);
+      }
+    }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Password Authentication</DialogTitle>
@@ -346,6 +358,13 @@ const ProfilePage: React.FC = () => {
             Set a password to sign in with your email address
           </DialogDescription>
         </DialogHeader>
+        {passwordDialogError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{passwordDialogError}</AlertDescription>
+          </Alert>
+        )}
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="new-password">Password</Label>
@@ -371,11 +390,7 @@ const ProfilePage: React.FC = () => {
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => {
-              setShowAddPassword(false);
-              setPassword('');
-              setConfirmPassword('');
-            }}
+            onClick={() => setShowAddPassword(false)}
             disabled={addingPassword}
           >
             Cancel
