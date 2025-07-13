@@ -5,9 +5,10 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Loader2, AlertCircle, UserCircle, Save, ArrowLeft, UploadCloud, CreditCard } from 'lucide-react';
-import { updateUserProfile, UserProfile, uploadAvatar } from '../api/auth';
+import { updateUserProfile, UserProfile, uploadAvatar, getUserIdentities, addPassword } from '../api/auth';
 import { useNavigate } from '@tanstack/react-router';
 import { SubscriptionStatus } from '../components/subscription';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 
 const ProfilePage: React.FC = () => {
   const { profile, loading: authLoading, user, signOut, refreshProfile } = useAuth();
@@ -20,6 +21,14 @@ const ProfilePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Add password functionality
+  const [hasPasswordAuth, setHasPasswordAuth] = useState<boolean | null>(null);
+  const [showAddPassword, setShowAddPassword] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [addingPassword, setAddingPassword] = useState(false);
+  const [passwordDialogError, setPasswordDialogError] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -29,6 +38,24 @@ const ProfilePage: React.FC = () => {
     }
   }, [profile]);
 
+  useEffect(() => {
+    // Check if user has password auth
+    const checkAuthMethods = async () => {
+      try {
+        const identities = await getUserIdentities();
+        const hasEmail = identities.identities.some(id => id.provider === 'email');
+        setHasPasswordAuth(hasEmail);
+      } catch (err) {
+        console.error('Failed to check auth methods:', err);
+        setHasPasswordAuth(null);
+      }
+    };
+
+    if (user) {
+      checkAuthMethods();
+    }
+  }, [user]);
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
@@ -36,6 +63,37 @@ const ProfilePage: React.FC = () => {
       const currentPreview = URL.createObjectURL(file);
       setPreviewUrl(currentPreview);
       return () => URL.revokeObjectURL(currentPreview);
+    }
+  };
+
+  const handleAddPassword = async () => {
+    // Clear previous dialog errors
+    setPasswordDialogError(null);
+
+    if (password !== confirmPassword) {
+      setPasswordDialogError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      setPasswordDialogError('Password must be at least 6 characters');
+      return;
+    }
+
+    setAddingPassword(true);
+
+    try {
+      await addPassword(password);
+      setSuccess('Password added successfully! You can now sign in with your email and password.');
+      setShowAddPassword(false);
+      setPassword('');
+      setConfirmPassword('');
+      setPasswordDialogError(null);
+      setHasPasswordAuth(true);
+    } catch (err: any) {
+      setPasswordDialogError(err.response?.data?.detail || 'Failed to add password');
+    } finally {
+      setAddingPassword(false);
     }
   };
 
@@ -224,6 +282,23 @@ const ProfilePage: React.FC = () => {
               placeholder="Your public display name"
             />
           </div>
+
+          {/* Add Password button - only show if user doesn't have password auth */}
+          {hasPasswordAuth === false && (
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowAddPassword(true)}
+                className="w-full"
+              >
+                Add Password Authentication
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2">
+                Add a password to sign in with your email address
+              </p>
+            </div>
+          )}
           
           <div className="flex justify-between items-center pt-4">
             <Button 
@@ -265,6 +340,77 @@ const ProfilePage: React.FC = () => {
         <SubscriptionStatus />
       </div>
     </div>
+
+    {/* Add Password Dialog */}
+    <Dialog open={showAddPassword} onOpenChange={(open) => {
+      setShowAddPassword(open);
+      if (!open) {
+        // Clear form and errors when dialog closes
+        setPassword('');
+        setConfirmPassword('');
+        setPasswordDialogError(null);
+      }
+    }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Password Authentication</DialogTitle>
+          <DialogDescription>
+            Set a password to sign in with your email address
+          </DialogDescription>
+        </DialogHeader>
+        {passwordDialogError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{passwordDialogError}</AlertDescription>
+          </Alert>
+        )}
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="new-password">Password</Label>
+            <Input
+              id="new-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter a secure password"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirm Password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm your password"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setShowAddPassword(false)}
+            disabled={addingPassword}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleAddPassword}
+            disabled={addingPassword || !password || !confirmPassword}
+          >
+            {addingPassword ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Adding...
+              </>
+            ) : (
+              'Add Password'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 };

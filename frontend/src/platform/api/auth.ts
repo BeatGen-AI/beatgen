@@ -79,3 +79,35 @@ export const handleOAuthCallback = async (provider: string, code: string): Promi
   const response = await apiClient.get<LoginResponse>(`/auth/callback/${provider}?code=${code}`);
   return response.data;
 };
+
+// Identity management
+export interface UserIdentity {
+  id: string;
+  provider: string;
+  created_at: string;
+}
+
+export interface IdentitiesResponse {
+  identities: UserIdentity[];
+  email: string;
+}
+
+export const getUserIdentities = async (): Promise<IdentitiesResponse> => {
+  const response = await apiClient.get('/auth/identities');
+  return response.data;
+};
+
+export const addPassword = async (password: string): Promise<{ message: string }> => {
+  const response = await apiClient.post('/auth/add-password', { password });
+  return response.data;
+};
+
+export const linkIdentity = async (provider: string): Promise<{ url: string; provider: string }> => {
+  const response = await apiClient.post('/auth/link-identity', { provider });
+  return response.data;
+};
+
+export const unlinkIdentity = async (identityId: string): Promise<{ message: string }> => {
+  const response = await apiClient.post('/auth/unlink-identity', { identity_id: identityId });
+  return response.data;
+};

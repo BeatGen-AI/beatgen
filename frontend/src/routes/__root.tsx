@@ -121,7 +121,7 @@ function RootLayout() {
   
   // Determine if the sidebar should be shown based on the route and authentication
   // Hide navigation on studio, login, register routes and when user is not authenticated
-  const noSidebarRoutes = ['/studio', '/login', '/register'];
+  const noSidebarRoutes = ['/studio', '/login', '/register', '/complete-profile'];
   const isPublicRoute = location.pathname === '/' || noSidebarRoutes.includes(location.pathname);
   const shouldShowSidebar = !isPublicRoute && !loading && user;
 

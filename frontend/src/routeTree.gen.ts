@@ -24,6 +24,7 @@ import { Route as LoginImport } from './routes/login'
 import { Route as HomeImport } from './routes/home'
 import { Route as DrumTracksImport } from './routes/drum-tracks'
 import { Route as CreditsImport } from './routes/credits'
+import { Route as CompleteProfileImport } from './routes/complete-profile'
 import { Route as CheckoutImport } from './routes/checkout'
 import { Route as AudioTracksImport } from './routes/audio-tracks'
 import { Route as IndexImport } from './routes/index'
@@ -112,6 +113,12 @@ const CreditsRoute = CreditsImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
+const CompleteProfileRoute = CompleteProfileImport.update({
+  id: '/complete-profile',
+  path: '/complete-profile',
+  getParentRoute: () => rootRoute,
+} as any)
+
 const CheckoutRoute = CheckoutImport.update({
   id: '/checkout',
   path: '/checkout',
@@ -177,6 +184,13 @@ declare module '@tanstack/react-router' {
       path: '/checkout'
       fullPath: '/checkout'
       preLoaderRoute: typeof CheckoutImport
+      parentRoute: typeof rootRoute
+    }
+    '/complete-profile': {
+      id: '/complete-profile'
+      path: '/complete-profile'
+      fullPath: '/complete-profile'
+      preLoaderRoute: typeof CompleteProfileImport
       parentRoute: typeof rootRoute
     }
     '/credits': {
@@ -319,6 +333,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
+  '/complete-profile': typeof CompleteProfileRoute
   '/credits': typeof CreditsRoute
   '/drum-tracks': typeof DrumTracksRoute
   '/home': typeof HomeRoute
@@ -342,6 +357,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
+  '/complete-profile': typeof CompleteProfileRoute
   '/credits': typeof CreditsRoute
   '/drum-tracks': typeof DrumTracksRoute
   '/home': typeof HomeRoute
@@ -366,6 +382,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
+  '/complete-profile': typeof CompleteProfileRoute
   '/credits': typeof CreditsRoute
   '/drum-tracks': typeof DrumTracksRoute
   '/home': typeof HomeRoute
@@ -391,6 +408,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audio-tracks'
     | '/checkout'
+    | '/complete-profile'
     | '/credits'
     | '/drum-tracks'
     | '/home'
@@ -413,6 +431,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audio-tracks'
     | '/checkout'
+    | '/complete-profile'
     | '/credits'
     | '/drum-tracks'
     | '/home'
@@ -435,6 +454,7 @@ export interface FileRouteTypes {
     | '/'
     | '/audio-tracks'
     | '/checkout'
+    | '/complete-profile'
     | '/credits'
     | '/drum-tracks'
     | '/home'
@@ -459,6 +479,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AudioTracksRoute: typeof AudioTracksRoute
   CheckoutRoute: typeof CheckoutRouteWithChildren
+  CompleteProfileRoute: typeof CompleteProfileRoute
   CreditsRoute: typeof CreditsRoute
   DrumTracksRoute: typeof DrumTracksRoute
   HomeRoute: typeof HomeRoute
@@ -481,6 +502,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AudioTracksRoute: AudioTracksRoute,
   CheckoutRoute: CheckoutRouteWithChildren,
+  CompleteProfileRoute: CompleteProfileRoute,
   CreditsRoute: CreditsRoute,
   DrumTracksRoute: DrumTracksRoute,
   HomeRoute: HomeRoute,
@@ -512,6 +534,7 @@ export const routeTree = rootRoute
         "/",
         "/audio-tracks",
         "/checkout",
+        "/complete-profile",
         "/credits",
         "/drum-tracks",
         "/home",
@@ -541,6 +564,9 @@ export const routeTree = rootRoute
       "children": [
         "/checkout/return"
       ]
+    },
+    "/complete-profile": {
+      "filePath": "complete-profile.tsx"
     },
     "/credits": {
       "filePath": "credits.tsx"

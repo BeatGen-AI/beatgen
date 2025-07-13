@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Query, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from pydantic import BaseModel, EmailStr
 import urllib.parse
 
-from app2.api.dependencies import get_auth_service
+from app2.api.dependencies import get_auth_service, get_current_user, get_current_user_with_token
 from app2.services.auth_service import AuthService
 from app2.core.logging import get_api_logger
-from app2.core.exceptions import UnauthorizedException, ServiceException
+from app2.core.exceptions import UnauthorizedException, ServiceException, ValidationException
 from app2.core.config import settings
 
 # Import the schemas for compatibility with the old API
@@ -35,6 +35,43 @@ class OAuthURLResponse(BaseModel):
     """Response with OAuth URL for redirect"""
 
     url: str
+
+
+class UsernameCheckRequest(BaseModel):
+    """Request model for username availability check"""
+    
+    username: str
+
+
+class UsernameCheckResponse(BaseModel):
+    """Response for username availability check"""
+    
+    available: bool
+    message: Optional[str] = None
+
+
+class CompleteProfileRequest(BaseModel):
+    """Request model for completing profile with username"""
+    
+    username: str
+
+
+class AddPasswordRequest(BaseModel):
+    """Request model for adding password to OAuth account"""
+    
+    password: str
+
+
+class LinkIdentityRequest(BaseModel):
+    """Request model for linking an identity to existing account"""
+    
+    provider: str  # 'google', 'github', etc.
+
+
+class UnlinkIdentityRequest(BaseModel):
+    """Request model for unlinking an identity"""
+    
+    identity_id: str
 
 
 @router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
@@ -264,3 +301,250 @@ async def callback_google(
         error_redirect_url = f"{settings.app.FRONTEND_BASE_URL}?error=unexpected&error_description={error_desc}"
         logger.info(f"Redirecting to frontend with error: {error_redirect_url}")
         return RedirectResponse(error_redirect_url)
+
+
+@router.post("/check-username", response_model=UsernameCheckResponse)
+async def check_username(
+    request: UsernameCheckRequest,
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Any:
+    """
+    Check if a username is available
+    """
+    logger.info(f"Checking username availability: {request.username}")
+    try:
+        # Basic validation
+        username = request.username.strip()
+        if not username or len(username) < 3:
+            return UsernameCheckResponse(
+                available=False,
+                message="Username must be at least 3 characters long"
+            )
+        if len(username) > 30:
+            return UsernameCheckResponse(
+                available=False,
+                message="Username must be 30 characters or less"
+            )
+        if not username.replace("_", "").isalnum():
+            return UsernameCheckResponse(
+                available=False,
+                message="Username can only contain letters, numbers, and underscores"
+            )
+        
+        # Check availability
+        available = await auth_service.check_username_availability(username)
+        
+        return UsernameCheckResponse(
+            available=available,
+            message=None if available else "Username is already taken"
+        )
+    except Exception as e:
+        logger.error(f"Error checking username availability: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to check username availability"
+        )
+
+
+@router.post("/complete-profile")
+async def complete_profile(
+    request: CompleteProfileRequest,
+    current_user: dict = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Any:
+    """
+    Complete user profile by setting username (for OAuth users)
+    """
+    user_id = current_user.get("id")  # The user ID from the auth service
+    logger.info(f"Completing profile for user {user_id} with username: {request.username}")
+    
+    try:
+        # Complete the profile
+        updated_user = await auth_service.complete_profile(
+            user_id=user_id,
+            username=request.username.strip()
+        )
+        
+        return {
+            "message": "Profile completed successfully",
+            "user": {
+                "id": str(updated_user.id),
+                "email": updated_user.email,
+                "username": updated_user.username,
+                "display_name": updated_user.display_name
+            }
+        }
+    except ValidationException as e:
+        logger.warning(f"Validation error completing profile: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error completing profile: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to complete profile"
+        )
+
+
+@router.get("/profile-status")
+async def profile_status(
+    current_user: dict = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Any:
+    """
+    Check if user's profile is complete (has username)
+    """
+    user_id = current_user.get("id")
+    logger.info(f"Checking profile status for user {user_id}")
+    
+    try:
+        is_complete = await auth_service.check_profile_complete(user_id)
+        return {
+            "profile_complete": is_complete,
+            "needs_username": not is_complete
+        }
+    except Exception as e:
+        logger.error(f"Error checking profile status: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to check profile status"
+        )
+
+
+@router.post("/add-password")
+async def add_password(
+    request: AddPasswordRequest,
+    current_user: dict = Depends(get_current_user_with_token),
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Any:
+    """
+    Add password authentication to an OAuth user account
+    """
+    user_id = current_user.get("id")  # Supabase auth ID
+    access_token = current_user.get("access_token")  # We need the token for the update
+    
+    logger.info(f"Adding password auth for user {user_id}")
+    
+    try:
+        # Validate password
+        if len(request.password) < 6:
+            raise ValidationException("Password must be at least 6 characters long")
+        
+        # Add password to the user
+        success = await auth_service.add_password_to_oauth_user(
+            user_id=user_id,
+            password=request.password,
+            access_token=access_token
+        )
+        
+        if success:
+            return {"message": "Password added successfully"}
+        else:
+            raise ServiceException("Failed to add password")
+            
+    except ValidationException as e:
+        logger.warning(f"Validation error adding password: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error adding password: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to add password"
+        )
+
+
+@router.get("/identities")
+async def get_identities(
+    current_user: dict = Depends(get_current_user_with_token),
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Any:
+    """
+    Get all linked identities for the current user
+    """
+    user_id = current_user.get("id")
+    logger.info(f"Getting identities for user {user_id}")
+    
+    try:
+        access_token = current_user.get("access_token")
+        identities = await auth_service.get_user_identities(user_id, access_token)
+        return identities
+    except Exception as e:
+        logger.error(f"Error getting identities: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get identities"
+        )
+
+
+@router.post("/link-identity")
+async def link_identity(
+    request: LinkIdentityRequest,
+    current_user: dict = Depends(get_current_user_with_token),
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Any:
+    """
+    Link a new identity (Google, GitHub, etc.) to existing account
+    """
+    user_id = current_user.get("id")
+    access_token = current_user.get("access_token")
+    
+    logger.info(f"Linking {request.provider} identity for user {user_id}")
+    
+    try:
+        result = await auth_service.link_identity_to_user(
+            user_id=user_id,
+            provider=request.provider,
+            access_token=access_token
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error linking identity: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to link {request.provider} identity"
+        )
+
+
+@router.post("/unlink-identity")
+async def unlink_identity(
+    request: UnlinkIdentityRequest,
+    current_user: dict = Depends(get_current_user_with_token),
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Any:
+    """
+    Unlink an identity from the user's account
+    """
+    user_id = current_user.get("id")
+    access_token = current_user.get("access_token")
+    
+    logger.info(f"Unlinking identity {request.identity_id} for user {user_id}")
+    
+    try:
+        success = await auth_service.unlink_identity(
+            user_id=user_id,
+            identity_id=request.identity_id,
+            access_token=access_token
+        )
+        
+        if success:
+            return {"message": "Identity unlinked successfully"}
+        else:
+            raise ServiceException("Failed to unlink identity")
+            
+    except ValidationException as e:
+        logger.warning(f"Validation error unlinking identity: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error unlinking identity: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to unlink identity"
+        )
