@@ -55,10 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userProfile = await getUserProfile();
       console.log('Profile refreshed successfully:', userProfile);
       setProfile(userProfile);
+      return userProfile; // Return the profile so it can be reused
     } catch (error) {
       console.error('Failed to refresh user profile:', error);
       // Optionally handle profile refresh error, e.g., by signing out
       // setProfile(null); // Or keep stale profile
+      return null;
     }
   };
 
@@ -76,18 +78,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: decodedToken.sub || 'unknown',
           email: decodedToken.email || decodedToken.sub || '',
         });
-        await fetchProfile(); // Use the new fetchProfile function
+        const userProfile = await fetchProfile(); // Use the new fetchProfile function and get the profile
         
         // Check if profile needs completion (OAuth users without username)
-        try {
-          const userProfile = await getUserProfile();
-          if (!userProfile.username && window.location.pathname !== '/complete-profile') {
-            // Profile incomplete, redirect to complete-profile
-            console.log('Profile incomplete, redirecting to complete-profile');
-            window.location.href = '/complete-profile';
-          }
-        } catch (error) {
-          console.error('Error checking profile completion:', error);
+        if (userProfile && !userProfile.username && window.location.pathname !== '/complete-profile') {
+          // Profile incomplete, redirect to complete-profile
+          console.log('Profile incomplete, redirecting to complete-profile');
+          window.location.href = '/complete-profile';
         }
       } else {
         console.warn('Token is expired or invalid, removing');
