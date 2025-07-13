@@ -781,6 +781,19 @@ class AuthService:
                 if response.status_code != 200:
                     error_msg = f"Failed to update password: {response.status_code} - {response.text}"
                     logger.error(error_msg)
+                    
+                    # Try to parse the error response for a user-friendly message
+                    try:
+                        error_data = response.json()
+                        if 'msg' in error_data:
+                            raise ServiceException(error_data['msg'])
+                        elif 'message' in error_data:
+                            raise ServiceException(error_data['message'])
+                        elif 'error' in error_data:
+                            raise ServiceException(error_data['error'])
+                    except:
+                        pass
+                    
                     raise ServiceException(error_msg)
                 
                 logger.info("Password updated successfully")

@@ -233,9 +233,21 @@ async def reset_password(
         )
     except Exception as e:
         logger.error(f"Password reset failed: {str(e)}")
+        # Pass through the actual error message
+        error_message = str(e)
+        
+        # Extract user-friendly message if it's buried in the exception
+        if "New password should be different" in error_message:
+            error_message = "New password must be different from your current password"
+        elif "same_password" in error_message:
+            error_message = "New password cannot be the same as your current password"
+        elif "Failed to reset password" in error_message:
+            # Generic message, try to extract more detail
+            error_message = "Failed to reset password. Please try again."
+            
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reset password"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_message
         )
 
 
