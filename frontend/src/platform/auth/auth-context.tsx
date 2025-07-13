@@ -104,6 +104,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const hash = window.location.hash.substring(1); // Remove #
           const params = new URLSearchParams(hash);
           const accessToken = params.get('access_token');
+          const type = params.get('type');
+
+          // Skip processing if this is a recovery token (password reset)
+          if (type === 'recovery') {
+            console.log('Recovery token detected, skipping auth processing');
+            setLoading(false);
+            return;
+          }
 
           if (accessToken) {
             await processToken(accessToken);

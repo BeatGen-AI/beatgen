@@ -87,6 +87,14 @@ class AudioConfig(BaseModel):
     PPQ: int = 480
 
 
+class ResendConfig(BaseModel):
+    """Resend email configuration"""
+    
+    API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    FROM_EMAIL: str = os.getenv("RESEND_FROM_EMAIL", "noreply@beatgen.com")
+    FROM_NAME: str = os.getenv("RESEND_FROM_NAME", "BeatGen")
+
+
 class StripeConfig(BaseModel):
     """Stripe payment configuration"""
     
@@ -137,6 +145,7 @@ class Settings(BaseModel):
     cors: CORSConfig = CORSConfig()
     db: DatabaseConfig = DatabaseConfig()
     audio: AudioConfig = AudioConfig()
+    resend: ResendConfig = ResendConfig()
     stripe: StripeConfig = StripeConfig()
 
     class Config:
@@ -161,3 +170,5 @@ stripe_env = "PROD_STRIPE" if settings.app.APP_ENV == "prod" else "DEV_STRIPE"
 logger.info(f"Loaded Settings - Stripe Environment: {stripe_env}")
 logger.info(f"Loaded Settings - Stripe Secret Key: {'Set' if settings.stripe.SECRET_KEY else 'Not Set'}")
 logger.info(f"Loaded Settings - Stripe Publishable Key: {'Set' if settings.stripe.PUBLISHABLE_KEY else 'Not Set'}")
+logger.info(f"Loaded Settings - Resend API Key: {'Set' if settings.resend.API_KEY else 'Not Set'}")
+logger.info(f"Loaded Settings - Resend From Email: {settings.resend.FROM_EMAIL}")

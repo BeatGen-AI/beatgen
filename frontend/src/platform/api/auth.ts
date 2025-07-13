@@ -38,8 +38,28 @@ export const signIn = async (email: string, password: string): Promise<LoginResp
   return response.data;
 };
 
-export const requestPasswordReset = async (email: string): Promise<void> => {
-  await apiClient.post('/auth/forgot-password', { email });
+export const requestPasswordReset = async (email: string, redirectTo?: string): Promise<void> => {
+  await apiClient.post('/auth/forgot-password', { 
+    email, 
+    redirect_to: redirectTo 
+  });
+};
+
+export const updatePasswordWithToken = async (password: string, token: string): Promise<void> => {
+  // Temporarily set the token for this request
+  const originalToken = localStorage.getItem('access_token');
+  localStorage.setItem('access_token', token);
+  
+  try {
+    await apiClient.post('/auth/reset-password', { password });
+  } finally {
+    // Restore original token or clear if none
+    if (originalToken) {
+      localStorage.setItem('access_token', originalToken);
+    } else {
+      localStorage.removeItem('access_token');
+    }
+  }
 };
 
 export const getUserProfile = async (): Promise<UserProfile> => {

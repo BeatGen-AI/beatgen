@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
 import { publicRoute } from '../platform/auth/auth-utils.tsx'
 import { useAuth } from '../platform/auth/auth-context'
+import PasswordResetModal from '../platform/components/PasswordResetModal'
 
 // Shadcn/ui and lucide-react imports
 import { Button } from "../components/ui/button"
@@ -48,6 +49,7 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,6 +156,16 @@ function LoginPage() {
                 disabled={isLoading || isGoogleLoading}
               />
             </div>
+            <div className="flex justify-end mt-2">
+              <Button
+                type="button"
+                variant="link"
+                className="text-sm text-primary hover:underline"
+                onClick={() => setShowPasswordReset(true)}
+              >
+                Forgot password?
+              </Button>
+            </div>
           </div>
 
           <div>
@@ -215,6 +227,12 @@ function LoginPage() {
           </div>
         </form>
       </div>
+      
+      {/* Password Reset Modal */}
+      <PasswordResetModal
+        open={showPasswordReset}
+        onOpenChange={setShowPasswordReset}
+      />
     </div>
   );
 }

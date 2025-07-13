@@ -60,11 +60,19 @@ function RootLayout() {
   // Simple studio route detection using router location
   const isStudioRoute = location.pathname === '/studio';
   
-  // Handle OAuth callbacks
+  // Handle OAuth callbacks and password reset tokens
   useEffect(() => {
-    const handleOAuth = async () => {
+    const handleAuthCallbacks = async () => {
       // Check if this is an OAuth callback
       if (typeof window !== 'undefined') {
+        // Check for password reset token in hash
+        const hash = window.location.hash;
+        if (hash && hash.includes('type=recovery') && location.pathname !== '/reset-password') {
+          // Redirect to reset-password page with the hash intact
+          window.location.href = `/reset-password${hash}`;
+          return;
+        }
+        
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
         const isGoogleCallback = window.location.pathname.includes('/api/auth/callback/google');
@@ -93,8 +101,8 @@ function RootLayout() {
       }
     };
     
-    handleOAuth();
-  }, []);
+    handleAuthCallbacks();
+  }, [location.pathname]);
   
   // Define themes inline or import them if preferred
   const lightTheme = { background: '#ffffff', text: '#000000' }; // Simplified for example
@@ -121,7 +129,7 @@ function RootLayout() {
   
   // Determine if the sidebar should be shown based on the route and authentication
   // Hide navigation on studio, login, register routes and when user is not authenticated
-  const noSidebarRoutes = ['/studio', '/login', '/register', '/complete-profile'];
+  const noSidebarRoutes = ['/studio', '/login', '/register', '/complete-profile', '/reset-password', '/oauth-callback'];
   const isPublicRoute = location.pathname === '/' || noSidebarRoutes.includes(location.pathname);
   const shouldShowSidebar = !isPublicRoute && !loading && user;
 

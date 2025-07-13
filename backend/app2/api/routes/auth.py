@@ -23,6 +23,7 @@ class ForgotPasswordRequest(BaseModel):
     """Request model for password reset"""
 
     email: EmailStr
+    redirect_to: Optional[str] = None
 
 
 class MessageResponse(BaseModel):
@@ -72,6 +73,12 @@ class UnlinkIdentityRequest(BaseModel):
     """Request model for unlinking an identity"""
     
     identity_id: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request model for resetting password with token"""
+    
+    password: str
 
 
 @router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
@@ -163,7 +170,7 @@ async def login(
 
 @router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(
-    email: str,  # Changed to simple string parameter to match old API
+    request: ForgotPasswordRequest,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> Any:
     """
@@ -171,17 +178,65 @@ async def forgot_password(
 
     For security reasons, always returns success whether the email exists or not.
     """
-    logger.info(f"Processing password reset request for email: {email}")
+    logger.info(f"Processing password reset request for email: {request.email}")
     try:
         # Call Supabase auth service to send reset password email
-        await auth_service.send_password_reset(email)
-        logger.info(f"Password reset email sent to: {email}")
+        await auth_service.send_password_reset(request.email, request.redirect_to)
+        logger.info(f"Password reset email sent to: {request.email}")
     except Exception as e:
         # Log the error but don't expose it to the client
         logger.error(f"Password reset failed: {str(e)}")
 
     # Always return the same message whether successful or not for security
     return {"message": "If the email exists, a password reset link will be sent"}
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    request: ResetPasswordRequest,
+    current_user: dict = Depends(get_current_user_with_token),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> Any:
+    """
+    Reset password using recovery token from email
+    
+    The user must be authenticated with the recovery token from the email
+    """
+    user_id = current_user.get("id")
+    access_token = current_user.get("access_token")
+    
+    logger.info(f"Processing password reset for user: {user_id}")
+    
+    try:
+        # Validate password strength
+        if len(request.password) < 8:
+            raise ValidationException("Password must be at least 8 characters long")
+        
+        # Update the password using the recovery token
+        success = await auth_service.update_password_with_token(
+            user_id=user_id,
+            password=request.password,
+            access_token=access_token
+        )
+        
+        if success:
+            logger.info(f"Password reset successful for user: {user_id}")
+            return {"message": "Password has been reset successfully"}
+        else:
+            raise ServiceException("Failed to reset password")
+            
+    except ValidationException as e:
+        logger.warning(f"Validation error during password reset: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Password reset failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset password"
+        )
 
 
 @router.get("/login/google", response_model=OAuthURLResponse)
