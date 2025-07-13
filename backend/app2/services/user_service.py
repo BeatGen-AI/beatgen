@@ -10,6 +10,7 @@ from app2.core.exceptions import (
     UnauthorizedException,
 )
 from app2.repositories.user_repository import UserRepository
+from app2.models.user import User
 from app2.infrastructure.database.supabase_client import supabase
 
 logger = get_service_logger("user")
@@ -27,7 +28,7 @@ class UserService:
         """
         self.user_repository = user_repository
 
-    async def get_profile_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+    async def get_profile_by_email(self, email: str) -> Optional[User]:
         """
         Get a user's profile by email
         
@@ -52,9 +53,9 @@ class UserService:
         except Exception as e:
             logger.error(f"Error getting user profile by email: {str(e)}")
             logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to get user profile by email: {str(e)}")
+            raise ServiceException(f"Failed to get user profile by email: {str(e)}") from e
 
-    async def get_profile(self, user_id: str) -> Dict[str, Any]:
+    async def get_profile(self, user_id: str) -> User:
         """
         Get a user's profile
 
@@ -78,11 +79,11 @@ class UserService:
                 raise
             logger.error(f"Error getting user profile: {str(e)}")
             logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to get user profile: {str(e)}")
+            raise ServiceException(f"Failed to get user profile: {str(e)}") from e
 
     async def update_profile(
         self, user_id: str, profile_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    ) -> User:
         """
         Update a user's profile
 
@@ -114,7 +115,7 @@ class UserService:
                 raise
             logger.error(f"Error updating user profile: {str(e)}")
             logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to update user profile: {str(e)}")
+            raise ServiceException(f"Failed to update user profile: {str(e)}") from e
 
     async def change_password(
         self, user_id: str, current_password: str, new_password: str
@@ -168,7 +169,7 @@ class UserService:
                 raise
             logger.error(f"Error changing password: {str(e)}")
             logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to change password: {str(e)}")
+            raise ServiceException(f"Failed to change password: {str(e)}") from e
 
     async def update_avatar(self, user_id: str, file: UploadFile) -> Dict[str, Any]:
         """
