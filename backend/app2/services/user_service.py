@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import traceback
 import uuid # For generating unique filenames
 from fastapi import UploadFile # For type hinting
@@ -26,6 +26,33 @@ class UserService:
             user_repository: The repository for user operations
         """
         self.user_repository = user_repository
+
+    async def get_profile_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a user's profile by email
+        
+        Args:
+            email: The email of the user
+            
+        Returns:
+            The user profile or None if not found
+            
+        Raises:
+            ServiceException: If the operation fails
+        """
+        logger.info(f"Getting profile for email: {email}")
+        try:
+            profile = await self.user_repository.find_by_email(email)
+            if profile:
+                logger.info(f"Found profile for email: {email}")
+                return profile
+            else:
+                logger.info(f"No profile found for email: {email}")
+                return None
+        except Exception as e:
+            logger.error(f"Error getting user profile by email: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise ServiceException(f"Failed to get user profile by email: {str(e)}")
 
     async def get_profile(self, user_id: str) -> Dict[str, Any]:
         """

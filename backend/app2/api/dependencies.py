@@ -10,6 +10,7 @@ from app2.infrastructure.database.sqlmodel_client import get_session
 
 
 from app2.repositories.user_repository import UserRepository
+from app2.repositories.auth_identity_repository import AuthIdentityRepository
 from app2.repositories.project_repository import ProjectRepository
 from app2.repositories.project_track_repository import ProjectTrackRepository
 from app2.repositories.file_repository import FileRepository
@@ -39,6 +40,11 @@ SessionDep = Annotated[Session, Depends(get_session)]
 def get_user_repository(session: SessionDep) -> UserRepository:
     """Get the user repository instance"""
     return UserRepository(session)
+
+
+def get_auth_identity_repository(session: SessionDep) -> AuthIdentityRepository:
+    """Get the auth identity repository instance"""
+    return AuthIdentityRepository(session)
 
 
 def get_project_repository(session: SessionDep) -> ProjectRepository:
@@ -86,9 +92,12 @@ def get_drum_sample_public_repository(
 # Service instances
 def get_auth_service(
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
+    auth_identity_repository: Annotated[
+        AuthIdentityRepository, Depends(get_auth_identity_repository)
+    ],
 ) -> AuthService:
     """Get the auth service instance"""
-    return AuthService(user_repository)
+    return AuthService(user_repository, auth_identity_repository)
 
 
 def get_user_service(
@@ -168,6 +177,33 @@ async def get_current_user(
     """
     try:
         return await auth_service.get_current_user(token)
+    except Exception as e:
+        logger.error(f"Authentication error: {str(e)}")
+        raise UnauthorizedException("Could not validate credentials")
+
+
+async def get_current_user_with_token(
+    token: str = Depends(oauth2_scheme),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> Dict[str, Any]:
+    """
+    Get the current authenticated user with access token included
+    
+    Args:
+        token: The JWT token from the request
+        auth_service: The auth service
+        
+    Returns:
+        The user info with access_token included
+        
+    Raises:
+        UnauthorizedException: If the token is invalid
+    """
+    try:
+        user_info = await auth_service.get_current_user(token)
+        # Add the access token to the user info for operations that need it
+        user_info["access_token"] = token
+        return user_info
     except Exception as e:
         logger.error(f"Authentication error: {str(e)}")
         raise UnauthorizedException("Could not validate credentials")

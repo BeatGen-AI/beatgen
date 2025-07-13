@@ -77,6 +77,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: decodedToken.email || decodedToken.sub || '',
         });
         await fetchProfile(); // Use the new fetchProfile function
+        
+        // Check if profile needs completion (OAuth users without username)
+        try {
+          const userProfile = await getUserProfile();
+          if (!userProfile.username && window.location.pathname !== '/complete-profile') {
+            // Profile incomplete, redirect to complete-profile
+            console.log('Profile incomplete, redirecting to complete-profile');
+            window.location.href = '/complete-profile';
+          }
+        } catch (error) {
+          console.error('Error checking profile completion:', error);
+        }
       } else {
         console.warn('Token is expired or invalid, removing');
         localStorage.removeItem('access_token');

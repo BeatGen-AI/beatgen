@@ -5,7 +5,7 @@ import { ApiError } from './types';
 // In development, use a relative URL to leverage Vite's proxy
 // In production, this would be the actual API URL
 // The backend has redirect_slashes=False, but we need to be consistent with URL formats
-const API_URL = import.meta.env.DEV ? '' : 'https://api.beatgen.com';
+const API_URL = import.meta.env.VITE_APP_ENV === 'dev' || import.meta.env.DEV ? 'https://localhost:8000' : 'https://api.beatgen.com';
 
 export const apiClient = axios.create({
   baseURL: API_URL,
