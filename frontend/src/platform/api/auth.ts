@@ -38,8 +38,23 @@ export const signIn = async (email: string, password: string): Promise<LoginResp
   return response.data;
 };
 
-export const requestPasswordReset = async (email: string): Promise<void> => {
-  await apiClient.post('/auth/forgot-password', { email });
+export const requestPasswordReset = async (email: string, redirectTo?: string): Promise<void> => {
+  await apiClient.post('/auth/forgot-password', { 
+    email, 
+    redirect_to: redirectTo 
+  });
+};
+
+export const updatePasswordWithToken = async (password: string, token: string): Promise<void> => {
+  // Send the recovery token as a custom header without modifying localStorage
+  await apiClient.post('/auth/reset-password', 
+    { password },
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }
+  );
 };
 
 export const getUserProfile = async (): Promise<UserProfile> => {

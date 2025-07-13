@@ -1,36 +1,25 @@
+import React, { useState } from 'react';
 import { 
-  Modal, 
-  Box, 
-  Typography, 
-  TextField, 
-  Button,
-  IconButton,
-  CircularProgress,
-  Alert
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import { useState } from 'react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '../../components/ui/dialog';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { requestPasswordReset } from '../api/auth';
-
-const style = {
-  position: 'absolute',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
-  width: 400,
-  bgcolor: 'background.paper',
-  borderRadius: 2,
-  boxShadow: 24,
-  p: 4,
-};
 
 interface PasswordResetModalProps {
   open: boolean;
-  onClose: () => void;
-  onLoginClick?: () => void;
+  onOpenChange: (open: boolean) => void;
 }
 
-export default function PasswordResetModal({ open, onClose, onLoginClick }: PasswordResetModalProps) {
+export default function PasswordResetModal({ open, onOpenChange }: PasswordResetModalProps) {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +32,21 @@ export default function PasswordResetModal({ open, onClose, onLoginClick }: Pass
     setSuccess(false);
     
     try {
-      await requestPasswordReset(email);
+      // Use the current origin for redirect URL to ensure it works in dev and prod
+      const baseUrl = window.location.origin;
+      const redirectUrl = `${baseUrl}/reset-password`;
+      
+      console.log('Password reset request:', { email, redirectUrl, baseUrl });
+      
+      await requestPasswordReset(email, redirectUrl);
       setSuccess(true);
+      
+      // Clear form after 5 seconds
+      setTimeout(() => {
+        setSuccess(false);
+        setEmail('');
+        onOpenChange(false);
+      }, 5000);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'An unexpected error occurred');
       console.error(err);
@@ -52,86 +54,83 @@ export default function PasswordResetModal({ open, onClose, onLoginClick }: Pass
       setIsLoading(false);
     }
   };
+
+  // Reset state when dialog closes
+  React.useEffect(() => {
+    if (!open) {
+      setEmail('');
+      setError(null);
+      setSuccess(false);
+    }
+  }, [open]);
   
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      aria-labelledby="password-reset-modal-title"
-    >
-      <Box sx={style}>
-        <IconButton
-          aria-label="close"
-          onClick={onClose}
-          sx={{
-            position: 'absolute',
-            right: 8,
-            top: 8,
-            color: 'grey.500',
-          }}
-        >
-          <CloseIcon />
-        </IconButton>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Reset Your Password</DialogTitle>
+          <DialogDescription>
+            Enter your email address and we'll send you instructions to reset your password.
+          </DialogDescription>
+        </DialogHeader>
 
-        <Typography id="password-reset-modal-title" variant="h6" component="h2" sx={{ mb: 3 }}>
-          Reset Your Password
-        </Typography>
-
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            Password reset instructions have been sent to your email.
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
         
-        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField
-            required
-            label="Email"
-            type="email"
-            fullWidth
-            variant="outlined"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={isLoading || success}
-          />
+        {success && (
+          <Alert className="bg-green-100 border-green-400 text-green-700">
+            <AlertCircle className="h-4 w-4 text-green-500" />
+            <AlertTitle>Success</AlertTitle>
+            <AlertDescription>
+              Password reset instructions have been sent to your email.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email address</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading || success}
+              required
+            />
+          </div>
 
-          <Button 
-            variant="contained" 
-            type="submit"
-            disabled={isLoading || success}
-            sx={{ 
-              mt: 2,
-              bgcolor: '#1a237e',
-              '&:hover': {
-                bgcolor: '#000051'
-              }
-            }}
-          >
-            {isLoading ? <CircularProgress size={24} color="inherit" /> : 'Send Reset Instructions'}
-          </Button>
-
-          <Typography variant="body2" sx={{ mt: 2, textAlign: 'center' }}>
-            Remembered your password?{' '}
+          <DialogFooter>
             <Button 
-              variant="text" 
-              sx={{ 
-                p: 0, 
-                textTransform: 'none',
-                color: '#1a237e'
-              }}
-              onClick={() => {
-                onClose();
-                if (onLoginClick) {
-                  onLoginClick();
-                }
-              }}
+              type="button"
+              variant="outline" 
+              onClick={() => onOpenChange(false)}
+              disabled={isLoading}
             >
-              Log in
+              Cancel
             </Button>
-          </Typography>
-        </Box>
-      </Box>
-    </Modal>
+            <Button 
+              type="submit"
+              disabled={isLoading || success}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                'Send Reset Instructions'
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

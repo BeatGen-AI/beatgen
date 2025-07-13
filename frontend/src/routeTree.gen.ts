@@ -14,6 +14,7 @@ import { Route as rootRoute } from './routes/__root'
 import { Route as StudioImport } from './routes/studio'
 import { Route as SettingsImport } from './routes/settings'
 import { Route as SamplerTracksImport } from './routes/sampler-tracks'
+import { Route as ResetPasswordImport } from './routes/reset-password'
 import { Route as RegisterImport } from './routes/register'
 import { Route as ProjectsImport } from './routes/projects'
 import { Route as ProfileImport } from './routes/profile'
@@ -50,6 +51,12 @@ const SettingsRoute = SettingsImport.update({
 const SamplerTracksRoute = SamplerTracksImport.update({
   id: '/sampler-tracks',
   path: '/sampler-tracks',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const ResetPasswordRoute = ResetPasswordImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -263,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterImport
       parentRoute: typeof rootRoute
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordImport
+      parentRoute: typeof rootRoute
+    }
     '/sampler-tracks': {
       id: '/sampler-tracks'
       path: '/sampler-tracks'
@@ -344,6 +358,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sampler-tracks': typeof SamplerTracksRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
@@ -368,6 +383,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sampler-tracks': typeof SamplerTracksRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
@@ -393,6 +409,7 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
   '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sampler-tracks': typeof SamplerTracksRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
@@ -419,6 +436,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/projects'
     | '/register'
+    | '/reset-password'
     | '/sampler-tracks'
     | '/settings'
     | '/studio'
@@ -442,6 +460,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/projects'
     | '/register'
+    | '/reset-password'
     | '/sampler-tracks'
     | '/settings'
     | '/studio'
@@ -465,6 +484,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/projects'
     | '/register'
+    | '/reset-password'
     | '/sampler-tracks'
     | '/settings'
     | '/studio'
@@ -490,6 +510,7 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   ProjectsRoute: typeof ProjectsRoute
   RegisterRoute: typeof RegisterRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SamplerTracksRoute: typeof SamplerTracksRoute
   SettingsRoute: typeof SettingsRoute
   StudioRoute: typeof StudioRoute
@@ -513,6 +534,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   ProjectsRoute: ProjectsRoute,
   RegisterRoute: RegisterRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SamplerTracksRoute: SamplerTracksRoute,
   SettingsRoute: SettingsRoute,
   StudioRoute: StudioRoute,
@@ -545,6 +567,7 @@ export const routeTree = rootRoute
         "/profile",
         "/projects",
         "/register",
+        "/reset-password",
         "/sampler-tracks",
         "/settings",
         "/studio",
@@ -597,6 +620,9 @@ export const routeTree = rootRoute
     },
     "/register": {
       "filePath": "register.tsx"
+    },
+    "/reset-password": {
+      "filePath": "reset-password.tsx"
     },
     "/sampler-tracks": {
       "filePath": "sampler-tracks.tsx"

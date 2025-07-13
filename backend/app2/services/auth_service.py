@@ -211,12 +211,13 @@ class AuthService:
                 raise UnauthorizedException("Invalid email or password")
             raise ServiceException(f"Authentication failed: {str(e)}")
 
-    async def send_password_reset(self, email: str) -> bool:
+    async def send_password_reset(self, email: str, redirect_to: Optional[str] = None) -> bool:
         """
         Send password reset email
 
         Args:
             email: User's email address
+            redirect_to: Optional URL to redirect to after password reset
 
         Returns:
             True if email was sent successfully
@@ -226,8 +227,19 @@ class AuthService:
         """
         logger.info(f"Sending password reset email to: {email}")
         try:
+            # Prepare options with redirect URL if provided
+            options = {}
+            if redirect_to:
+                options['redirect_to'] = redirect_to
+                logger.info(f"Password reset will redirect to: {redirect_to}")
+            else:
+                # Default redirect to frontend reset password page
+                default_redirect = f"{settings.app.FRONTEND_BASE_URL}/reset-password"
+                options['redirect_to'] = default_redirect
+                logger.info(f"Using default redirect: {default_redirect}")
+            
             # Use Supabase Auth to send password reset email
-            supabase.client.auth.reset_password_email(email)
+            supabase.client.auth.reset_password_email(email, options)
             logger.info(f"Password reset email sent to: {email}")
             return True
         except Exception as e:
@@ -736,6 +748,63 @@ class AuthService:
         except Exception as e:
             logger.error(f"Error adding password auth: {str(e)}")
             raise ServiceException(f"Failed to add password: {str(e)}")
+
+    async def update_password_with_token(
+        self, user_id: str, password: str, access_token: str
+    ) -> bool:
+        """
+        Update password using a recovery token from password reset email
+        
+        Args:
+            user_id: The user's ID
+            password: The new password
+            access_token: The recovery token from the password reset email
+            
+        Returns:
+            True if successful
+        """
+        try:
+            logger.info(f"Updating password for user {user_id} with recovery token")
+            
+            # Update the user's password using the recovery token
+            url = f"{settings.supabase.URL}/auth/v1/user"
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "apikey": settings.supabase.KEY,
+                "Content-Type": "application/json"
+            }
+            data = {"password": password}
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.put(url, json=data, headers=headers)
+                
+                if response.status_code != 200:
+                    error_msg = f"Failed to update password: {response.status_code} - {response.text}"
+                    logger.error(error_msg)
+                    
+                    # Try to parse the error response for a user-friendly message
+                    try:
+                        error_data = response.json()
+                        if 'msg' in error_data:
+                            raise ServiceException(error_data['msg'])
+                        elif 'message' in error_data:
+                            raise ServiceException(error_data['message'])
+                        elif 'error' in error_data:
+                            raise ServiceException(error_data['error'])
+                    except:
+                        pass
+                    
+                    raise ServiceException(error_msg)
+                
+                logger.info("Password updated successfully")
+                return True
+                
+        except httpx.RequestError as e:
+            logger.error(f"Request error updating password: {str(e)}")
+            raise ServiceException(f"Failed to update password: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error updating password: {str(e)}")
+            raise ServiceException(f"Failed to update password: {str(e)}")
 
     async def handle_google_callback(
         self, code: str, request: Request, response: Response
