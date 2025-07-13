@@ -18,6 +18,9 @@ from app2.models.user import UserCreate
 router = APIRouter()
 logger = get_api_logger("auth")
 
+# Password validation constants
+MIN_PASSWORD_LENGTH = 8
+
 
 class ForgotPasswordRequest(BaseModel):
     """Request model for password reset"""
@@ -209,8 +212,8 @@ async def reset_password(
     
     try:
         # Validate password strength
-        if len(request.password) < 8:
-            raise ValidationException("Password must be at least 8 characters long")
+        if len(request.password) < MIN_PASSWORD_LENGTH:
+            raise ValidationException(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
         
         # Update the password using the recovery token
         success = await auth_service.update_password_with_token(
@@ -230,7 +233,7 @@ async def reset_password(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Password reset failed: {str(e)}")
         # Pass through the actual error message
@@ -248,7 +251,7 @@ async def reset_password(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_message
-        )
+        ) from e
 
 
 @router.get("/login/google", response_model=OAuthURLResponse)
@@ -496,8 +499,8 @@ async def add_password(
     
     try:
         # Validate password
-        if len(request.password) < 6:
-            raise ValidationException("Password must be at least 6 characters long")
+        if len(request.password) < MIN_PASSWORD_LENGTH:
+            raise ValidationException(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
         
         # Add password to the user
         success = await auth_service.add_password_to_oauth_user(

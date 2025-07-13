@@ -46,20 +46,15 @@ export const requestPasswordReset = async (email: string, redirectTo?: string): 
 };
 
 export const updatePasswordWithToken = async (password: string, token: string): Promise<void> => {
-  // Temporarily set the token for this request
-  const originalToken = localStorage.getItem('access_token');
-  localStorage.setItem('access_token', token);
-  
-  try {
-    await apiClient.post('/auth/reset-password', { password });
-  } finally {
-    // Restore original token or clear if none
-    if (originalToken) {
-      localStorage.setItem('access_token', originalToken);
-    } else {
-      localStorage.removeItem('access_token');
+  // Send the recovery token as a custom header without modifying localStorage
+  await apiClient.post('/auth/reset-password', 
+    { password },
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
     }
-  }
+  );
 };
 
 export const getUserProfile = async (): Promise<UserProfile> => {
