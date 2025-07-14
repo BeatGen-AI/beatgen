@@ -110,6 +110,7 @@ export function useProjectPrefetch() {
     });
 
     let cachedCount = 0;
+    let failedCount = 0;
     
     for (const track of audioTracks) {
       try {
@@ -137,11 +138,23 @@ export function useProjectPrefetch() {
         }
       } catch (error) {
         console.error(`Failed to prefetch audio for track ${track.id}:`, error);
+        failedCount++;
       }
     }
 
+    // Determine final status based on success/failure ratio
+    let finalStatus: 'success' | 'error';
+    if (cachedCount === audioTracks.length) {
+      finalStatus = 'success';
+    } else if (cachedCount === 0) {
+      finalStatus = 'error';
+    } else {
+      // Partial success - some cached, some failed
+      finalStatus = 'error'; // Mark as error so it will retry next time
+    }
+    
     updateStatus(projectId, { 
-      audioStatus: cachedCount === audioTracks.length ? 'success' : 'error',
+      audioStatus: finalStatus,
       audioProgress: 100 
     });
   }, [updateStatus, prefetchStatuses]);
