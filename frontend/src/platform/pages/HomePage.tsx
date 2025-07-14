@@ -79,7 +79,7 @@ export default function HomePage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userIsAuthenticated = isAuthenticated();
-  const { prefetchProject, getPrefetchStatus } = useProjectPrefetch();
+  const { prefetchProject, getPrefetchStatus, isProjectCached } = useProjectPrefetch();
 
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
   const [currentPageApi, setCurrentPageApi] = useState<number>(1);
@@ -108,6 +108,8 @@ export default function HomePage() {
     queryKey: ['projects', currentPageApi, PROJECTS_PER_PAGE_API],
     queryFn: () => getProjects(currentPageApi, PROJECTS_PER_PAGE_API),
     placeholderData: (previousData) => previousData,
+    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
+    gcTime: 1000 * 60 * 30, // Keep in cache for 30 minutes
   });
   
   const totalProjectsOnServer = projectsData?.total_items ?? 0;
@@ -137,18 +139,17 @@ export default function HomePage() {
     // Prefetch each visible project (the hook already checks if cached)
     visibleProjects.forEach(project => {
       if (project.id) {
-        // Check if already cached before prefetching
-        const status = getPrefetchStatus(project.id);
-        const isAlreadyCached = status?.metadataStatus === 'success';
+        // Check if already fully cached (metadata + audio + soundfonts)
+        const isFullyCached = isProjectCached(project.id);
         
-        if (!isAlreadyCached) {
+        if (!isFullyCached) {
           prefetchProject(project.id).catch(error => {
             console.error(`Failed to prefetch project ${project.id}:`, error);
           });
         }
       }
     });
-  }, [allFetchedProjects, displayedProjectsCount, prefetchProject, getPrefetchStatus, userIsAuthenticated]);
+  }, [allFetchedProjects, displayedProjectsCount, prefetchProject, isProjectCached, userIsAuthenticated]);
 
   const fetchSounds = () => {
     console.log('Refreshing sounds library');
