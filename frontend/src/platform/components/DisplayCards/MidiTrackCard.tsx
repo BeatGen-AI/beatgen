@@ -1,17 +1,11 @@
 import React from 'react';
-import {
-  Card, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
-} from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
 import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon, MusicNote as MusicNoteIcon } from '@mui/icons-material';
 import { MidiTrackRead } from '../../../platform/types/dto/track_models/midi_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
 import { convertJsonToNotes } from '../../../types/note';
-import { Box } from '@mui/material';
+import BaseTrackCard from './BaseTrackCard';
 
 interface MidiTrackCardProps {
   track: MidiTrackRead;
@@ -44,75 +38,64 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
   // Convert MIDI notes JSON to Note array for preview
   const notes = track.midi_notes_json ? convertJsonToNotes(track.midi_notes_json, track.id) : [];
 
-  return (
-    <Card 
-      className="midi-track-card w-full rounded-lg hover-shadow-card"
-      style={{ '--hover-shadow-color': sectionColor } as React.CSSProperties}
-    >
-      <CardHeader className="flex flex-row items-center justify-between p-3">
-        <div className="flex items-center">
-          <MusicNoteIcon className="text-primary mr-2" fontSize="small" />
-          <CardTitle className="text-sm font-medium truncate mr-2">{track.name}</CardTitle>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <Button 
-            variant="ghost"
-            size="icon"
-            onClick={() => handlePlayTrack(track)}
-            className="text-muted-foreground hover:bg-accent hover:text-primary h-7 w-7"
-          >
-            {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
-          </Button>
-          {handleEditTrack && (
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => handleEditTrack(track.id)}
-              className="text-muted-foreground hover:bg-accent hover:text-yellow-500 dark:hover:text-yellow-400 h-7 w-7"
-            >
-              <MusicNoteIcon fontSize="small" />
-            </Button>
-          )}
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => handleDeleteTrack(track.id)}
-            className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
-          >
-            <DeleteIcon fontSize="small" />
-          </Button>
-        </div>
-      </CardHeader>
-      
-      {/* MIDI Notes Preview */}
-      <Box sx={{ px: 1.5, pb: 1.5 }}>
-        <Box
-          sx={{
-            height: 60,
-            bgcolor: 'transparent',
-            borderRadius: 1,
-            overflow: 'hidden',
-            position: 'relative'
-          }}
+  const icon = <MusicNoteIcon className="text-primary" fontSize="small" />;
+  
+  const headerActions = (
+    <>
+      <Button 
+        variant="ghost"
+        size="icon"
+        onClick={() => handlePlayTrack(track)}
+        className="text-muted-foreground hover:bg-accent hover:text-primary h-7 w-7"
+      >
+        {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
+      </Button>
+      {handleEditTrack && (
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={() => handleEditTrack(track.id)}
+          className="text-muted-foreground hover:bg-accent hover:text-yellow-500 dark:hover:text-yellow-400 h-7 w-7"
         >
-          <MidiNotesPreview
-            width={280}
-            height={60}
-            noteColor={sectionColor}
-            notes={notes}
-          />
-        </Box>
-      </Box>
-      
-      <CardFooter className="p-3 pt-1 flex justify-between items-center">
-        <p className="text-xs text-muted-foreground">
-          Instrument: {track.instrument_file?.display_name || 'Unknown'}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {noteCount} notes {isPlaying && ` ${formatTime(currentTime, false)} / ${formatTime(duration, false)}`}
-        </p>
-      </CardFooter>
-    </Card>
+          <MusicNoteIcon fontSize="small" />
+        </Button>
+      )}
+      <Button 
+        variant="ghost" 
+        size="icon"
+        onClick={() => handleDeleteTrack(track.id)}
+        className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
+      >
+        <DeleteIcon fontSize="small" />
+      </Button>
+    </>
+  );
+
+  const previewContent = (
+    <div className="w-full h-[50px] flex items-center justify-center">
+      <MidiNotesPreview
+        width={260}
+        height={50}
+        noteColor={sectionColor}
+        notes={notes}
+      />
+    </div>
+  );
+
+  const footerLeft = `Instrument: ${track.instrument_file?.display_name || 'Unknown'}`;
+  const footerRight = `${noteCount} notes${isPlaying ? ` ${formatTime(currentTime, false)} / ${formatTime(duration, false)}` : ''}`;
+
+  return (
+    <BaseTrackCard
+      title={track.name}
+      icon={icon}
+      sectionColor={sectionColor}
+      headerActions={headerActions}
+      previewContent={previewContent}
+      footerLeft={footerLeft}
+      footerRight={footerRight}
+      className="midi-track-card"
+    />
   );
 };
 

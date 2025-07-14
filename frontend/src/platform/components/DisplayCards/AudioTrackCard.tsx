@@ -1,15 +1,11 @@
 import React from 'react';
-import {
-  Card, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
-} from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
 import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
+import { AudioWaveform } from 'lucide-react';
 import { AudioTrackRead as Sound } from '../../../platform/types/dto/track_models/audio_track'; 
-import { formatTime, formatFileSize } from '../../../studio/utils/audioProcessing';
+import { formatTime } from '../../../studio/utils/audioProcessing';
 import { WaveformDisplay } from '../../../studio/components/track/WaveformDisplay';
+import BaseTrackCard from './BaseTrackCard';
 
 interface AudioTrackCardProps {
   sound: Sound;
@@ -31,53 +27,52 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
 }) => {
   const isPlaying = playingId === sound.id;
 
+  const icon = <AudioWaveform className="text-primary" size={18} />;
+  
+  const headerActions = (
+    <>
+      <Button 
+        variant="ghost"
+        size="icon"
+        onClick={() => handlePlaySound(sound)}
+        className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-7 w-7"
+      >
+        {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
+      </Button>
+      <Button 
+        variant="ghost" 
+        size="icon"
+        onClick={() => handleDeleteSound(sound.id)}
+        className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
+      >
+        <DeleteIcon fontSize="small" />
+      </Button>
+    </>
+  );
+
+  const previewContent = (
+    <div className="w-full h-[50px] flex items-center justify-center">
+      <WaveformDisplay
+        waveformData={sound.waveform_data}
+        trackColor={sectionColor}
+        duration={sound.audio_file_duration}
+        width={260}
+      />
+    </div>
+  );
+
+  const footerRight = formatTime(sound.audio_file_duration, false);
+
   return (
-    <Card 
-      className="audio-track-card w-full rounded-lg hover-shadow-card"
-      style={{ '--hover-shadow-color': sectionColor } as React.CSSProperties}
-    >
-      <CardHeader className="flex flex-row items-center justify-between p-3">
-        <CardTitle className="text-sm font-medium truncate mr-2">{sound.name}</CardTitle>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <Button 
-            variant="ghost"
-            size="icon"
-            onClick={() => handlePlaySound(sound)}
-            className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-7 w-7"
-          >
-            {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => handleDeleteSound(sound.id)}
-            className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
-          >
-            <DeleteIcon fontSize="small" />
-          </Button>
-        </div>
-      </CardHeader>
-      
-      {/* Waveform Preview */}
-      <div className="px-6 pb-6">
-        <div
-          className="h-[60px] bg-card rounded overflow-hidden relative"
-        >
-          <WaveformDisplay
-            waveformData={sound.waveform_data}
-            trackColor={sectionColor}
-            duration={sound.audio_file_duration}
-            width={280}
-          />
-        </div>
-      </div>
-      
-      <CardFooter className="p-3 pt-1 flex justify-end items-center">
-        <p className="text-xs text-muted-foreground">
-          {formatTime(sound.audio_file_duration, false)}
-        </p>
-      </CardFooter>
-    </Card>
+    <BaseTrackCard
+      title={sound.name}
+      icon={icon}
+      sectionColor={sectionColor}
+      headerActions={headerActions}
+      previewContent={previewContent}
+      footerRight={footerRight}
+      className="audio-track-card"
+    />
   );
 };
 
