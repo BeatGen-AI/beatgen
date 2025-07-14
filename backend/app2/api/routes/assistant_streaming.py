@@ -727,8 +727,8 @@ async def process_generate_audio_request(
         else:
             duration = min(max(calculated_duration, 1.0), 30.0)
         
-        # Match the exact successful format from the API docs example
-        enhanced_prompt = f"{prompt_text} solo, minimalist, no accompaniment, no drums, no bass, acoustic"
+        # Match the exact successful format from the API docs example with simplicity emphasis
+        enhanced_prompt = f"{prompt_text} solo, simple, minimalist, no accompaniment, no drums, no bass, acoustic"
         
         # Add key signature
         if key_signature:
@@ -745,8 +745,8 @@ async def process_generate_audio_request(
         # Create FAL-AI service instance
         fal_ai_service = get_fal_ai_service()
         
-        # Match the exact negative prompt from the successful API example
-        negative_prompt = "accompaniment, drums, background instruments"
+        # Enhanced negative prompt to avoid complexity and ensure solo focus
+        negative_prompt = "accompaniment, drums, background instruments, complex, layered, arrangement"
         
         # Generate audio using FAL-AI
         logger.info(f"Generating audio with FAL-AI - BPM: {bpm}, Key: {key_signature}, Bars: {bars}")
