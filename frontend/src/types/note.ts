@@ -28,7 +28,6 @@ interface JsonNote {
 }
 
 export function convertJsonToNotes(json_data: { [k: string]: unknown }, trackId?: string): Note[] {
-    console.log(`convertJsonToNotes:`, json_data);
     // Check if json_data has a 'notes' property and if it's an array
     if (json_data && Array.isArray(json_data.notes)) {
         // Type assertion with proper interface
@@ -42,7 +41,6 @@ export function convertJsonToNotes(json_data: { [k: string]: unknown }, trackId?
             velocity: note.velocity,
             trackId: trackId
         }));
-        console.log(`DEBUGconvertJsonToNotes:`, ret);
         return ret;
     } else {
         console.error("Invalid JSON data format: 'notes' array not found.", json_data);

@@ -11,6 +11,8 @@ import { FolderOpen } from 'lucide-react';
 import { IconTrashFilled } from '@tabler/icons-react';
 import { Project } from '../../types/project';
 import { cn } from "../../../lib/utils";
+import PrefetchStatus from '../PrefetchStatus';
+import { PrefetchStatus as PrefetchStatusType } from '../../hooks/useProjectPrefetch';
 
 interface ProjectCardProps {
   project: Project;
@@ -18,6 +20,7 @@ interface ProjectCardProps {
   onEditProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   sectionColor: string;
+  getPrefetchStatus?: (projectId: string) => PrefetchStatusType | undefined;
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = ({
@@ -26,6 +29,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   onEditProject,
   onDeleteProject,
   sectionColor,
+  getPrefetchStatus,
 }) => {
   return (
     <Card 
@@ -40,6 +44,11 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           <FolderOpen className="text-primary mr-2" size={18} />
           <CardTitle className="text-sm font-medium truncate">{project.name}</CardTitle>
         </div>
+        {project.id && getPrefetchStatus && (
+          <div className="ml-2">
+            <PrefetchStatus projectId={project.id} getPrefetchStatus={getPrefetchStatus} />
+          </div>
+        )}
       </CardHeader>
       
       {/* Fixed height preview area */}

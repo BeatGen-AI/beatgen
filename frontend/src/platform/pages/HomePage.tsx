@@ -61,6 +61,7 @@ import GenerateSongModal from '../components/GenerateSongModal';
 import { createProject } from '../api/projects';
 import { ProjectCreate } from '../types/project';
 import { isAuthenticated } from '../auth/auth-utils';
+import { useProjectPrefetch } from '../hooks/useProjectPrefetch';
 
 // Import shared pagination constants
 import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
@@ -78,6 +79,7 @@ export default function HomePage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userIsAuthenticated = isAuthenticated();
+  const { prefetchProject, getPrefetchStatus, isProjectCached } = useProjectPrefetch();
 
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
   const [currentPageApi, setCurrentPageApi] = useState<number>(1);
@@ -106,6 +108,8 @@ export default function HomePage() {
     queryKey: ['projects', currentPageApi, PROJECTS_PER_PAGE_API],
     queryFn: () => getProjects(currentPageApi, PROJECTS_PER_PAGE_API),
     placeholderData: (previousData) => previousData,
+    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
+    gcTime: 1000 * 60 * 30, // Keep in cache for 30 minutes
   });
   
   const totalProjectsOnServer = projectsData?.total_items ?? 0;
@@ -124,6 +128,28 @@ export default function HomePage() {
       }
     }
   }, [projectsData?.items, currentPageApi]);
+
+  // Prefetch visible projects for instant loading
+  useEffect(() => {
+    if (!userIsAuthenticated) return; // Only prefetch for authenticated users
+    
+    // Get currently visible projects
+    const visibleProjects = allFetchedProjects.slice(0, displayedProjectsCount);
+    
+    // Prefetch each visible project (the hook already checks if cached)
+    visibleProjects.forEach(project => {
+      if (project.id) {
+        // Check if already fully cached (metadata + audio + soundfonts)
+        const isFullyCached = isProjectCached(project.id);
+        
+        if (!isFullyCached) {
+          prefetchProject(project.id).catch(error => {
+            console.error(`Failed to prefetch project ${project.id}:`, error);
+          });
+        }
+      }
+    });
+  }, [allFetchedProjects, displayedProjectsCount, prefetchProject, isProjectCached, userIsAuthenticated]);
 
   const fetchSounds = () => {
     console.log('Refreshing sounds library');
@@ -402,6 +428,7 @@ export default function HomePage() {
               snackbarSeverity={snackbar.severity}
               onCloseSnackbar={handleCloseSnackbar}
               sectionColor={logoColors[1]}
+              getPrefetchStatus={getPrefetchStatus}
             />
           </FadeCard>
 
