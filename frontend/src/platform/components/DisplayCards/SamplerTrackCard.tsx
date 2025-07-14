@@ -1,10 +1,4 @@
 import React from 'react';
-import {
-  Card, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
-} from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
 import { 
   PlayArrow as PlayIcon, 
@@ -18,7 +12,7 @@ import { formatTime, formatFileSize } from '../../../studio/utils/audioProcessin
 import { WaveformDisplay } from '../../../studio/components/track/WaveformDisplay';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
 import { convertJsonToNotes } from '../../../types/note';
-import { Box } from '@mui/material';
+import BaseTrackCard from './BaseTrackCard';
 
 interface SamplerTrackCardProps {
   track: SamplerTrackRead;
@@ -61,94 +55,75 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
     return `${noteName}${octave}`;
   };
 
-  return (
-    <Card 
-      className="sampler-track-card w-full rounded-lg hover-shadow-card"
-      style={{ '--hover-shadow-color': sectionColor } as React.CSSProperties}
-    >
-      <CardHeader className="flex flex-row items-center justify-between p-3">
-        <div className="flex items-center">
-          <IconWaveSine className="text-green-600 dark:text-green-400 mr-2" size={18} />
-          <CardTitle className="text-sm font-medium truncate mr-2">{track.name}</CardTitle>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <Button 
-            variant="ghost"
-            size="icon"
-            onClick={() => handlePlayTrack(track)}
-            className="text-muted-foreground hover:bg-accent hover:text-green-600 dark:hover:text-green-400 h-7 w-7"
-          >
-            {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
-          </Button>
-          {handleEditTrack && (
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => handleEditTrack(track.id)}
-              className="text-muted-foreground hover:bg-accent hover:text-yellow-500 dark:hover:text-yellow-400 h-7 w-7"
-            >
-              <SettingsIcon fontSize="small" />
-            </Button>
-          )}
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => handleDeleteTrack(track.id)}
-            className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
-          >
-            <DeleteIcon fontSize="small" />
-          </Button>
-        </div>
-      </CardHeader>
-      
-      {/* Waveform Preview */}
-      <div className="px-6 pb-3">
-        <div
-          className="h-[60px] bg-card rounded overflow-hidden relative"
+  const icon = <IconWaveSine className="text-green-600 dark:text-green-400" size={18} />;
+  
+  const headerActions = (
+    <>
+      <Button 
+        variant="ghost"
+        size="icon"
+        onClick={() => handlePlayTrack(track)}
+        className="text-muted-foreground hover:bg-accent hover:text-green-600 dark:hover:text-green-400 h-7 w-7"
+      >
+        {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
+      </Button>
+      {handleEditTrack && (
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={() => handleEditTrack(track.id)}
+          className="text-muted-foreground hover:bg-accent hover:text-yellow-500 dark:hover:text-yellow-400 h-7 w-7"
         >
-          <WaveformDisplay
-            waveformData={track.waveform_data}
-            trackColor={sectionColor}
-            duration={track.audio_file_duration}
-            width={280}
-          />
-        </div>
+          <SettingsIcon fontSize="small" />
+        </Button>
+      )}
+      <Button 
+        variant="ghost" 
+        size="icon"
+        onClick={() => handleDeleteTrack(track.id)}
+        className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
+      >
+        <DeleteIcon fontSize="small" />
+      </Button>
+    </>
+  );
+
+  const previewContent = (
+    <div className="w-full h-full flex flex-col gap-1">
+      <div className="h-[35px] w-full">
+        <WaveformDisplay
+          waveformData={track.waveform_data}
+          trackColor={sectionColor}
+          duration={track.audio_file_duration}
+          width={260}
+        />
       </div>
-      
-      {/* MIDI Notes Preview */}
-      <Box sx={{ px: 1.5, pb: 1.5 }}>
-        <Box
-          sx={{
-            height: 60,
-            bgcolor: 'transparent',
-            borderRadius: 1,
-            overflow: 'hidden',
-            position: 'relative'
-          }}
-        >
-          <MidiNotesPreview
-            width={280}
-            height={60}
-            noteColor={sectionColor}
-            notes={notes}
-          />
-        </Box>
-      </Box>
-      
-      <CardFooter className="p-3 pt-1 flex justify-between items-center">
-        <div className="flex flex-col">
-          <p className="text-xs text-muted-foreground mb-1">
-            Base Note: {formatMidiNote(track.base_midi_note)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {formatTime(track.audio_file_duration, false)} {formatFileSize(track.audio_file_size)}
-          </p>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {noteCount} notes {isPlaying && ` ${formatTime(currentTime, false)} / ${formatTime(duration, false)}`}
-        </p>
-      </CardFooter>
-    </Card>
+      <div className="h-[35px] w-full">
+        <MidiNotesPreview
+          width={260}
+          height={35}
+          noteColor={sectionColor}
+          notes={notes}
+        />
+      </div>
+    </div>
+  );
+
+  const footerLeft = `${formatMidiNote(track.base_midi_note)} • ${formatTime(track.audio_file_duration, false)}`;
+  
+  const footerRight = `${noteCount} notes${isPlaying ? ` ${formatTime(currentTime, false)} / ${formatTime(duration, false)}` : ''}`;
+
+  return (
+    <BaseTrackCard
+      title={track.name}
+      icon={icon}
+      sectionColor={sectionColor}
+      headerActions={headerActions}
+      previewContent={previewContent}
+      footerLeft={footerLeft}
+      footerRight={footerRight}
+      className="sampler-track-card"
+    />
   );
 };
 
