@@ -89,9 +89,9 @@ export function useProjectPrefetch() {
   };
 
   const prefetchAudioFiles = useCallback(async (projectId: string, tracks: CombinedTrack[]) => {
-    // Check current status - if already success, don't re-run
+    // Check current status - if already success or loading, don't re-run
     const currentStatus = prefetchStatuses.get(projectId);
-    if (currentStatus?.audioStatus === 'success') {
+    if (currentStatus?.audioStatus === 'success' || currentStatus?.audioStatus === 'loading') {
       return;
     }
     
@@ -147,9 +147,9 @@ export function useProjectPrefetch() {
   }, [updateStatus, prefetchStatuses]);
 
   const prefetchSoundfonts = useCallback(async (projectId: string, tracks: CombinedTrack[]) => {
-    // Check current status - if already success, don't re-run
+    // Check current status - if already success or loading, don't re-run
     const currentStatus = prefetchStatuses.get(projectId);
-    if (currentStatus?.soundfontStatus === 'success') {
+    if (currentStatus?.soundfontStatus === 'success' || currentStatus?.soundfontStatus === 'loading') {
       return;
     }
     
