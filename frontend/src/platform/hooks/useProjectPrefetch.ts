@@ -181,6 +181,8 @@ export function useProjectPrefetch() {
 
     let cachedCount = 0;
     
+    let failedCount = 0;
+    
     for (const soundfontId of uniqueSoundfonts) {
       try {
         // Check if already cached in IndexedDB
@@ -197,11 +199,23 @@ export function useProjectPrefetch() {
         });
       } catch (error) {
         console.error(`Failed to prefetch soundfont ${soundfontId}:`, error);
+        failedCount++;
       }
     }
 
+    // Determine final status based on success/failure ratio
+    let finalStatus: 'success' | 'error';
+    if (cachedCount === uniqueSoundfonts.length) {
+      finalStatus = 'success';
+    } else if (cachedCount === 0) {
+      finalStatus = 'error';
+    } else {
+      // Partial success - some cached, some failed
+      finalStatus = 'error'; // Mark as error so it will retry next time
+    }
+    
     updateStatus(projectId, { 
-      soundfontStatus: cachedCount === uniqueSoundfonts.length ? 'success' : 'error',
+      soundfontStatus: finalStatus,
       soundfontProgress: 100 
     });
   }, [updateStatus, prefetchStatuses]);
