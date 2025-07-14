@@ -415,14 +415,14 @@ class FileService:
             # Generate unique storage key in the correct format: tracks/audio/{user_id}/{track_id}
             track_id = str(uuid.uuid4())
             file_extension = file_name.split(".")[-1]
-            storage_key = f"tracks/audio/{user_id}/{track_id}.{file_extension}"
+            storage_key = f"audio/{user_id}/{track_id}.{file_extension}"
             
             # Create storage client
             from app2.infrastructure.storage.supabase_storage import SupabaseStorage
             storage = SupabaseStorage("tracks")
             
-            # Upload the file data directly to Supabase storage
-            upload_result = storage.upload_file(storage_key, audio_data)
+            # Upload the file data directly to Supabase storage with proper content type
+            upload_result = storage.upload_file(storage_key, audio_data, "audio/wav")
             
             if not upload_result:
                 error_msg = "Failed to upload audio file to storage"

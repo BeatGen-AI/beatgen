@@ -157,13 +157,14 @@ class SupabaseStorage:
             logger.error(traceback.format_exc())
             raise StorageException(f"Failed to list files: {str(e)}")
 
-    def upload_file(self, path: str, file_data: bytes) -> bool:
+    def upload_file(self, path: str, file_data: bytes, content_type: str = None) -> bool:
         """
         Upload file data directly to storage
 
         Args:
             path: The storage path where the file will be stored
             file_data: The file content as bytes
+            content_type: MIME type of the file (optional)
 
         Returns:
             True if the operation was successful
@@ -174,12 +175,31 @@ class SupabaseStorage:
         try:
             logger.info(f"Uploading file directly to path: {path}")
             
-            # Upload the file using the Supabase client
-            response = self._bucket.upload(path, file_data, {"upsert": "true"})
+            # Determine content type if not provided
+            if not content_type:
+                file_extension = path.split('.')[-1].lower()
+                if file_extension == 'wav':
+                    content_type = 'audio/wav'
+                elif file_extension == 'mp3':
+                    content_type = 'audio/mpeg'
+                elif file_extension == 'ogg':
+                    content_type = 'audio/ogg'
+                elif file_extension == 'flac':
+                    content_type = 'audio/flac'
+                else:
+                    content_type = 'application/octet-stream'
+            
+            # Upload the file using the Supabase client with proper content type
+            file_options = {
+                "upsert": "true",
+                "content-type": content_type
+            }
+            
+            response = self._bucket.upload(path, file_data, file_options)
             
             # Check if upload was successful
             if response:
-                logger.info(f"Successfully uploaded file to: {path}")
+                logger.info(f"Successfully uploaded file to: {path} with content type: {content_type}")
                 return True
             else:
                 logger.error(f"Upload failed for path: {path}")

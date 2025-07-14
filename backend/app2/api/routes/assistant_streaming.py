@@ -643,7 +643,7 @@ async def process_generate_audio_request(
         from app2.services.fal_ai_service import get_fal_ai_service
         from app2.services.file_service import FileService
         from app2.repositories.file_repository import FileRepository
-        from app2.models.track_models.audio_track import AudioTrackCreate, AudioTrackRead
+        from app2.models.track_models.audio_track import AudioTrack, AudioTrackCreate, AudioTrackRead
         from app2.repositories.audio_track_repository import AudioTrackRepository
         import uuid
         
@@ -734,24 +734,32 @@ async def process_generate_audio_request(
         # For now, we'll create a simple mock waveform
         waveform_data = [0.0] * 200  # Placeholder waveform
         
-        # Create audio track record
-        audio_track_data = AudioTrackCreate(
-            id=audio_track_id,
-            name=f"Generated Audio: {prompt_text[:50]}...",
-            audio_file_storage_key=storage_key,
-            audio_file_format="wav",
-            audio_file_size=len(audio_data),
-            audio_file_duration=duration,
-            audio_file_sample_rate=generation_result.sample_rate,
-            waveform_data=waveform_data
-        )
+        # Create audio track record data as a dictionary (since AudioTrackCreate doesn't have user_id)
+        audio_track_data = {
+            "id": audio_track_id,
+            "name": f"Generated Audio: {prompt_text[:50]}...",
+            "audio_file_storage_key": storage_key,
+            "audio_file_format": "wav",
+            "audio_file_size": len(audio_data),
+            "audio_file_duration": duration,
+            "audio_file_sample_rate": generation_result.sample_rate,
+            "waveform_data": waveform_data,
+            "user_id": user_id
+        }
         
-        # Add user_id to the track data before creating
-        audio_track_data.user_id = user_id
+        # Create AudioTrack model directly
+        audio_track = AudioTrack(**audio_track_data)
         
         # Save to database
-        audio_repo = AudioTrackRepository(session)
-        created_track = await audio_repo.create(audio_track_data)
+        session.add(audio_track)
+        session.commit()
+        session.refresh(audio_track)
+        
+        # Convert to read model for the response
+        created_track = AudioTrackRead.model_validate(audio_track)
+        
+        # Debug: Log the created track to see what fields are included
+        logger.info(f"Created track data: {created_track.model_dump()}")
         
         await sse_queue.stage(
             name="completing",
@@ -759,11 +767,12 @@ async def process_generate_audio_request(
         )
         
         # Create action to add the audio track to the frontend
+        from app2.types.assistant_actions import AudioTrackData
+        
+        # Use mode='json' to ensure proper serialization of UUIDs and datetimes
         action = AssistantAction(
-            type="add_audio_track",
-            data={
-                "track_data": created_track.model_dump()
-            }
+            action_type="add_audio_track",
+            data=AudioTrackData(track_data=created_track.model_dump(mode='json'))
         )
         
         # Send the action
