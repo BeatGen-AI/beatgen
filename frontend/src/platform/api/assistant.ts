@@ -4,7 +4,7 @@ import { AssistantAction } from '@/platform/types/dto/assistant';
 
 // Types for request/response
 export interface AssistantRequestOptions {
-  mode: 'chat' | 'generate' | 'edit';
+  mode: 'chat' | 'generate' | 'edit' | 'generate-audio';
   prompt: string;
   model: string;
   context?: {
@@ -17,6 +17,14 @@ export interface AssistantRequestOptions {
     source?: string;
     auto_create_project?: boolean;
     model?: string;
+    // Musical context for better AI generation
+    bpm?: number;
+    time_signature?: {
+      numerator: number;
+      denominator: number;
+    };
+    key_signature?: string;
+    project_title?: string;
   };
 }
 

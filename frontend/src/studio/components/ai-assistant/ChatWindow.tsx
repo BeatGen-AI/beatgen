@@ -32,6 +32,7 @@ import { MidiTrackPayload } from '../../stores/types';
 import { MidiTrackRead } from 'src/platform/types/dto/track_models/midi_track';
 import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track';
 import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
+import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
 import { alpha } from '@mui/material/styles';
 import ChatModelMenu from './ChatModelMenu';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
@@ -88,7 +89,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   const [streamConnection, setStreamConnection] = useState<{ close: () => void } | null>(null);
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
   
-  // Access the store for executing actions
+  // Access the store for executing actions and project context
   const { 
     handleAddTrack, 
     handleTrackVolumeChange,
@@ -98,7 +99,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     loadTrack,
     loadDrumTrack,
     tracks,
-    updateTrackState
+    updateTrackState,
+    // Add project context for musical parameters
+    bpm,
+    timeSignature,
+    keySignature,
+    projectTitle
   } = useStudioStore();
   
   // Add state to handle visibility after animation
@@ -444,7 +450,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     
     try {
       // Determine the appropriate mode (lowercase for API)
-      const apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat';
+      let apiMode: 'generate' | 'edit' | 'chat' | 'generate-audio';
+      if (mode === 'Generate Audio') {
+        apiMode = 'generate-audio';
+      } else {
+        apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat' | 'generate-audio';
+      }
       
       // Get track ID if selected
       const trackId = selectedTrack ? selectedTrack.id : undefined;
@@ -455,9 +466,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           prompt,
           mode: apiMode,
           model: selectedModel,
-          context: { // Pass selected model in context
+          context: { // Pass musical context for better AI generation
             model: selectedModel,
-            track_id: trackId
+            track_id: trackId,
+            bpm: bpm,
+            time_signature: {
+              numerator: timeSignature[0],
+              denominator: timeSignature[1]
+            },
+            key_signature: keySignature,
+            project_title: projectTitle
           }
         },
         setupStreamCallbacks()
@@ -478,8 +496,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   
   // Helper function to create a CombinedTrack with instance metadata
   const createCombinedTrack = (
-    trackData: MidiTrackRead | SamplerTrackRead | DrumTrackRead,
-    trackType: 'MIDI' | 'SAMPLER' | 'DRUM',
+    trackData: MidiTrackRead | SamplerTrackRead | DrumTrackRead | AudioTrackRead,
+    trackType: 'MIDI' | 'SAMPLER' | 'DRUM' | 'AUDIO',
     isDirty: boolean = true  // AI-generated tracks should be marked as dirty by default
   ): CombinedTrack => {
     const defaultName = `New ${trackType.charAt(0) + trackType.slice(1).toLowerCase()} Track`;
@@ -551,7 +569,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         // New action type for adding an individual generated track with notes
         if (store) {
           try {
-            const trackType = actionData.type as 'MIDI' | 'SAMPLER' | 'DRUM';
+            const trackType = actionData.type as 'MIDI' | 'SAMPLER' | 'DRUM' | 'AUDIO';
             const trackData = actionData.track_data;
             
             switch (trackType) {
@@ -607,11 +625,46 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                 }, 100);
                 break;
                 
+              case 'AUDIO':
+                const audioTrack = createCombinedTrack(trackData as AudioTrackRead, 'AUDIO');
+                console.log('🟢 Constructed AUDIO track:', audioTrack);
+                console.log('🟢 Track dirty flag before load:', audioTrack.dirty);
+                await loadTrack(audioTrack);
+                
+                // Use a small delay to ensure tracks are fully loaded in state
+                setTimeout(() => {
+                  // Mark the AI-generated track as dirty so it will be saved
+                  updateTrackState(audioTrack.id, { dirty: true });
+                  console.log('🟢 Audio track marked as dirty after load');
+                }, 100);
+                break;
+                
               default:
                 console.warn(`Unknown track type: ${trackType}`);
             }
           } catch (error) {
             console.error('Failed to add AI generated track:', error);
+          }
+        }
+        break;
+      case 'add_audio_track':
+        console.log('🟢 add_audio_track action received:', actionData);
+        if (store) {
+          try {
+            const audioTrackData = actionData.track_data as AudioTrackRead;
+            const combinedAudioTrack = createCombinedTrack(audioTrackData, 'AUDIO');
+            console.log('🟢 Constructed Audio CombinedTrack:', combinedAudioTrack);
+            console.log('🟢 Track dirty flag before load:', combinedAudioTrack.dirty);
+            await loadTrack(combinedAudioTrack);
+            
+            // Use a small delay to ensure tracks are fully loaded in state
+            setTimeout(() => {
+              // Mark the AI-generated track as dirty so it will be saved
+              updateTrackState(combinedAudioTrack.id, { dirty: true });
+              console.log('🟢 Audio track marked as dirty after load');
+            }, 100);
+          } catch (error) {
+            console.error('Failed to add AI generated audio track:', error);
           }
         }
         break;
@@ -763,7 +816,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   };
 
   const handleModeSelect = (newMode: string) => {
-    setMode(newMode.charAt(0).toUpperCase() + newMode.slice(1).toLowerCase());
+    // Handle special case for "generate-audio" to display as "Generate Audio"
+    if (newMode.toLowerCase() === 'generate-audio') {
+      setMode('Generate Audio');
+    } else {
+      setMode(newMode.charAt(0).toUpperCase() + newMode.slice(1).toLowerCase());
+    }
   };
 
   const handleContextClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -1027,18 +1085,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                 gap: 1
               }}
             >
-              {/* Model Selector Chip - Bottom Left */}
-              <MenuChip
-                label={selectedModel}
-                onClick={handleModelChipClick}
-              />
-              <ChatModelMenu
-                anchorEl={modelAnchorEl}
-                open={Boolean(modelAnchorEl)}
-                onClose={handleModelMenuClose}
-                onSelect={handleModelSelect}
-                models={AVAILABLE_MODELS}
-              />
+              {/* Model Selector Chip - Bottom Left (hidden for Generate Audio mode) */}
+              {mode !== 'Generate Audio' ? (
+                <>
+                  <MenuChip
+                    label={selectedModel}
+                    onClick={handleModelChipClick}
+                  />
+                  <ChatModelMenu
+                    anchorEl={modelAnchorEl}
+                    open={Boolean(modelAnchorEl)}
+                    onClose={handleModelMenuClose}
+                    onSelect={handleModelSelect}
+                    models={AVAILABLE_MODELS}
+                  />
+                </>
+              ) : (
+                <Box sx={{ flex: 1 }} />
+              )}
 
               {/* Send/Cancel Chip - Bottom Right */}
               <MenuChip 

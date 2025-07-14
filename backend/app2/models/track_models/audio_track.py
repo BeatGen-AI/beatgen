@@ -57,6 +57,8 @@ class AudioTrack(AudioTrackBase, table=True):
 # API Models
 class AudioTrackRead(AudioTrackBase):
     """API response model for audio track data"""
+    
+    id: uuid.UUID  # Explicitly include id for API responses
 
 
 class AudioTrackCreate(AudioTrackBase):

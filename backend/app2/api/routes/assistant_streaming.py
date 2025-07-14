@@ -19,6 +19,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse, StreamingResponse
 import asyncio
 import json
+import re
 import time
 from typing import Dict, Any, Optional, Literal
 import traceback
@@ -68,7 +69,7 @@ load_dotenv()
 class AssistantRequestModel(AssistantRequest):
     """Unified request model for all assistant interaction types"""
 
-    mode: Literal["generate", "edit", "chat"]
+    mode: Literal["generate", "edit", "chat", "generate-audio"]
 
 
 # Response schema for request creation
@@ -300,6 +301,8 @@ async def process_assistant_request(request_id: str):
             # Process based on mode, passing the session
             if context.mode == "generate":
                 await process_generate_request(request_id, context, sse_queue, session)
+            elif context.mode == "generate-audio":
+                await process_generate_audio_request(request_id, context, sse_queue, session)
             elif context.mode == "edit":
                 # If process_edit_request needs a session, pass it here
                 await process_edit_request(request_id, context, sse_queue)
@@ -630,6 +633,229 @@ async def process_chat_request(request_id: str, context, queue: asyncio.Queue):
     # Send complete event
     await queue.put(("complete", final_response.dict()))
     logger.info(f"Chat request completed successfully: {request_id}")
+
+
+async def process_generate_audio_request(
+    request_id: str, context, sse_queue: SSEQueueManager, session: Session
+):
+    """
+    Process a generate-audio mode request using FAL-AI Lyria2 model
+    
+    Generates solo instrument audio tracks based on user prompts, incorporating
+    musical context (BPM, key signature, time signature) from the DAW project.
+    
+    Args:
+        request_id: Unique identifier for this generation request
+        context: Request context containing user prompt and musical parameters
+        sse_queue: Server-sent events queue for real-time updates
+        session: Database session for track creation and credit management
+    """
+    try:
+        # Import services we need
+        from app2.services.fal_ai_service import get_fal_ai_service
+        from app2.services.file_service import FileService
+        from app2.repositories.file_repository import FileRepository
+        from app2.models.track_models.audio_track import AudioTrack, AudioTrackCreate, AudioTrackRead
+        from app2.repositories.audio_track_repository import AudioTrackRepository
+        import uuid
+        
+        # Create file service instance
+        file_repository = FileRepository(session)
+        file_service = FileService(file_repository)
+        
+        logger.info(f"Processing generate-audio request: {request_id}")
+        
+        # Get user ID
+        user_id = context.user_id
+        if not user_id:
+            await sse_queue.error(
+                message="User ID not found",
+                error_data={"error": "unauthorized", "message": "User authentication required"}
+            )
+            return
+        
+        # Check credits (same as generate mode)
+        user_credits_info = await credits_service.get_user_credits(user_id)
+        if not user_credits_info:
+            from app2.models.user import User
+            user = session.get(User, user_id)
+            if user:
+                await credits_service.initialize_user_credits(user)
+                user_credits_info = await credits_service.get_user_credits(user_id)
+        
+        if user_credits_info and not user_credits_info.get("is_unlimited", False):
+            current_balance = user_credits_info.get("balance", 0)
+            if isinstance(current_balance, str):
+                current_balance = 999999
+            
+            if current_balance < 1:
+                await sse_queue.error(
+                    message="Insufficient credits",
+                    error_data={
+                        "error": "insufficient_credits",
+                        "required": 1,
+                        "current_balance": current_balance,
+                        "message": "You need at least 1 credit to generate audio. Please upgrade your plan."
+                    }
+                )
+                return
+        
+        # Extract musical context from request with sensible defaults
+        bpm = context.context.get('bpm', 120) if context.context else 120
+        key_signature = context.context.get('key_signature', 'C Major') if context.context else 'C Major'
+        time_signature = context.context.get('time_signature', {'numerator': 4, 'denominator': 4}) if context.context else {'numerator': 4, 'denominator': 4}
+        
+        prompt_text = context.prompt
+        
+        # Parse number of bars from prompt (default to 4 bars for musical context)
+        bars = 4  # Default to 4 bars
+        bars_match = re.search(r'(\d+)\s*(?:bar|bars|measure|measures)\b', prompt_text.lower())
+        if bars_match:
+            bars = int(bars_match.group(1))
+            bars = min(max(bars, 1), 16)  # Clamp between 1-16 bars
+        
+        # Calculate duration based on BPM and bars for metadata (FAL-AI always generates 30s)
+        beats_per_bar = time_signature['numerator']
+        total_beats = bars * beats_per_bar
+        calculated_duration = (total_beats / bpm) * 60.0
+        
+        # Check for explicit duration in prompt (for metadata purposes)
+        duration_match = re.search(r'(\d+)\s*(?:second|sec|s)\b', prompt_text.lower())
+        if duration_match:
+            duration = float(duration_match.group(1))
+            duration = min(max(duration, 1.0), 30.0)
+        else:
+            duration = min(max(calculated_duration, 1.0), 30.0)
+        
+        # Match the exact successful format from the API docs example with simplicity emphasis
+        enhanced_prompt = f"{prompt_text} solo, simple, minimalist, no accompaniment, no drums, no bass, acoustic"
+        
+        # Add key signature
+        if key_signature:
+            enhanced_prompt += f", key {key_signature}"
+        
+        # Add BPM and quality specs exactly like the working example
+        enhanced_prompt += f", {bpm}bpm, studio, 48kHz Stereo"
+        
+        await sse_queue.stage(
+            name="generating_audio",
+            description=f"Generating audio with FAL-AI: '{enhanced_prompt}' ({duration:.1f}s, {bars} bars)"
+        )
+        
+        # Create FAL-AI service instance
+        fal_ai_service = get_fal_ai_service()
+        
+        # Enhanced negative prompt to avoid complexity and ensure solo focus
+        negative_prompt = "accompaniment, drums, background instruments, complex, layered, arrangement"
+        
+        # Generate audio using FAL-AI
+        logger.info(f"Generating audio with FAL-AI - BPM: {bpm}, Key: {key_signature}, Bars: {bars}")
+        audio_data, generation_result = await fal_ai_service.generate_and_download_audio(
+            prompt=enhanced_prompt,
+            negative_prompt=negative_prompt
+        )
+        
+        await sse_queue.stage(
+            name="processing_audio",
+            description="Processing and storing generated audio..."
+        )
+        
+        # Upload audio to storage
+        audio_track_id = str(uuid.uuid4())
+        storage_key = await file_service.upload_audio_file(
+            audio_data, 
+            generation_result.file_name,
+            user_id
+        )
+        
+        # Generate waveform data (simplified - you may want to use a proper audio analysis library)
+        # For now, we'll create a simple mock waveform
+        waveform_data = [0.0] * 200  # Placeholder waveform
+        
+        # Create audio track record data as a dictionary (since AudioTrackCreate doesn't have user_id)
+        audio_track_data = {
+            "id": audio_track_id,
+            "name": f"Generated Audio: {prompt_text[:50]}...",
+            "audio_file_storage_key": storage_key,
+            "audio_file_format": "wav",
+            "audio_file_size": len(audio_data),
+            "audio_file_duration": duration,
+            "audio_file_sample_rate": generation_result.sample_rate,
+            "waveform_data": waveform_data,
+            "user_id": user_id
+        }
+        
+        # Create AudioTrack model directly
+        audio_track = AudioTrack(**audio_track_data)
+        
+        # Save to database
+        session.add(audio_track)
+        session.commit()
+        session.refresh(audio_track)
+        
+        # Convert to read model for the response
+        created_track = AudioTrackRead.model_validate(audio_track)
+        
+        
+        await sse_queue.stage(
+            name="completing",
+            description="Finalizing audio track..."
+        )
+        
+        # Create action to add the audio track to the frontend
+        from app2.types.assistant_actions import AudioTrackData
+        
+        # Use mode='json' to ensure proper serialization of UUIDs and datetimes
+        action = AssistantAction(
+            action_type="add_audio_track",
+            data=AudioTrackData(track_data=created_track.model_dump(mode='json'))
+        )
+        
+        # Send the action
+        await sse_queue.action(action)
+        
+        # Deduct credits using the correct method name with comprehensive metadata
+        if user_credits_info and not user_credits_info.get("is_unlimited", False):
+            await credits_service.use_credits(
+                user_id=user_id,
+                amount=1,
+                description="Audio generation with FAL-AI",
+                metadata={
+                    "request_id": request_id,
+                    "model": "fal-ai/lyria2",
+                    "user_prompt": prompt_text,
+                    "enhanced_prompt": enhanced_prompt,
+                    "negative_prompt": negative_prompt,
+                    "bpm": bpm,
+                    "key_signature": key_signature,
+                    "time_signature": time_signature,
+                    "bars": bars,
+                    "calculated_duration": duration,
+                    "generation_type": "audio"
+                },
+                # AI-specific parameters
+                model_provider="fal-ai",
+                model_name="lyria2",
+                request_id=request_id,
+                generation_type="audio",
+                prompt_preview=prompt_text[:200] if prompt_text else None
+            )
+        
+        # Send completion message
+        response_text = f"Successfully generated audio: '{prompt_text}' ({duration} seconds)"
+        
+        # Send completion
+        final_response = AssistantResponse(response=response_text)
+        await sse_queue.complete(final_response.model_dump())
+        
+        logger.info(f"Generate-audio request completed successfully: {request_id}")
+        
+    except Exception as e:
+        logger.error(f"Error in generate-audio request {request_id}: {str(e)}")
+        await sse_queue.error(
+            message=f"Failed to generate audio: {str(e)}",
+            error_data={"error": "generation_failed", "details": str(e)}
+        )
 
 
 # Ensure all endpoints in these routes are included in main.py

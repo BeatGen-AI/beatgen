@@ -56,8 +56,9 @@ export const DrumPatternPreview: React.FC<DrumPatternPreviewProps> = ({
   }, [numCols, ticksPerStep, pixelsPerTick, contentOffset, visibleRange]);
 
   // Calculate cell width based on timeline positioning
+  const horizontalGap = 1; // Gap between horizontally adjacent cells
   const cellWidth = useMemo(() => {
-    return ticksPerStep * pixelsPerTick;
+    return (ticksPerStep * pixelsPerTick) - horizontalGap;
   }, [ticksPerStep, pixelsPerTick]);
 
   // Render drum pattern cells
@@ -73,34 +74,15 @@ export const DrumPatternPreview: React.FC<DrumPatternPreviewProps> = ({
         cells.push(
           <Rect
             key={`cell-${rowIndex}-${stepIndex}`}
-            x={x}
+            x={x + horizontalGap / 2}
             y={y}
             width={cellWidth}
             height={rowHeight}
-            fill={isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.05)'}
-            cornerRadius={1}
+            fill="white"
+            opacity={isActive ? 0.8 : 0.05}
+            cornerRadius={3}
           />
         );
-        
-        // Glow effect for active cells
-        if (isActive) {
-          cells.push(
-            <Rect
-              key={`glow-${rowIndex}-${stepIndex}`}
-              x={x - 1}
-              y={y - 1}
-              width={cellWidth + 2}
-              height={rowHeight + 2}
-              fill="transparent"
-              stroke="rgba(255, 255, 255, 0.6)"
-              strokeWidth={0.5}
-              cornerRadius={1}
-              shadowColor="white"
-              shadowBlur={2}
-              shadowOpacity={0.4}
-            />
-          );
-        }
       });
     });
     

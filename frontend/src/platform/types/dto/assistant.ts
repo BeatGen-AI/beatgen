@@ -15,6 +15,7 @@ export type ActionType =
   | "add_track"
   | "add_drum_track"
   | "add_sampler_track"
+  | "add_audio_track"
   | "adjust_volume"
   | "adjust_pan"
   | "toggle_mute"

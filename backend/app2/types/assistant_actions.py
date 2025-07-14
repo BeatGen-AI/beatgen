@@ -52,6 +52,7 @@ class ActionType(str, Enum):
     CHANGE_KEY = "change_key"
     CHANGE_TIME_SIGNATURE = "change_time_signature"
     ADD_TRACK = "add_track"
+    ADD_AUDIO_TRACK = "add_audio_track"
     ADD_DRUM_TRACK = "add_drum_track"
     ADD_SAMPLER_TRACK = "add_sampler_track"
     ADJUST_VOLUME = "adjust_volume"
@@ -101,6 +102,11 @@ class TrackData(ActionData):
     project_track_data: Optional[ProjectTrack] = Field(
         None, description="The data for the project track"
     )
+
+
+class AudioTrackData(ActionData):
+    """Data for adding an AI-generated audio track to the timeline"""
+    track_data: Dict[str, Any] = Field(..., description="Complete audio track data including metadata, file info, and waveform")
 
 
 class VolumeData(ActionData):
