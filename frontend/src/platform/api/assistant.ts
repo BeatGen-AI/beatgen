@@ -17,6 +17,14 @@ export interface AssistantRequestOptions {
     source?: string;
     auto_create_project?: boolean;
     model?: string;
+    // Musical context for better AI generation
+    bpm?: number;
+    time_signature?: {
+      numerator: number;
+      denominator: number;
+    };
+    key_signature?: string;
+    project_title?: string;
   };
 }
 

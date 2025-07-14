@@ -412,7 +412,7 @@ class FileService:
         """
         logger.info(f"Uploading audio file {file_name} for user ID: {user_id}")
         try:
-            # Generate unique storage key in the correct format: tracks/audio/{user_id}/{track_id}
+            # Generate unique storage key for audio files
             track_id = str(uuid.uuid4())
             file_extension = file_name.split(".")[-1]
             storage_key = f"audio/{user_id}/{track_id}.{file_extension}"

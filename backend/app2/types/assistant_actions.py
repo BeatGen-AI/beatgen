@@ -105,8 +105,8 @@ class TrackData(ActionData):
 
 
 class AudioTrackData(ActionData):
-    """Data for adding an audio track"""
-    track_data: Dict[str, Any] = Field(..., description="The audio track data")
+    """Data for adding an AI-generated audio track to the timeline"""
+    track_data: Dict[str, Any] = Field(..., description="Complete audio track data including metadata, file info, and waveform")
 
 
 class VolumeData(ActionData):

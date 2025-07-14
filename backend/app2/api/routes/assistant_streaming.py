@@ -19,6 +19,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse, StreamingResponse
 import asyncio
 import json
+import re
 import time
 from typing import Dict, Any, Optional, Literal
 import traceback
@@ -637,7 +638,18 @@ async def process_chat_request(request_id: str, context, queue: asyncio.Queue):
 async def process_generate_audio_request(
     request_id: str, context, sse_queue: SSEQueueManager, session: Session
 ):
-    """Process a generate-audio mode request using FAL-AI"""
+    """
+    Process a generate-audio mode request using FAL-AI Lyria2 model
+    
+    Generates solo instrument audio tracks based on user prompts, incorporating
+    musical context (BPM, key signature, time signature) from the DAW project.
+    
+    Args:
+        request_id: Unique identifier for this generation request
+        context: Request context containing user prompt and musical parameters
+        sse_queue: Server-sent events queue for real-time updates
+        session: Database session for track creation and credit management
+    """
     try:
         # Import services we need
         from app2.services.fal_ai_service import get_fal_ai_service
@@ -688,33 +700,59 @@ async def process_generate_audio_request(
                 )
                 return
         
-        # Parsing duration from prompt if specified, default to 10 seconds
-        duration = 10.0
+        # Extract musical context from request with sensible defaults
+        bpm = context.context.get('bpm', 120) if context.context else 120
+        key_signature = context.context.get('key_signature', 'C Major') if context.context else 'C Major'
+        time_signature = context.context.get('time_signature', {'numerator': 4, 'denominator': 4}) if context.context else {'numerator': 4, 'denominator': 4}
+        
         prompt_text = context.prompt
         
-        # Simple parsing for duration (e.g., "10 seconds", "5s", "30 second")
-        import re
+        # Parse number of bars from prompt (default to 4 bars for musical context)
+        bars = 4  # Default to 4 bars
+        bars_match = re.search(r'(\d+)\s*(?:bar|bars|measure|measures)\b', prompt_text.lower())
+        if bars_match:
+            bars = int(bars_match.group(1))
+            bars = min(max(bars, 1), 16)  # Clamp between 1-16 bars
+        
+        # Calculate duration based on BPM and bars for metadata (FAL-AI always generates 30s)
+        beats_per_bar = time_signature['numerator']
+        total_beats = bars * beats_per_bar
+        calculated_duration = (total_beats / bpm) * 60.0
+        
+        # Check for explicit duration in prompt (for metadata purposes)
         duration_match = re.search(r'(\d+)\s*(?:second|sec|s)\b', prompt_text.lower())
         if duration_match:
             duration = float(duration_match.group(1))
-            duration = min(max(duration, 1.0), 30.0)  # Clamp between 1-30 seconds
+            duration = min(max(duration, 1.0), 30.0)
+        else:
+            duration = min(max(calculated_duration, 1.0), 30.0)
+        
+        # Match the exact successful format from the API docs example
+        enhanced_prompt = f"{prompt_text} solo, minimalist, no accompaniment, no drums, no bass, acoustic"
+        
+        # Add key signature
+        if key_signature:
+            enhanced_prompt += f", key {key_signature}"
+        
+        # Add BPM and quality specs exactly like the working example
+        enhanced_prompt += f", {bpm}bpm, studio, 48kHz Stereo"
         
         await sse_queue.stage(
             name="generating_audio",
-            description=f"Generating audio with FAL-AI: '{prompt_text}' ({duration}s)"
+            description=f"Generating audio with FAL-AI: '{enhanced_prompt}' ({duration:.1f}s, {bars} bars)"
         )
         
         # Create FAL-AI service instance
         fal_ai_service = get_fal_ai_service()
         
+        # Match the exact negative prompt from the successful API example
+        negative_prompt = "accompaniment, drums, background instruments"
+        
         # Generate audio using FAL-AI
-        logger.info(f"Calling FAL-AI with prompt: '{prompt_text}', duration: {duration}s")
+        logger.info(f"Generating audio with FAL-AI - BPM: {bpm}, Key: {key_signature}, Bars: {bars}")
         audio_data, generation_result = await fal_ai_service.generate_and_download_audio(
-            prompt=prompt_text,
-            duration=duration,
-            temperature=1.0,
-            top_p=0.95,
-            audio_format="wav"
+            prompt=enhanced_prompt,
+            negative_prompt=negative_prompt
         )
         
         await sse_queue.stage(
@@ -758,8 +796,6 @@ async def process_generate_audio_request(
         # Convert to read model for the response
         created_track = AudioTrackRead.model_validate(audio_track)
         
-        # Debug: Log the created track to see what fields are included
-        logger.info(f"Created track data: {created_track.model_dump()}")
         
         await sse_queue.stage(
             name="completing",
@@ -778,9 +814,32 @@ async def process_generate_audio_request(
         # Send the action
         await sse_queue.action(action)
         
-        # Deduct credits
+        # Deduct credits using the correct method name with comprehensive metadata
         if user_credits_info and not user_credits_info.get("is_unlimited", False):
-            await credits_service.deduct_credits(user_id, 1, "Audio generation with FAL-AI")
+            await credits_service.use_credits(
+                user_id=user_id,
+                amount=1,
+                description="Audio generation with FAL-AI",
+                metadata={
+                    "request_id": request_id,
+                    "model": "fal-ai/lyria2",
+                    "user_prompt": prompt_text,
+                    "enhanced_prompt": enhanced_prompt,
+                    "negative_prompt": negative_prompt,
+                    "bpm": bpm,
+                    "key_signature": key_signature,
+                    "time_signature": time_signature,
+                    "bars": bars,
+                    "calculated_duration": duration,
+                    "generation_type": "audio"
+                },
+                # AI-specific parameters
+                model_provider="fal-ai",
+                model_name="lyria2",
+                request_id=request_id,
+                generation_type="audio",
+                prompt_preview=prompt_text[:200] if prompt_text else None
+            )
         
         # Send completion message
         response_text = f"Successfully generated audio: '{prompt_text}' ({duration} seconds)"

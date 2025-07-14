@@ -49,34 +49,32 @@ class FalAIService:
     async def generate_audio(
         self,
         prompt: str,
-        duration: float = 10.0,
-        temperature: float = 1.0,
-        top_p: float = 0.95,
-        audio_format: str = "wav"
+        negative_prompt: str = None,
+        seed: int = None
     ) -> AudioGenerationResult:
         """
         Generate audio using FAL-AI's Lyria2 model
         
         Args:
             prompt: Text description of the audio to generate
-            duration: Duration in seconds (default: 10.0)
-            temperature: Controls randomness (0.0-2.0, default: 1.0)
-            top_p: Controls diversity (0.0-1.0, default: 0.95)
-            audio_format: Output format ("wav" or "mp3", default: "wav")
+            negative_prompt: What to avoid in generation (optional)
+            seed: Random seed for reproducible results (optional)
             
         Returns:
             AudioGenerationResult with the generated audio information
         """
-        logger.info(f"Generating audio with prompt: '{prompt}', duration: {duration}s")
+        logger.info(f"Generating audio with prompt: '{prompt}'")
         
-        # Prepare request arguments for FAL-AI Lyria2
+        # Prepare request arguments for FAL-AI Lyria2 (only supported parameters)
         arguments = {
-            "prompt": prompt,
-            "duration": duration,
-            "temperature": temperature,
-            "top_p": top_p,
-            "output_format": audio_format
+            "prompt": prompt
         }
+        
+        # Add optional parameters if provided
+        if negative_prompt:
+            arguments["negative_prompt"] = negative_prompt
+        if seed is not None:
+            arguments["seed"] = seed
         
         try:
             # Track logs from FAL-AI
@@ -85,7 +83,10 @@ class FalAIService:
                     for log in update.logs:
                         logger.info(f"FAL-AI log: {log['message']}")
             
-            logger.info(f"Submitting request to FAL-AI Lyria2: {arguments}")
+            logger.info(f"Submitting request to FAL-AI Lyria2")
+            logger.info(f"Prompt: '{arguments.get('prompt', 'N/A')[:100]}...'")
+            if arguments.get('negative_prompt'):
+                logger.info(f"Negative prompt: '{arguments.get('negative_prompt')}')")
             
             # Get the event loop
             loop = asyncio.get_event_loop()
@@ -101,7 +102,7 @@ class FalAIService:
                 )
             )
             
-            logger.info(f"FAL-AI response: {result}")
+            logger.info("FAL-AI generation completed successfully")
             
             # Extract audio URL from response
             # FAL-AI Lyria2 returns the audio in the "audio" field with nested structure
@@ -123,16 +124,16 @@ class FalAIService:
             if not audio_url:
                 raise Exception(f"No audio URL found in FAL-AI response. Response keys: {list(result.keys())}")
             
-            # Generate a unique filename
-            file_name = f"fal_ai_audio_{uuid.uuid4().hex[:8]}.{audio_format}"
+            # Generate a unique filename (FAL-AI Lyria2 outputs WAV)
+            file_name = f"fal_ai_audio_{uuid.uuid4().hex[:8]}.wav"
             
-            # Create result object
+            # Create result object (FAL-AI Lyria2 generates 30-second clips at 48kHz)
             audio_result = AudioGenerationResult(
                 audio_url=audio_url,
                 file_name=file_name,
-                duration=duration,
-                sample_rate=44100,  # FAL-AI typically uses 44.1kHz
-                format=f"audio/{audio_format}"
+                duration=30.0,  # FAL-AI Lyria2 always generates 30-second clips
+                sample_rate=48000,  # FAL-AI Lyria2 uses 48kHz
+                format="audio/wav"
             )
             
             logger.info(f"Audio generation successful: {file_name}")
@@ -174,10 +175,8 @@ class FalAIService:
     async def generate_and_download_audio(
         self,
         prompt: str,
-        duration: float = 10.0,
-        temperature: float = 1.0,
-        top_p: float = 0.95,
-        audio_format: str = "wav"
+        negative_prompt: str = None,
+        seed: int = None
     ) -> Tuple[bytes, AudioGenerationResult]:
         """
         Generate and download audio in one step
@@ -185,13 +184,11 @@ class FalAIService:
         Returns:
             Tuple of (audio_bytes, AudioGenerationResult)
         """
-        # Generate audio
+        # Generate audio with only supported parameters
         result = await self.generate_audio(
             prompt=prompt,
-            duration=duration,
-            temperature=temperature,
-            top_p=top_p,
-            audio_format=audio_format
+            negative_prompt=negative_prompt,
+            seed=seed
         )
         
         # Download the audio file

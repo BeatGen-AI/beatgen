@@ -89,7 +89,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   const [streamConnection, setStreamConnection] = useState<{ close: () => void } | null>(null);
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
   
-  // Access the store for executing actions
+  // Access the store for executing actions and project context
   const { 
     handleAddTrack, 
     handleTrackVolumeChange,
@@ -99,7 +99,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     loadTrack,
     loadDrumTrack,
     tracks,
-    updateTrackState
+    updateTrackState,
+    // Add project context for musical parameters
+    bpm,
+    timeSignature,
+    keySignature,
+    projectTitle
   } = useStudioStore();
   
   // Add state to handle visibility after animation
@@ -445,7 +450,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     
     try {
       // Determine the appropriate mode (lowercase for API)
-      const apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat' | 'generate-audio';
+      let apiMode: 'generate' | 'edit' | 'chat' | 'generate-audio';
+      if (mode === 'Generate Audio') {
+        apiMode = 'generate-audio';
+      } else {
+        apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat' | 'generate-audio';
+      }
       
       // Get track ID if selected
       const trackId = selectedTrack ? selectedTrack.id : undefined;
@@ -456,9 +466,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           prompt,
           mode: apiMode,
           model: selectedModel,
-          context: { // Pass selected model in context
+          context: { // Pass musical context for better AI generation
             model: selectedModel,
-            track_id: trackId
+            track_id: trackId,
+            bpm: bpm,
+            time_signature: {
+              numerator: timeSignature[0],
+              denominator: timeSignature[1]
+            },
+            key_signature: keySignature,
+            project_title: projectTitle
           }
         },
         setupStreamCallbacks()
@@ -799,7 +816,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   };
 
   const handleModeSelect = (newMode: string) => {
-    setMode(newMode.charAt(0).toUpperCase() + newMode.slice(1).toLowerCase());
+    // Handle special case for "generate-audio" to display as "Generate Audio"
+    if (newMode.toLowerCase() === 'generate-audio') {
+      setMode('Generate Audio');
+    } else {
+      setMode(newMode.charAt(0).toUpperCase() + newMode.slice(1).toLowerCase());
+    }
   };
 
   const handleContextClick = (event: React.MouseEvent<HTMLDivElement>) => {
