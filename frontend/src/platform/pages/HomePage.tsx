@@ -38,6 +38,16 @@ import SamplerLibrary from '../components/SamplerLibrary';
 import DrumLibrary from '../components/DrumLibrary';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Page } from '../types/pagination';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 // We'll define logoColors here since we're not importing from SimpleSidebar anymore
 const logoColors = [
   '#e539a9', // Bright Pink
@@ -72,6 +82,8 @@ export default function HomePage() {
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
   const [currentPageApi, setCurrentPageApi] = useState<number>(1);
   const [allFetchedProjects, setAllFetchedProjects] = useState<Project[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
   const [showSoundUploader, setShowSoundUploader] = useState(false);
   const [showGenerateSongModal, setShowGenerateSongModal] = useState(false);
@@ -147,17 +159,31 @@ export default function HomePage() {
     onSuccess: () => {
       showSnackbar('Project deleted successfully', 'success');
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
     },
     onError: (err) => {
       console.error('Error deleting project:', err);
       showSnackbar('Failed to delete project', 'error');
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
     },
   });
 
   const handleDeleteListedProject = async (projectId: string) => {
-    if (window.confirm('Are you sure you want to delete this project?')) {
-      performDeleteProject(projectId);
+    setProjectToDelete(projectId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteProject = () => {
+    if (projectToDelete) {
+      performDeleteProject(projectToDelete);
     }
+  };
+
+  const cancelDeleteProject = () => {
+    setDeleteDialogOpen(false);
+    setProjectToDelete(null);
   };
 
   const showSnackbar = (message: string, severity: 'success' | 'error') => {
@@ -462,6 +488,24 @@ export default function HomePage() {
         onClose={() => setShowGenerateSongModal(false)}
         onSaveAsProject={handleSaveGeneratedSong}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this project? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDeleteProject}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteProject}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

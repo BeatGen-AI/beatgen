@@ -20,6 +20,16 @@ import { Project } from '../types/project';
 import ProjectsDisplay from '../components/ProjectsDisplay';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Page } from '../types/pagination';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 
 // Import shared pagination constants
 import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
@@ -34,6 +44,8 @@ export default function Projects() {
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
   const [currentPageApi, setCurrentPageApi] = useState<number>(1);
   const [allFetchedProjects, setAllFetchedProjects] = useState<Project[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -103,17 +115,31 @@ export default function Projects() {
     onSuccess: () => {
       showSnackbar('Project deleted successfully', 'success');
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
     },
     onError: (err: Error) => {
       console.error('Error deleting project:', err);
       showSnackbar(`Failed to delete project: ${err.message}`, 'error');
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
     },
   });
 
   const handleDeleteProject = async (projectId: string) => {
-    if (window.confirm('Are you sure you want to delete this project?')) {
-      performDeleteProject(projectId);
+    setProjectToDelete(projectId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteProject = () => {
+    if (projectToDelete) {
+      performDeleteProject(projectToDelete);
     }
+  };
+
+  const cancelDeleteProject = () => {
+    setDeleteDialogOpen(false);
+    setProjectToDelete(null);
   };
 
   const showSnackbar = (message: string, severity: 'success' | 'error') => {
@@ -164,6 +190,24 @@ export default function Projects() {
             onCloseSnackbar={handleCloseSnackbar} 
             sectionColor={''}          />
       </Container>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this project? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDeleteProject}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteProject} disabled={isDeletingProject}>
+              {isDeletingProject ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
