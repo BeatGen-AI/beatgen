@@ -70,7 +70,6 @@ export function useProjectPrefetch() {
       };
       
       const newStatus = { ...currentStatus, ...updates };
-      console.log(`[STATUS DEBUG] Status updated for project ${projectId}. Previous:`, currentStatus, 'New:', newStatus);
       
       newMap.set(projectId, newStatus);
       return newMap;
