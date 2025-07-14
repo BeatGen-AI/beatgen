@@ -15,6 +15,7 @@ import {
 import { Project } from '../types/project';
 import { Button } from "../../components/ui/button";
 import ProjectCard from './DisplayCards/ProjectCard';
+import { PrefetchStatus as PrefetchStatusType } from '../hooks/useProjectPrefetch';
 const logoColors = [
   '#e539a9', // Bright Pink
   '#c63ba6', // Magenta
@@ -41,6 +42,7 @@ interface ProjectsDisplayProps {
   snackbarSeverity: 'success' | 'error';
   onCloseSnackbar: () => void;
   sectionColor: string;
+  getPrefetchStatus?: (projectId: string) => PrefetchStatusType | undefined;
 }
 
 const ProjectsDisplay: React.FC<ProjectsDisplayProps> = ({
@@ -60,6 +62,7 @@ const ProjectsDisplay: React.FC<ProjectsDisplayProps> = ({
   snackbarSeverity,
   onCloseSnackbar,
   sectionColor,
+  getPrefetchStatus,
 }) => {
   return (
     <React.Fragment>
@@ -110,6 +113,7 @@ const ProjectsDisplay: React.FC<ProjectsDisplayProps> = ({
                 onEditProject={onEditProject}
                 onDeleteProject={onDeleteProject}
                 sectionColor={sectionColor}
+                getPrefetchStatus={getPrefetchStatus}
               />
             </Grid>
           ))}

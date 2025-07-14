@@ -23,8 +23,11 @@ import { AppThemeProvider } from './platform/theme/ThemeContext';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 10, // 10 minutes - increased for better caching
+      gcTime: 1000 * 60 * 30, // 30 minutes - keep in cache longer (formerly cacheTime)
       refetchOnWindowFocus: false,
+      refetchOnMount: false, // Don't refetch on component mount if data is fresh
+      retry: 2, // Retry failed requests twice
     },
   },
 });
