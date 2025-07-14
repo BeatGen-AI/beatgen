@@ -119,7 +119,13 @@ export const streamAssistantResponse = (
   callbacks: StreamCallbacks
 ): { close: () => void } => {
   try {
-    const url = `/assistant/stream/${requestId}`;
+    // Use the same backend URL logic as apiClient
+    const isDev = import.meta.env.VITE_APP_ENV === 'dev' || import.meta.env.DEV;
+    const API_URL = isDev 
+      ? import.meta.env.VITE_LOCAL_BACKEND_URL || '' 
+      : import.meta.env.VITE_PROD_BACKEND_BASE_URL || 'https://api.beatgen.com';
+    
+    const url = `${API_URL}/assistant/stream/${requestId}`;
     
     // Get auth token from localStorage with correct key
     const token = localStorage.getItem('access_token');
