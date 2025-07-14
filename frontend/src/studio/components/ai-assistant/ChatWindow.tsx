@@ -1085,18 +1085,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                 gap: 1
               }}
             >
-              {/* Model Selector Chip - Bottom Left */}
-              <MenuChip
-                label={selectedModel}
-                onClick={handleModelChipClick}
-              />
-              <ChatModelMenu
-                anchorEl={modelAnchorEl}
-                open={Boolean(modelAnchorEl)}
-                onClose={handleModelMenuClose}
-                onSelect={handleModelSelect}
-                models={AVAILABLE_MODELS}
-              />
+              {/* Model Selector Chip - Bottom Left (hidden for Generate Audio mode) */}
+              {mode !== 'Generate Audio' ? (
+                <>
+                  <MenuChip
+                    label={selectedModel}
+                    onClick={handleModelChipClick}
+                  />
+                  <ChatModelMenu
+                    anchorEl={modelAnchorEl}
+                    open={Boolean(modelAnchorEl)}
+                    onClose={handleModelMenuClose}
+                    onSelect={handleModelSelect}
+                    models={AVAILABLE_MODELS}
+                  />
+                </>
+              ) : (
+                <Box sx={{ flex: 1 }} />
+              )}
 
               {/* Send/Cancel Chip - Bottom Right */}
               <MenuChip 
