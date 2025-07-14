@@ -389,3 +389,50 @@ class FileService:
             logger.error(f"Error creating upload URL: {str(e)}")
             logger.error(traceback.format_exc())
             raise ServiceException(f"Failed to create upload URL: {str(e)}")
+
+    async def upload_audio_file(
+        self,
+        audio_data: bytes,
+        file_name: str,
+        user_id: str
+    ) -> str:
+        """
+        Upload audio file data directly to storage
+        
+        Args:
+            audio_data: The audio file content as bytes
+            file_name: The name of the file
+            user_id: The ID of the user
+            
+        Returns:
+            The storage key of the uploaded file
+            
+        Raises:
+            ServiceException: If the operation fails
+        """
+        logger.info(f"Uploading audio file {file_name} for user ID: {user_id}")
+        try:
+            # Generate unique storage key in the correct format: tracks/audio/{user_id}/{track_id}
+            track_id = str(uuid.uuid4())
+            file_extension = file_name.split(".")[-1]
+            storage_key = f"tracks/audio/{user_id}/{track_id}.{file_extension}"
+            
+            # Create storage client
+            from app2.infrastructure.storage.supabase_storage import SupabaseStorage
+            storage = SupabaseStorage("tracks")
+            
+            # Upload the file data directly to Supabase storage
+            upload_result = storage.upload_file(storage_key, audio_data)
+            
+            if not upload_result:
+                error_msg = "Failed to upload audio file to storage"
+                logger.error(error_msg)
+                raise Exception(error_msg)
+            
+            logger.info(f"Successfully uploaded audio file {file_name} with storage key: {storage_key}")
+            return storage_key
+            
+        except Exception as e:
+            logger.error(f"Error uploading audio file: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise ServiceException(f"Failed to upload audio file: {str(e)}")

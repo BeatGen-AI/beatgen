@@ -156,3 +156,36 @@ class SupabaseStorage:
             logger.error(f"Error listing files: {str(e)}")
             logger.error(traceback.format_exc())
             raise StorageException(f"Failed to list files: {str(e)}")
+
+    def upload_file(self, path: str, file_data: bytes) -> bool:
+        """
+        Upload file data directly to storage
+
+        Args:
+            path: The storage path where the file will be stored
+            file_data: The file content as bytes
+
+        Returns:
+            True if the operation was successful
+
+        Raises:
+            StorageException: If the operation fails
+        """
+        try:
+            logger.info(f"Uploading file directly to path: {path}")
+            
+            # Upload the file using the Supabase client
+            response = self._bucket.upload(path, file_data, {"upsert": "true"})
+            
+            # Check if upload was successful
+            if response:
+                logger.info(f"Successfully uploaded file to: {path}")
+                return True
+            else:
+                logger.error(f"Upload failed for path: {path}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error uploading file: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise StorageException(f"Failed to upload file: {str(e)}")

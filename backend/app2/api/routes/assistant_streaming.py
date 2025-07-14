@@ -68,7 +68,7 @@ load_dotenv()
 class AssistantRequestModel(AssistantRequest):
     """Unified request model for all assistant interaction types"""
 
-    mode: Literal["generate", "edit", "chat"]
+    mode: Literal["generate", "edit", "chat", "generate-audio"]
 
 
 # Response schema for request creation
@@ -300,6 +300,8 @@ async def process_assistant_request(request_id: str):
             # Process based on mode, passing the session
             if context.mode == "generate":
                 await process_generate_request(request_id, context, sse_queue, session)
+            elif context.mode == "generate-audio":
+                await process_generate_audio_request(request_id, context, sse_queue, session)
             elif context.mode == "edit":
                 # If process_edit_request needs a session, pass it here
                 await process_edit_request(request_id, context, sse_queue)
@@ -630,6 +632,162 @@ async def process_chat_request(request_id: str, context, queue: asyncio.Queue):
     # Send complete event
     await queue.put(("complete", final_response.dict()))
     logger.info(f"Chat request completed successfully: {request_id}")
+
+
+async def process_generate_audio_request(
+    request_id: str, context, sse_queue: SSEQueueManager, session: Session
+):
+    """Process a generate-audio mode request using FAL-AI"""
+    try:
+        # Import services we need
+        from app2.services.fal_ai_service import get_fal_ai_service
+        from app2.services.file_service import FileService
+        from app2.repositories.file_repository import FileRepository
+        from app2.models.track_models.audio_track import AudioTrackCreate, AudioTrackRead
+        from app2.repositories.audio_track_repository import AudioTrackRepository
+        import uuid
+        
+        # Create file service instance
+        file_repository = FileRepository(session)
+        file_service = FileService(file_repository)
+        
+        logger.info(f"Processing generate-audio request: {request_id}")
+        
+        # Get user ID
+        user_id = context.user_id
+        if not user_id:
+            await sse_queue.error(
+                message="User ID not found",
+                error_data={"error": "unauthorized", "message": "User authentication required"}
+            )
+            return
+        
+        # Check credits (same as generate mode)
+        user_credits_info = await credits_service.get_user_credits(user_id)
+        if not user_credits_info:
+            from app2.models.user import User
+            user = session.get(User, user_id)
+            if user:
+                await credits_service.initialize_user_credits(user)
+                user_credits_info = await credits_service.get_user_credits(user_id)
+        
+        if user_credits_info and not user_credits_info.get("is_unlimited", False):
+            current_balance = user_credits_info.get("balance", 0)
+            if isinstance(current_balance, str):
+                current_balance = 999999
+            
+            if current_balance < 1:
+                await sse_queue.error(
+                    message="Insufficient credits",
+                    error_data={
+                        "error": "insufficient_credits",
+                        "required": 1,
+                        "current_balance": current_balance,
+                        "message": "You need at least 1 credit to generate audio. Please upgrade your plan."
+                    }
+                )
+                return
+        
+        # Parsing duration from prompt if specified, default to 10 seconds
+        duration = 10.0
+        prompt_text = context.prompt
+        
+        # Simple parsing for duration (e.g., "10 seconds", "5s", "30 second")
+        import re
+        duration_match = re.search(r'(\d+)\s*(?:second|sec|s)\b', prompt_text.lower())
+        if duration_match:
+            duration = float(duration_match.group(1))
+            duration = min(max(duration, 1.0), 30.0)  # Clamp between 1-30 seconds
+        
+        await sse_queue.stage(
+            name="generating_audio",
+            description=f"Generating audio with FAL-AI: '{prompt_text}' ({duration}s)"
+        )
+        
+        # Create FAL-AI service instance
+        fal_ai_service = get_fal_ai_service()
+        
+        # Generate audio using FAL-AI
+        logger.info(f"Calling FAL-AI with prompt: '{prompt_text}', duration: {duration}s")
+        audio_data, generation_result = await fal_ai_service.generate_and_download_audio(
+            prompt=prompt_text,
+            duration=duration,
+            temperature=1.0,
+            top_p=0.95,
+            audio_format="wav"
+        )
+        
+        await sse_queue.stage(
+            name="processing_audio",
+            description="Processing and storing generated audio..."
+        )
+        
+        # Upload audio to storage
+        audio_track_id = str(uuid.uuid4())
+        storage_key = await file_service.upload_audio_file(
+            audio_data, 
+            generation_result.file_name,
+            user_id
+        )
+        
+        # Generate waveform data (simplified - you may want to use a proper audio analysis library)
+        # For now, we'll create a simple mock waveform
+        waveform_data = [0.0] * 200  # Placeholder waveform
+        
+        # Create audio track record
+        audio_track_data = AudioTrackCreate(
+            id=audio_track_id,
+            name=f"Generated Audio: {prompt_text[:50]}...",
+            audio_file_storage_key=storage_key,
+            audio_file_format="wav",
+            audio_file_size=len(audio_data),
+            audio_file_duration=duration,
+            audio_file_sample_rate=generation_result.sample_rate,
+            waveform_data=waveform_data
+        )
+        
+        # Add user_id to the track data before creating
+        audio_track_data.user_id = user_id
+        
+        # Save to database
+        audio_repo = AudioTrackRepository(session)
+        created_track = await audio_repo.create(audio_track_data)
+        
+        await sse_queue.stage(
+            name="completing",
+            description="Finalizing audio track..."
+        )
+        
+        # Create action to add the audio track to the frontend
+        action = AssistantAction(
+            type="add_audio_track",
+            data={
+                "track_data": created_track.model_dump()
+            }
+        )
+        
+        # Send the action
+        await sse_queue.action(action)
+        
+        # Deduct credits
+        if user_credits_info and not user_credits_info.get("is_unlimited", False):
+            await credits_service.deduct_credits(user_id, 1, "Audio generation with FAL-AI")
+        
+        # Send completion message
+        response_text = f"Successfully generated audio: '{prompt_text}' ({duration} seconds)"
+        
+        # Send completion
+        final_response = AssistantResponse(response=response_text)
+        await sse_queue.complete(final_response.model_dump())
+        
+        logger.info(f"Generate-audio request completed successfully: {request_id}")
+        
+    except Exception as e:
+        logger.error(f"Error in generate-audio request {request_id}: {str(e)}")
+        await sse_queue.error(
+            message=f"Failed to generate audio: {str(e)}",
+            error_data={"error": "generation_failed", "details": str(e)}
+        )
 
 
 # Ensure all endpoints in these routes are included in main.py

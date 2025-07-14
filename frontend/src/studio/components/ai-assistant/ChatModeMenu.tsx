@@ -54,6 +54,16 @@ const ChatModeMenu: React.FC<ChatModeMenuProps> = ({ anchorEl, open, onClose, on
       >
         Edit
       </MenuItem>
+      <MenuItem 
+        onClick={() => handleSelect('generate-audio')}
+        sx={{ 
+          paddingTop: '4px',      // Adjusted padding
+          paddingBottom: '4px',   // Adjusted padding
+          fontSize: '0.7rem'      // Matched font size from MenuChip
+        }}
+      >
+        Generate Audio
+      </MenuItem>
     </Menu>
   );
 };

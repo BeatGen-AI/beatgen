@@ -94,6 +94,12 @@ class ResendConfig(BaseModel):
     FROM_EMAIL: str = os.getenv("RESEND_FROM_EMAIL", "noreply@beatgen.com")
     FROM_NAME: str = os.getenv("RESEND_FROM_NAME", "BeatGen")
 
+class FalConfig(BaseModel):
+    """Fal configuration"""
+    
+    API_KEY: str = os.getenv("FAL_API_KEY", "")
+    BASE_URL: str = os.getenv("FAL_BASE_URL", "https://api.fal.com")
+    BASE_URL: str = os.getenv("FAL_BASE_URL", "https://api.fal.com")
 
 class StripeConfig(BaseModel):
     """Stripe payment configuration"""
