@@ -10,6 +10,7 @@ import { db } from '../../core/db/dexie-client';
 import { cn } from '@/lib/utils';
 import { interactWithAssistant, StreamCallbacks } from '../../../platform/api/assistant';
 import GenerationPromptControl from '../shared/GenerationPromptControl';
+import AudioPreview from '../shared/AudioPreview';
 
 // TrackCard component for displaying individual audio tracks
 interface TrackCardProps {
@@ -28,6 +29,15 @@ const TrackCard: React.FC<TrackCardProps> = ({
   const [isDownloading, setIsDownloading] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Debug logging
+  console.log('TrackCard: Rendering with track:', {
+    id: track.id,
+    name: track.name,
+    storage_key: track.audio_file_storage_key,
+    duration: track.audio_file_duration,
+    isPlaying
+  });
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -57,9 +67,9 @@ const TrackCard: React.FC<TrackCardProps> = ({
       // Download from remote storage
       const blob = await downloadAudioTrackFile(track.audio_file_storage_key);
       
-      // Store in IndexedDB for future use
+      // Store in IndexedDB for future use (upsert to handle existing keys)
       const file = new File([blob], track.name, { type: blob.type });
-      await db.addAudioFile(track.id, file, track.audio_file_duration);
+      await db.upsertAudioFile(track.id, file, track.audio_file_duration);
       
       // Create URL for playback
       const url = URL.createObjectURL(blob);
@@ -179,22 +189,17 @@ const TrackCard: React.FC<TrackCardProps> = ({
         </div>
       </div>
 
-      {/* Simple waveform visualization if available */}
-      {track.waveform_data && track.waveform_data.length > 0 && (
-        <div className="mb-2">
-          <div className="flex items-center h-8 gap-0.5 bg-muted/20 rounded px-2">
-            {track.waveform_data.slice(0, 50).map((amplitude, index) => (
-              <div
-                key={index}
-                className="bg-primary/60 flex-1 rounded-full"
-                style={{
-                  height: `${Math.max(2, Math.abs(amplitude) * 20)}px`,
-                }}
-              />
-            ))}
-          </div>
+      {/* Audio waveform preview */}
+      <div className="mb-2">
+        <div className="w-full h-[40px] flex items-center justify-center">
+          <AudioPreview 
+            audioUrl={track.audio_file_storage_key || ''}
+            variant="card"
+            duration={track.audio_file_duration}
+            isPlaying={isPlaying}
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -347,6 +352,17 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
 
     try {
       const result = await getSoundsPaginated(page, ITEMS_PER_PAGE);
+      
+      console.log('AudioTracksModal: Fetched tracks:', result.items?.length || 0, 'tracks');
+      if (result.items && result.items.length > 0) {
+        console.log('AudioTracksModal: Sample track data:', result.items[0]);
+        console.log('AudioTracksModal: All tracks storage keys:', result.items.map(t => ({
+          id: t.id,
+          name: t.name,
+          storage_key: t.audio_file_storage_key,
+          duration: t.audio_file_duration
+        })));
+      }
       
       if (append) {
         setTracks(prev => [...prev, ...(result.items || [])]);

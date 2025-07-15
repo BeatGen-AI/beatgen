@@ -4,7 +4,7 @@ import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon 
 import { AudioWaveform } from 'lucide-react';
 import { AudioTrackRead as Sound } from '../../../platform/types/dto/track_models/audio_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
-import { WaveformDisplay } from '../../../studio/components/track/WaveformDisplay';
+import AudioPreview from '../../../studio/components/shared/AudioPreview';
 import BaseTrackCard from './BaseTrackCard';
 
 interface AudioTrackCardProps {
@@ -52,11 +52,12 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
 
   const previewContent = (
     <div className="w-full h-[50px] flex items-center justify-center">
-      <WaveformDisplay
-        waveformData={sound.waveform_data}
-        trackColor={sectionColor}
+      <AudioPreview
+        audioUrl={sound.audio_file_storage_key || ''}
+        variant="card"
         duration={sound.audio_file_duration}
-        width={260}
+        isPlaying={isPlaying}
+        color={sectionColor}
       />
     </div>
   );
