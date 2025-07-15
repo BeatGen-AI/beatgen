@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Music, Loader2, Play, Pause, Upload } from 'lucide-react';
+import { Music, Loader2, Play, Pause, Upload, Send } from 'lucide-react';
 import { AudioTrackRead } from '../../../platform/types/dto/track_models/audio_track';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getSoundsPaginated, downloadAudioTrackFile } from '../../../platform/api/sounds';
 import { db } from '../../core/db/dexie-client';
 import { cn } from '@/lib/utils';
+import { interactWithAssistant, StreamCallbacks } from '../../../platform/api/assistant';
+import GenerationPromptControl from '../shared/GenerationPromptControl';
 
 // TrackCard component for displaying individual audio tracks
 interface TrackCardProps {
@@ -209,6 +212,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   onSelectTrack,
   onFileUpload
 }) => {
+  const [activeTab, setActiveTab] = useState('my-tracks');
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [tracks, setTracks] = useState<AudioTrackRead[]>([]);
@@ -218,6 +222,13 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Generation state
+  const [generatePrompt, setGeneratePrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState('');
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [streamConnection, setStreamConnection] = useState<{ close: () => void } | null>(null);
   
   const ITEMS_PER_PAGE = 12;
 
@@ -247,6 +258,81 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
         fetchTracks(1, false);
       }, 1000);
     }
+  };
+
+  const handleGenerateAudio = async () => {
+    if (!generatePrompt.trim() || isGenerating) return;
+
+    setIsGenerating(true);
+    setGenerationStatus('Initializing audio generation...');
+    setGenerationError(null);
+
+    try {
+      const streamCallbacks: StreamCallbacks = {
+        onConnected: () => {
+          setGenerationStatus('Connected to generation service...');
+        },
+        onStage: (stage) => {
+          setGenerationStatus(stage.description || `Stage: ${stage.name}`);
+        },
+        onStatus: (status) => {
+          setGenerationStatus(status.message || 'Processing...');
+        },
+        onAction: (action) => {
+          if (action.action_type === 'add_audio_track' && action.data?.track_data) {
+            // Convert the track data to AudioTrackRead and select it
+            const trackData = action.data.track_data as AudioTrackRead;
+            onSelectTrack(trackData);
+            setGenerationStatus('Audio generated successfully!');
+            setTimeout(() => {
+              onClose();
+            }, 1500);
+          }
+        },
+        onComplete: () => {
+          setIsGenerating(false);
+          setGenerationStatus('Generation completed!');
+          // Refresh tracks list to show the new generated track
+          fetchTracks(1, false);
+        },
+        onError: (error) => {
+          setIsGenerating(false);
+          setGenerationError(error.message || 'Failed to generate audio');
+          setGenerationStatus('');
+        }
+      };
+
+      const { close } = await interactWithAssistant(
+        {
+          prompt: generatePrompt,
+          mode: 'generate-audio',
+          model: 'fal-ai/lyria2',
+          context: {
+            bpm: 120, // Default BPM, could be made configurable
+            time_signature: { numerator: 4, denominator: 4 },
+            key_signature: 'C Major'
+          }
+        },
+        streamCallbacks
+      );
+
+      setStreamConnection({ close });
+    } catch (error) {
+      setIsGenerating(false);
+      setGenerationError('Failed to start audio generation');
+      setGenerationStatus('');
+      console.error('Generation error:', error);
+    }
+  };
+
+  const handleCancelGeneration = () => {
+    if (streamConnection) {
+      streamConnection.close();
+      setStreamConnection(null);
+    }
+    setIsGenerating(false);
+    setGenerationStatus('');
+    setGenerationError(null);
   };
 
   // Fetch tracks function
@@ -324,13 +410,13 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl w-[90vw] h-[85vh] p-0 flex flex-col shadow-2xl rounded-lg">
+      <DialogContent className="max-w-6xl w-[95vw] h-[85vh] p-0 flex flex-col shadow-2xl rounded-lg">
         <DialogHeader className="p-2">
           <div className="flex items-center justify-between pl-4 pt-4 pr-4">
             <DialogTitle className="text-2xl font-bold">
-              Select Audio Track
+              Audio Tracks
             </DialogTitle>
-            {onFileUpload && (
+            {onFileUpload && activeTab === 'my-tracks' && (
               <Button
                 onClick={handleImportClick}
                 className="flex items-center gap-2"
@@ -344,52 +430,137 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
         </DialogHeader>
 
         <div className="flex-grow flex flex-col overflow-hidden">
-          <div 
-            ref={scrollContainerRef}
-            className="flex-grow overflow-y-auto p-6 pt-0"
-          >
-            {isLoading && tracks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <Loader2 className="w-12 h-12 animate-spin mb-4" />
-                <p>Loading audio tracks...</p>
-              </div>
-            ) : error ? (
-              <Alert variant="destructive" className="mb-4">
-                Failed to load audio tracks: {error}
-              </Alert>
-            ) : (
-              <>
-                {/* Tracks List */}
-                <div className="space-y-3 pb-4">
-                  {tracks.length === 0 && !isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                      <Music className="w-16 h-16 mb-4" />
-                      <p className="text-lg font-medium mb-2">No audio tracks found</p>
-                      <p className="text-sm text-center">Upload some audio files to get started</p>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+            <div className="px-6 pb-0">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="my-tracks">My Audio Tracks</TabsTrigger>
+                <TabsTrigger value="generate">Generate Audio</TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent value="my-tracks" className="flex-grow overflow-hidden m-0">
+              <div className="h-full flex flex-col overflow-hidden">
+                <div 
+                  ref={scrollContainerRef}
+                  className="flex-grow overflow-y-auto p-6 pt-0"
+                >
+                  {isLoading && tracks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                      <Loader2 className="w-12 h-12 animate-spin mb-4" />
+                      <p>Loading audio tracks...</p>
                     </div>
+                  ) : error ? (
+                    <Alert variant="destructive" className="mb-4">
+                      Failed to load audio tracks: {error}
+                    </Alert>
                   ) : (
-                    tracks.map((track) => (
-                      <TrackCard
-                        key={track.id}
-                        track={track}
-                        onClick={() => handleTrackSelect(track)}
-                        isPlaying={playingId === track.id}
-                        onPlayToggle={() => handlePlayToggle(track.id)}
-                      />
-                    ))
+                    <>
+                      {/* Tracks List */}
+                      <div className="space-y-3 pb-4">
+                        {tracks.length === 0 && !isLoading ? (
+                          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                            <Music className="w-16 h-16 mb-4" />
+                            <p className="text-lg font-medium mb-2">No audio tracks found</p>
+                            <p className="text-sm text-center">Upload some audio files to get started</p>
+                          </div>
+                        ) : (
+                          tracks.map((track) => (
+                            <TrackCard
+                              key={track.id}
+                              track={track}
+                              onClick={() => handleTrackSelect(track)}
+                              isPlaying={playingId === track.id}
+                              onPlayToggle={() => handlePlayToggle(track.id)}
+                            />
+                          ))
+                        )}
+                      </div>
+
+                      {/* Loading more indicator */}
+                      {isLoadingMore && (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin" />
+                          <span className="ml-2 text-muted-foreground">Loading more...</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
+              </div>
+            </TabsContent>
 
-                {/* Loading more indicator */}
-                {isLoadingMore && (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                    <span className="ml-2 text-muted-foreground">Loading more...</span>
+            <TabsContent value="generate" className="flex-grow overflow-hidden m-0">
+              <div className="h-full flex flex-col overflow-hidden">
+                <div className="flex-grow overflow-y-auto p-6">
+                  <div className="space-y-6">
+                    <div className="text-center">
+                      <Music className="w-12 h-12 mx-auto mb-3 text-primary" />
+                      <h3 className="text-lg font-semibold mb-2">Generate Audio</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Describe the audio you want to generate and let AI create it for you
+                      </p>
+                    </div>
+
+                    <GenerationPromptControl
+                      prompt={generatePrompt}
+                      onPromptChange={setGeneratePrompt}
+                      onGenerate={handleGenerateAudio}
+                      isGenerating={isGenerating}
+                      placeholder="Describe the audio you want to generate (e.g., 'acoustic guitar melody in C major', 'piano chord progression', 'violin solo')"
+                      maxLength={500}
+                      showRandomButton={false}
+                      showSelect={false}
+                      submitButtonAriaLabel="Generate Audio"
+                    />
+
+                    {/* Generation Status */}
+                    {(isGenerating || generationStatus) && (
+                      <div className="bg-muted/50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">
+                            {isGenerating ? 'Generating...' : 'Status'}
+                          </span>
+                          {isGenerating && (
+                            <Button
+                              onClick={handleCancelGeneration}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Cancel
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isGenerating && <Loader2 className="h-4 w-4 animate-spin" />}
+                          <span className="text-sm text-muted-foreground">
+                            {generationStatus}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Generation Error */}
+                    {generationError && (
+                      <Alert variant="destructive">
+                        {generationError}
+                      </Alert>
+                    )}
+
+                    {/* Help Text */}
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <h4 className="font-medium mb-2">Tips for better results:</h4>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>• Be specific about the instrument (e.g., "acoustic guitar", "piano")</li>
+                        <li>• Mention the style or genre if desired</li>
+                        <li>• Specify key signature for musical coherence</li>
+                        <li>• Keep descriptions clear and concise</li>
+                      </ul>
+                    </div>
                   </div>
-                )}
-              </>
-            )}
-          </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Hidden file input */}
