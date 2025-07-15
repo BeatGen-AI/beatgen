@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Music, Loader2, Play, Pause, Upload, Send } from 'lucide-react';
+import { Music, Loader2, Play, Pause, Upload, Send, Download } from 'lucide-react';
 import { AudioTrackRead } from '../../../platform/types/dto/track_models/audio_track';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ const TrackCard: React.FC<TrackCardProps> = ({
   const [isDownloading, setIsDownloading] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isDownloadingFile, setIsDownloadingFile] = useState(false);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -101,6 +102,41 @@ const TrackCard: React.FC<TrackCardProps> = ({
     onPlayToggle();
   }, [audioUrl, isPlaying, onPlayToggle, downloadAndCacheAudio]);
 
+  // Handle download
+  const handleDownload = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!track.audio_file_storage_key) return;
+    
+    setIsDownloadingFile(true);
+    try {
+      // Check if we already have this file cached
+      let blob: Blob;
+      const existingFile = await db.getAudioFile(track.id);
+      
+      if (existingFile) {
+        blob = existingFile.data;
+      } else {
+        // Download from remote storage
+        blob = await downloadAudioTrackFile(track.audio_file_storage_key);
+      }
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${track.name}.${track.audio_file_format || 'wav'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download audio file:', error);
+    } finally {
+      setIsDownloadingFile(false);
+    }
+  }, [track.id, track.audio_file_storage_key, track.name, track.audio_file_format]);
+
   // Cleanup audio URL when component unmounts
   useEffect(() => {
     return () => {
@@ -131,28 +167,26 @@ const TrackCard: React.FC<TrackCardProps> = ({
       
       <div className="flex items-start justify-between mb-2">
         <div className="flex-grow min-w-0">
-          <div className="flex items-center justify-between mt-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {track.created_at ? new Date(track.created_at).toLocaleDateString() : 'Unknown date'}
-              </span>
-              {track.audio_file_duration > 0 && (
-                <>
-                  <span className="text-xs text-muted-foreground">•</span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDuration(track.audio_file_duration)}
-                  </span>
-                </>
-              )}
-              {track.audio_file_size && (
-                <>
-                  <span className="text-xs text-muted-foreground">•</span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatFileSize(track.audio_file_size)}
-                  </span>
-                </>
-              )}
-            </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs text-muted-foreground">
+              {track.created_at ? new Date(track.created_at).toLocaleDateString() : 'Unknown date'}
+            </span>
+            {track.audio_file_duration > 0 && (
+              <>
+                <span className="text-xs text-muted-foreground">•</span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDuration(track.audio_file_duration)}
+                </span>
+              </>
+            )}
+            {track.audio_file_size && (
+              <>
+                <span className="text-xs text-muted-foreground">•</span>
+                <span className="text-xs text-muted-foreground">
+                  {formatFileSize(track.audio_file_size)}
+                </span>
+              </>
+            )}
             
             {/* Format and Sample Rate */}
             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
@@ -163,12 +197,25 @@ const TrackCard: React.FC<TrackCardProps> = ({
           </div>
         </div>
 
-        {/* Play Button */}
+        {/* Download and Play Buttons */}
         <div className="flex items-center gap-0.5 ml-2">
+          <button
+            onClick={handleDownload}
+            className="p-1 rounded-full text-muted-foreground hover:text-primary transition-colors"
+            disabled={isDownloadingFile}
+            title="Download audio file"
+          >
+            {isDownloadingFile ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Download className="w-3.5 h-3.5" />
+            )}
+          </button>
           <button
             onClick={handlePlayToggle}
             className="p-1 rounded-full text-muted-foreground hover:text-primary transition-colors"
             disabled={isDownloading}
+            title={isPlaying ? "Pause" : "Play"}
           >
             {isDownloading ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -567,7 +614,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                       </div>
 
                       {/* File Upload Area */}
-                      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+                      <div className="border-2 h-85 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors flex items-center justify-center">
                         <input
                           ref={fileInputRef}
                           type="file"
@@ -621,6 +668,17 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                       </p>
                     </div>
 
+                    {/* Help Text */}
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <h4 className="font-medium mb-2">Tips for better results:</h4>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>• Be specific about the instrument (e.g., "acoustic guitar", "piano")</li>
+                        <li>• Mention the style or genre if desired</li>
+                        <li>• Specify key signature for musical coherence</li>
+                        <li>• Keep descriptions clear and concise</li>
+                      </ul>
+                    </div>
+
                     <GenerationPromptControl
                       prompt={generatePrompt}
                       onPromptChange={setGeneratePrompt}
@@ -665,17 +723,6 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                         {generationError}
                       </Alert>
                     )}
-
-                    {/* Help Text */}
-                    <div className="bg-muted/30 rounded-lg p-4">
-                      <h4 className="font-medium mb-2">Tips for better results:</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• Be specific about the instrument (e.g., "acoustic guitar", "piano")</li>
-                        <li>• Mention the style or genre if desired</li>
-                        <li>• Specify key signature for musical coherence</li>
-                        <li>• Keep descriptions clear and concise</li>
-                      </ul>
-                    </div>
                   </div>
                 </div>
               </div>

@@ -40,6 +40,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   
   // Use provided color or fallback to a neutral color
   const waveformColor = color || 'rgba(139, 69, 19, 0.8)'; // Default brownish color
+  console.log('AudioPreview: color prop received:', color, 'final waveformColor:', waveformColor);
   const backgroundColor = 'transparent';
   const skeletonColor = 'rgba(0, 0, 0, 0.1)';
   const errorBg = 'rgba(0, 0, 0, 0.1)';
