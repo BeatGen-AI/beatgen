@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from "../../components/ui/button";
 import { Add as AddIcon } from '@mui/icons-material';
 // import SoundUploader from './SoundUploader'; // Path might need adjustment if SoundUploader is in a different directory
 import SoundLibrary from './SoundLibrary'; // Assuming SoundLibrary is in the same components folder or adjust path
 import { AudioTracksModal } from '../../studio/components/modals/AudioTracksModal';
 import { AudioTrackRead } from '../types/dto/track_models/audio_track';
+import { getUploadUrl, createSoundRecord } from '../api/sounds';
+import { processAudioFile as processAudioFileUtil, uploadFileWithProgress } from '../../studio/utils/audioProcessing';
 
 interface AudioTracksDisplayProps {
   onReloadSounds: () => void;
@@ -28,6 +31,7 @@ const AudioTracksDisplay: React.FC<AudioTracksDisplayProps> = ({
   // onCancelUpload,
   // showSnackbar,
 }) => {
+  const queryClient = useQueryClient();
   const [isAudioTracksModalOpen, setIsAudioTracksModalOpen] = useState(false);
 
   const handleSelectTrack = (track: AudioTrackRead) => {
@@ -37,11 +41,43 @@ const AudioTracksDisplay: React.FC<AudioTracksDisplayProps> = ({
     onReloadSounds(); // Refresh the sound library to show any new tracks
   };
 
-  const handleFileUpload = (file: File) => {
-    // File upload is handled by the AudioTracksModal's upload functionality
-    // Once uploaded, it will appear in the user's library
-    setIsAudioTracksModalOpen(false);
-    onReloadSounds(); // Refresh the sound library to show the new track
+  const handleFileUpload = async (file: File) => {
+    try {
+      // 1. Generate UUID and get presigned URL
+      const trackId = crypto.randomUUID();
+      const { id, upload_url, storage_key } = await getUploadUrl(file.name, trackId, 'audio');
+      
+      // 2. Upload file with progress tracking
+      await uploadFileWithProgress(file, upload_url, () => {});
+      
+      // 3. Process file to get metadata
+      const metadata = await processAudioFileUtil(file);
+      
+      // 4. Create database record with name derived from filename (same as studio)
+      const soundName = file.name.split('.').slice(0, -1).join('.') || file.name;
+      await createSoundRecord({
+        id: id,
+        name: soundName,
+        audio_file_format: metadata.format,
+        audio_file_duration: metadata.duration,
+        audio_file_size: file.size,
+        audio_file_sample_rate: metadata.sampleRate,
+        audio_file_storage_key: storage_key,
+        waveform_data: metadata.waveform
+      });
+      
+      // 5. Close modal and refresh library
+      setIsAudioTracksModalOpen(false);
+      
+      // Invalidate the audioTracks query to force a refresh
+      queryClient.invalidateQueries({ queryKey: ['audioTracks'] });
+      
+      // Also call the callback if provided
+      onReloadSounds();
+    } catch (error) {
+      console.error('Failed to upload audio file:', error);
+      // TODO: Show error to user
+    }
   };
 
   return (

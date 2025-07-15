@@ -775,7 +775,7 @@ async def process_generate_audio_request(
         # Create audio track record data as a dictionary (since AudioTrackCreate doesn't have user_id)
         audio_track_data = {
             "id": audio_track_id,
-            "name": f"Generated Audio: {prompt_text[:50]}...",
+            "name": prompt_text[:50] + ("..." if len(prompt_text) > 50 else ""),
             "audio_file_storage_key": storage_key,
             "audio_file_format": "wav",
             "audio_file_size": len(audio_data),

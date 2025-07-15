@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { downloadAudioTrackFile } from '../../../platform/api/sounds';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
 
 // Global audio context to prevent it from being closed/recreated
 let globalAudioContext: AudioContext | null = null;
@@ -32,9 +31,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
 }) => {
   console.log('AudioPreview: Component render with audioUrl:', audioUrl);
   
-  const { studioMode } = useAppTheme();
-  const isDark = studioMode === 'dark';
-  
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,12 +38,12 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   const effectRunCount = useRef(0);
   const prevWaveformDataRef = useRef<number[]>([]);
   
-  // Theme-aware colors
-  const waveformColor = color || (isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)');
-  const backgroundColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
-  const skeletonColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-  const errorBg = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-  const errorText = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+  // Use provided color or fallback to a neutral color
+  const waveformColor = color || 'rgba(139, 69, 19, 0.8)'; // Default brownish color
+  const backgroundColor = 'transparent';
+  const skeletonColor = 'rgba(0, 0, 0, 0.1)';
+  const errorBg = 'rgba(0, 0, 0, 0.1)';
+  const errorText = 'rgba(0, 0, 0, 0.6)';
 
   // Track waveform data changes
   useEffect(() => {
@@ -90,9 +86,9 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       case 'track':
         return '40px';
       case 'card':
-        return '32px';
+        return '60px';
       default:
-        return '32px';
+        return '60px';
     }
   };
 

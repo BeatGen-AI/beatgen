@@ -131,30 +131,30 @@ const TrackCard: React.FC<TrackCardProps> = ({
       
       <div className="flex items-start justify-between mb-2">
         <div className="flex-grow min-w-0">
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-xs text-muted-foreground">
-              {track.created_at ? new Date(track.created_at).toLocaleDateString() : 'Unknown date'}
-            </span>
-            {track.audio_file_duration > 0 && (
-              <>
-                <span className="text-xs text-muted-foreground">•</span>
-                <span className="text-xs text-muted-foreground">
-                  {formatDuration(track.audio_file_duration)}
-                </span>
-              </>
-            )}
-            {track.audio_file_size && (
-              <>
-                <span className="text-xs text-muted-foreground">•</span>
-                <span className="text-xs text-muted-foreground">
-                  {formatFileSize(track.audio_file_size)}
-                </span>
-              </>
-            )}
-          </div>
-          
-          {/* Format and Sample Rate */}
-          <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center justify-between mt-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {track.created_at ? new Date(track.created_at).toLocaleDateString() : 'Unknown date'}
+              </span>
+              {track.audio_file_duration > 0 && (
+                <>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDuration(track.audio_file_duration)}
+                  </span>
+                </>
+              )}
+              {track.audio_file_size && (
+                <>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatFileSize(track.audio_file_size)}
+                  </span>
+                </>
+              )}
+            </div>
+            
+            {/* Format and Sample Rate */}
             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
               <Music className="w-2.5 h-2.5 mr-1" />
               {track.audio_file_format?.toUpperCase() || 'AUDIO'}
