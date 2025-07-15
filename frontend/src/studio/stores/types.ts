@@ -54,8 +54,14 @@ export interface DrumTrackPayload {
   samples: DrumSamplePublicRead[]; // Assuming DrumSamplePublicRead is defined/imported here
 }
 
+export interface AudioTrackPayload {
+  audioTrackData?: AudioTrackRead;  // For existing tracks from modal
+  file?: File;                      // For new file uploads  
+  isSampler?: boolean;              // For sampler vs audio distinction
+}
+
 // Union type for the payload for adding tracks
-export type AddTrackPayload = MidiTrackPayload | DrumTrackPayload | { file?: File; isSampler?: boolean } | null;
+export type AddTrackPayload = MidiTrackPayload | DrumTrackPayload | AudioTrackPayload | null;
 
 export enum KeySignature {
   C_MAJOR = "C Major",

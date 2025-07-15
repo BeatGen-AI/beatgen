@@ -1,7 +1,7 @@
 import { TrackInstance } from 'src/platform/types/project';
 import { CombinedTrackEntity as CombinedTrack } from 'src/platform/types/entities/project';
 import { Position } from '../../components/track';
-import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTrackPayload, DrumTrackPayload, MidiTrackPayload, AudioTrackOptions, SamplerTrackOptions, MidiTrackOptions, AnyTrackRead, MidiTrack, AudioTrack, SamplerTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, DrumTrackOptions } from '../types';
+import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTrackPayload, DrumTrackPayload, MidiTrackPayload, AudioTrackPayload, AudioTrackOptions, SamplerTrackOptions, MidiTrackOptions, AnyTrackRead, MidiTrack, AudioTrack, SamplerTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, DrumTrackOptions } from '../types';
 import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions';
 import type { Action } from '../../core/state/history/actions'; 
@@ -1143,7 +1143,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               return rootState.findTrackById(mainDrumTrackId); 
           }
           
-          // --- Standard/MIDI/Sampler Track Creation (Unchanged) --- 
+          // --- Standard/MIDI/AUDIO/Sampler Track Creation --- 
           const countStd = rootState.tracks.length + 1;
           let instrumentNameStd: string | undefined;
           let trackOptionsStd: TrackOptions = {};
@@ -1155,6 +1155,22 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   instrumentName: midiPayload.instrumentName,
                   instrumentStorageKey: midiPayload.instrumentStorageKey
               };
+          } else if (type === 'AUDIO' && payload && 'audioTrackData' in payload) {
+              const audioPayload = payload as AudioTrackPayload;
+              const existingTrack = audioPayload.audioTrackData;
+              
+              if (existingTrack) {
+                  instrumentNameStd = existingTrack.name;
+                  trackOptionsStd = {
+                      name: existingTrack.name,
+                      storage_key: existingTrack.audio_file_storage_key,
+                      audio_file_format: existingTrack.audio_file_format,
+                      audio_file_size: existingTrack.audio_file_size,
+                      audio_file_duration: existingTrack.audio_file_duration,
+                      audio_file_sample_rate: existingTrack.audio_file_sample_rate,
+                      waveform_data: existingTrack.waveform_data,
+                  };
+              }
           }
           const trackNameStd = TRACK_CONFIG[type]?.getDefaultName(countStd, instrumentNameStd) || `Track ${countStd}`;
           const trackData = await createTrackAndRegisterWithHistory(type, trackNameStd, trackOptionsStd);
