@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { Group, Line, Rect } from 'react-konva';
+import { Group, Line, Rect, Shape } from 'react-konva';
 import { CombinedTrack } from 'src/platform/types/project';
 import { analyzeAudioFile, getAudioStorageKey, getAudioDuration } from '../../../../utils/audioAnalysis';
 
@@ -155,20 +155,50 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
       {/* Only render waveform if we have real data */}
       {realWaveformData.length > 0 && (
         <>
-          {/* Upper waveform */}
+          {/* Filled waveform area */}
+          <Shape
+            sceneFunc={(context, shape) => {
+              context.beginPath();
+              
+              // Draw upper waveform
+              for (let i = 0; i < upperPoints.length; i += 2) {
+                const x = upperPoints[i];
+                const y = upperPoints[i + 1];
+                if (i === 0) {
+                  context.moveTo(x, y);
+                } else {
+                  context.lineTo(x, y);
+                }
+              }
+              
+              // Draw lower waveform (in reverse to close the path)
+              for (let i = lowerPoints.length - 2; i >= 0; i -= 2) {
+                const x = lowerPoints[i];
+                const y = lowerPoints[i + 1];
+                context.lineTo(x, y);
+              }
+              
+              context.closePath();
+              context.fillStrokeShape(shape);
+            }}
+            fill="white"
+            opacity={0.3}
+          />
+          
+          {/* Upper waveform outline */}
           <Line
             points={upperPoints}
-            stroke={color}
+            stroke="white"
             strokeWidth={2}
             lineJoin="round"
             lineCap="round"
             opacity={0.95}
           />
           
-          {/* Lower waveform */}
+          {/* Lower waveform outline */}
           <Line
             points={lowerPoints}
-            stroke={color}
+            stroke="white"
             strokeWidth={2}
             lineJoin="round"
             lineCap="round"
