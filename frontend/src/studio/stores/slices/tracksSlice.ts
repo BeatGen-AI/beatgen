@@ -1161,6 +1161,20 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               
               if (existingTrack) {
                   instrumentNameStd = existingTrack.name;
+                  
+                  // Retrieve the audio file from IndexedDB
+                  let audioFile: File | undefined;
+                  try {
+                      const cachedFile = await db.getAudioFile(existingTrack.id);
+                      if (cachedFile) {
+                          audioFile = new File([cachedFile.data], existingTrack.name, { 
+                              type: cachedFile.type 
+                          });
+                      }
+                  } catch (error) {
+                      console.warn('Failed to retrieve audio file from IndexedDB:', error);
+                  }
+                  
                   trackOptionsStd = {
                       name: existingTrack.name,
                       storage_key: existingTrack.audio_file_storage_key,
@@ -1169,6 +1183,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                       audio_file_duration: existingTrack.audio_file_duration,
                       audio_file_sample_rate: existingTrack.audio_file_sample_rate,
                       waveform_data: existingTrack.waveform_data,
+                      audioFile: audioFile, // Include the actual file for audio engine
                   };
               }
           }
