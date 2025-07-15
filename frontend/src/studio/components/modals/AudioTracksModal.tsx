@@ -199,16 +199,21 @@ interface AudioTracksModalProps {
   onClose: () => void;
   onSelectTrack: (track: AudioTrackRead) => void;
   onFileUpload?: (file: File) => void;
+  useUiMode?: boolean; // When true, use UI mode; when false, use studio mode
+  uploadModeOnly?: boolean; // When true, only show upload tab instead of my tracks
 }
 
 export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   open,
   onClose,
   onSelectTrack,
-  onFileUpload
+  onFileUpload,
+  useUiMode = false, // Default to studio mode
+  uploadModeOnly = false // Default to show both tabs
 }) => {
   const { mode: uiMode, studioMode } = useAppTheme();
-  const [activeTab, setActiveTab] = useState('my-tracks');
+  const effectiveMode = useUiMode ? uiMode : studioMode;
+  const [activeTab, setActiveTab] = useState(uploadModeOnly ? 'upload' : 'my-tracks');
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [tracks, setTracks] = useState<AudioTrackRead[]>([]);
@@ -242,17 +247,24 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && onFileUpload) {
-      onFileUpload(file);
-      // Clear the input so the same file can be selected again
+    const files = event.target.files;
+    if (files && onFileUpload) {
+      // Handle multiple files
+      Array.from(files).forEach((file) => {
+        onFileUpload(file);
+      });
+      
+      // Clear the input so the same files can be selected again
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      // Refresh the tracks list after upload
-      setTimeout(() => {
-        fetchTracks(1, false);
-      }, 1000);
+      
+      // Refresh the tracks list after upload (only if not in upload mode only)
+      if (!uploadModeOnly) {
+        setTimeout(() => {
+          fetchTracks(1, false);
+        }, 1000);
+      }
     }
   };
 
@@ -400,14 +412,54 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
     }
   }, [isLoadingMore, currentPage, totalItems, handleLoadMore]);
 
-  // Initial load when modal opens
+  // Apply the appropriate dark mode to document element when dialog is open
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    
+    const root = window.document.documentElement;
+    const originalHasDark = root.classList.contains('dark');
+    
+    // Apply or remove dark class based on effectiveMode immediately
+    if (effectiveMode === 'dark' && !originalHasDark) {
+      root.classList.add('dark');
+    } else if (effectiveMode === 'light' && originalHasDark) {
+      root.classList.remove('dark');
+    }
+    
+    // Don't restore immediately on cleanup - let the dialog close first
+    return () => {
+      // We'll handle restoration when dialog fully closes
+    };
+  }, [open, effectiveMode]);
+  
+  // Separate effect to handle restoration after dialog closes
+  useEffect(() => {
+    if (open) return; // Only run when dialog is closed
+    
+    // Restore original dark mode after animation completes
+    const timeoutId = setTimeout(() => {
+      const root = window.document.documentElement;
+      const currentHasDark = root.classList.contains('dark');
+      const shouldHaveDark = uiMode === 'dark';
+      
+      if (shouldHaveDark && !currentHasDark) {
+        root.classList.add('dark');
+      } else if (!shouldHaveDark && currentHasDark) {
+        root.classList.remove('dark');
+      }
+    }, 200); // Wait for closing animation
+    
+    return () => clearTimeout(timeoutId);
+  }, [open, uiMode]);
+
+  // Initial load when modal opens (only if not in upload mode only)
+  useEffect(() => {
+    if (open && !uploadModeOnly) {
       setCurrentPage(1);
       setTracks([]);
       fetchTracks(1, false);
     }
-  }, [open]);
+  }, [open, uploadModeOnly]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -434,61 +486,128 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
             <div className="px-6 pb-0">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="my-tracks">My Audio Tracks</TabsTrigger>
-                <TabsTrigger value="generate">Generate Audio</TabsTrigger>
+                {uploadModeOnly ? (
+                  <>
+                    <TabsTrigger value="upload">Upload Audio</TabsTrigger>
+                    <TabsTrigger value="generate">Generate Audio</TabsTrigger>
+                  </>
+                ) : (
+                  <>
+                    <TabsTrigger value="my-tracks">My Audio Tracks</TabsTrigger>
+                    <TabsTrigger value="generate">Generate Audio</TabsTrigger>
+                  </>
+                )}
               </TabsList>
             </div>
 
-            <TabsContent value="my-tracks" className="flex-grow overflow-hidden m-0">
-              <div className="h-full flex flex-col overflow-hidden">
-                <div 
-                  ref={scrollContainerRef}
-                  className="flex-grow overflow-y-auto p-6 pt-0"
-                >
-                  {isLoading && tracks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                      <Loader2 className="w-12 h-12 animate-spin mb-4" />
-                      <p>Loading audio tracks...</p>
-                    </div>
-                  ) : error ? (
-                    <Alert variant="destructive" className="mb-4">
-                      Failed to load audio tracks: {error}
-                    </Alert>
-                  ) : (
-                    <>
-                      {/* Tracks List */}
-                      <div className="space-y-3 pb-4">
-                        {tracks.length === 0 && !isLoading ? (
-                          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                            <Music className="w-16 h-16 mb-4" />
-                            <p className="text-lg font-medium mb-2">No audio tracks found</p>
-                            <p className="text-sm text-center">Upload some audio files to get started</p>
+            {!uploadModeOnly && (
+              <TabsContent value="my-tracks" className="flex-grow overflow-hidden m-0">
+                <div className="h-full flex flex-col overflow-hidden">
+                  <div 
+                    ref={scrollContainerRef}
+                    className="flex-grow overflow-y-auto p-6 pt-0"
+                  >
+                    {isLoading && tracks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <Loader2 className="w-12 h-12 animate-spin mb-4" />
+                        <p>Loading audio tracks...</p>
+                      </div>
+                    ) : error ? (
+                      <Alert variant="destructive" className="mb-4">
+                        Failed to load audio tracks: {error}
+                      </Alert>
+                    ) : (
+                      <>
+                        {/* Tracks List */}
+                        <div className="space-y-3 pb-4">
+                          {tracks.length === 0 && !isLoading ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                              <Music className="w-16 h-16 mb-4" />
+                              <p className="text-lg font-medium mb-2">No audio tracks found</p>
+                              <p className="text-sm text-center">Upload some audio files to get started</p>
+                            </div>
+                          ) : (
+                            tracks.map((track) => (
+                              <TrackCard
+                                key={track.id}
+                                track={track}
+                                onClick={() => handleTrackSelect(track)}
+                                isPlaying={playingId === track.id}
+                                onPlayToggle={() => handlePlayToggle(track.id)}
+                              />
+                            ))
+                          )}
+                        </div>
+
+                        {/* Loading more indicator */}
+                        {isLoadingMore && (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin" />
+                            <span className="ml-2 text-muted-foreground">Loading more...</span>
                           </div>
-                        ) : (
-                          tracks.map((track) => (
-                            <TrackCard
-                              key={track.id}
-                              track={track}
-                              onClick={() => handleTrackSelect(track)}
-                              isPlaying={playingId === track.id}
-                              onPlayToggle={() => handlePlayToggle(track.id)}
-                            />
-                          ))
                         )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            )}
+
+            {uploadModeOnly && (
+              <TabsContent value="upload" className="flex-grow overflow-hidden m-0">
+                <div className="h-full flex flex-col overflow-hidden">
+                  <div className="flex-grow overflow-y-auto p-6">
+                    <div className="space-y-6">
+                      <div className="text-center">
+                        <Upload className="w-12 h-12 mx-auto mb-3 text-primary" />
+                        <h3 className="text-lg font-semibold mb-2">Upload Audio</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Add audio files to your library
+                        </p>
                       </div>
 
-                      {/* Loading more indicator */}
-                      {isLoadingMore && (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="h-8 w-8 animate-spin" />
-                          <span className="ml-2 text-muted-foreground">Loading more...</span>
-                        </div>
-                      )}
-                    </>
-                  )}
+                      {/* File Upload Area */}
+                      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="audio/*"
+                          multiple
+                          onChange={handleFileChange}
+                          className="hidden"
+                          id="audio-upload"
+                        />
+                        <label
+                          htmlFor="audio-upload"
+                          className="cursor-pointer flex flex-col items-center gap-4"
+                        >
+                          <Upload className="w-8 h-8 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">
+                              Choose files or drag and drop
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Supports MP3, WAV, FLAC, and other audio formats
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Help Text */}
+                      <div className="bg-muted/30 rounded-lg p-4">
+                        <h4 className="font-medium mb-2">Tips for uploading:</h4>
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          <li>• Use high-quality audio files for best results</li>
+                          <li>• Supported formats: MP3, WAV, FLAC, OGG, M4A</li>
+                          <li>• Files will be added to your audio library</li>
+                          <li>• You can then add them to studio projects</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
+            )}
 
             <TabsContent value="generate" className="flex-grow overflow-hidden m-0">
               <div className="h-full flex flex-col overflow-hidden">

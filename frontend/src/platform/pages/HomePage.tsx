@@ -444,7 +444,7 @@ export default function HomePage() {
                 Audio Tracks
               </h2>
             </div>
-            <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={logoColors[2]} />
+            <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={logoColors[2]} useUiMode={true} />
           </FadeCard>
 
           {/* Midi Tracks Section */}
