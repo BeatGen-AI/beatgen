@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { Group, Line, Rect } from 'react-konva';
 import { CombinedTrack } from 'src/platform/types/project';
+import { analyzeAudioFile, getAudioStorageKey, getAudioDuration } from '../../../../utils/audioAnalysis';
 
 export interface AudioTrackRendererProps {
   track: CombinedTrack;
@@ -22,54 +23,83 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   contentOffset,
   color
 }) => {
+  const [realWaveformData, setRealWaveformData] = useState<number[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   // Validate props
   if (isNaN(width) || width <= 0) {
     console.warn('AudioTrackRenderer: Invalid width', width);
     return null;
   }
   
-  // Generate mock waveform data (in real app, this would come from audio analysis)
+  // Get audio storage key and duration from track
+  const audioStorageKey = getAudioStorageKey(track);
+  const audioDuration = getAudioDuration(track);
+  
+  // Calculate the actual width based on audio duration and pixelsPerTick
+  // For timeline tracks, we want the waveform to represent the actual duration
+  const actualWidth = useMemo(() => {
+    if (audioDuration > 0) {
+      // Convert duration to ticks (assuming 480 ticks per beat at 120 BPM)
+      const ticksPerSecond = 480 * 120 / 60; // 480 ticks per beat, 120 BPM = 2 beats per second
+      const durationTicks = audioDuration * ticksPerSecond;
+      return Math.max(durationTicks * pixelsPerTick, width);
+    }
+    return width;
+  }, [audioDuration, pixelsPerTick, width]);
+
+  // Load real waveform data
+  useEffect(() => {
+    const loadWaveform = async () => {
+      if (!audioStorageKey) {
+        setError('No audio storage key available');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Calculate number of bars based on actual width
+        const barCount = Math.floor(actualWidth / 2); // One bar every 2 pixels
+        const waveformData = await analyzeAudioFile(audioStorageKey, barCount);
+        
+        setRealWaveformData(waveformData);
+      } catch (err) {
+        console.error('AudioTrackRenderer: Failed to load waveform:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load waveform');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadWaveform();
+  }, [audioStorageKey, actualWidth]);
+
+  // Generate waveform points from real data only
   const waveformData = useMemo(() => {
     const points: number[] = [];
-    const samples = Math.floor(width / 2); // Sample every 2 pixels
     const centerY = height / 2;
     const maxAmplitude = height * 0.4; // 80% of height for waveform
     
-    // Generate a more realistic waveform pattern
-    for (let i = 0; i < samples; i++) {
-      const x = i * 2;
-      
-      // Create varying amplitude based on position
-      const progress = i / samples;
-      let amplitude = maxAmplitude;
-      
-      // Fade in at start
-      if (progress < 0.1) {
-        amplitude *= progress * 10;
+    if (realWaveformData.length > 0) {
+      // Use real waveform data
+      for (let i = 0; i < realWaveformData.length; i++) {
+        const x = i * 2; // 2 pixels per bar
+        const amplitude = realWaveformData[i] * maxAmplitude;
+        
+        // Upper waveform
+        points.push(x, centerY - amplitude);
+        
+        // Lower waveform (mirror)
+        points.push(x, centerY + amplitude);
       }
-      // Fade out at end
-      else if (progress > 0.9) {
-        amplitude *= (1 - progress) * 10;
-      }
-      // Add some variation in the middle
-      else {
-        const variation = Math.sin(progress * Math.PI * 8) * 0.3 + 0.7;
-        amplitude *= variation;
-      }
-      
-      // Add some randomness for realism
-      const randomFactor = 0.8 + Math.random() * 0.4;
-      amplitude *= randomFactor;
-      
-      // Upper waveform
-      points.push(x, centerY - amplitude);
-      
-      // Lower waveform (mirror)
-      points.push(x, centerY + amplitude);
     }
     
     return points;
-  }, [width, height]);
+  }, [realWaveformData, height]);
   
   // Split points into upper and lower waveforms
   const upperPoints = [];
@@ -86,40 +116,69 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
       <Rect
         x={0}
         y={0}
-        width={width}
+        width={actualWidth}
         height={height}
         fill={`${color}20`}
       />
       
       {/* Center line */}
       <Line
-        points={[0, height / 2, width, height / 2]}
+        points={[0, height / 2, actualWidth, height / 2]}
         stroke={`${color}40`}
         strokeWidth={1}
       />
       
-      {/* Upper waveform */}
-      <Line
-        points={upperPoints}
-        stroke={color}
-        strokeWidth={1.5}
-        lineJoin="round"
-        lineCap="round"
-        opacity={0.8}
-      />
+      {/* Loading indicator */}
+      {isLoading && (
+        <Rect
+          x={0}
+          y={0}
+          width={actualWidth}
+          height={height}
+          fill={`${color}10`}
+          opacity={0.5}
+        />
+      )}
       
-      {/* Lower waveform */}
-      <Line
-        points={lowerPoints}
-        stroke={color}
-        strokeWidth={1.5}
-        lineJoin="round"
-        lineCap="round"
-        opacity={0.8}
-      />
+      {/* Error state */}
+      {error && (
+        <Rect
+          x={0}
+          y={0}
+          width={actualWidth}
+          height={height}
+          fill={`${color}15`}
+          opacity={0.3}
+        />
+      )}
+      
+      {/* Only render waveform if we have real data */}
+      {realWaveformData.length > 0 && (
+        <>
+          {/* Upper waveform */}
+          <Line
+            points={upperPoints}
+            stroke={color}
+            strokeWidth={2}
+            lineJoin="round"
+            lineCap="round"
+            opacity={0.95}
+          />
+          
+          {/* Lower waveform */}
+          <Line
+            points={lowerPoints}
+            stroke={color}
+            strokeWidth={2}
+            lineJoin="round"
+            lineCap="round"
+            opacity={0.95}
+          />
+        </>
+      )}
       
       {/* Add some visual markers for beats (optional) */}
-      {Array.from({ length: Math.floor(width / (pixelsPerTick * 480)) }).map((_, i) => {
+      {Array.from({ length: Math.floor(actualWidth / (pixelsPerTick * 480)) }).map((_, i) => {
         const x = i * pixelsPerTick * 480; // Every beat
         return (
           <Line
