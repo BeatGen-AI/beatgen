@@ -107,23 +107,8 @@ def get_user_service(
     return UserService(user_repository)
 
 
-def get_project_service(
-    project_repository: Annotated[ProjectRepository, Depends(get_project_repository)],
-    project_track_repository: Annotated[
-        ProjectTrackRepository, Depends(get_project_track_repository)
-    ],
-    track_service: Annotated[TrackService, Depends(lambda: get_track_service())],
-) -> ProjectService:
-    """Get the project service instance"""
-    return ProjectService(project_repository, project_track_repository, track_service)
-
-
-def get_track_service() -> TrackService:
+def get_track_service(session: SessionDep) -> TrackService:
     """Get the track service instance with specialized track repositories"""
-    # This is a bit of a hack to avoid circular dependencies
-    # We create a new session here to avoid the circular dependency issue
-    session = next(get_session())
-
     audio_repository = AudioTrackRepository(session)
     midi_repository = MidiTrackRepository(session)
     sampler_repository = SamplerTrackRepository(session)
@@ -139,6 +124,17 @@ def get_track_service() -> TrackService:
         project_track_repository=project_track_repository,
         file_repository=file_repository,
     )
+
+
+def get_project_service(
+    project_repository: Annotated[ProjectRepository, Depends(get_project_repository)],
+    project_track_repository: Annotated[
+        ProjectTrackRepository, Depends(get_project_track_repository)
+    ],
+    track_service: Annotated[TrackService, Depends(get_track_service)],
+) -> ProjectService:
+    """Get the project service instance"""
+    return ProjectService(project_repository, project_track_repository, track_service)
 
 
 def get_file_service(

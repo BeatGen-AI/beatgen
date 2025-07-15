@@ -42,7 +42,7 @@ from app2.llm.available_models import ModelInfo
 from app2.llm import available_models
 from app2.llm.agents.music_agent import SongRequest, music_agent
 from pydantic import BaseModel
-from app2.infrastructure.database.sqlmodel_client import engine
+from app2.infrastructure.database.sqlmodel_client import get_async_session
 from sqlmodel import Session
 from app2.services.credits_service import credits_service
 
@@ -276,11 +276,9 @@ async def process_assistant_request(request_id: str):
         return
 
     # Get a database session for this background task
-    # Note: We need a way to get a session outside of a request dependency
-    # Option 1: Create a new session context manually (simplest for background task)
-    session = None  # Initialize session to None
+    # Use the async session context manager for proper cleanup
     try:
-        with Session(engine) as session:  # Create a new session for this task
+        async with get_async_session() as session:  # Use async session manager
             # Log start of processing
             logger.info(
                 f"Processing assistant request: {request_id}, mode: {context.mode} with session: {session}"

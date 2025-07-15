@@ -35,12 +35,12 @@ else:
         DATABASE_URL,
         echo=False,
         
-        # More aggressive connection management
+        # More conservative connection management
         pool_pre_ping=True,
         pool_recycle=300,
-        pool_size=35,  # Increased further but still under your 50 connection limit
-        max_overflow=10,
-        pool_timeout=60,
+        pool_size=20,  # Reduced from 35 to prevent pool exhaustion
+        max_overflow=5,  # Reduced from 10 to limit total connections
+        pool_timeout=30,  # Reduced from 60 to fail faster when pool is exhausted
         
         # Enhanced keepalive and reliability settings
         connect_args={
@@ -54,6 +54,14 @@ else:
             "connect_timeout": 15,
             "sslmode": "require",  # Explicitly require SSL
             "application_name": "beatgen"
+        },
+        
+        # Additional engine-level query timeout
+        execution_options={
+            "postgresql_readonly": False,
+            "postgresql_deferrable": False,
+            "isolation_level": "READ_COMMITTED",
+            "statement_timeout": 30000,  # 30 second timeout for queries
         }
     )
 
