@@ -97,6 +97,10 @@ class MusicGenerationContext:
     # Model configuration
     model_info: Optional[ModelInfo] = None
     queue: Optional[SSEQueueManager] = None
+    
+    # Database and user context
+    session: Optional[Session] = None
+    user_id: Optional[str] = None
 
 
 # --- Parallel Execution Support (Simplified) ---
@@ -1383,6 +1387,255 @@ Create rhythmic patterns that fit the composition style."""
 
         return drum_track
 
+    async def generate_user_style_prompt(self, params: FullMusicalParameters, selected_instruments: SelectInstruments, user_prompt: str) -> str:
+        """
+        Generate a natural user-style prompt for FAL-AI diffusion model using LLM.
+        
+        Args:
+            params: Musical parameters including key, tempo, chord progression
+            selected_instruments: Selected instruments for context
+            user_prompt: Original user request
+            
+        Returns:
+            A natural user-style prompt that would be enhanced through the normal flow
+        """
+        logger.info("Generating user-style prompt using LLM...")
+        
+        # Find the melody instrument for context
+        melody_instrument = "piano"  # Default fallback
+        melody_instrument_selection = next((
+            item for item in selected_instruments.instrument_selections
+            if item.role.lower() == "melody"
+        ), None)
+        
+        if melody_instrument_selection:
+            melody_instrument = melody_instrument_selection.instrument_name
+        
+        # Create system prompt
+        system_prompt = f"""You are a musician who wants to generate audio using a text-to-audio model.
+
+Your task is to create a natural, user-style prompt that someone would type to generate a solo instrument melody.
+
+Current musical context:
+- Key: {params.key} {params.mode}
+- Tempo: {params.tempo} BPM
+- Chord Progression: {params.chord_progression}
+- Selected Melody Instrument: {melody_instrument}
+- Song Title: {params.song_title or 'Untitled'}
+- Original User Request: "{user_prompt}"
+
+Create a simple, natural prompt that a user would type to generate a solo {melody_instrument} melody. Keep it conversational and natural - like what someone would actually type, not a technical specification.
+
+Examples of good user-style prompts:
+- "piano solo melody"
+- "gentle acoustic guitar melody"
+- "sad violin solo"
+- "upbeat saxophone melody"
+- "classical piano piece"
+
+Focus on the instrument and basic mood/style. Don't include technical specifications - those will be added automatically."""
+        
+        # Create the prompt request
+        prompt_request = f"""Based on the musical context and the user's original request "{user_prompt}", create a natural user-style prompt for generating a solo {melody_instrument} melody.
+
+The prompt should be something a real user would naturally type - simple, conversational, and focused on the instrument and basic musical character.
+
+Respond with just the prompt text - no quotes, no additional formatting, just the natural user prompt."""
+        
+        # Create fresh session for prompt generation
+        prompt_session = self._create_fresh_chat_session(system_prompt)
+        
+        try:
+            # Generate the user-style prompt
+            response_data = await prompt_session.send_message_async(
+                user_prompt_content=prompt_request,
+                stream=False,
+                model_settings={},
+                expect_json=False
+            )
+            
+            if isinstance(response_data, str):
+                user_style_prompt = response_data.strip()
+                logger.info(f"Generated user-style prompt: '{user_style_prompt}'")
+                
+                # Track tokens for prompt generation
+                self._track_stage_tokens("generate_user_style_prompt", prompt_session.get_token_usage())
+                
+                return user_style_prompt
+            else:
+                logger.error(f"Unexpected response format from LLM: {type(response_data)}")
+                raise ValueError("Failed to generate user-style prompt: unexpected response format")
+                
+        except Exception as e:
+            logger.error(f"Error generating user-style prompt: {e}")
+            # Fallback to a basic user-style prompt
+            fallback_prompt = f"{melody_instrument} solo melody"
+            logger.info(f"Using fallback user-style prompt: '{fallback_prompt}'")
+            return fallback_prompt
+
+    async def generate_diffusion_melody_and_send_sse(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
+        """
+        Generate audio using FAL-AI diffusion model and send as audio track SSE action.
+        
+        This is an alternative to MIDI-based melody generation that uses AI audio generation
+        to create solo instrument melodies that can be layered in the DAW.
+        
+        Args:
+            params: Musical parameters including key, tempo, chord progression
+            selected_instruments: Selected instruments (melody instrument will be used for prompt)
+            queue: SSE queue for sending progress updates and final audio track
+        """
+        logger.info("Starting diffusion-based melody generation with FAL-AI...")
+        
+        # Generate a natural user-style prompt using LLM
+        await self.context.queue.stage(
+            name="generating_user_prompt",
+            description="Creating natural user-style prompt for audio generation..."
+        )
+        
+        # Get the original user prompt from context
+        original_user_prompt = self.context.user_prompt if self.context and self.context.user_prompt else "Create a melody"
+        
+        # Generate user-style prompt using LLM
+        user_style_prompt = await self.generate_user_style_prompt(
+            params, 
+            selected_instruments, 
+            original_user_prompt
+        )
+        
+        # Now enhance it with the same flow as the existing generate-audio mode
+        # This is the same logic from assistant_streaming.py process_generate_audio_request
+        
+        # Extract musical context with sensible defaults
+        bpm = params.tempo
+        key_signature = f"{params.key} {params.mode}" if params.key and params.mode else "C Major"
+        time_signature = {'numerator': 4, 'denominator': 4}  # Default to 4/4
+        
+        # Match the exact successful format from the API docs example with simplicity emphasis
+        enhanced_prompt = f"{user_style_prompt} solo, simple, minimalist, no accompaniment, no drums, no bass, acoustic"
+        
+        # Add key signature
+        if key_signature:
+            enhanced_prompt += f", key {key_signature}"
+        
+        # Add BPM and quality specs exactly like the working example
+        enhanced_prompt += f", {bpm}bpm, studio, 48kHz Stereo"
+        
+        # Enhanced negative prompt to avoid complexity and ensure solo focus
+        negative_prompt = "accompaniment, drums, background instruments, complex, layered, arrangement"
+        
+        await self.context.queue.stage(
+            name="generating_diffusion_audio",
+            description=f"Generating audio using AI diffusion model..."
+        )
+        
+        logger.info(f"=== DIFFUSION PROMPT COMPARISON ===")
+        logger.info(f"LLM Generated user-style prompt: '{user_style_prompt}'")
+        logger.info(f"Final enhanced prompt: '{enhanced_prompt}'")
+        logger.info(f"Negative prompt: '{negative_prompt}'")
+        logger.info(f"=== END PROMPT COMPARISON ===")
+        
+        try:
+            # Import FAL-AI service
+            from app2.services.fal_ai_service import get_fal_ai_service
+            from app2.services.file_service import FileService
+            from app2.repositories.file_repository import FileRepository
+            from app2.models.track_models.audio_track import AudioTrack
+            from app2.repositories.audio_track_repository import AudioTrackRepository
+            from app2.types.assistant_actions import AudioTrackData
+            import uuid
+            
+            # Get session and user_id from context
+            if not self.context or not self.context.session:
+                raise ValueError("Database session not available in music agent context")
+            
+            if not self.context.user_id:
+                raise ValueError("User ID not available in music agent context")
+            
+            session = self.context.session
+            user_id = self.context.user_id
+            
+            # Create file service instance
+            file_repository = FileRepository(session)
+            file_service = FileService(file_repository)
+            
+            # Create FAL-AI service instance
+            fal_ai_service = get_fal_ai_service()
+            
+            # Generate and download audio
+            audio_data, generation_result = await fal_ai_service.generate_and_download_audio(
+                prompt=enhanced_prompt,
+                negative_prompt=negative_prompt
+            )
+            
+            await self.context.queue.stage(
+                name="processing_diffusion_audio",
+                description="Processing and storing generated audio..."
+            )
+            
+            # Upload audio to storage
+            storage_key = await file_service.upload_audio_file(
+                audio_data, 
+                generation_result.file_name,
+                user_id
+            )
+            
+            # Create placeholder waveform data
+            waveform_data = [0.0] * 200  # Simple placeholder
+            
+            # Create audio track record
+            audio_track_id = str(uuid.uuid4())
+            
+            # Extract instrument name from the melody selection for track naming
+            melody_instrument_selection = next((
+                item for item in selected_instruments.instrument_selections
+                if item.role.lower() == "melody"
+            ), None)
+            
+            track_name = "AI Generated Melody"
+            if melody_instrument_selection:
+                track_name = f"AI {melody_instrument_selection.instrument_name} Melody"
+            
+            audio_track_data = {
+                "id": audio_track_id,
+                "name": track_name,
+                "audio_file_storage_key": storage_key,
+                "audio_file_format": "wav",
+                "audio_file_size": len(audio_data),
+                "audio_file_duration": generation_result.duration,
+                "audio_file_sample_rate": generation_result.sample_rate,
+                "waveform_data": waveform_data,
+                "user_id": user_id
+            }
+            
+            # Create AudioTrack model directly
+            audio_track = AudioTrack(**audio_track_data)
+            
+            # Save to database
+            session.add(audio_track)
+            session.commit()
+            session.refresh(audio_track)
+            
+            # Convert to read model for the response
+            from app2.models.track_models.audio_track import AudioTrackRead
+            created_track = AudioTrackRead.model_validate(audio_track)
+            
+            # Create action to add the audio track to the frontend
+            action = AssistantAction(
+                action_type="add_audio_track",
+                data=AudioTrackData(track_data=created_track.model_dump(mode='json'))
+            )
+            
+            # Send the action
+            await self.context.queue.action(action)
+            
+            logger.info(f"Successfully generated and sent diffusion melody: {track_name} in {key_signature}")
+            
+        except Exception as e:
+            logger.error(f"Error in diffusion melody generation: {str(e)}")
+            await self.context.queue.error(f"Failed to generate diffusion melody: {str(e)}")
+            raise
+
     def _sanitize_key_and_mode(self, key: str, mode: str) -> tuple[str, str]:
         """If key is like 'A minor' or 'C major', split it. Always return (tonic, mode)."""
         if key and isinstance(key, str) and " " in key:
@@ -1392,7 +1645,7 @@ Create rhythmic patterns that fit the composition style."""
         return key, mode.lower() if mode else "major"
 
     # --- Main Orchestration Method (Parallel Execution) ---
-    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: Session, user_id: str = None):
+    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: Session, user_id: str = None, generation_type: str = "midi"):
         """
         Main execution flow for the music generation agent with parallel execution.
         Processes the request through various stages, using LLM calls for decisions
@@ -1422,7 +1675,9 @@ Create rhythmic patterns that fit the composition style."""
             chord_research=None,
             drum_research=None,
             model_info=model_info,
-            queue=queue
+            queue=queue,
+            session=db_session,
+            user_id=user_id
         )
         
         # Step 0: Research Musical Context
@@ -1514,10 +1769,15 @@ Create rhythmic patterns that fit the composition style."""
                 logger.error(f"Melody explanation failed: {_}")
                 raise _
             
-            # Step 7: Melody Generation (after melody explanation completes)
-            melody_task = self._emit_step_events(
-                7, "Melody Generation", self._generate_melody_notes_and_send_sse, params, selected_instruments
-            )
+            # Step 7: Melody Generation (MIDI or Audio based on generation_type)
+            if generation_type == "audio":
+                melody_task = self._emit_step_events(
+                    7, "Melody Generation", self.generate_diffusion_melody_and_send_sse, params, selected_instruments
+                )
+            else:  # default to midi
+                melody_task = self._emit_step_events(
+                    7, "Melody Generation", self._generate_melody_notes_and_send_sse, params, selected_instruments
+                )
             
             # Wait for both melody generation and drum beat generation to complete
             melody_data, drum_data = await asyncio.gather(
