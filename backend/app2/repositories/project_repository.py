@@ -4,7 +4,8 @@ Handles basic CRUD operations for project entities
 """
 
 from typing import Dict, Any, List
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 import asyncio
@@ -20,12 +21,12 @@ from app2.models.project import Project
 class ProjectRepository:
     """Repository for project operations"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         """
         Initialize the repository with database session
 
         Args:
-            session: The SQLModel session for database operations
+            session: The async SQLModel session for database operations
         """
         self.session = session
         self.logger = get_repository_logger("project")
@@ -47,7 +48,8 @@ class ProjectRepository:
         self.logger.info(f"Getting project with ID: {project_id}")
         try:
             statement = select(Project).where(Project.id == project_id)
-            project = self.session.exec(statement).first()
+            result = await self.session.execute(statement)
+            project = result.scalars().first()
 
             if not project:
                 self.logger.error(f"Project with ID {project_id} not found")
@@ -93,7 +95,8 @@ class ProjectRepository:
                 .where(Project.id == project_id)
             )
 
-            project = self.session.exec(statement).first()
+            result = await self.session.execute(statement)
+            project = result.scalars().first()
 
             if not project:
                 self.logger.error(f"Project with ID {project_id} not found")
@@ -156,7 +159,8 @@ class ProjectRepository:
                     query = query.where(getattr(Project, key) == value)
 
             # Execute query
-            results = self.session.exec(query).all()
+            result = await self.session.execute(query)
+            results = result.scalars().all()
 
             self.logger.info(f"Found {len(results)} projects")
             return results
@@ -210,30 +214,25 @@ class ProjectRepository:
             offset = (page - 1) * size
 
             # Query for items on the current page
-            def _get_items():
-                return (
-                    self.session.exec(
-                        select(Project)
-                        .where(Project.user_id == user_id)
-                        .offset(offset)
-                        .limit(size)
-                        .order_by(Project.created_at.desc())
-                    )
-                    .all()
-                )
-            items_result = await asyncio.to_thread(_get_items)
+            # Query for items on the current page
+            items_statement = (
+                select(Project)
+                .where(Project.user_id == user_id)
+                .offset(offset)
+                .limit(size)
+                .order_by(Project.created_at.desc())
+            )
+            items_result_exec = await self.session.execute(items_statement)
+            items_result = items_result_exec.scalars().all()
 
             # Query for total count
-            def _get_count():
-                return (
-                    self.session.exec(
-                        select(func.count())
-                        .select_from(Project)
-                        .where(Project.user_id == user_id)
-                    )
-                    .one()
-                )
-            total_items_result = await asyncio.to_thread(_get_count)
+            count_statement = (
+                select(func.count())
+                .select_from(Project)
+                .where(Project.user_id == user_id)
+            )
+            total_items_result_exec = await self.session.execute(count_statement)
+            total_items_result = total_items_result_exec.scalar()
 
             self.logger.info(
                 f"Found {len(items_result)} projects (total: {total_items_result}) for user: {user_id}"
@@ -267,7 +266,8 @@ class ProjectRepository:
                 .where(Project.user_id == user_id)
             )
 
-            projects = self.session.exec(statement).all()
+            result = await self.session.execute(statement)
+            projects = result.scalars().all()
 
             self.logger.info(f"Found {len(projects)} projects for user: {user_id}")
             return projects
@@ -304,13 +304,13 @@ class ProjectRepository:
 
             # Add to session and commit
             self.session.add(project)
-            self.session.commit()
-            self.session.refresh(project)
+            await self.session.commit()
+            await self.session.refresh(project)
 
             self.logger.info(f"Created project with ID: {project.id}")
             return project
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             self.logger.error(f"Error creating project: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to create project: {str(e)}")
@@ -365,13 +365,13 @@ class ProjectRepository:
 
             # Commit changes
             self.session.add(project)
-            self.session.commit()
-            self.session.refresh(project)
+            await self.session.commit()
+            await self.session.refresh(project)
 
             self.logger.info(f"Updated project with ID: {project_id}, new version: {project.version}")
             return project
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
             self.logger.error(f"Error updating project: {str(e)}")
@@ -400,12 +400,12 @@ class ProjectRepository:
             # Delete the project (associated ProjectTrack entries should be deleted
             # by the service layer before calling this method)
             self.session.delete(project)
-            self.session.commit()
+            await self.session.commit()
 
             self.logger.info(f"Deleted project with ID: {project_id}")
             return True
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
             self.logger.error(f"Error deleting project: {str(e)}")

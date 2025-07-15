@@ -1,7 +1,7 @@
 from typing import Dict, Any, Annotated
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app2.core.config import settings
 from app2.core.exceptions import UnauthorizedException
@@ -33,7 +33,7 @@ logger = get_logger("beatgen.api.dependencies")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # Database session dependency
-SessionDep = Annotated[Session, Depends(get_session)]
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 # Repository instances
