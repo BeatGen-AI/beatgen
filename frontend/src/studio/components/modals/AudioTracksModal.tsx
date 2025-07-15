@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { interactWithAssistant, StreamCallbacks } from '../../../platform/api/assistant';
 import GenerationPromptControl from '../shared/GenerationPromptControl';
 import AudioPreview from '../shared/AudioPreview';
+import { useAppTheme } from '../../../platform/theme/ThemeContext';
 
 // TrackCard component for displaying individual audio tracks
 interface TrackCardProps {
@@ -206,6 +207,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   onSelectTrack,
   onFileUpload
 }) => {
+  const { mode: uiMode, studioMode } = useAppTheme();
   const [activeTab, setActiveTab] = useState('my-tracks');
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);

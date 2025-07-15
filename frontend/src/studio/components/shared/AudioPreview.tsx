@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { downloadAudioTrackFile } from '../../../platform/api/sounds';
+import { useAppTheme } from '../../../platform/theme/ThemeContext';
 
 // Global audio context to prevent it from being closed/recreated
 let globalAudioContext: AudioContext | null = null;
@@ -27,9 +28,12 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   duration,
   isPlaying = false,
   className,
-  color = 'hsl(var(--foreground))'
+  color
 }) => {
   console.log('AudioPreview: Component render with audioUrl:', audioUrl);
+  
+  const { studioMode } = useAppTheme();
+  const isDark = studioMode === 'dark';
   
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,6 +41,13 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   const cacheRef = useRef<Map<string, number[]>>(new Map());
   const effectRunCount = useRef(0);
   const prevWaveformDataRef = useRef<number[]>([]);
+  
+  // Theme-aware colors
+  const waveformColor = color || (isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)');
+  const backgroundColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+  const skeletonColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+  const errorBg = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+  const errorText = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
 
   // Track waveform data changes
   useEffect(() => {
@@ -275,7 +286,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
           )}
           style={{
             height: `${height}%`,
-            backgroundColor: color,
+            backgroundColor: waveformColor,
             opacity: isLoading ? 0.5 : 1.0,
             minHeight: '2px',
             marginRight: index < data.length - 1 ? '1px' : '0'
@@ -290,9 +301,10 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     return Array.from({ length: barCount }, (_, index) => (
       <div
         key={index}
-        className="flex-1 rounded-full bg-muted animate-pulse"
+        className="flex-1 rounded-full animate-pulse"
         style={{
           height: `${Math.random() * 60 + 20}%`,
+          backgroundColor: skeletonColor,
           minHeight: '2px',
           marginRight: index < barCount - 1 ? '1px' : '0'
         }}
@@ -312,19 +324,23 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   return (
     <div 
       className={cn(
-        'flex items-end gap-0.5 px-2 py-1 bg-muted/20 rounded overflow-hidden relative',
+        'flex items-end gap-0.5 px-2 py-1 rounded overflow-hidden relative',
         className
       )}
       style={{
         width: getContainerWidth(),
-        height: getContainerHeight()
+        height: getContainerHeight(),
+        backgroundColor: backgroundColor
       }}
     >
       {isLoading ? renderSkeletonBars() : renderBars()}
       
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted/50 rounded">
-          <span className="text-xs text-muted-foreground">
+        <div 
+          className="absolute inset-0 flex items-center justify-center rounded"
+          style={{ backgroundColor: errorBg }}
+        >
+          <span className="text-xs" style={{ color: errorText }}>
             Failed to load
           </span>
         </div>
