@@ -324,7 +324,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   return (
     <div 
       className={cn(
-        'flex items-end gap-0.5 px-2 py-1 rounded overflow-hidden relative',
+        'flex items-center gap-0.5 px-2 py-1 rounded overflow-hidden relative',
         className
       )}
       style={{
