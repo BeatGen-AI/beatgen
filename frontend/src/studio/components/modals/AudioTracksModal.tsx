@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Music, Loader2, Play, Pause, Upload, Send, Download } from 'lucide-react';
 import { AudioTrackRead } from '../../../platform/types/dto/track_models/audio_track';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -260,6 +261,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
 }) => {
   const { mode: uiMode, studioMode } = useAppTheme();
   const effectiveMode = useUiMode ? uiMode : studioMode;
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(uploadModeOnly ? 'upload' : 'my-tracks');
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -349,6 +351,8 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
           setGenerationStatus('Generation completed!');
           // Refresh tracks list to show the new generated track
           fetchTracks(1, false);
+          // Also invalidate the React Query cache to ensure SoundLibrary refreshes
+          queryClient.invalidateQueries({ queryKey: ['audioTracks'] });
         },
         onError: (error) => {
           setIsGenerating(false);

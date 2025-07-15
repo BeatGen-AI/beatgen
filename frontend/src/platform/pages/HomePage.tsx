@@ -153,6 +153,7 @@ export default function HomePage() {
 
   const fetchSounds = () => {
     console.log('Refreshing sounds library');
+    queryClient.invalidateQueries({ queryKey: ['audioTracks'] });
   };
 
   const handleShowMoreProjects = () => {
