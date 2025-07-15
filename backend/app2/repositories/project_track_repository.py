@@ -3,7 +3,7 @@ ProjectTrack repository for database operations using SQLModel
 Handles operations on the project-track join table with the new track model structure
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import traceback
@@ -11,6 +11,9 @@ from datetime import datetime
 import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
+
+if TYPE_CHECKING:
+    from app2.dto.track_dto import ProjectTrackData
 
 from app2.core.exceptions import DatabaseException, NotFoundException
 from app2.core.logging import get_repository_logger
@@ -33,21 +36,33 @@ class ProjectTrackRepository:
 
     async def get_by_project_id(self, project_id: uuid.UUID) -> List[ProjectTrack]:
         """
-        Get all project-track associations for a project
+        Get all project-track associations for a project with all relationships loaded
 
         Args:
             project_id: The ID of the project
 
         Returns:
-            List of project-track associations
+            List of project-track associations with all relationships loaded
 
         Raises:
             DatabaseException: If there's a database error
         """
         self.logger.info(f"Getting project-tracks for project {project_id}")
         try:
-            statement = select(ProjectTrack).where(
-                ProjectTrack.project_id == project_id
+            from sqlalchemy.orm import selectinload
+            
+            from app2.models.track_models.midi_track import MidiTrack
+            from app2.models.track_models.drum_track import DrumTrack
+            
+            statement = (
+                select(ProjectTrack)
+                .options(
+                    selectinload(ProjectTrack.audio_track),
+                    selectinload(ProjectTrack.midi_track).selectinload(MidiTrack.instrument_file),
+                    selectinload(ProjectTrack.sampler_track),
+                    selectinload(ProjectTrack.drum_track).selectinload(DrumTrack.sampler_tracks)
+                )
+                .where(ProjectTrack.project_id == project_id)
             )
             result = await self.session.execute(statement)
             results = result.scalars().all()
@@ -117,11 +132,22 @@ class ProjectTrackRepository:
             f"Getting project-track for project {project_id} and {track_type} track {track_id}"
         )
         try:
+            from sqlalchemy.orm import selectinload
+            
             # Select based on project_id, track_id and track_type
-            statement = select(ProjectTrack).where(
-                ProjectTrack.project_id == project_id,
-                ProjectTrack.track_type == track_type,
-                ProjectTrack.track_id == track_id,
+            statement = (
+                select(ProjectTrack)
+                .options(
+                    selectinload(ProjectTrack.audio_track),
+                    selectinload(ProjectTrack.midi_track),
+                    selectinload(ProjectTrack.sampler_track),
+                    selectinload(ProjectTrack.drum_track)
+                )
+                .where(
+                    ProjectTrack.project_id == project_id,
+                    ProjectTrack.track_type == track_type,
+                    ProjectTrack.track_id == track_id,
+                )
             )
 
             result = await self.session.execute(statement)
@@ -556,71 +582,69 @@ class ProjectTrackRepository:
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to delete project-tracks: {str(e)}")
 
+    async def _load_nested_relationships(self, project_tracks: List[ProjectTrack]) -> None:
+        """
+        Load nested relationships for tracks that need them
+        """
+        from app2.models.public_models.instrument_file import InstrumentFile
+        from app2.models.track_models.sampler_track import SamplerTrack
+        from sqlmodel import select
+        
+        # Load instrument files for MIDI tracks
+        midi_tracks = [pt.midi_track for pt in project_tracks if pt.midi_track]
+        if midi_tracks:
+            instrument_ids = [mt.instrument_id for mt in midi_tracks]
+            stmt = select(InstrumentFile).where(InstrumentFile.id.in_(instrument_ids))
+            result = await self.session.execute(stmt)
+            instruments = result.scalars().all()
+            
+            # Map instruments to tracks
+            instrument_map = {inst.id: inst for inst in instruments}
+            for midi_track in midi_tracks:
+                if midi_track.instrument_id in instrument_map:
+                    midi_track.instrument_file = instrument_map[midi_track.instrument_id]
+        
+        # Load sampler tracks for drum tracks
+        drum_tracks = [pt.drum_track for pt in project_tracks if pt.drum_track]
+        if drum_tracks:
+            drum_ids = [dt.id for dt in drum_tracks]
+            stmt = select(SamplerTrack).where(SamplerTrack.drum_track_id.in_(drum_ids))
+            result = await self.session.execute(stmt)
+            sampler_tracks = result.scalars().all()
+            
+            # Map sampler tracks to drum tracks
+            sampler_map = {}
+            for st in sampler_tracks:
+                if st.drum_track_id not in sampler_map:
+                    sampler_map[st.drum_track_id] = []
+                sampler_map[st.drum_track_id].append(st)
+            
+            for drum_track in drum_tracks:
+                drum_track.sampler_tracks = sampler_map.get(drum_track.id, [])
+
     async def get_track_with_settings(
         self, project_id: uuid.UUID
-    ) -> List[Dict[str, Any]]:
+    ) -> List[ProjectTrack]:
         """
         Get all tracks with their project-specific settings for a project
+        All relationships are eagerly loaded to prevent greenlet errors
 
         Args:
             project_id: The ID of the project
 
         Returns:
-            List of dictionaries with track data and settings
+            List of ProjectTrack objects with all relationships loaded
 
         Raises:
             DatabaseException: If there's a database error
         """
         self.logger.info(f"Getting tracks with settings for project {project_id}")
         try:
-            # Get all project-track associations for this project
+            # Get all project-track associations with all relationships loaded
             project_tracks = await self.get_by_project_id(project_id)
-
-            result = []
-
-            # For each association, load the track based on its type
-            for pt in project_tracks:
-                # Handle instance_metadata - pass it through as-is
-                instance_metadata = pt.instance_metadata
-                if instance_metadata is not None and not isinstance(instance_metadata, list):
-                    self.logger.warning(f"Unexpected instance_metadata type for track {pt.track_id}: {type(instance_metadata)}")
-                    # Convert to empty list if not a list
-                    instance_metadata = []
-                elif instance_metadata is None:
-                    # If None, use empty list
-                    instance_metadata = []
-                
-                track_data = {
-                    "project_id": pt.project_id,
-                    "track_id": pt.track_id,
-                    "name": pt.name,
-                    "volume": pt.volume,
-                    "pan": pt.pan,
-                    "mute": pt.mute,
-                    "duration_ticks": pt.duration_ticks,
-                    "track_number": pt.track_number,
-                    "track_type": pt.track_type,
-                    "instance_metadata": instance_metadata,
-                }
-
-                # Get track based on type
-                if pt.track_type == TrackType.AUDIO and pt.audio_track:
-                    track_data["track"] = pt.audio_track
-                elif pt.track_type == TrackType.MIDI and pt.midi_track:
-                    track_data["track"] = pt.midi_track
-                elif pt.track_type == TrackType.SAMPLER and pt.sampler_track:
-                    track_data["track"] = pt.sampler_track
-                elif pt.track_type == TrackType.DRUM and pt.drum_track:
-                    track_data["track"] = pt.drum_track
-
-                result.append(track_data)
-
-            self.logger.info(f"result: {result}")
-
-            self.logger.info(
-                f"Found {len(result)} tracks with settings for project {project_id}"
-            )
-            return result
+            
+            self.logger.info(f"Successfully loaded {len(project_tracks)} project tracks with relationships")
+            return project_tracks
         except Exception as e:
             self.logger.error(f"Error getting tracks with settings: {str(e)}")
             self.logger.error(traceback.format_exc())

@@ -47,7 +47,11 @@ class ProjectRepository:
         """
         self.logger.info(f"Getting project with ID: {project_id}")
         try:
-            statement = select(Project).where(Project.id == project_id)
+            statement = (
+                select(Project)
+                .options(selectinload(Project.project_tracks))
+                .where(Project.id == project_id)
+            )
             result = await self.session.execute(statement)
             project = result.scalars().first()
 
@@ -80,16 +84,26 @@ class ProjectRepository:
         """
         self.logger.info(f"Getting project with ID: {project_id} with tracks and files")
         try:
-            # We need a query with multiple selectinload calls to eagerly load tracks and related files
-            from app2.models.track import Track
+            # We need a query with multiple selectinload calls to eagerly load project tracks and related track files
+            from app2.models.project_track import ProjectTrack
 
             statement = (
                 select(Project)
                 .options(
-                    selectinload(Project.tracks).options(
-                        selectinload(Track.audio_file),
-                        selectinload(Track.midi_file),
-                        selectinload(Track.instrument_file),
+                    selectinload(Project.project_tracks).options(
+                        selectinload(ProjectTrack.audio_track).options(
+                            selectinload(ProjectTrack.audio_track.audio_file)
+                        ),
+                        selectinload(ProjectTrack.midi_track).options(
+                            selectinload(ProjectTrack.midi_track.midi_file),
+                            selectinload(ProjectTrack.midi_track.instrument_file)
+                        ),
+                        selectinload(ProjectTrack.sampler_track).options(
+                            selectinload(ProjectTrack.sampler_track.drum_track)
+                        ),
+                        selectinload(ProjectTrack.drum_track).options(
+                            selectinload(ProjectTrack.drum_track.sampler_tracks)
+                        )
                     )
                 )
                 .where(Project.id == project_id)
@@ -102,7 +116,7 @@ class ProjectRepository:
                 self.logger.error(f"Project with ID {project_id} not found")
                 raise NotFoundException("Project", project_id)
 
-            track_count = len(project.tracks) if project.tracks else 0
+            track_count = len(project.project_tracks) if project.project_tracks else 0
             self.logger.info(
                 f"Found project with ID: {project_id} with {track_count} tracks"
             )
@@ -110,18 +124,18 @@ class ProjectRepository:
             # Log file counts for debugging
             audio_file_count = sum(
                 1
-                for t in project.tracks
-                if hasattr(t, "audio_file") and t.audio_file is not None
+                for pt in project.project_tracks
+                if pt.audio_track and hasattr(pt.audio_track, "audio_file") and pt.audio_track.audio_file is not None
             )
             midi_file_count = sum(
                 1
-                for t in project.tracks
-                if hasattr(t, "midi_file") and t.midi_file is not None
+                for pt in project.project_tracks
+                if pt.midi_track and hasattr(pt.midi_track, "midi_file") and pt.midi_track.midi_file is not None
             )
             instrument_file_count = sum(
                 1
-                for t in project.tracks
-                if hasattr(t, "instrument_file") and t.instrument_file is not None
+                for pt in project.project_tracks
+                if pt.midi_track and hasattr(pt.midi_track, "instrument_file") and pt.midi_track.instrument_file is not None
             )
 
             self.logger.info(
@@ -153,7 +167,10 @@ class ProjectRepository:
         self.logger.info(f"Getting projects with filters: {filter_str}")
         try:
             # Build query with filters
-            query = select(Project)
+            query = (
+                select(Project)
+                .options(selectinload(Project.project_tracks))
+            )
             for key, value in filters.items():
                 if hasattr(Project, key):
                     query = query.where(getattr(Project, key) == value)
@@ -217,6 +234,7 @@ class ProjectRepository:
             # Query for items on the current page
             items_statement = (
                 select(Project)
+                .options(selectinload(Project.project_tracks))
                 .where(Project.user_id == user_id)
                 .offset(offset)
                 .limit(size)
@@ -260,9 +278,18 @@ class ProjectRepository:
         """
         self.logger.info(f"Getting projects for user: {user_id} with tracks")
         try:
+            from app2.models.project_track import ProjectTrack
+
             statement = (
                 select(Project)
-                .options(selectinload(Project.tracks))
+                .options(
+                    selectinload(Project.project_tracks).options(
+                        selectinload(ProjectTrack.audio_track),
+                        selectinload(ProjectTrack.midi_track),
+                        selectinload(ProjectTrack.sampler_track),
+                        selectinload(ProjectTrack.drum_track)
+                    )
+                )
                 .where(Project.user_id == user_id)
             )
 
