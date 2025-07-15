@@ -30,15 +30,6 @@ const TrackCard: React.FC<TrackCardProps> = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Debug logging
-  console.log('TrackCard: Rendering with track:', {
-    id: track.id,
-    name: track.name,
-    storage_key: track.audio_file_storage_key,
-    duration: track.audio_file_duration,
-    isPlaying
-  });
-
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -191,14 +182,12 @@ const TrackCard: React.FC<TrackCardProps> = ({
 
       {/* Audio waveform preview */}
       <div className="mb-2">
-        <div className="w-full h-[40px] flex items-center justify-center">
-          <AudioPreview 
-            audioUrl={track.audio_file_storage_key || ''}
-            variant="card"
-            duration={track.audio_file_duration}
-            isPlaying={isPlaying}
-          />
-        </div>
+        <AudioPreview 
+          audioUrl={track.audio_file_storage_key || ''}
+          variant="card"
+          duration={track.audio_file_duration}
+          isPlaying={isPlaying}
+        />
       </div>
     </div>
   );
@@ -356,12 +345,6 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
       console.log('AudioTracksModal: Fetched tracks:', result.items?.length || 0, 'tracks');
       if (result.items && result.items.length > 0) {
         console.log('AudioTracksModal: Sample track data:', result.items[0]);
-        console.log('AudioTracksModal: All tracks storage keys:', result.items.map(t => ({
-          id: t.id,
-          name: t.name,
-          storage_key: t.audio_file_storage_key,
-          duration: t.audio_file_duration
-        })));
       }
       
       if (append) {
