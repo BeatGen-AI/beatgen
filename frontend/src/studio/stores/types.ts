@@ -95,6 +95,7 @@ export interface BaseTrackOptions {
   trim_end_ticks?: number;
   duration_ticks?: number;
   duration?: number; // Usually in seconds, but might be ticks in some contexts
+  isExistingTrack?: boolean; // Flag to indicate this is an existing track from AudioTracksModal
 }
 
 // Specific options for Audio Tracks
