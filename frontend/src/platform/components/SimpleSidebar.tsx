@@ -32,9 +32,8 @@ import {
 } from "../../components/ui/tooltip";
 import { useAuth } from '../auth/auth-context';
 import { PricingDialog, PlanBadge } from './subscription';
-import { useSubscriptionStore, selectCurrentPlan } from '../stores/subscriptionStore';
+import { useUser } from '../context/UserContext';
 import { CreditsDisplay } from './credits/CreditsDisplay';
-import { useEffect } from 'react';
 
 export const logoColors = [
   '#e539a9', // Bright Pink
@@ -59,16 +58,9 @@ const SimpleSidebar: React.FC<SimpleSidebarProps> = ({
 }) => {
   const navigate = useNavigate();
   const { signOut, profile, user } = useAuth();
+  const { subscription } = useUser();
   const [showPricingDialog, setShowPricingDialog] = useState(false);
-  const fetchStatus = useSubscriptionStore(state => state.fetchStatus);
-  const currentPlan = useSubscriptionStore(selectCurrentPlan);
-  
-  // Fetch subscription status when component mounts
-  useEffect(() => {
-    if (user) {
-      fetchStatus();
-    }
-  }, [user, fetchStatus]);
+  const currentPlan = subscription?.plan || null;
 
   const menuItems = [
     { text: 'Home', icon: <IconHomeFilled />, path: '/' },

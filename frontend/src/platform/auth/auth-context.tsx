@@ -48,18 +48,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Function to fetch and set the user profile
+  // Function to fetch and set the user profile - kept for backward compatibility
   const fetchProfile = async () => {
     try {
-      console.log('Refreshing user profile...');
+      console.log('Profile management now handled by UserContext - this is for backward compatibility');
       const userProfile = await getUserProfile();
-      console.log('Profile refreshed successfully:', userProfile);
       setProfile(userProfile);
-      return userProfile; // Return the profile so it can be reused
+      return userProfile;
     } catch (error) {
       console.error('Failed to refresh user profile:', error);
-      // Optionally handle profile refresh error, e.g., by signing out
-      // setProfile(null); // Or keep stale profile
       return null;
     }
   };

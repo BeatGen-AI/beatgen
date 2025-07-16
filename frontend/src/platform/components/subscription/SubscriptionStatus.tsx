@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { useSubscriptionStore, selectIsSubscribed, selectCurrentPlan } from '../../stores/subscriptionStore';
+import React, { useState } from 'react';
 import { subscriptionApi } from '../../api/subscriptions';
-import { creditsApi, CreditsStatus } from '../../api/credits';
 import { Loader2, Crown, AlertCircle, ExternalLink, Coins } from 'lucide-react';
+import { useUser } from '../../context/UserContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,33 +20,15 @@ import {
 import { format } from 'date-fns';
 
 export const SubscriptionStatus: React.FC = () => {
-  const { status, isLoading, error, fetchStatus, cancelSubscription } = useSubscriptionStore();
-  const isSubscribed = useSubscriptionStore(selectIsSubscribed);
-  const currentPlan = useSubscriptionStore(selectCurrentPlan);
+  const { subscription: status, subscriptionLoading: isLoading, subscriptionError: error, credits, refreshSubscription } = useUser();
+  const isSubscribed = status?.status === 'active' || status?.status === 'trialing';
+  const currentPlan = status?.plan || null;
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
-  const [credits, setCredits] = useState<CreditsStatus | null>(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
-
-  useEffect(() => {
-    const fetchCredits = async () => {
-      try {
-        const creditStatus = await creditsApi.getStatus();
-        setCredits(creditStatus);
-      } catch (error) {
-        console.error('Failed to fetch credits:', error);
-      }
-    };
-
-    if (status) {
-      fetchCredits();
-    }
-  }, [status]);
+  // No need to fetch status on mount - UserContext handles this
 
   const handleManageSubscription = async () => {
     try {
@@ -63,7 +44,8 @@ export const SubscriptionStatus: React.FC = () => {
       setIsCanceling(true);
       setCancelError(null);
       
-      await cancelSubscription(true); // Cancel at period end
+      await subscriptionApi.cancelSubscription(true); // Cancel at period end
+      await refreshSubscription(); // Refresh subscription data
       
       setShowCancelDialog(false);
     } catch (error) {
@@ -81,7 +63,7 @@ export const SubscriptionStatus: React.FC = () => {
       
       // Reactivate the subscription
       await subscriptionApi.reactivateSubscription();
-      await fetchStatus(); // Refresh the subscription status
+      await refreshSubscription(); // Refresh the subscription status
       
       // Clear any error state
       setCancelError(null);

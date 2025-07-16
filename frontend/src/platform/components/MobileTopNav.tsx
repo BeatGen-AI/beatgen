@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   IconMenu2,
@@ -22,7 +22,7 @@ import { Button } from "../../components/ui/button";
 import { useAuth } from '../auth/auth-context';
 import { PricingDialog, PlanBadge } from './subscription';
 import { CreditsDisplay } from './credits/CreditsDisplay';
-import { useSubscriptionStore, selectCurrentPlan } from '../stores/subscriptionStore';
+import { useUser } from '../context/UserContext';
 
 const logoColors = [
   '#e539a9', // Bright Pink
@@ -36,16 +36,9 @@ const logoColors = [
 const MobileTopNav: React.FC = () => {
   const navigate = useNavigate();
   const { signOut, profile, user } = useAuth();
+  const { subscription } = useUser();
   const [showPricingDialog, setShowPricingDialog] = useState(false);
-  const fetchStatus = useSubscriptionStore(state => state.fetchStatus);
-  const currentPlan = useSubscriptionStore(selectCurrentPlan);
-  
-  // Fetch subscription status when component mounts
-  useEffect(() => {
-    if (user) {
-      fetchStatus();
-    }
-  }, [user, fetchStatus]);
+  const currentPlan = subscription?.plan || null;
 
   const menuItems = [
     { text: 'Home', icon: <IconHome className="w-4 h-4" />, path: '/' },

@@ -5,14 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useSubscriptionStore, selectCurrentPlan } from '../../stores/subscriptionStore';
+import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../auth/auth-context';
 import { SUBSCRIPTION_PLANS, getMonthlyPlans, getYearlyPlans } from '../../config/subscription-plans';
 
 export const PricingPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const currentPlan = useSubscriptionStore(selectCurrentPlan);
+  const { subscription } = useUser();
+  const currentPlan = subscription?.plan || null;
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
 
   const handleSelectPlan = (priceId: string) => {

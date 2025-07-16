@@ -1,14 +1,14 @@
 import React from 'react';
 import { Coins, Infinity } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCredits } from '../../hooks/useCredits';
+import { useUser } from '../../context/UserContext';
 
 interface CreditsDisplayProps {
   isExpanded?: boolean;
 }
 
 export const CreditsDisplay: React.FC<CreditsDisplayProps> = ({ isExpanded = true }) => {
-  const { credits, isLoading } = useCredits();
+  const { credits, creditsLoading: isLoading } = useUser();
 
   if (isLoading) {
     return (

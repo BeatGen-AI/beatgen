@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useSubscriptionStore } from '../../stores/subscriptionStore';
+import { useUser } from '../../context/UserContext';
 
 export const CheckoutSuccess: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const { fetchStatus } = useSubscriptionStore();
+  const { refreshSubscription } = useUser();
   
   // Get session_id from URL search params
   const searchParams = new URLSearchParams(window.location.search);
@@ -17,7 +17,7 @@ export const CheckoutSuccess: React.FC = () => {
     // Fetch updated subscription status
     const updateStatus = async () => {
       try {
-        await fetchStatus();
+        await refreshSubscription();
       } catch (error) {
         console.error('Error fetching subscription status:', error);
       } finally {
@@ -26,7 +26,7 @@ export const CheckoutSuccess: React.FC = () => {
     };
 
     updateStatus();
-  }, [fetchStatus]);
+  }, [refreshSubscription]);
 
   if (loading) {
     return (
