@@ -277,7 +277,7 @@ class StripeService:
             logger.error(f"Stripe error creating portal session: {str(e)}")
             raise
     
-    async def sync_subscription_from_stripe(self, stripe_subscription: Dict[str, Any]) -> None:
+    async def sync_subscription_from_stripe(self, stripe_subscription: Dict[str, Any]) -> Optional[Subscription]:
         """Sync subscription data from Stripe webhook"""
         async with get_async_session() as session:
             # Extract data from the subscription dict
@@ -329,7 +329,7 @@ class StripeService:
             
             if not customer:
                 logger.error(f"Customer not found for Stripe customer ID: {customer_id}")
-                return
+                return None
             
             # Get the plan
             stmt = select(SubscriptionPlan).where(
@@ -340,7 +340,7 @@ class StripeService:
             
             if not plan:
                 logger.error(f"Plan not found for Stripe price ID: {price_id}")
-                return
+                return None
             
             # Check if subscription exists
             stmt = select(Subscription).where(
@@ -389,6 +389,7 @@ class StripeService:
                 session.add(subscription)
             
             session.commit()
+            return subscription
     
     async def record_payment_event(
         self, 
