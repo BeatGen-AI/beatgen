@@ -11,9 +11,7 @@ from datetime import datetime
 import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
-
-if TYPE_CHECKING:
-    from app2.dto.track_dto import ProjectTrackData
+from sqlalchemy.orm import selectinload
 
 from app2.core.exceptions import DatabaseException, NotFoundException
 from app2.core.logging import get_repository_logger
@@ -95,8 +93,18 @@ class ProjectTrackRepository:
         self.logger.info(f"Getting project-tracks for {track_type} track {track_id}")
         try:
             # Select based on track_id and track_type
-            statement = select(ProjectTrack).where(
-                ProjectTrack.track_type == track_type, ProjectTrack.track_id == track_id
+            statement = (
+                select(ProjectTrack)
+                .options(
+                    selectinload(ProjectTrack.audio_track),
+                    selectinload(ProjectTrack.midi_track),
+                    selectinload(ProjectTrack.sampler_track),
+                    selectinload(ProjectTrack.drum_track)
+                )
+                .where(
+                    ProjectTrack.track_type == track_type,
+                    ProjectTrack.track_id == track_id
+                )
             )
 
             result = await self.session.execute(statement)
@@ -539,7 +547,7 @@ class ProjectTrackRepository:
             
         except Exception as e:
             self.logger.error(f"Error in batch upsert: {str(e)}")
-            raise DatabaseException(f"Failed to batch upsert project-tracks: {str(e)}")
+            raise DatabaseException(f"Failed to batch upsert project-tracks: {str(e)}") from e
 
     async def delete_by_track_ids(self, project_id: uuid.UUID, track_ids: List[uuid.UUID]) -> int:
         """

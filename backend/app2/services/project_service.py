@@ -143,9 +143,7 @@ class ProjectService:
             for project_track in project_tracks:
                 # Handle instance_metadata - ensure it's a list
                 instance_metadata = project_track.instance_metadata
-                if instance_metadata is None:
-                    instance_metadata = []
-                elif not isinstance(instance_metadata, list):
+                if instance_metadata is None or not isinstance(instance_metadata, list):
                     instance_metadata = []
                 
                 # Create default instance if none exist (for backwards compatibility)
