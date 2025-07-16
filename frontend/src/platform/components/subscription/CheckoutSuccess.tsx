@@ -26,7 +26,7 @@ export const CheckoutSuccess: React.FC = () => {
     };
 
     updateStatus();
-  }, [fetchStatus]);
+  }, [refreshSubscription]);
 
   if (loading) {
     return (
