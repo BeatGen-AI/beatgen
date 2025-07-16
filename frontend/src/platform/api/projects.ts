@@ -91,6 +91,14 @@ export const deleteTrack = async (projectId: string, trackId: string): Promise<P
 
 export const uploadAudioTrack = async (track: CombinedTrack): Promise<void> => {
   const audioTrack = track.track as AudioTrack;
+  
+  // Check if this is an existing track that was selected from AudioTracksModal
+  // Existing tracks already have audio_file_storage_key, so no need to upload
+  if (audioTrack.audio_file_storage_key) {
+    console.log(`Skipping upload for existing track ${track.id} with storage key: ${audioTrack.audio_file_storage_key}`);
+    return;
+  }
+  
   const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'audio', true);
   if (!upload_url) {
     console.log("Audio track already exists, skipping upload");
@@ -186,6 +194,16 @@ export const saveProjectWithSounds = async (
   tracks: CombinedTrack[]
 ): Promise<Project> => {
   console.log("Saving project with sounds:", projectId, projectData, tracks);
+  
+  // Log track types for debugging
+  const trackTypes = tracks.map(t => ({
+    id: t.id,
+    name: t.name,
+    type: t.track_type,
+    hasStorageKey: !!(t.track as any).audio_file_storage_key
+  }));
+  console.log("Track upload analysis:", trackTypes);
+  
   for (const track of tracks) {
     switch (track.track_type) {
       case 'AUDIO':

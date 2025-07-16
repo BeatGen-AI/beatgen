@@ -320,15 +320,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                    type === 'SAMPLER' ? (options as SamplerTrackOptions).sampleFile : 
                    undefined;
 
-      // Handle audio file cache update for existing tracks with new studio IDs
-      if (type === 'AUDIO' && (options as any).originalTrackId && file) {
-        const originalTrackId = (options as any).originalTrackId as string;
+      // Handle audio file cache update for existing tracks (ID stays the same)
+      if (type === 'AUDIO' && (options as any).isExistingTrack && file) {
         try {
-          // Update the cache to use the new studio track ID
+          // Ensure the audio file is cached with the preserved track ID
           await db.upsertAudioFile(trackId, file, (options as any).audio_file_duration || 0);
-          console.log(`✅ Updated audio file cache: ${originalTrackId} → ${trackId}`);
+          console.log(`✅ Ensured audio file cache for existing track: ${trackId}`);
         } catch (error) {
-          console.warn('Failed to update audio file cache with new track ID:', error);
+          console.warn('Failed to ensure audio file cache for existing track:', error);
         }
       }
 
@@ -1188,6 +1187,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   }
                   
                   trackOptionsStd = {
+                      id: existingTrack.id, // Use original track ID instead of generating new UUID
                       name: existingTrack.name,
                       storage_key: existingTrack.audio_file_storage_key,
                       audio_file_format: existingTrack.audio_file_format,
@@ -1196,7 +1196,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                       audio_file_sample_rate: existingTrack.audio_file_sample_rate,
                       waveform_data: existingTrack.waveform_data,
                       audioFile: audioFile, // Include the actual file for audio engine
-                      originalTrackId: existingTrack.id, // Pass original ID for cache update
+                      isExistingTrack: true, // Flag to indicate this is an existing track
                   };
               }
           }
