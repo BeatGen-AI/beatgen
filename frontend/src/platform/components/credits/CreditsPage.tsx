@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { creditsApi, CreditsStatus } from '../../api/credits';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Coins, Calendar, RefreshCcw, Infinity } from 'lucide-react';
@@ -8,26 +7,11 @@ import { CreditsHistory } from './CreditsHistory';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
+import { useUser } from '../../context/UserContext';
 
 export const CreditsPage: React.FC = () => {
-  const [credits, setCredits] = useState<CreditsStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { credits, creditsLoading: isLoading } = useUser();
   const currentPlan = useSubscriptionStore(state => state.currentPlan);
-
-  useEffect(() => {
-    const fetchCredits = async () => {
-      try {
-        const status = await creditsApi.getStatus();
-        setCredits(status);
-      } catch (error) {
-        console.error('Failed to fetch credits:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchCredits();
-  }, []);
 
   if (isLoading) {
     return (

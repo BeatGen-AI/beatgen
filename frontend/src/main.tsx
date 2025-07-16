@@ -18,6 +18,8 @@ import Studio from './studio/Studio';
 import { AuthProvider } from './platform/auth/auth-context';
 // Import our custom Theme Provider
 import { AppThemeProvider } from './platform/theme/ThemeContext';
+// Import UserProvider
+import { UserProvider } from './platform/context/UserContext';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -54,9 +56,11 @@ if (document.getElementById('root')) {
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <AppThemeProvider>
-            <RouterProvider router={router} />
-          </AppThemeProvider>
+          <UserProvider>
+            <AppThemeProvider>
+              <RouterProvider router={router} />
+            </AppThemeProvider>
+          </UserProvider>
         </AuthProvider>
       </QueryClientProvider>
     </React.StrictMode>
@@ -91,9 +95,11 @@ const mountStudio = (elementId: string) => {
         // Using StrictMode in production can cause double-mounting, which might 
         // contribute to cleanup issues
         <AuthProvider>
-          <AppThemeProvider>
-            <Studio />
-          </AppThemeProvider>
+          <UserProvider>
+            <AppThemeProvider>
+              <Studio />
+            </AppThemeProvider>
+          </UserProvider>
         </AuthProvider>
       );
       

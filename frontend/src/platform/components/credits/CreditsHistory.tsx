@@ -1,28 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { creditsApi, CreditTransaction } from '../../api/credits';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, TrendingUp, TrendingDown, Plus, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import { useUser } from '../../context/UserContext';
 
 export const CreditsHistory: React.FC = () => {
-  const [history, setHistory] = useState<CreditTransaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { creditsHistory: history, creditsHistoryLoading: isLoading, refreshCreditsHistory } = useUser();
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const transactions = await creditsApi.getHistory(50);
-        setHistory(transactions);
-      } catch (error) {
-        console.error('Failed to fetch credit history:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchHistory();
-  }, []);
+    // Load credits history when component mounts
+    if (!history) {
+      refreshCreditsHistory(50);
+    }
+  }, [history, refreshCreditsHistory]);
 
   const getTransactionIcon = (type: string, amount: number) => {
     if (amount > 0) {
@@ -64,7 +55,7 @@ export const CreditsHistory: React.FC = () => {
         <CardDescription>Your recent credit transactions</CardDescription>
       </CardHeader>
       <CardContent>
-        {history.length === 0 ? (
+        {!history || history.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             No transactions yet
           </div>

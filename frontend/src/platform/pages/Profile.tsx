@@ -5,13 +5,15 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Loader2, AlertCircle, UserCircle, Save, ArrowLeft, UploadCloud, CreditCard } from 'lucide-react';
-import { updateUserProfile, UserProfile, uploadAvatar, getUserIdentities, addPassword } from '../api/auth';
+import { getUserIdentities, addPassword, UserProfile } from '../api/auth';
 import { useNavigate } from '@tanstack/react-router';
 import { SubscriptionStatus } from '../components/subscription';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
+import { useUser } from '../context/UserContext';
 
 const ProfilePage: React.FC = () => {
-  const { profile, loading: authLoading, user, signOut, refreshProfile } = useAuth();
+  const { user, signOut } = useAuth();
+  const { profile, profileLoading: authLoading, updateProfile, uploadUserAvatar } = useUser();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -113,10 +115,16 @@ const ProfilePage: React.FC = () => {
 
     if (selectedFile) {
       try {
-        const uploadResponse = await uploadAvatar(selectedFile);
-        newAvatarUrl = uploadResponse.avatar_url;
-        setPreviewUrl(newAvatarUrl);
-        setSelectedFile(null);
+        const uploadResponse = await uploadUserAvatar(selectedFile);
+        if (uploadResponse) {
+          newAvatarUrl = uploadResponse.avatar_url;
+          setPreviewUrl(newAvatarUrl);
+          setSelectedFile(null);
+        } else {
+          setError('Failed to upload avatar.');
+          setIsLoading(false);
+          return;
+        }
       } catch (uploadError: any) {
         setError(uploadError.response?.data?.detail || uploadError.message || 'Failed to upload avatar.');
         setIsLoading(false);
@@ -148,9 +156,12 @@ const ProfilePage: React.FC = () => {
     }
 
     try {
-      await updateUserProfile(updatedData);
-      setSuccess('Profile updated successfully!');
-      if (refreshProfile) await refreshProfile();
+      const result = await updateProfile(updatedData);
+      if (result) {
+        setSuccess('Profile updated successfully!');
+      } else {
+        setError('Failed to update profile.');
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Failed to update profile.');
     } finally {

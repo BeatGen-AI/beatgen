@@ -3,6 +3,7 @@ from typing import Optional
 from sqlmodel import select
 from datetime import datetime
 import logging
+import traceback
 
 from app2.core.config import settings
 from app2.services.stripe_service import StripeService, stripe_client
@@ -63,49 +64,76 @@ async def stripe_webhook(
     try:
         # Handle different event types
         if event["type"] == "customer.subscription.created":
+            logger.info(f"🔵 WEBHOOK - Starting handle_subscription_created for {event['data']['object']['id']}")
             await handle_subscription_created(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_subscription_created for {event['data']['object']['id']}")
         
         elif event["type"] == "customer.subscription.updated":
+            logger.info(f"🔵 WEBHOOK - Starting handle_subscription_updated for {event['data']['object']['id']}")
             await handle_subscription_updated(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_subscription_updated for {event['data']['object']['id']}")
         
         elif event["type"] == "customer.subscription.deleted":
+            logger.info(f"🔵 WEBHOOK - Starting handle_subscription_deleted for {event['data']['object']['id']}")
             await handle_subscription_deleted(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_subscription_deleted for {event['data']['object']['id']}")
         
         elif event["type"] == "invoice.payment_succeeded":
+            logger.info(f"🔵 WEBHOOK - Starting handle_payment_succeeded for {event['data']['object']['id']}")
             await handle_payment_succeeded(event)
+            logger.info(f"✅ WEBHOOK - Completed handle_payment_succeeded for {event['data']['object']['id']}")
         
         elif event["type"] == "invoice.payment_failed":
+            logger.info(f"🔵 WEBHOOK - Starting handle_payment_failed for {event['data']['object']['id']}")
             await handle_payment_failed(event)
+            logger.info(f"✅ WEBHOOK - Completed handle_payment_failed for {event['data']['object']['id']}")
         
         elif event["type"] == "customer.subscription.trial_will_end":
+            logger.info(f"🔵 WEBHOOK - Starting handle_trial_ending for {event['data']['object']['id']}")
             await handle_trial_ending(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_trial_ending for {event['data']['object']['id']}")
         
         elif event["type"] == "checkout.session.completed":
+            logger.info(f"🔵 WEBHOOK - Starting handle_checkout_completed for {event['data']['object']['id']}")
             await handle_checkout_completed(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_checkout_completed for {event['data']['object']['id']}")
         
         elif event["type"] == "product.created":
+            logger.info(f"🔵 WEBHOOK - Starting handle_product_created for {event['data']['object']['id']}")
             await handle_product_created(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_product_created for {event['data']['object']['id']}")
         
         elif event["type"] == "product.updated":
+            logger.info(f"🔵 WEBHOOK - Starting handle_product_updated for {event['data']['object']['id']}")
             await handle_product_updated(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_product_updated for {event['data']['object']['id']}")
         
         elif event["type"] == "product.deleted":
+            logger.info(f"🔵 WEBHOOK - Starting handle_product_deleted for {event['data']['object']['id']}")
             await handle_product_deleted(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_product_deleted for {event['data']['object']['id']}")
         
         elif event["type"] == "price.created":
+            logger.info(f"🔵 WEBHOOK - Starting handle_price_created for {event['data']['object']['id']}")
             await handle_price_created(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_price_created for {event['data']['object']['id']}")
         
         elif event["type"] == "price.updated":
+            logger.info(f"🔵 WEBHOOK - Starting handle_price_updated for {event['data']['object']['id']}")
             await handle_price_updated(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_price_updated for {event['data']['object']['id']}")
         
         elif event["type"] == "price.deleted":
+            logger.info(f"🔵 WEBHOOK - Starting handle_price_deleted for {event['data']['object']['id']}")
             await handle_price_deleted(event["data"]["object"])
+            logger.info(f"✅ WEBHOOK - Completed handle_price_deleted for {event['data']['object']['id']}")
         
         else:
             logger.info(f"Unhandled event type: {event['type']}")
     
     except Exception as e:
-        logger.error(f"Error processing webhook event: {e}")
+        logger.error(f"❌ WEBHOOK - Error processing webhook event {event['type']}: {e}")
+        logger.error(f"❌ WEBHOOK - Full error details: {traceback.format_exc()}")
         # Return success to avoid Stripe retrying
         # We'll handle the error internally
     
@@ -117,58 +145,95 @@ async def handle_subscription_created(subscription_data):
     logger.info(f"New subscription created: {subscription_data['id']}")
     logger.info(f"Subscription data keys: {list(subscription_data.keys())}")
     logger.info(f"Has current_period_start: {'current_period_start' in subscription_data}")
-    # The webhook data already has everything we need, so just use it directly
-    subscription = await stripe_service.sync_subscription_from_stripe(subscription_data)
     
-    # Allocate credits for the new subscription
-    if subscription and subscription.user_id:
-        # Get the plan tier from the subscription
-        plan_tier = "free"  # Default
-        if subscription.plan:
-            plan_tier = subscription.plan.tier
+    try:
+        logger.info(f"🔵 SUB_CREATED - Starting sync_subscription_from_stripe for {subscription_data['id']}")
+        # The webhook data already has everything we need, so just use it directly
+        subscription = await stripe_service.sync_subscription_from_stripe(subscription_data)
+        logger.info(f"✅ SUB_CREATED - Completed sync_subscription_from_stripe for {subscription_data['id']}, result: {subscription}")
         
-        logger.info(f"Allocating credits for user {subscription.user_id} with tier {plan_tier}")
-        await credits_service.update_subscription_tier(str(subscription.user_id), plan_tier)
-
-
-async def handle_subscription_updated(subscription_data):
-    """Handle subscription updates (plan changes, status changes, etc.)"""
-    logger.info(f"Subscription updated: {subscription_data['id']} - Status: {subscription_data['status']}")
-    # The webhook data already has everything we need, so just use it directly
-    subscription = await stripe_service.sync_subscription_from_stripe(subscription_data)
-    
-    # Update credits if subscription is active and has a plan
-    if subscription and subscription.user_id:
-        if subscription_data['status'] in ['active', 'trialing']:
+        # Allocate credits for the new subscription
+        if subscription and subscription.user_id:
             # Get the plan tier from the subscription
             plan_tier = "free"  # Default
             if subscription.plan:
                 plan_tier = subscription.plan.tier
             
-            logger.info(f"Updating credits for user {subscription.user_id} with tier {plan_tier}")
+            logger.info(f"🔵 SUB_CREATED - Allocating credits for user {subscription.user_id} with tier {plan_tier}")
             await credits_service.update_subscription_tier(str(subscription.user_id), plan_tier)
-        elif subscription_data['status'] == 'canceled' and subscription_data.get('canceled_at'):
-            # If subscription is immediately canceled (not at period end)
-            logger.info(f"Subscription immediately canceled for user {subscription.user_id}")
-            await credits_service.handle_subscription_cancellation(
-                str(subscription.user_id), 
-                datetime.fromtimestamp(subscription_data['canceled_at'])
-            )
+            logger.info(f"✅ SUB_CREATED - Completed credit allocation for user {subscription.user_id}")
+        else:
+            logger.error(f"❌ SUB_CREATED - No subscription or user_id found: subscription={subscription}")
+            
+    except Exception as e:
+        logger.error(f"❌ SUB_CREATED - Error in handle_subscription_created: {e}")
+        logger.error(f"❌ SUB_CREATED - Full traceback: {traceback.format_exc()}")
+        raise  # Re-raise to ensure error is captured at webhook level
+
+
+async def handle_subscription_updated(subscription_data):
+    """Handle subscription updates (plan changes, status changes, etc.)"""
+    logger.info(f"Subscription updated: {subscription_data['id']} - Status: {subscription_data['status']}")
+    
+    try:
+        logger.info(f"🔵 SUB_UPDATED - Starting sync_subscription_from_stripe for {subscription_data['id']}")
+        # The webhook data already has everything we need, so just use it directly
+        subscription = await stripe_service.sync_subscription_from_stripe(subscription_data)
+        logger.info(f"✅ SUB_UPDATED - Completed sync_subscription_from_stripe for {subscription_data['id']}")
+        
+        # Update credits if subscription is active and has a plan
+        if subscription and subscription.user_id:
+            if subscription_data['status'] in ['active', 'trialing']:
+                # Get the plan tier from the subscription
+                plan_tier = "free"  # Default
+                if subscription.plan:
+                    plan_tier = subscription.plan.tier
+                
+                logger.info(f"🔵 SUB_UPDATED - Updating credits for user {subscription.user_id} with tier {plan_tier}")
+                await credits_service.update_subscription_tier(str(subscription.user_id), plan_tier)
+                logger.info(f"✅ SUB_UPDATED - Completed credit update for user {subscription.user_id}")
+            elif subscription_data['status'] == 'canceled' and subscription_data.get('canceled_at'):
+                # If subscription is immediately canceled (not at period end)
+                logger.info(f"🔵 SUB_UPDATED - Subscription immediately canceled for user {subscription.user_id}")
+                await credits_service.handle_subscription_cancellation(
+                    str(subscription.user_id), 
+                    datetime.fromtimestamp(subscription_data['canceled_at'])
+                )
+                logger.info(f"✅ SUB_UPDATED - Completed cancellation handling for user {subscription.user_id}")
+        else:
+            logger.error(f"❌ SUB_UPDATED - No subscription or user_id found: subscription={subscription}")
+            
+    except Exception as e:
+        logger.error(f"❌ SUB_UPDATED - Error in handle_subscription_updated: {e}")
+        logger.error(f"❌ SUB_UPDATED - Full traceback: {traceback.format_exc()}")
+        raise
 
 
 async def handle_subscription_deleted(subscription_data):
     """Handle subscription deletion/cancellation"""
     logger.info(f"Subscription deleted: {subscription_data['id']}")
-    # The webhook data already has everything we need, so just use it directly
-    subscription = await stripe_service.sync_subscription_from_stripe(subscription_data)
     
-    # When subscription is deleted, remove all credits
-    if subscription and subscription.user_id:
-        logger.info(f"Removing credits for user {subscription.user_id} due to subscription deletion")
-        await credits_service.handle_subscription_cancellation(
-            str(subscription.user_id), 
-            datetime.utcnow()  # Credits are removed immediately when subscription is deleted
-        )
+    try:
+        logger.info(f"🔵 SUB_DELETED - Starting sync_subscription_from_stripe for {subscription_data['id']}")
+        # The webhook data already has everything we need, so just use it directly
+        subscription = await stripe_service.sync_subscription_from_stripe(subscription_data)
+        logger.info(f"✅ SUB_DELETED - Completed sync_subscription_from_stripe for {subscription_data['id']}")
+        
+        # When subscription is deleted, remove all credits
+        if subscription and subscription.user_id:
+            logger.info(f"🔵 SUB_DELETED - Removing credits for user {subscription.user_id} due to subscription deletion")
+            await credits_service.handle_subscription_cancellation(
+                str(subscription.user_id), 
+                datetime.utcnow()  # Credits are removed immediately when subscription is deleted
+            )
+            logger.info(f"✅ SUB_DELETED - Completed credit removal for user {subscription.user_id}")
+        else:
+            logger.error(f"❌ SUB_DELETED - No subscription or user_id found: subscription={subscription}")
+            
+    except Exception as e:
+        logger.error(f"❌ SUB_DELETED - Error in handle_subscription_deleted: {e}")
+        logger.error(f"❌ SUB_DELETED - Full traceback: {traceback.format_exc()}")
+        raise
 
 
 async def handle_payment_succeeded(event):
@@ -220,54 +285,81 @@ async def handle_checkout_completed(checkout_session):
     """Handle completed checkout session"""
     logger.info(f"Checkout completed: {checkout_session['id']}")
     
-    # For subscription mode, retrieve the subscription
-    if checkout_session.get('mode') == 'subscription' and checkout_session.get('subscription'):
-        try:
-            # For checkout completion, we need to retrieve the full subscription
-            # But we'll convert it to dict format for consistency
-            subscription = stripe_client.subscriptions.retrieve(checkout_session['subscription'])
-            logger.info(f"Retrieved subscription {subscription.id} from checkout session")
+    try:
+        # For subscription mode, retrieve the subscription
+        if checkout_session.get('mode') == 'subscription' and checkout_session.get('subscription'):
+            logger.info(f"🔵 CHECKOUT - Processing subscription checkout for session {checkout_session['id']}")
+            logger.info(f"🔵 CHECKOUT - Subscription ID: {checkout_session.get('subscription')}")
             
-            # Convert to dict and sync
-            subscription_dict = subscription.to_dict()
-            synced_subscription = await stripe_service.sync_subscription_from_stripe(subscription_dict)
-            
-            # Allocate initial credits
-            if synced_subscription and synced_subscription.user_id:
-                plan_tier = "free"  # Default
-                if synced_subscription.plan:
-                    plan_tier = synced_subscription.plan.tier
+            try:
+                # For checkout completion, we need to retrieve the full subscription
+                # But we'll convert it to dict format for consistency
+                logger.info(f"🔵 CHECKOUT - Retrieving subscription from Stripe: {checkout_session['subscription']}")
+                subscription = stripe_client.subscriptions.retrieve(checkout_session['subscription'])
+                logger.info(f"✅ CHECKOUT - Retrieved subscription {subscription.id} from checkout session")
                 
-                logger.info(f"Allocating initial credits for user {synced_subscription.user_id} with tier {plan_tier}")
-                await credits_service.update_subscription_tier(str(synced_subscription.user_id), plan_tier)
-            
-            # Also record the successful payment event
-            if checkout_session.get('customer'):
-                async with get_async_session() as session:
-                    stmt = select(StripeCustomer).where(
-                        StripeCustomer.stripe_customer_id == checkout_session['customer']
-                    )
-                    result = session.exec(stmt)
-                    customer = result.first()
+                # Convert to dict and sync
+                subscription_dict = subscription.to_dict()
+                logger.info(f"🔵 CHECKOUT - Starting sync_subscription_from_stripe for {subscription.id}")
+                synced_subscription = await stripe_service.sync_subscription_from_stripe(subscription_dict)
+                logger.info(f"✅ CHECKOUT - Synced subscription to database: {synced_subscription}")
+                
+                # Allocate initial credits
+                if synced_subscription and synced_subscription.user_id:
+                    plan_tier = "free"  # Default
+                    if synced_subscription.plan:
+                        plan_tier = synced_subscription.plan.tier
                     
-                    if customer:
-                        # Create a payment event for the initial payment
-                        payment_event = PaymentEvent(
-                            user_id=customer.user_id,
-                            stripe_event_id=f"checkout_{checkout_session['id']}",
-                            event_type="checkout.session.completed",
-                            amount_cents=checkout_session.get('amount_total'),
-                            currency=checkout_session.get('currency'),
-                            status="succeeded",
-                            event_data={"checkout_session": checkout_session},
+                    logger.info(f"🔵 CHECKOUT - Allocating initial credits for user {synced_subscription.user_id} with tier {plan_tier}")
+                    await credits_service.update_subscription_tier(str(synced_subscription.user_id), plan_tier)
+                    logger.info(f"✅ CHECKOUT - Completed initial credit allocation for user {synced_subscription.user_id}")
+                else:
+                    logger.error(f"❌ CHECKOUT - No synced subscription or user_id found: {synced_subscription}")
+                
+                # Also record the successful payment event
+                if checkout_session.get('customer'):
+                    logger.info(f"🔵 CHECKOUT - Recording payment event for customer {checkout_session['customer']}")
+                    async with get_async_session() as session:
+                        stmt = select(StripeCustomer).where(
+                            StripeCustomer.stripe_customer_id == checkout_session['customer']
                         )
-                        session.add(payment_event)
-                        session.commit()
-                        logger.info(f"Recorded checkout completion for user {customer.user_id}")
-        except Exception as e:
-            logger.error(f"Error handling checkout completion: {e}")
-    
-    # The subscription.created webhook will also fire, providing additional confirmation
+                        result = session.exec(stmt)
+                        customer = result.first()
+                        
+                        if customer:
+                            # Create a payment event for the initial payment
+                            payment_event = PaymentEvent(
+                                user_id=customer.user_id,
+                                stripe_event_id=f"checkout_{checkout_session['id']}",
+                                event_type="checkout.session.completed",
+                                amount_cents=checkout_session.get('amount_total'),
+                                currency=checkout_session.get('currency'),
+                                status="succeeded",
+                                event_data={"checkout_session": checkout_session},
+                            )
+                            session.add(payment_event)
+                            session.commit()
+                            logger.info(f"✅ CHECKOUT - Recorded checkout completion for user {customer.user_id}")
+                        else:
+                            logger.error(f"❌ CHECKOUT - Customer not found for payment event: {checkout_session['customer']}")
+                else:
+                    logger.warning(f"⚠️ CHECKOUT - No customer ID in checkout session")
+                    
+            except Exception as e:
+                logger.error(f"❌ CHECKOUT - Error handling checkout completion: {e}")
+                logger.error(f"❌ CHECKOUT - Full traceback: {traceback.format_exc()}")
+                raise
+        else:
+            logger.info(f"⚠️ CHECKOUT - Checkout session is not subscription mode or missing subscription ID")
+            logger.info(f"⚠️ CHECKOUT - Mode: {checkout_session.get('mode')}, Subscription: {checkout_session.get('subscription')}")
+        
+        # The subscription.created webhook will also fire, providing additional confirmation
+        logger.info(f"✅ CHECKOUT - Completed checkout processing for session {checkout_session['id']}")
+        
+    except Exception as e:
+        logger.error(f"❌ CHECKOUT - Error in handle_checkout_completed: {e}")
+        logger.error(f"❌ CHECKOUT - Full traceback: {traceback.format_exc()}")
+        raise
 
 
 async def handle_product_created(product):
