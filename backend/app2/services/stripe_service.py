@@ -389,6 +389,9 @@ class StripeService:
                 session.add(subscription)
             
             session.commit()
+            
+            # Refresh the subscription to ensure it has the latest data and attached relationships
+            session.refresh(subscription)
             return subscription
     
     async def record_payment_event(

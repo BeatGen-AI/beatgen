@@ -305,16 +305,26 @@ async def handle_checkout_completed(checkout_session):
                 logger.info(f"✅ CHECKOUT - Synced subscription to database: {synced_subscription}")
                 
                 # Allocate initial credits
-                if synced_subscription and synced_subscription.user_id:
-                    plan_tier = "free"  # Default
-                    if synced_subscription.plan:
-                        plan_tier = synced_subscription.plan.tier
+                if synced_subscription:
+                    # Get user_id and plan_id from the subscription object
+                    user_id = synced_subscription.user_id
+                    plan_id = synced_subscription.plan_id
                     
-                    logger.info(f"🔵 CHECKOUT - Allocating initial credits for user {synced_subscription.user_id} with tier {plan_tier}")
-                    await credits_service.update_subscription_tier(str(synced_subscription.user_id), plan_tier)
-                    logger.info(f"✅ CHECKOUT - Completed initial credit allocation for user {synced_subscription.user_id}")
+                    # Get plan details from database to avoid detached instance issues
+                    async with get_async_session() as session:
+                        stmt = select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id)
+                        result = session.exec(stmt)
+                        plan = result.first()
+                        
+                        if plan and user_id:
+                            plan_tier = plan.tier
+                            logger.info(f"🔵 CHECKOUT - Allocating initial credits for user {user_id} with tier {plan_tier}")
+                            await credits_service.update_subscription_tier(str(user_id), plan_tier)
+                            logger.info(f"✅ CHECKOUT - Completed initial credit allocation for user {user_id}")
+                        else:
+                            logger.error(f"❌ CHECKOUT - Plan or user_id not found: plan={plan}, user_id={user_id}")
                 else:
-                    logger.error(f"❌ CHECKOUT - No synced subscription or user_id found: {synced_subscription}")
+                    logger.error(f"❌ CHECKOUT - No synced subscription found: {synced_subscription}")
                 
                 # Also record the successful payment event
                 if checkout_session.get('customer'):
