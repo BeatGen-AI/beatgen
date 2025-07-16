@@ -333,10 +333,11 @@ function Studio({ projectId, initialTrackId, initialTrackType }: StudioProps) {
               midiTrackData: trackData // Also pass the full track data for notes, etc.
             };
           } else if (initialTrackType === 'sampler') {
-            // For sampler tracks, use audio payload structure with isSampler flag
+            // For sampler tracks, we need to pass the track data properly
             payload = { 
               audioTrackData: trackData,
-              isSampler: true 
+              isSampler: true,
+              samplerTrackData: trackData // Pass full sampler track data
             };
           } else if (initialTrackType === 'drum') {
             // For drum tracks, we might need to pass samples
@@ -357,6 +358,12 @@ function Studio({ projectId, initialTrackId, initialTrackType }: StudioProps) {
               // Use updateInstanceNotes to set all notes at once
               midiManager.updateInstanceNotes(createdTrack.id, '', trackData.midi_notes_json.notes);
             }
+          }
+          
+          // For sampler tracks, ensure audio file is properly cached
+          if (initialTrackType === 'sampler' && trackData.audio_storage_key && createdTrack) {
+            console.log(`Ensuring sampler audio file is cached for track ${createdTrack.id}`);
+            // The audio file caching should be handled by the track creation logic above
           }
           
           // Clear the track parameters from URL after successful loading

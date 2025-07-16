@@ -1177,8 +1177,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   isExistingTrack: !!existingMidiTrack
               };
           } else if (type === 'AUDIO' && payload && 'audioTrackData' in payload) {
-              const audioPayload = payload as AudioTrackPayload;
+              const audioPayload = payload as AudioTrackPayload & { samplerTrackData?: any };
               const existingTrack = audioPayload.audioTrackData;
+              const existingSamplerTrack = audioPayload.samplerTrackData;
+              
+              // Check if this is a sampler track
+              const isSamplerTrack = audioPayload.isSampler || existingSamplerTrack;
               
               if (existingTrack) {
                   instrumentNameStd = existingTrack.name;
@@ -1199,7 +1203,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   trackOptionsStd = {
                       id: existingTrack.id, // Use original track ID instead of generating new UUID
                       name: existingTrack.name,
-                      storage_key: existingTrack.audio_file_storage_key,
+                      storage_key: existingTrack.audio_file_storage_key || existingTrack.audio_storage_key,
                       audio_file_format: existingTrack.audio_file_format,
                       audio_file_size: existingTrack.audio_file_size,
                       audio_file_duration: existingTrack.audio_file_duration,
@@ -1207,6 +1211,48 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                       waveform_data: existingTrack.waveform_data,
                       audioFile: audioFile, // Include the actual file for audio engine
                       isExistingTrack: true, // Flag to indicate this is an existing track
+                      // Add sampler-specific options if this is a sampler track
+                      ...(isSamplerTrack && existingSamplerTrack ? {
+                          sampleFile: audioFile,
+                          baseMidiNote: existingSamplerTrack.base_midi_note,
+                          grainSize: existingSamplerTrack.grain_size,
+                          overlap: existingSamplerTrack.overlap,
+                          drum_track_id: existingSamplerTrack.drum_track_id,
+                      } : {})
+                  };
+              }
+          } else if (type === 'SAMPLER' && payload && 'audioTrackData' in payload) {
+              // Handle sampler tracks specifically
+              const samplerPayload = payload as AudioTrackPayload & { samplerTrackData?: any };
+              const existingSamplerTrack = samplerPayload.samplerTrackData || samplerPayload.audioTrackData;
+              
+              if (existingSamplerTrack) {
+                  instrumentNameStd = existingSamplerTrack.name;
+                  
+                  // Retrieve the audio file from IndexedDB
+                  let audioFile: File | undefined;
+                  try {
+                      const cachedFile = await db.getAudioFile(existingSamplerTrack.id);
+                      if (cachedFile) {
+                          audioFile = new File([cachedFile.data], existingSamplerTrack.name, { 
+                              type: cachedFile.type 
+                          });
+                      }
+                  } catch (error) {
+                      console.warn('Failed to retrieve sampler audio file from IndexedDB:', error);
+                  }
+                  
+                  trackOptionsStd = {
+                      id: existingSamplerTrack.id,
+                      name: existingSamplerTrack.name,
+                      storage_key: existingSamplerTrack.audio_storage_key,
+                      sampleFile: audioFile,
+                      baseMidiNote: existingSamplerTrack.base_midi_note,
+                      grainSize: existingSamplerTrack.grain_size,
+                      overlap: existingSamplerTrack.overlap,
+                      drum_track_id: existingSamplerTrack.drum_track_id,
+                      waveform_data: existingSamplerTrack.waveform_data,
+                      isExistingTrack: true,
                   };
               }
           }
