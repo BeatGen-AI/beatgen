@@ -4,12 +4,14 @@ import {
   PlayArrow as PlayIcon, 
   Pause as PauseIcon, 
   DeleteOutline as DeleteIcon,
-  DriveFileMove as EditIcon
+  DriveFileMove as EditIcon,
+  Launch as LaunchIcon
 } from '@mui/icons-material';
 import { Drum } from 'lucide-react';
 import { DrumTrackRead } from '../../../platform/types/dto/track_models/drum_track';
 import { Badge } from "../../../components/ui/badge";
 import BaseTrackCard from './BaseTrackCard';
+import { openTrackInStudio } from '../../utils/studioLinks';
 
 interface DrumTrackCardProps {
   track: DrumTrackRead;
@@ -53,6 +55,15 @@ const DrumTrackCard: React.FC<DrumTrackCardProps> = ({
           <EditIcon fontSize="small" />
         </Button>
       )}
+      <Button 
+        variant="ghost"
+        size="icon"
+        onClick={() => openTrackInStudio(track.id, 'drum')}
+        className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-7 w-7"
+        title="Open in Studio"
+      >
+        <LaunchIcon fontSize="small" />
+      </Button>
       <Button 
         variant="ghost" 
         size="icon"

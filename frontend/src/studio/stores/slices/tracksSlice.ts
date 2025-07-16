@@ -1158,12 +1158,23 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           let instrumentNameStd: string | undefined;
           let trackOptionsStd: TrackOptions = {};
           if (type === 'MIDI' && payload && 'instrumentId' in payload) {
-              const midiPayload = payload as MidiTrackPayload;
-              instrumentNameStd = midiPayload.instrumentName;
+              const midiPayload = payload as MidiTrackPayload & { midiTrackData?: any };
+              const existingMidiTrack = midiPayload.midiTrackData;
+              
+              if (existingMidiTrack) {
+                  instrumentNameStd = existingMidiTrack.name;
+              } else {
+                  instrumentNameStd = midiPayload.instrumentName;
+              }
+              
               trackOptionsStd = { 
+                  id: existingMidiTrack?.id,
+                  name: existingMidiTrack?.name,
                   instrumentId: midiPayload.instrumentId,
                   instrumentName: midiPayload.instrumentName,
-                  instrumentStorageKey: midiPayload.instrumentStorageKey
+                  instrumentStorageKey: midiPayload.instrumentStorageKey,
+                  midiNotes: existingMidiTrack?.midi_notes_json?.notes || [],
+                  isExistingTrack: !!existingMidiTrack
               };
           } else if (type === 'AUDIO' && payload && 'audioTrackData' in payload) {
               const audioPayload = payload as AudioTrackPayload;
@@ -1199,7 +1210,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   };
               }
           }
-          const trackNameStd = TRACK_CONFIG[type]?.getDefaultName(countStd, instrumentNameStd) || `Track ${countStd}`;
+          // For existing tracks, use the original name; for new tracks, generate a default name
+          const trackNameStd = (trackOptionsStd as any)?.isExistingTrack 
+            ? instrumentNameStd 
+            : (TRACK_CONFIG[type]?.getDefaultName(countStd, instrumentNameStd) || `Track ${countStd}`);
           const trackData = await createTrackAndRegisterWithHistory(type, trackNameStd, trackOptionsStd);
           return trackData;
       }

@@ -1,11 +1,12 @@
 import React from 'react';
 import { Button } from "../../../components/ui/button";
-import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon, MusicNote as MusicNoteIcon } from '@mui/icons-material';
+import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon, MusicNote as MusicNoteIcon, Launch as LaunchIcon } from '@mui/icons-material';
 import { MidiTrackRead } from '../../../platform/types/dto/track_models/midi_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
 import { convertJsonToNotes } from '../../../types/note';
 import BaseTrackCard from './BaseTrackCard';
+import { openTrackInStudio } from '../../utils/studioLinks';
 
 interface MidiTrackCardProps {
   track: MidiTrackRead;
@@ -60,6 +61,15 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
           <MusicNoteIcon fontSize="small" />
         </Button>
       )}
+      <Button 
+        variant="ghost"
+        size="icon"
+        onClick={() => openTrackInStudio(track.id, 'midi')}
+        className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-7 w-7"
+        title="Open in Studio"
+      >
+        <LaunchIcon fontSize="small" />
+      </Button>
       <Button 
         variant="ghost" 
         size="icon"

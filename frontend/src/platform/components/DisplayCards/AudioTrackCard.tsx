@@ -1,11 +1,12 @@
 import React from 'react';
 import { Button } from "../../../components/ui/button";
-import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
+import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon, Launch as LaunchIcon } from '@mui/icons-material';
 import { AudioWaveform } from 'lucide-react';
 import { AudioTrackRead as Sound } from '../../../platform/types/dto/track_models/audio_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
 import AudioPreview from '../../../studio/components/shared/AudioPreview';
 import BaseTrackCard from './BaseTrackCard';
+import { openTrackInStudio } from '../../utils/studioLinks';
 
 interface AudioTrackCardProps {
   sound: Sound;
@@ -38,6 +39,15 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
         className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-7 w-7"
       >
         {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
+      </Button>
+      <Button 
+        variant="ghost"
+        size="icon"
+        onClick={() => openTrackInStudio(sound.id, 'audio')}
+        className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-7 w-7"
+        title="Open in Studio"
+      >
+        <LaunchIcon fontSize="small" />
       </Button>
       <Button 
         variant="ghost" 

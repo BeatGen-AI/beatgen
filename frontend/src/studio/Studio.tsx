@@ -35,12 +35,14 @@ import { GridSnapOption } from './components/piano-roll2/gridConstants';
 // Studio Component Props
 interface StudioProps {
   projectId?: string;
+  initialTrackId?: string;
+  initialTrackType?: 'audio' | 'midi' | 'sampler' | 'drum';
 }
 
 const COLLAPSED_SIDEBAR_WIDTH = '40px'; // Width of the sidebar when collapsed
 
 // Main Studio Component
-function Studio({ projectId }: StudioProps) {
+function Studio({ projectId, initialTrackId, initialTrackType }: StudioProps) {
   // Initialize DB session management
   useStudioDBSession();
   
@@ -289,6 +291,85 @@ function Studio({ projectId }: StudioProps) {
       delete (window as any).storeInstance;
     };
   }, [initializeAudio, existingProjectId, projectId, loadProject]);
+
+  // Handle initial track loading when opening studio with a specific track
+  useEffect(() => {
+    if (initialTrackId && initialTrackType && isInitialized && !projectId) {
+      console.log(`Loading initial track: ${initialTrackId} (${initialTrackType})`);
+      
+      const loadInitialTrack = async () => {
+        try {
+          // Import the API functions dynamically to avoid circular dependencies
+          const { getSound, getMidiTrack, getSamplerTrack, getDrumTrack } = await import('../platform/api/sounds');
+          
+          // Fetch the full track data from the API first
+          let trackData: any;
+          if (initialTrackType === 'audio') {
+            trackData = await getSound(initialTrackId);
+          } else if (initialTrackType === 'midi') {
+            trackData = await getMidiTrack(initialTrackId);
+          } else if (initialTrackType === 'sampler') {
+            trackData = await getSamplerTrack(initialTrackId);
+          } else if (initialTrackType === 'drum') {
+            trackData = await getDrumTrack(initialTrackId);
+          }
+          
+          if (!trackData) {
+            throw new Error(`Track not found: ${initialTrackId}`);
+          }
+          
+          console.log('Fetched track data:', trackData);
+          
+          // Create payload with the full track data
+          let payload: any = {};
+          if (initialTrackType === 'audio') {
+            payload = { audioTrackData: trackData };
+          } else if (initialTrackType === 'midi') {
+            // For MIDI tracks, we need to extract the instrument info
+            payload = {
+              instrumentId: trackData.instrument_id,
+              instrumentName: trackData.instrument_file?.name || trackData.instrument_name || 'Unknown Instrument',
+              instrumentStorageKey: trackData.instrument_file?.storage_key || trackData.instrument_storage_key,
+              midiTrackData: trackData // Also pass the full track data for notes, etc.
+            };
+          } else if (initialTrackType === 'sampler') {
+            // For sampler tracks, use audio payload structure with isSampler flag
+            payload = { 
+              audioTrackData: trackData,
+              isSampler: true 
+            };
+          } else if (initialTrackType === 'drum') {
+            // For drum tracks, we might need to pass samples
+            payload = { 
+              samples: trackData.sampler_tracks || [],
+              drumTrackData: trackData
+            };
+          }
+          
+          const createdTrack = await handleAddTrack(initialTrackType.toUpperCase() as any, payload);
+          console.log(`Successfully loaded initial track: ${initialTrackId}`);
+          
+          // For MIDI and Sampler tracks, load the notes into the MIDI manager
+          if ((initialTrackType === 'midi' || initialTrackType === 'sampler') && trackData.midi_notes_json?.notes && createdTrack) {
+            const midiManager = store?.getMidiManager();
+            if (midiManager && midiManager.hasTrack(createdTrack.id)) {
+              console.log(`Loading ${trackData.midi_notes_json.notes.length} MIDI notes for ${initialTrackType} track ${createdTrack.id}`);
+              // Use updateInstanceNotes to set all notes at once
+              midiManager.updateInstanceNotes(createdTrack.id, '', trackData.midi_notes_json.notes);
+            }
+          }
+          
+          // Clear the track parameters from URL after successful loading
+          const newUrl = '/studio';
+          window.history.replaceState({}, '', newUrl);
+        } catch (error) {
+          console.error('Failed to load initial track:', error);
+        }
+      };
+
+      loadInitialTrack();
+    }
+  }, [initialTrackId, initialTrackType, isInitialized, projectId, handleAddTrack]);
   
   // Handlers
   const handleBpmChange = (event: React.ChangeEvent<HTMLInputElement>) => {

@@ -4,7 +4,8 @@ import {
   PlayArrow as PlayIcon, 
   Pause as PauseIcon, 
   DeleteOutline as DeleteIcon,
-  SettingsSuggest as SettingsIcon
+  SettingsSuggest as SettingsIcon,
+  Launch as LaunchIcon
 } from '@mui/icons-material';
 import { IconWaveSine } from '@tabler/icons-react';
 import { SamplerTrackRead } from '../../../platform/types/dto/track_models/sampler_track';
@@ -13,6 +14,7 @@ import AudioPreview from '../../../studio/components/shared/AudioPreview';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
 import { convertJsonToNotes } from '../../../types/note';
 import BaseTrackCard from './BaseTrackCard';
+import { openTrackInStudio } from '../../utils/studioLinks';
 
 interface SamplerTrackCardProps {
   track: SamplerTrackRead;
@@ -77,6 +79,15 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
           <SettingsIcon fontSize="small" />
         </Button>
       )}
+      <Button 
+        variant="ghost"
+        size="icon"
+        onClick={() => openTrackInStudio(track.id, 'sampler')}
+        className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-7 w-7"
+        title="Open in Studio"
+      >
+        <LaunchIcon fontSize="small" />
+      </Button>
       <Button 
         variant="ghost" 
         size="icon"
