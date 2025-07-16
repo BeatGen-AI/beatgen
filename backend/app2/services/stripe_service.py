@@ -29,8 +29,8 @@ class StripeService:
         async with get_async_session() as session:
             # Check if customer already exists
             stmt = select(StripeCustomer).where(StripeCustomer.user_id == user.id)
-            result = session.exec(stmt)
-            existing_customer = result.first()
+            result = await session.execute(stmt)
+            existing_customer = result.scalars().first()
             
             if existing_customer:
                 return existing_customer.stripe_customer_id
@@ -55,7 +55,7 @@ class StripeService:
                     stripe_customer_id=stripe_customer.id,
                 )
                 session.add(db_customer)
-                session.commit()
+                await session.commit()
                 
                 return stripe_customer.id
                 
@@ -136,8 +136,8 @@ class StripeService:
                 Subscription.user_id == user.id,
                 Subscription.status.in_(["active", "trialing"])
             )
-            result = session.exec(stmt)
-            subscription = result.first()
+            result = await session.execute(stmt)
+            subscription = result.scalars().first()
             
             if not subscription:
                 raise ValueError("No active subscription found")
@@ -166,7 +166,7 @@ class StripeService:
                     subscription.canceled_at = datetime.utcnow()
                 
                 session.add(subscription)
-                session.commit()
+                await session.commit()
                 
                 return {
                     "status": "scheduled" if at_period_end else "canceled",
@@ -189,7 +189,7 @@ class StripeService:
                     Subscription.status.in_(["active", "trialing", "past_due"])
                 )
             )
-            result = session.exec(stmt)
+            result = await session.execute(stmt)
             row = result.first()
             
             if not row:
@@ -224,8 +224,8 @@ class StripeService:
                 Subscription.status.in_(["active", "trialing"]),
                 Subscription.cancel_at_period_end == True
             )
-            result = session.exec(stmt)
-            subscription = result.first()
+            result = await session.execute(stmt)
+            subscription = result.scalars().first()
             
             if not subscription:
                 raise ValueError("No subscription pending cancellation found")
@@ -246,7 +246,7 @@ class StripeService:
                 subscription.updated_at = datetime.utcnow()
                 
                 session.add(subscription)
-                session.commit()
+                await session.commit()
                 
                 return {
                     "status": "reactivated",
@@ -324,8 +324,8 @@ class StripeService:
             stmt = select(StripeCustomer).where(
                 StripeCustomer.stripe_customer_id == customer_id
             )
-            result = session.exec(stmt)
-            customer = result.first()
+            result = await session.execute(stmt)
+            customer = result.scalars().first()
             
             if not customer:
                 logger.error(f"Customer not found for Stripe customer ID: {customer_id}")
@@ -335,8 +335,8 @@ class StripeService:
             stmt = select(SubscriptionPlan).where(
                 SubscriptionPlan.stripe_price_id == price_id
             )
-            result = session.exec(stmt)
-            plan = result.first()
+            result = await session.execute(stmt)
+            plan = result.scalars().first()
             
             if not plan:
                 logger.error(f"Plan not found for Stripe price ID: {price_id}")
@@ -346,8 +346,8 @@ class StripeService:
             stmt = select(Subscription).where(
                 Subscription.stripe_subscription_id == subscription_id
             )
-            result = session.exec(stmt)
-            subscription = result.first()
+            result = await session.execute(stmt)
+            subscription = result.scalars().first()
             
             if subscription:
                 # Update existing subscription
@@ -388,7 +388,7 @@ class StripeService:
                 )
                 session.add(subscription)
             
-            session.commit()
+            await session.commit()
             
             # Return essential data with plan info to avoid session detachment issues
             return {
@@ -410,8 +410,8 @@ class StripeService:
             stmt = select(PaymentEvent).where(
                 PaymentEvent.stripe_event_id == stripe_event["id"]
             )
-            result = session.exec(stmt)
-            if result.first():
+            result = await session.execute(stmt)
+            if result.scalars().first():
                 return  # Already processed
             
             invoice = stripe_event["data"]["object"]
@@ -429,7 +429,7 @@ class StripeService:
             )
             
             session.add(payment_event)
-            session.commit()
+            await session.commit()
     
     @staticmethod
     def verify_webhook_signature(payload: bytes, signature: str, webhook_secret: str) -> Dict[str, Any]:

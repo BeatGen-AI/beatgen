@@ -6,6 +6,7 @@ from typing import List
 import uuid
 from sqlmodel import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app2.models.track_models.sampler_track import (
     SamplerTrack,
@@ -35,15 +36,16 @@ class SamplerTrackRepository(BaseRepository[SamplerTrack]):
         self, user_id: uuid.UUID, skip: int, limit: int
     ) -> tuple[List[SamplerTrack], int]:
         """Get paginated sampler tracks for a specific user."""
-        # Query for items
+        # Query for items with joined relationships
         items_query = (
             select(SamplerTrack)
+            .options(joinedload(SamplerTrack.drum_track))
             .where(SamplerTrack.user_id == user_id)
             .offset(skip)
             .limit(limit)
         )
         items_result = await self.session.execute(items_query)
-        items = items_result.scalars().all()
+        items = items_result.scalars().unique().all()
 
         # Query for total count
         count_query = (

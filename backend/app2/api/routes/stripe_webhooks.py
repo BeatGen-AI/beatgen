@@ -53,8 +53,8 @@ async def stripe_webhook(
             stmt = select(PaymentEvent).where(
                 PaymentEvent.stripe_event_id == event["id"]
             )
-            result = session.exec(stmt)
-            if result.first():
+            result = await session.execute(stmt)
+            if result.scalars().first():
                 logger.info(f"Event {event['id']} already processed")
                 return {"status": "already_processed"}
     
@@ -256,8 +256,8 @@ async def handle_payment_succeeded(event):
         stmt = select(StripeCustomer).where(
             StripeCustomer.stripe_customer_id == invoice["customer"]
         )
-        result = session.exec(stmt)
-        customer = result.first()
+        result = await session.execute(stmt)
+        customer = result.scalars().first()
         
         if customer:
             await stripe_service.record_payment_event(event, customer.user_id)
@@ -275,8 +275,8 @@ async def handle_payment_failed(event):
         stmt = select(StripeCustomer).where(
             StripeCustomer.stripe_customer_id == invoice["customer"]
         )
-        result = session.exec(stmt)
-        customer = result.first()
+        result = await session.execute(stmt)
+        customer = result.scalars().first()
         
         if customer:
             await stripe_service.record_payment_event(event, customer.user_id)
@@ -335,8 +335,8 @@ async def handle_checkout_completed(checkout_session):
                         stmt = select(StripeCustomer).where(
                             StripeCustomer.stripe_customer_id == checkout_session['customer']
                         )
-                        result = session.exec(stmt)
-                        customer = result.first()
+                        result = await session.execute(stmt)
+                        customer = result.scalars().first()
                         
                         if customer:
                             # Create a payment event for the initial payment
@@ -350,7 +350,7 @@ async def handle_checkout_completed(checkout_session):
                                 event_data={"checkout_session": checkout_session},
                             )
                             session.add(payment_event)
-                            session.commit()
+                            await session.commit()
                             logger.info(f"✅ CHECKOUT - Recorded checkout completion for user {customer.user_id}")
                         else:
                             logger.error(f"❌ CHECKOUT - Customer not found for payment event: {checkout_session['customer']}")
@@ -388,8 +388,8 @@ async def handle_product_created(product):
         stmt = select(SubscriptionPlan).where(
             SubscriptionPlan.stripe_product_id == product['id']
         )
-        result = session.exec(stmt)
-        existing = result.first()
+        result = await session.execute(stmt)
+        existing = result.scalars().first()
         
         if not existing:
             # Create new product - we'll update with price info when price is created
@@ -404,7 +404,7 @@ async def handle_product_created(product):
                 is_active=product['active']
             )
             session.add(plan)
-            session.commit()
+            await session.commit()
             logger.info(f"Created subscription plan for product: {product['id']}")
 
 
@@ -418,8 +418,8 @@ async def handle_product_updated(product):
         stmt = select(SubscriptionPlan).where(
             SubscriptionPlan.stripe_product_id == product['id']
         )
-        result = session.exec(stmt)
-        plan = result.first()
+        result = await session.execute(stmt)
+        plan = result.scalars().first()
         
         if plan:
             plan.name = product['name']
@@ -429,7 +429,7 @@ async def handle_product_updated(product):
                 plan.tier = product['metadata']['tier'].lower()
             
             session.add(plan)
-            session.commit()
+            await session.commit()
             logger.info(f"Updated subscription plan for product: {product['id']}")
 
 
@@ -443,14 +443,14 @@ async def handle_product_deleted(product):
         stmt = select(SubscriptionPlan).where(
             SubscriptionPlan.stripe_product_id == product['id']
         )
-        result = session.exec(stmt)
-        plan = result.first()
+        result = await session.execute(stmt)
+        plan = result.scalars().first()
         
         if plan:
             # Soft delete - just mark as inactive
             plan.is_active = False
             session.add(plan)
-            session.commit()
+            await session.commit()
             logger.info(f"Deactivated subscription plan for product: {product['id']}")
 
 
@@ -465,8 +465,8 @@ async def handle_price_created(price):
         stmt = select(SubscriptionPlan).where(
             SubscriptionPlan.stripe_product_id == price['product']
         )
-        result = session.exec(stmt)
-        plan = result.first()
+        result = await session.execute(stmt)
+        plan = result.scalars().first()
         
         if plan:
             # Update the plan with price information
@@ -488,7 +488,7 @@ async def handle_price_created(price):
                     plan.billing_period = BillingPeriod.MONTHLY
             
             session.add(plan)
-            session.commit()
+            await session.commit()
             logger.info(f"Updated plan with price: {price['id']}")
         else:
             # Price created before product webhook - create placeholder
@@ -505,8 +505,8 @@ async def handle_price_updated(price):
         stmt = select(SubscriptionPlan).where(
             SubscriptionPlan.stripe_price_id == price['id']
         )
-        result = session.exec(stmt)
-        plan = result.first()
+        result = await session.execute(stmt)
+        plan = result.scalars().first()
         
         if plan:
             plan.price_cents = price['unit_amount']
@@ -514,7 +514,7 @@ async def handle_price_updated(price):
             plan.is_active = price['active']
             
             session.add(plan)
-            session.commit()
+            await session.commit()
             logger.info(f"Updated plan price: {price['id']}")
 
 
@@ -529,11 +529,11 @@ async def handle_price_deleted(price):
         stmt = select(SubscriptionPlan).where(
             SubscriptionPlan.stripe_price_id == price['id']
         )
-        result = session.exec(stmt)
-        plan = result.first()
+        result = await session.execute(stmt)
+        plan = result.scalars().first()
         
         if plan:
             plan.is_active = False
             session.add(plan)
-            session.commit()
+            await session.commit()
             logger.info(f"Deactivated plan for deleted price: {price['id']}")
