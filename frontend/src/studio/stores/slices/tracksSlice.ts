@@ -320,6 +320,18 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                    type === 'SAMPLER' ? (options as SamplerTrackOptions).sampleFile : 
                    undefined;
 
+      // Handle audio file cache update for existing tracks with new studio IDs
+      if (type === 'AUDIO' && (options as any).originalTrackId && file) {
+        const originalTrackId = (options as any).originalTrackId as string;
+        try {
+          // Update the cache to use the new studio track ID
+          await db.upsertAudioFile(trackId, file, (options as any).audio_file_duration || 0);
+          console.log(`✅ Updated audio file cache: ${originalTrackId} → ${trackId}`);
+        } catch (error) {
+          console.warn('Failed to update audio file cache with new track ID:', error);
+        }
+      }
+
       await passedStore.getAudioEngine().createTrack(trackId, name); 
       
       // Calculate defaults
@@ -1184,6 +1196,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                       audio_file_sample_rate: existingTrack.audio_file_sample_rate,
                       waveform_data: existingTrack.waveform_data,
                       audioFile: audioFile, // Include the actual file for audio engine
+                      originalTrackId: existingTrack.id, // Pass original ID for cache update
                   };
               }
           }

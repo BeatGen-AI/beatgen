@@ -173,6 +173,12 @@ export const useAutoSave = (options: UseAutoSaveOptions = {}): UseAutoSaveReturn
         const currentTracks = state.tracks;
         const hasDirtyTracks = currentTracks.some(track => track.dirty === true);
         
+        console.log('AutoSave: Checking tracks for dirty flag:', {
+          totalTracks: currentTracks.length,
+          dirtyTracks: currentTracks.filter(track => track.dirty === true).map(t => ({ id: t.id, name: t.name, dirty: t.dirty })),
+          hasDirtyTracks
+        });
+        
         // If we have dirty tracks and enough time has passed, trigger auto-save
         if (hasDirtyTracks) {
           const now = Date.now();

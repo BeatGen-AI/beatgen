@@ -13,6 +13,7 @@ import { interactWithAssistant, StreamCallbacks } from '../../../platform/api/as
 import GenerationPromptControl from '../shared/GenerationPromptControl';
 import AudioPreview from '../shared/AudioPreview';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import SampleManager from '../../core/samples/sampleManager';
 
 // TrackCard component for displaying individual audio tracks
 interface TrackCardProps {
@@ -335,10 +336,30 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
         onStatus: (status) => {
           setGenerationStatus(status.message || 'Processing...');
         },
-        onAction: (action) => {
+        onAction: async (action) => {
           if (action.type === 'add_audio_track' && action.data?.track_data) {
-            // Convert the track data to AudioTrackRead and select it
+            // Convert the track data to AudioTrackRead
             const trackData = action.data.track_data as AudioTrackRead;
+            
+            // Download and cache the audio file before selecting the track
+            if (trackData.audio_file_storage_key) {
+              try {
+                setGenerationStatus('Caching audio file...');
+                const sampleManager = SampleManager.getInstance(db);
+                await sampleManager.getSampleBlob(
+                  trackData.id, 
+                  trackData.audio_file_storage_key, 
+                  'audio_track', 
+                  trackData.name
+                );
+              } catch (error) {
+                console.error('Failed to cache generated audio file:', error);
+                setGenerationError('Failed to cache audio file');
+                return;
+              }
+            }
+            
+            // Now select the track (it will have the cached audio file)
             onSelectTrack(trackData);
             setGenerationStatus('Audio generated successfully!');
             setTimeout(() => {
