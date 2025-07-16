@@ -661,73 +661,78 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
             )}
 
             <TabsContent value="generate" className="flex-grow overflow-hidden m-0">
-              <div className="h-full flex flex-col overflow-hidden">
-                <div className="flex-grow overflow-y-auto p-6">
-                  <div className="space-y-6">
-                    <div className="text-center">
-                      <Music className="w-12 h-12 mx-auto mb-3 text-primary" />
-                      <h3 className="text-lg font-semibold mb-2">Generate Audio</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Describe the audio you want to generate and let AI create it for you
-                      </p>
-                    </div>
-
-                    {/* Help Text */}
-                    <div className="bg-muted/30 rounded-lg p-4">
-                      <h4 className="font-medium mb-2">Tips for better results:</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• Be specific about the instrument (e.g., "acoustic guitar", "piano")</li>
-                        <li>• Mention the style or genre if desired</li>
-                        <li>• Specify key signature for musical coherence</li>
-                        <li>• Keep descriptions clear and concise</li>
-                      </ul>
-                    </div>
-
-                    <GenerationPromptControl
-                      prompt={generatePrompt}
-                      onPromptChange={setGeneratePrompt}
-                      onGenerate={handleGenerateAudio}
-                      isGenerating={isGenerating}
-                      placeholder="Describe the audio you want to generate (e.g., 'acoustic guitar melody in C major', 'piano chord progression', 'violin solo')"
-                      maxLength={500}
-                      showRandomButton={false}
-                      showSelect={false}
-                      submitButtonAriaLabel="Generate Audio"
-                    />
-
-                    {/* Generation Status */}
-                    {(isGenerating || generationStatus) && (
-                      <div className="bg-muted/50 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium">
-                            {isGenerating ? 'Generating...' : 'Status'}
-                          </span>
-                          {isGenerating && (
-                            <Button
-                              onClick={handleCancelGeneration}
-                              variant="outline"
-                              size="sm"
-                            >
-                              Cancel
-                            </Button>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {isGenerating && <Loader2 className="h-4 w-4 animate-spin" />}
-                          <span className="text-sm text-muted-foreground">
-                            {generationStatus}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Generation Error */}
-                    {generationError && (
-                      <Alert variant="destructive">
-                        {generationError}
-                      </Alert>
-                    )}
+              <div className="h-full flex flex-col p-6">
+                {/* Header and Tips - Top Section */}
+                <div className="flex-shrink-0 space-y-6 mb-6">
+                  <div className="text-center">
+                    <Music className="w-12 h-12 mx-auto mb-3 text-primary" />
+                    <h3 className="text-lg font-semibold mb-2">Generate Audio</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Describe the audio you want to generate and let AI create it for you
+                    </p>
                   </div>
+
+                  {/* Help Text */}
+                  <div className="bg-muted/30 rounded-lg p-4">
+                    <h4 className="font-medium mb-2">Tips for better results:</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• Be specific about the instrument (e.g., "acoustic guitar", "piano")</li>
+                      <li>• Mention the style or genre if desired</li>
+                      <li>• Specify key signature for musical coherence</li>
+                      <li>• Keep descriptions clear and concise</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Flexible space to push textarea to bottom */}
+                <div className="flex-grow"></div>
+
+                {/* Textarea and Controls - Bottom Section */}
+                <div className="flex-shrink-0 space-y-4">
+                  <GenerationPromptControl
+                    prompt={generatePrompt}
+                    onPromptChange={setGeneratePrompt}
+                    onGenerate={handleGenerateAudio}
+                    isGenerating={isGenerating}
+                    placeholder="Describe the audio you want to generate (e.g., 'acoustic guitar melody in C major', 'piano chord progression', 'violin solo')"
+                    maxLength={500}
+                    showRandomButton={false}
+                    showSelect={false}
+                    submitButtonAriaLabel="Generate Audio"
+                  />
+
+                  {/* Generation Status */}
+                  {(isGenerating || generationStatus) && (
+                    <div className="bg-muted/50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">
+                          {isGenerating ? 'Generating...' : 'Status'}
+                        </span>
+                        {isGenerating && (
+                          <Button
+                            onClick={handleCancelGeneration}
+                            variant="outline"
+                            size="sm"
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isGenerating && <Loader2 className="h-4 w-4 animate-spin" />}
+                        <span className="text-sm text-muted-foreground">
+                          {generationStatus}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Generation Error */}
+                  {generationError && (
+                    <Alert variant="destructive">
+                      {generationError}
+                    </Alert>
+                  )}
                 </div>
               </div>
             </TabsContent>
