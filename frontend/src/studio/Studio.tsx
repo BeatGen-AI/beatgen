@@ -320,6 +320,31 @@ function Studio({ projectId, initialTrackId, initialTrackType }: StudioProps) {
           
           console.log('Fetched track data:', trackData);
           
+          // For audio and sampler tracks, download and cache the audio file BEFORE creating the track
+          if (initialTrackType === 'audio' || initialTrackType === 'sampler') {
+            const storageKey = initialTrackType === 'sampler' ? trackData.audio_storage_key : trackData.audio_file_storage_key;
+            
+            if (storageKey) {
+              console.log(`Pre-downloading audio file for ${initialTrackType} track ${trackData.id}`);
+              try {
+                // Import the download function that handles multiple storage prefixes
+                const { downloadAudioTrackFile } = await import('../platform/api/sounds');
+                
+                // Download the audio file using the smart fallback logic
+                const audioBlob = await downloadAudioTrackFile(storageKey);
+                const audioFile = new File([audioBlob], trackData.name || 'audio.wav', {
+                  type: audioBlob.type || 'audio/wav'
+                });
+                
+                // Cache the audio file in IndexedDB BEFORE creating the track
+                await db.upsertAudioFile(trackData.id, audioFile, trackData.audio_file_duration || 0);
+                console.log(`Successfully pre-cached ${initialTrackType} audio file for track ${trackData.id}`);
+              } catch (error) {
+                console.error(`Error downloading ${initialTrackType} audio file:`, error);
+              }
+            }
+          }
+          
           // Create payload with the full track data
           let payload: any = {};
           if (initialTrackType === 'audio') {
@@ -360,11 +385,6 @@ function Studio({ projectId, initialTrackId, initialTrackType }: StudioProps) {
             }
           }
           
-          // For sampler tracks, ensure audio file is properly cached
-          if (initialTrackType === 'sampler' && trackData.audio_storage_key && createdTrack) {
-            console.log(`Ensuring sampler audio file is cached for track ${createdTrack.id}`);
-            // The audio file caching should be handled by the track creation logic above
-          }
           
           // Clear the track parameters from URL after successful loading
           const newUrl = '/studio';
