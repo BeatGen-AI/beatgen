@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from "../../../components/ui/button";
-import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
+import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { AudioWaveform } from 'lucide-react';
 import { AudioTrackRead as Sound } from '../../../platform/types/dto/track_models/audio_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
@@ -15,6 +15,7 @@ interface AudioTrackCardProps {
   handlePlaySound: (sound: Sound) => void;
   handleDeleteSound: (soundId: string) => void;
   handleSeek: (soundId: string, position: number) => void;
+  handleEditSound?: (sound: Sound) => void;
   sectionColor: string;
 }
 
@@ -23,6 +24,7 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
   playingId,
   handlePlaySound,
   handleDeleteSound,
+  handleEditSound,
   sectionColor,
 }) => {
   const isPlaying = playingId === sound.id;
@@ -39,6 +41,17 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
       >
         {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
       </Button>
+      {handleEditSound && (
+        <Button 
+          variant="ghost"
+          size="icon"
+          onClick={() => handleEditSound(sound)}
+          className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-7 w-7"
+          title="Edit audio"
+        >
+          <EditIcon fontSize="small" />
+        </Button>
+      )}
       <Button 
         variant="ghost" 
         size="icon"

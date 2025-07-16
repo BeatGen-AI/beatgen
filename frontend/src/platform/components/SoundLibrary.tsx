@@ -11,6 +11,7 @@ import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/paginatio
 import { getSoundsPaginated, deleteSound } from '../api/sounds';
 import { AudioTrackRead } from '../types/dto/track_models/audio_track';
 import AudioTrackCard from './DisplayCards/AudioTrackCard';
+import { EditAudioModal } from '../../studio/components/modals/EditAudioModal';
 
 interface SoundLibraryProps {
   onReload?: () => void;
@@ -25,6 +26,10 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  
+  // Edit modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTrack, setEditingTrack] = useState<AudioTrackRead | null>(null);
 
   // Pagination using shared hook
   const pagination = useAudioTracksPagination(
@@ -76,7 +81,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
     
     const audio = new Audio();
     
-    const baseUrl = process.env.REACT_APP_SUPABASE_URL || '';
+    const baseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co';
     const url = `${baseUrl}/storage/v1/object/public/tracks/${sound.audio_file_storage_key}`;
     console.log('Audio URL:', url);
     
@@ -126,6 +131,23 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
     }
     performDeleteSound(id);
   };
+  
+  // Edit sound handler
+  const handleEditSound = (sound: AudioTrackRead) => {
+    setEditingTrack(sound);
+    setIsEditModalOpen(true);
+  };
+  
+  // Handle track updated from edit modal
+  const handleTrackUpdated = (updatedTrack: AudioTrackRead) => {
+    // Invalidate queries to refresh the list
+    queryClient.invalidateQueries({ queryKey: ['audioTracks'] });
+    if (onReload) {
+      onReload();
+    }
+    // Don't auto-close the modal - let the user close it manually
+    // The modal will show a success message and the user can close when ready
+  };
 
   // Render item function for the grid
   const renderAudioTrackCard = (sound: AudioTrackRead) => (
@@ -136,6 +158,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
       duration={duration}
       handlePlaySound={handlePlaySound}
       handleDeleteSound={handleDeleteSound}
+      handleEditSound={handleEditSound}
       handleSeek={handleSeek}
       sectionColor={sectionColor}
     />
@@ -149,20 +172,33 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
   };
 
   return (
-    <PaginatedGrid<AudioTrackRead>
-      items={pagination.allFetchedItems}
-      displayedCount={pagination.displayedCount}
-      totalItems={pagination.totalItems}
-      loading={pagination.isLoading}
-      loadingMore={pagination.isFetching}
-      error={pagination.error}
-      onShowMore={pagination.showMore}
-      canShowMore={pagination.canShowMore}
-      renderItem={renderAudioTrackCard}
-      getItemKey={(sound) => sound.id}
-      emptyState={emptyState}
-      gridProps={{ xs: 12, sm: 6, md: 4 }}
-      sectionColor={sectionColor}
-    />
+    <>
+      <PaginatedGrid<AudioTrackRead>
+        items={pagination.allFetchedItems}
+        displayedCount={pagination.displayedCount}
+        totalItems={pagination.totalItems}
+        loading={pagination.isLoading}
+        loadingMore={pagination.isFetching}
+        error={pagination.error}
+        onShowMore={pagination.showMore}
+        canShowMore={pagination.canShowMore}
+        renderItem={renderAudioTrackCard}
+        getItemKey={(sound) => sound.id}
+        emptyState={emptyState}
+        gridProps={{ xs: 12, sm: 6, md: 4 }}
+        sectionColor={sectionColor}
+      />
+      
+      <EditAudioModal
+        open={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingTrack(null);
+        }}
+        audioTrack={editingTrack}
+        onTrackUpdated={handleTrackUpdated}
+        useUiMode={true}
+      />
+    </>
   );
 }

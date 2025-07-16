@@ -28,6 +28,16 @@ class AudioGenerationResult:
     format: str = "audio/wav"
 
 
+@dataclass
+class AudioInpaintResult:
+    """Result from FAL-AI audio inpainting"""
+    audio_url: str
+    file_name: str
+    duration: float
+    sample_rate: int = 44100
+    format: str = "audio/wav"
+
+
 class FalAIService:
     """Service for generating audio using FAL-AI's Lyria2 model"""
     
@@ -195,6 +205,117 @@ class FalAIService:
         audio_data = await self.download_audio(result.audio_url)
         
         return audio_data, result
+    
+    async def audio_inpaint(
+        self,
+        audio_url: str,
+        tags: str,
+        prompt: Optional[str] = None,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
+        lyrics: Optional[str] = None
+    ) -> AudioInpaintResult:
+        """
+        Modify audio using FAL-AI's ace-step/audio-inpaint model
+        
+        Args:
+            audio_url: URL of the source audio file to modify
+            tags: Style tags for the generation (e.g., "lofi, hiphop, drum and bass, trap, chill")
+            prompt: Optional text description of desired modifications
+            start_time: Optional start time for the segment to modify (in seconds)
+            end_time: Optional end time for the segment to modify (in seconds)
+            lyrics: Optional lyrics to guide the inpainting
+            
+        Returns:
+            AudioInpaintResult with the modified audio information
+        """
+        logger.info(f"Inpainting audio with tags: '{tags}' and prompt: '{prompt}'")
+        
+        # Prepare request arguments for FAL-AI ace-step/audio-inpaint
+        arguments = {
+            "audio_url": audio_url,
+            "tags": tags
+        }
+        
+        # Add optional parameters if provided
+        if prompt:
+            arguments["prompt"] = prompt
+        if start_time is not None:
+            arguments["start_time"] = start_time
+        if end_time is not None:
+            arguments["end_time"] = end_time
+        if lyrics:
+            arguments["lyrics"] = lyrics
+        
+        try:
+            # Track logs from FAL-AI
+            def on_queue_update(update):
+                if isinstance(update, fal_client.InProgress):
+                    for log in update.logs:
+                        logger.info(f"FAL-AI inpaint log: {log['message']}")
+            
+            logger.info(f"Submitting request to FAL-AI ace-step/audio-inpaint")
+            logger.info(f"Audio URL: {audio_url}")
+            logger.info(f"Prompt: '{arguments.get('prompt', 'N/A')[:100]}...'")
+            if arguments.get('prompt'):
+                logger.info(f"Style tags: '{arguments.get('style_tags')}'")
+            
+            # Get the event loop
+            loop = asyncio.get_event_loop()
+            
+            # Use the subscribe method for audio-inpaint
+            result = await loop.run_in_executor(
+                None,
+                lambda: fal_client.subscribe(
+                    "fal-ai/ace-step/audio-inpaint",
+                    arguments=arguments,
+                    with_logs=True,
+                    on_queue_update=on_queue_update,
+                )
+            )
+            
+            logger.info("FAL-AI inpaint completed successfully")
+            
+            # Extract audio URL from response
+            # ace-step/audio-inpaint returns the audio in the "audio" field
+            audio_url_result = None
+            if "audio" in result:
+                audio = result["audio"]
+                if isinstance(audio, dict) and "url" in audio:
+                    audio_url_result = audio["url"]
+                elif isinstance(audio, str):
+                    audio_url_result = audio
+            elif "audio_file" in result:
+                # Fallback for different response structure
+                audio_file = result["audio_file"]
+                if isinstance(audio_file, dict) and "url" in audio_file:
+                    audio_url_result = audio_file["url"]
+                elif isinstance(audio_file, str):
+                    audio_url_result = audio_file
+            
+            if not audio_url_result:
+                raise Exception(f"No audio URL found in FAL-AI response. Response keys: {list(result.keys())}")
+            
+            # Generate a unique filename for the inpainted audio
+            file_name = f"fal_ai_inpaint_{uuid.uuid4().hex[:8]}.wav"
+            
+            # Create result object (ace-step/audio-inpaint preserves input duration)
+            # We'll use the input duration as the default, but this could be updated
+            # based on the actual response if FAL-AI provides duration info
+            inpaint_result = AudioInpaintResult(
+                audio_url=audio_url_result,
+                file_name=file_name,
+                duration=30.0,  # Default duration, should be updated based on input
+                sample_rate=44100,  # Default sample rate for inpaint
+                format="audio/wav"
+            )
+            
+            logger.info(f"Audio inpaint successful: {file_name}")
+            return inpaint_result
+                
+        except Exception as e:
+            logger.error(f"Error inpainting audio with FAL-AI: {str(e)}")
+            raise Exception(f"Failed to inpaint audio: {str(e)}")
 
 
 # Service factory function

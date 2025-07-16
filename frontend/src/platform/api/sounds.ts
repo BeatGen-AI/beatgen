@@ -14,6 +14,24 @@ export interface UploadUrlResponse {
   upload_url: string;
   storage_key: string;
 }
+
+export interface AudioInpaintRequest {
+  audio_url: string;
+  tags: string;
+  prompt?: string;
+  start_time?: number;
+  end_time?: number;
+  lyrics?: string;
+}
+
+export interface AudioInpaintResponse {
+  audio_url: string;
+  file_name: string;
+  duration: number;
+  sample_rate: number;
+  format: string;
+  success: boolean;
+}
 /**
  * Get a presigned URL for uploading a file (audio or MIDI)
  * @param fileName The name of the file to upload
@@ -324,4 +342,26 @@ export const downloadAudioTrackFile = async (storageKey: string): Promise<Blob> 
 export const downloadDrumSampleFile = async (storageKey: string): Promise<Blob> => {
   const prefix = 'storage/v1/object/public/assets/drum_samples_public';
   return await downloadFile(prefix, storageKey);
+};
+
+/**
+ * Inpaint an audio track using FAL-AI's ace-step/audio-inpaint model
+ * @param request The inpaint request containing audio URL and prompt
+ * @returns The inpainted audio information
+ */
+export const inpaintAudio = async (request: AudioInpaintRequest): Promise<AudioInpaintResponse> => {
+  console.log('Inpainting audio with request:', request);
+  
+  try {
+    const response = await apiClient.post('/audio-inpaint/inpaint', request);
+    console.log('Audio inpaint successful:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error inpainting audio:', error);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
+    throw error;
+  }
 };

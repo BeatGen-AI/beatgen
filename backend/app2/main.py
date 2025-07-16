@@ -11,6 +11,7 @@ from app2.infrastructure.database.sqlmodel_client import create_db_and_tables
 from app2.api.routes import assistant_streaming
 from app2.api.routes import drum_samples
 from app2.api.routes import subscriptions, stripe_webhooks, credits
+from app2.api.routes import audio_inpaint
 
 # Configure logging
 logger = get_logger("beatgen.main")
@@ -124,6 +125,11 @@ app.include_router(
     credits.router,
     prefix="/credits",
     tags=["credits"],
+)
+app.include_router(
+    audio_inpaint.router,
+    prefix="/audio-inpaint",
+    tags=["audio_inpaint"],
 )
 
 
