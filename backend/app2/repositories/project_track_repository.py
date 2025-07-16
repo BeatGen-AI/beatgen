@@ -582,45 +582,6 @@ class ProjectTrackRepository:
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to delete project-tracks: {str(e)}")
 
-    async def _load_nested_relationships(self, project_tracks: List[ProjectTrack]) -> None:
-        """
-        Load nested relationships for tracks that need them
-        """
-        from app2.models.public_models.instrument_file import InstrumentFile
-        from app2.models.track_models.sampler_track import SamplerTrack
-        from sqlmodel import select
-        
-        # Load instrument files for MIDI tracks
-        midi_tracks = [pt.midi_track for pt in project_tracks if pt.midi_track]
-        if midi_tracks:
-            instrument_ids = [mt.instrument_id for mt in midi_tracks]
-            stmt = select(InstrumentFile).where(InstrumentFile.id.in_(instrument_ids))
-            result = await self.session.execute(stmt)
-            instruments = result.scalars().all()
-            
-            # Map instruments to tracks
-            instrument_map = {inst.id: inst for inst in instruments}
-            for midi_track in midi_tracks:
-                if midi_track.instrument_id in instrument_map:
-                    midi_track.instrument_file = instrument_map[midi_track.instrument_id]
-        
-        # Load sampler tracks for drum tracks
-        drum_tracks = [pt.drum_track for pt in project_tracks if pt.drum_track]
-        if drum_tracks:
-            drum_ids = [dt.id for dt in drum_tracks]
-            stmt = select(SamplerTrack).where(SamplerTrack.drum_track_id.in_(drum_ids))
-            result = await self.session.execute(stmt)
-            sampler_tracks = result.scalars().all()
-            
-            # Map sampler tracks to drum tracks
-            sampler_map = {}
-            for st in sampler_tracks:
-                if st.drum_track_id not in sampler_map:
-                    sampler_map[st.drum_track_id] = []
-                sampler_map[st.drum_track_id].append(st)
-            
-            for drum_track in drum_tracks:
-                drum_track.sampler_tracks = sampler_map.get(drum_track.id, [])
 
     async def get_track_with_settings(
         self, project_id: uuid.UUID
