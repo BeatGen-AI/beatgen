@@ -13,8 +13,9 @@ const getGlobalAudioContext = () => {
 };
 
 interface AudioPreviewProps {
-  audioUrl: string; // Storage key for the audio file (not a full URL)
-  variant: 'track' | 'card';
+  audioUrl?: string; // Storage key for the audio file (not a full URL)
+  audioBlob?: Blob; // Direct blob data
+  variant: 'track' | 'card' | 'full';
   duration?: number; // Required for track variant
   isPlaying?: boolean;
   className?: string;
@@ -23,6 +24,7 @@ interface AudioPreviewProps {
 
 const AudioPreview: React.FC<AudioPreviewProps> = ({
   audioUrl,
+  audioBlob,
   variant,
   duration,
   isPlaying = false,
@@ -79,8 +81,8 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     }
   };
 
-  const analyzeAudio = async (storageKey: string, barCount: number): Promise<number[]> => {
-    const cacheKey = `${storageKey}_${barCount}`;
+  const analyzeAudio = async (source: string | Blob, barCount: number, fallbackUrl?: string): Promise<number[]> => {
+    const cacheKey = typeof source === 'string' ? `${source}_${barCount}` : `blob_${barCount}`;
     
     // Check cache first
     if (cacheRef.current.has(cacheKey)) {
@@ -88,12 +90,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     }
 
     try {
-      // Validate storage key first
-      if (!storageKey || storageKey.trim() === '') {
-        throw new Error('Invalid storage key');
-      }
-
-      
       // Use global audio context
       const audioContext = getGlobalAudioContext();
       
@@ -102,16 +98,27 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
         await audioContext.resume();
       }
 
+      let audioBlob: Blob;
       
-      // Download audio file using the API
-      const audioBlob = await downloadAudioTrackFile(storageKey);
+      if (source && typeof source === 'object' && source.size > 0 && source.type) {
+        // Use blob directly - no network request needed
+        console.log('AudioPreview: Using blob directly, size:', source.size, 'type:', source.type);
+        audioBlob = source;
+      } else {
+        // Validate storage key first
+        if (!source || source.trim() === '') {
+          throw new Error('Invalid storage key');
+        }
+        console.log('AudioPreview: Downloading audio file for storage key:', source);
+        // Download audio file using the API
+        audioBlob = await downloadAudioTrackFile(source);
+      }
       
       const arrayBuffer = await audioBlob.arrayBuffer();
       
       if (arrayBuffer.byteLength === 0) {
         throw new Error('Empty audio file');
       }
-      
       
       // Decode audio data
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -148,11 +155,21 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       // Cache the result
       cacheRef.current.set(cacheKey, normalizedData);
       
-      
       return normalizedData;
       
     } catch (err) {
       console.error('Audio analysis failed:', err);
+      
+      // If we have a fallback URL and the blob failed, try the fallback
+      if (fallbackUrl && typeof source === 'object') {
+        console.log('AudioPreview: Blob failed, trying fallback URL:', fallbackUrl);
+        try {
+          return await analyzeAudio(fallbackUrl, barCount);
+        } catch (fallbackErr) {
+          console.error('AudioPreview: Fallback URL also failed:', fallbackErr);
+        }
+      }
+      
       throw err;
     }
   };
@@ -160,8 +177,27 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   useEffect(() => {
     effectRunCount.current += 1;
     
-    if (!audioUrl || audioUrl.trim() === '') {
-      // Generate fallback waveform for missing URL
+    // Determine the audio source - prioritize blob over URL
+    let audioSource: string | Blob | null = null;
+    
+    console.log('AudioPreview: Determining source', { 
+      hasBlob: !!audioBlob, 
+      blobSize: audioBlob?.size, 
+      blobType: audioBlob?.type,
+      hasUrl: !!audioUrl,
+      audioUrl: audioUrl 
+    });
+    
+    if (audioBlob && audioBlob.size > 0 && audioBlob.type) {
+      console.log('AudioPreview: Using blob as source');
+      audioSource = audioBlob;
+    } else if (audioUrl && audioUrl.trim() !== '') {
+      console.log('AudioPreview: Using URL as source:', audioUrl);
+      audioSource = audioUrl;
+    }
+    
+    if (!audioSource) {
+      // Generate fallback waveform for missing source
       const fallbackData = Array.from({ length: getBarCount() }, () => Math.random() * 0.3);
       setWaveformData(fallbackData);
       setIsLoading(false);
@@ -169,11 +205,9 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       return;
     }
 
-
     const loadWaveform = async () => {
-      
       // Check if we already have cached data for this exact configuration
-      const cacheKey = `${audioUrl}_${getBarCount()}`;
+      const cacheKey = typeof audioSource === 'string' ? `${audioSource}_${getBarCount()}` : `blob_${getBarCount()}`;
       if (cacheRef.current.has(cacheKey)) {
         const cachedData = cacheRef.current.get(cacheKey)!;
         setWaveformData(cachedData);
@@ -186,7 +220,9 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       setError(null);
       
       try {
-        const data = await analyzeAudio(audioUrl, getBarCount());
+        // Pass fallback URL when using blob source
+        const fallbackUrl = typeof audioSource === 'object' && audioUrl ? audioUrl : undefined;
+        const data = await analyzeAudio(audioSource!, getBarCount(), fallbackUrl);
         setWaveformData(data);
       } catch (err) {
         console.error('AudioPreview: Failed to load waveform:', err);
@@ -200,7 +236,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     };
 
     loadWaveform();
-  }, [audioUrl, variant]);
+  }, [audioUrl, audioBlob, variant]);
 
 
   // Note: We're using a global audio context that persists across component lifecycles
@@ -262,17 +298,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       }}
     >
       {isLoading ? renderSkeletonBars() : renderBars()}
-      
-      {error && (
-        <div 
-          className="absolute inset-0 flex items-center justify-center rounded"
-          style={{ backgroundColor: errorBg }}
-        >
-          <span className="text-xs" style={{ color: errorText }}>
-            Failed to load
-          </span>
-        </div>
-      )}
     </div>
   );
 };

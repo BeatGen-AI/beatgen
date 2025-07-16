@@ -43,10 +43,8 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
   const [editedAudioUrl, setEditedAudioUrl] = useState<string | null>(null);
   
   // Audio preview state
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Load audio URL when modal opens
   useEffect(() => {
@@ -54,14 +52,7 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
       loadAudioPreview();
     }
     return () => {
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-        setAudioUrl(null);
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      setAudioBlob(null);
     };
   }, [open, audioTrack]);
 
@@ -78,33 +69,61 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
         audioTrack.name
       );
       
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
+      console.log('EditAudioModal: Blob validation check', {
+        blob: blob,
+        hasBlob: !!blob,
+        isBlob: blob instanceof Blob,
+        size: blob?.size,
+        type: blob?.type,
+        trackId: audioTrack.id,
+        storageKey: audioTrack.audio_file_storage_key
+      });
+      
+      // More lenient validation - check for blob-like properties instead of instanceof
+      if (blob && blob.size > 0 && blob.type) {
+        console.log('EditAudioModal: Valid blob retrieved from IndexedDB', {
+          size: blob.size,
+          type: blob.type,
+          trackId: audioTrack.id,
+          storageKey: audioTrack.audio_file_storage_key
+        });
+        
+        // Convert to proper Blob if needed
+        let properBlob = blob;
+        if (!(blob instanceof Blob)) {
+          console.log('EditAudioModal: Converting blob-like object to proper Blob');
+          try {
+            // Convert blob-like object to proper Blob
+            // The blob-like object from IndexedDB has the data but not the proper prototype
+            properBlob = new Blob([blob], { type: blob.type });
+            console.log('EditAudioModal: Successfully converted to proper Blob');
+          } catch (error) {
+            console.warn('Failed to convert blob-like object to Blob:', error);
+            // If conversion fails, the fallback URL will be used
+          }
+        }
+        
+        setAudioBlob(properBlob);
+      } else {
+        console.warn('Invalid blob retrieved from IndexedDB, blob will be null', {
+          blob: blob,
+          hasBlob: !!blob,
+          isBlob: blob instanceof Blob,
+          size: blob?.size,
+          type: blob?.type,
+          trackId: audioTrack.id,
+          storageKey: audioTrack.audio_file_storage_key
+        });
+        setAudioBlob(null);
       }
     } catch (error) {
       console.error('Failed to load audio preview:', error);
+      setAudioBlob(null);
     } finally {
       setIsLoadingAudio(false);
     }
   };
 
-  const handlePlayToggle = () => {
-    if (!audioUrl) return;
-
-    if (isPlaying) {
-      audioRef.current?.pause();
-    } else {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(audioUrl);
-        audioRef.current.addEventListener('ended', () => {
-          setIsPlaying(false);
-        });
-      }
-      audioRef.current.play().catch(console.error);
-    }
-    setIsPlaying(!isPlaying);
-  };
 
   const handleEditAudio = async () => {
     if (!editTags.trim() || isEditing || !audioTrack) return;
@@ -118,7 +137,6 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
       const baseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co';
       const audioUrl = `${baseUrl}/storage/v1/object/public/tracks/${audioTrack.audio_file_storage_key}`;
       
-      console.log('Audio URL for inpainting:', audioUrl);
       setEditStatus('Sending audio to FAL-AI for inpainting...');
       
       // Call the inpaint API
@@ -134,8 +152,6 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
       setEditStatus('Processing completed! Audio edited successfully!');
       
       // Store the edited audio URL for playback
-      console.log('Inpaint result:', inpaintResult);
-      console.log('Setting edited audio URL:', inpaintResult.audio_url);
       setEditedAudioUrl(inpaintResult.audio_url);
       
       // Create an updated track with the new audio URL
@@ -154,11 +170,6 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
       // Update the track in the parent component
       onTrackUpdated(updatedTrack);
       
-      // Force a small delay to ensure state updates are processed
-      setTimeout(() => {
-        console.log('After timeout - editedAudioUrl:', editedAudioUrl);
-        console.log('After timeout - editSuccess:', editSuccess);
-      }, 100);
       
       // Don't auto-close the modal - let the user close it manually
       // They can see the success message and close when ready
@@ -191,7 +202,6 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
       
       setEditError(errorMessage);
       setEditStatus('');
-      console.error('Edit error:', error);
     } finally {
       setIsEditing(false);
     }
@@ -257,13 +267,6 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
 
   if (!audioTrack) return null;
 
-  // Debug render
-  console.log('EditAudioModal render:', {
-    editSuccess,
-    editedAudioUrl,
-    isEditing,
-    audioTrackName: audioTrack.name
-  });
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -285,110 +288,130 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
           </div>
         </DialogHeader>
 
-        <div className="flex-grow flex flex-col overflow-y-auto px-6 pb-6">
-          {/* Current Audio Preview */}
-          <div className="mb-6">
-            <Label className="text-sm font-medium mb-3 block">
-              Current Audio: {audioTrack.name}
-            </Label>
-            <div className="bg-muted/30 rounded-lg p-4">
-              <div className="flex items-center gap-4 mb-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePlayToggle}
-                  disabled={isLoadingAudio || !audioUrl}
-                >
-                  {isLoadingAudio ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : isPlaying ? (
-                    'Pause'
-                  ) : (
-                    'Play'
-                  )}
-                </Button>
-                <div className="text-sm text-muted-foreground">
-                  {audioTrack.audio_file_duration > 0 && (
-                    <span>Duration: {Math.round(audioTrack.audio_file_duration)}s</span>
-                  )}
-                  {audioTrack.audio_file_format && (
-                    <span className="ml-3">Format: {audioTrack.audio_file_format.toUpperCase()}</span>
-                  )}
+        <div className="flex-grow flex flex-col overflow-y-auto px-6 pb-6 space-y-6">
+          {/* Audio Comparison Section */}
+          <div className="space-y-4">
+            {/* Current Audio Preview */}
+            <div className="bg-gradient-to-r from-slate-50 to-gray-50 border border-slate-200 rounded-lg p-4">
+              <Label className="text-sm font-semibold mb-3 block text-slate-700">
+                🎧 Current Audio: {audioTrack.name}
+              </Label>
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                {audioBlob || !isLoadingAudio ? (
+                  <AudioPlayer
+                    audioBlob={audioBlob}
+                    audioUrl={`${process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co'}/storage/v1/object/public/tracks/${audioTrack.audio_file_storage_key}`}
+                    title="Original Audio"
+                    showWaveform={true}
+                    duration={audioTrack.audio_file_duration}
+                  />
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={true}
+                      className="font-medium"
+                    >
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </Button>
+                    <div className="text-sm text-muted-foreground">
+                      {audioTrack.audio_file_duration > 0 && (
+                        <span>Duration: {Math.round(audioTrack.audio_file_duration)}s</span>
+                      )}
+                      {audioTrack.audio_file_format && (
+                        <span className="ml-3">Format: {audioTrack.audio_file_format.toUpperCase()}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Edited Audio Result - Right below current audio for easy comparison */}
+            {editSuccess && editedAudioUrl && (
+              <div className="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4">
+                <Label className="text-sm font-semibold mb-3 block text-green-800">
+                  🎵 Edited Audio Result
+                </Label>
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <AudioPlayer
+                    audioUrl={editedAudioUrl}
+                    title="Edited Audio"
+                    showWaveform={true}
+                  />
                 </div>
               </div>
-              
-              {audioUrl && (
-                <AudioPreview
-                  audioUrl={audioUrl}
-                  variant="full"
-                  duration={audioTrack.audio_file_duration}
-                  isPlaying={isPlaying}
-                />
-              )}
-            </div>
+            )}
           </div>
 
-          {/* Style Tags */}
-          <div className="mb-6">
-            <Label htmlFor="edit-tags" className="text-sm font-medium mb-3 block">
-              Style Tags (Required)
-            </Label>
-            <Textarea
-              id="edit-tags"
-              value={editTags}
-              onChange={(e) => setEditTags(e.target.value)}
-              placeholder="Enter style tags (e.g., 'lofi, hiphop, drum and bass, trap, chill')"
-              className="min-h-[80px] resize-none"
-              disabled={isEditing}
-              maxLength={500}
-            />
-            <div className="flex justify-between items-center mt-2">
-              <span className="text-xs text-muted-foreground">
-                {editTags.length}/500 characters
-              </span>
-              {editTags.length > 450 && (
-                <span className="text-xs text-yellow-600">
-                  {500 - editTags.length} characters remaining
+          {/* Edit Form */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm">
+            <h3 className="text-lg font-semibold mb-4 text-slate-800">✨ Edit Parameters</h3>
+            
+            {/* Style Tags */}
+            <div className="mb-5">
+              <Label htmlFor="edit-tags" className="text-sm font-medium mb-2 block">
+                Style Tags <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="edit-tags"
+                value={editTags}
+                onChange={(e) => setEditTags(e.target.value)}
+                placeholder="Enter style tags (e.g., 'lofi, hiphop, drum and bass, trap, chill')"
+                className="min-h-[80px] resize-none"
+                disabled={isEditing}
+                maxLength={500}
+              />
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-xs text-muted-foreground">
+                  {editTags.length}/500 characters
                 </span>
-              )}
+                {editTags.length > 450 && (
+                  <span className="text-xs text-yellow-600">
+                    {500 - editTags.length} characters remaining
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Edit Instructions (Optional) */}
-          <div className="mb-6">
-            <Label htmlFor="edit-prompt" className="text-sm font-medium mb-3 block">
-              Additional Instructions (Optional)
-            </Label>
-            <Textarea
-              id="edit-prompt"
-              value={editPrompt}
-              onChange={(e) => setEditPrompt(e.target.value)}
-              placeholder="Additional instructions for the audio editing (optional)"
-              className="min-h-[80px] resize-none"
-              disabled={isEditing}
-              maxLength={1000}
-            />
-            <div className="flex justify-between items-center mt-2">
-              <span className="text-xs text-muted-foreground">
-                {editPrompt.length}/1000 characters
-              </span>
-              {editPrompt.length > 900 && (
-                <span className="text-xs text-yellow-600">
-                  {1000 - editPrompt.length} characters remaining
+            {/* Edit Instructions (Optional) */}
+            <div className="mb-5">
+              <Label htmlFor="edit-prompt" className="text-sm font-medium mb-2 block">
+                Additional Instructions <span className="text-xs text-muted-foreground">(Optional)</span>
+              </Label>
+              <Textarea
+                id="edit-prompt"
+                value={editPrompt}
+                onChange={(e) => setEditPrompt(e.target.value)}
+                placeholder="Additional instructions for the audio editing (optional)"
+                className="min-h-[80px] resize-none"
+                disabled={isEditing}
+                maxLength={1000}
+              />
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-xs text-muted-foreground">
+                  {editPrompt.length}/1000 characters
                 </span>
-              )}
+                {editPrompt.length > 900 && (
+                  <span className="text-xs text-yellow-600">
+                    {1000 - editPrompt.length} characters remaining
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Help Text */}
-          <div className="bg-muted/30 rounded-lg p-4 mb-6">
-            <h4 className="font-medium mb-2">Tips for audio editing:</h4>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• <strong>Style Tags:</strong> Use genre/style keywords separated by commas (e.g., "lofi, chill, ambient")</li>
-              <li>• <strong>Additional Instructions:</strong> Be specific about changes you want (optional)</li>
-              <li>• Common styles: lofi, hiphop, trap, chill, electronic, ambient, rock, jazz</li>
-              <li>• Use clear, descriptive language</li>
-            </ul>
+            {/* Help Text */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-medium mb-2 text-blue-800">💡 Tips for audio editing:</h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• <strong>Style Tags:</strong> Use genre/style keywords separated by commas</li>
+                <li>• <strong>Additional Instructions:</strong> Be specific about changes you want</li>
+                <li>• Common styles: lofi, hiphop, trap, chill, electronic, ambient, rock, jazz</li>
+                <li>• Use clear, descriptive language</li>
+              </ul>
+            </div>
           </div>
 
           {/* Edit Button */}
@@ -422,12 +445,12 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
             )}
           </div>
 
-          {/* Edit Status */}
-          {(isEditing || editStatus) && (
+          {/* Processing Status */}
+          {(isEditing || editStatus) && !editSuccess && (
             <div className="bg-muted/50 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">
-                  {isEditing ? 'Editing...' : 'Status'}
+                  {isEditing ? 'Processing...' : 'Status'}
                 </span>
                 {isEditing && (
                   <Button
@@ -448,44 +471,7 @@ export const EditAudioModal: React.FC<EditAudioModalProps> = ({
             </div>
           )}
 
-          {/* Debug info - Make it very visible */}
-          <div className="mb-4 p-4 bg-red-100 border-2 border-red-300 rounded text-sm font-mono">
-            <p className="font-bold text-red-800">DEBUG INFO:</p>
-            <p>editSuccess: {String(editSuccess)}</p>
-            <p>editedAudioUrl: {editedAudioUrl || 'NULL'}</p>
-            <p>isEditing: {String(isEditing)}</p>
-            <p>audioTrack: {audioTrack?.name || 'NULL'}</p>
-          </div>
-
-          {/* Edit Success */}
-          {editSuccess && (
-            <Alert className="mb-4 border-green-200 bg-green-50 text-green-800">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
-                </div>
-                <span className="font-medium">Success!</span>
-              </div>
-              <p className="mt-1 text-sm">Audio has been successfully edited. You can listen to the result below.</p>
-            </Alert>
-          )}
-
-          {/* Edited Audio Player */}
-          {editedAudioUrl && (
-            <div className="mb-4">
-              <Label className="text-sm font-medium mb-3 block">
-                Edited Audio Result
-              </Label>
-              <div className="p-2 bg-blue-50 border border-blue-200 rounded mb-2">
-                <p className="text-xs text-blue-600">Debug: Audio URL = {editedAudioUrl}</p>
-              </div>
-              <AudioPlayer
-                audioUrl={editedAudioUrl}
-                title="Edited Audio"
-                showWaveform={false}
-              />
-            </div>
-          )}
+          {/* Success Message */}
 
           {/* Edit Error */}
           {editError && (
