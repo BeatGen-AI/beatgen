@@ -336,7 +336,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
           setGenerationStatus(status.message || 'Processing...');
         },
         onAction: (action) => {
-          if (action.action_type === 'add_audio_track' && action.data?.track_data) {
+          if (action.type === 'add_audio_track' && action.data?.track_data) {
             // Convert the track data to AudioTrackRead and select it
             const trackData = action.data.track_data as AudioTrackRead;
             onSelectTrack(trackData);
@@ -516,7 +516,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl w-[95vw] h-[85vh] p-0 flex flex-col shadow-2xl rounded-lg">
         <DialogHeader className="p-2">
-          <div className="flex items-center justify-between pl-4 pt-4 pr-4">
+          <div className="flex items-center justify-between pl-4 pt-8 pr-4">
             <DialogTitle className="text-2xl font-bold">
               Audio Tracks
             </DialogTitle>
@@ -618,7 +618,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                       </div>
 
                       {/* File Upload Area */}
-                      <div className="border-2 h-85 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors flex items-center justify-center">
+                      <div className="border-2 h-80 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors flex items-center justify-center">
                         <input
                           ref={fileInputRef}
                           type="file"
