@@ -277,7 +277,7 @@ class StripeService:
             logger.error(f"Stripe error creating portal session: {str(e)}")
             raise
     
-    async def sync_subscription_from_stripe(self, stripe_subscription: Dict[str, Any]) -> Optional[Subscription]:
+    async def sync_subscription_from_stripe(self, stripe_subscription: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Sync subscription data from Stripe webhook"""
         async with get_async_session() as session:
             # Extract data from the subscription dict
@@ -390,9 +390,14 @@ class StripeService:
             
             session.commit()
             
-            # Refresh the subscription to ensure it has the latest data and attached relationships
-            session.refresh(subscription)
-            return subscription
+            # Return essential data with plan info to avoid session detachment issues
+            return {
+                "user_id": subscription.user_id,
+                "plan_id": subscription.plan_id,
+                "plan_tier": plan.tier,
+                "stripe_subscription_id": subscription.stripe_subscription_id,
+                "status": subscription.status
+            }
     
     async def record_payment_event(
         self, 

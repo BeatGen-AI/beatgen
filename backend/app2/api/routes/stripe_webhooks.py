@@ -153,17 +153,18 @@ async def handle_subscription_created(subscription_data):
         logger.info(f"✅ SUB_CREATED - Completed sync_subscription_from_stripe for {subscription_data['id']}, result: {subscription}")
         
         # Allocate credits for the new subscription
-        if subscription and subscription.user_id:
-            # Get the plan tier from the subscription
-            plan_tier = "free"  # Default
-            if subscription.plan:
-                plan_tier = subscription.plan.tier
+        if subscription:
+            user_id = subscription["user_id"]
+            plan_tier = subscription["plan_tier"]
             
-            logger.info(f"🔵 SUB_CREATED - Allocating credits for user {subscription.user_id} with tier {plan_tier}")
-            await credits_service.update_subscription_tier(str(subscription.user_id), plan_tier)
-            logger.info(f"✅ SUB_CREATED - Completed credit allocation for user {subscription.user_id}")
+            if user_id and plan_tier:
+                logger.info(f"🔵 SUB_CREATED - Allocating credits for user {user_id} with tier {plan_tier}")
+                await credits_service.update_subscription_tier(str(user_id), plan_tier)
+                logger.info(f"✅ SUB_CREATED - Completed credit allocation for user {user_id}")
+            else:
+                logger.error(f"❌ SUB_CREATED - Missing user_id or plan_tier: user_id={user_id}, plan_tier={plan_tier}")
         else:
-            logger.error(f"❌ SUB_CREATED - No subscription or user_id found: subscription={subscription}")
+            logger.error(f"❌ SUB_CREATED - No subscription found: subscription={subscription}")
             
     except Exception as e:
         logger.error(f"❌ SUB_CREATED - Error in handle_subscription_created: {e}")
@@ -182,26 +183,30 @@ async def handle_subscription_updated(subscription_data):
         logger.info(f"✅ SUB_UPDATED - Completed sync_subscription_from_stripe for {subscription_data['id']}")
         
         # Update credits if subscription is active and has a plan
-        if subscription and subscription.user_id:
-            if subscription_data['status'] in ['active', 'trialing']:
-                # Get the plan tier from the subscription
-                plan_tier = "free"  # Default
-                if subscription.plan:
-                    plan_tier = subscription.plan.tier
-                
-                logger.info(f"🔵 SUB_UPDATED - Updating credits for user {subscription.user_id} with tier {plan_tier}")
-                await credits_service.update_subscription_tier(str(subscription.user_id), plan_tier)
-                logger.info(f"✅ SUB_UPDATED - Completed credit update for user {subscription.user_id}")
-            elif subscription_data['status'] == 'canceled' and subscription_data.get('canceled_at'):
-                # If subscription is immediately canceled (not at period end)
-                logger.info(f"🔵 SUB_UPDATED - Subscription immediately canceled for user {subscription.user_id}")
-                await credits_service.handle_subscription_cancellation(
-                    str(subscription.user_id), 
-                    datetime.fromtimestamp(subscription_data['canceled_at'])
-                )
-                logger.info(f"✅ SUB_UPDATED - Completed cancellation handling for user {subscription.user_id}")
+        if subscription:
+            user_id = subscription["user_id"]
+            plan_tier = subscription["plan_tier"]
+            
+            if user_id:
+                if subscription_data['status'] in ['active', 'trialing']:
+                    if plan_tier:
+                        logger.info(f"🔵 SUB_UPDATED - Updating credits for user {user_id} with tier {plan_tier}")
+                        await credits_service.update_subscription_tier(str(user_id), plan_tier)
+                        logger.info(f"✅ SUB_UPDATED - Completed credit update for user {user_id}")
+                    else:
+                        logger.error(f"❌ SUB_UPDATED - Missing plan_tier for user {user_id}")
+                elif subscription_data['status'] == 'canceled' and subscription_data.get('canceled_at'):
+                    # If subscription is immediately canceled (not at period end)
+                    logger.info(f"🔵 SUB_UPDATED - Subscription immediately canceled for user {user_id}")
+                    await credits_service.handle_subscription_cancellation(
+                        str(user_id), 
+                        datetime.fromtimestamp(subscription_data['canceled_at'])
+                    )
+                    logger.info(f"✅ SUB_UPDATED - Completed cancellation handling for user {user_id}")
+            else:
+                logger.error(f"❌ SUB_UPDATED - Missing user_id in subscription: {subscription}")
         else:
-            logger.error(f"❌ SUB_UPDATED - No subscription or user_id found: subscription={subscription}")
+            logger.error(f"❌ SUB_UPDATED - No subscription found: subscription={subscription}")
             
     except Exception as e:
         logger.error(f"❌ SUB_UPDATED - Error in handle_subscription_updated: {e}")
@@ -220,15 +225,20 @@ async def handle_subscription_deleted(subscription_data):
         logger.info(f"✅ SUB_DELETED - Completed sync_subscription_from_stripe for {subscription_data['id']}")
         
         # When subscription is deleted, remove all credits
-        if subscription and subscription.user_id:
-            logger.info(f"🔵 SUB_DELETED - Removing credits for user {subscription.user_id} due to subscription deletion")
-            await credits_service.handle_subscription_cancellation(
-                str(subscription.user_id), 
-                datetime.utcnow()  # Credits are removed immediately when subscription is deleted
-            )
-            logger.info(f"✅ SUB_DELETED - Completed credit removal for user {subscription.user_id}")
+        if subscription:
+            user_id = subscription["user_id"]
+            
+            if user_id:
+                logger.info(f"🔵 SUB_DELETED - Removing credits for user {user_id} due to subscription deletion")
+                await credits_service.handle_subscription_cancellation(
+                    str(user_id), 
+                    datetime.utcnow()  # Credits are removed immediately when subscription is deleted
+                )
+                logger.info(f"✅ SUB_DELETED - Completed credit removal for user {user_id}")
+            else:
+                logger.error(f"❌ SUB_DELETED - Missing user_id in subscription: {subscription}")
         else:
-            logger.error(f"❌ SUB_DELETED - No subscription or user_id found: subscription={subscription}")
+            logger.error(f"❌ SUB_DELETED - No subscription found: subscription={subscription}")
             
     except Exception as e:
         logger.error(f"❌ SUB_DELETED - Error in handle_subscription_deleted: {e}")
@@ -306,23 +316,15 @@ async def handle_checkout_completed(checkout_session):
                 
                 # Allocate initial credits
                 if synced_subscription:
-                    # Get user_id and plan_id from the subscription object
-                    user_id = synced_subscription.user_id
-                    plan_id = synced_subscription.plan_id
+                    user_id = synced_subscription["user_id"]
+                    plan_tier = synced_subscription["plan_tier"]
                     
-                    # Get plan details from database to avoid detached instance issues
-                    async with get_async_session() as session:
-                        stmt = select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id)
-                        result = session.exec(stmt)
-                        plan = result.first()
-                        
-                        if plan and user_id:
-                            plan_tier = plan.tier
-                            logger.info(f"🔵 CHECKOUT - Allocating initial credits for user {user_id} with tier {plan_tier}")
-                            await credits_service.update_subscription_tier(str(user_id), plan_tier)
-                            logger.info(f"✅ CHECKOUT - Completed initial credit allocation for user {user_id}")
-                        else:
-                            logger.error(f"❌ CHECKOUT - Plan or user_id not found: plan={plan}, user_id={user_id}")
+                    if user_id and plan_tier:
+                        logger.info(f"🔵 CHECKOUT - Allocating initial credits for user {user_id} with tier {plan_tier}")
+                        await credits_service.update_subscription_tier(str(user_id), plan_tier)
+                        logger.info(f"✅ CHECKOUT - Completed initial credit allocation for user {user_id}")
+                    else:
+                        logger.error(f"❌ CHECKOUT - Missing user_id or plan_tier: user_id={user_id}, plan_tier={plan_tier}")
                 else:
                     logger.error(f"❌ CHECKOUT - No synced subscription found: {synced_subscription}")
                 
