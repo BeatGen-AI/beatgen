@@ -36,6 +36,7 @@ class AudioTrackRepository(BaseRepository[AudioTrack]):
         items_query = (
             select(AudioTrack)
             .where(AudioTrack.user_id == user_id)
+            .order_by(AudioTrack.created_at.desc())
             .offset(skip)
             .limit(limit)
         )

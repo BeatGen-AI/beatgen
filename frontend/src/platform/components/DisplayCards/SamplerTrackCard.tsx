@@ -9,7 +9,7 @@ import {
 import { IconWaveSine } from '@tabler/icons-react';
 import { SamplerTrackRead } from '../../../platform/types/dto/track_models/sampler_track';
 import { formatTime, formatFileSize } from '../../../studio/utils/audioProcessing';
-import { WaveformDisplay } from '../../../studio/components/track/WaveformDisplay';
+import AudioPreview from '../../../studio/components/shared/AudioPreview';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
 import { convertJsonToNotes } from '../../../types/note';
 import BaseTrackCard from './BaseTrackCard';
@@ -91,11 +91,12 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
   const previewContent = (
     <div className="w-full h-full flex flex-col gap-1">
       <div className="h-[35px] w-full">
-        <WaveformDisplay
-          waveformData={track.waveform_data}
-          trackColor={sectionColor}
+        <AudioPreview
+          audioUrl={track.audio_storage_key || ''}
+          variant="card"
           duration={track.audio_file_duration}
-          width={260}
+          isPlaying={isPlaying}
+          color={sectionColor}
         />
       </div>
       <div className="h-[35px] w-full">

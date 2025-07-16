@@ -54,8 +54,14 @@ export interface DrumTrackPayload {
   samples: DrumSamplePublicRead[]; // Assuming DrumSamplePublicRead is defined/imported here
 }
 
+export interface AudioTrackPayload {
+  audioTrackData?: AudioTrackRead;  // For existing tracks from modal
+  file?: File;                      // For new file uploads  
+  isSampler?: boolean;              // For sampler vs audio distinction
+}
+
 // Union type for the payload for adding tracks
-export type AddTrackPayload = MidiTrackPayload | DrumTrackPayload | { file?: File; isSampler?: boolean } | null;
+export type AddTrackPayload = MidiTrackPayload | DrumTrackPayload | AudioTrackPayload | null;
 
 export enum KeySignature {
   C_MAJOR = "C Major",
@@ -89,6 +95,7 @@ export interface BaseTrackOptions {
   trim_end_ticks?: number;
   duration_ticks?: number;
   duration?: number; // Usually in seconds, but might be ticks in some contexts
+  isExistingTrack?: boolean; // Flag to indicate this is an existing track from AudioTracksModal
 }
 
 // Specific options for Audio Tracks

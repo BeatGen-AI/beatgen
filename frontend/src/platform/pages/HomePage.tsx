@@ -152,7 +152,7 @@ export default function HomePage() {
   }, [allFetchedProjects, displayedProjectsCount, prefetchProject, isProjectCached, userIsAuthenticated]);
 
   const fetchSounds = () => {
-    console.log('Refreshing sounds library');
+    queryClient.invalidateQueries({ queryKey: ['audioTracks'] });
   };
 
   const handleShowMoreProjects = () => {
@@ -245,7 +245,6 @@ export default function HomePage() {
     }
     
     try {
-      console.log('Saving generated song as project:', generatedData);
       
       // Check if project was already created by homepage API
       if (generatedData.project_id) {
@@ -444,7 +443,7 @@ export default function HomePage() {
                 Audio Tracks
               </h2>
             </div>
-            <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={logoColors[2]} />
+            <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={logoColors[2]} useUiMode={true} />
           </FadeCard>
 
           {/* Midi Tracks Section */}

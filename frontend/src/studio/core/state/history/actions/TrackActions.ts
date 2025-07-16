@@ -103,6 +103,7 @@ export class AddTrackAction extends BaseAction {
         
         // Step 1: Update Zustand state FIRST
         let trackAddedToState = false;
+        console.log('AddTrackAction: Adding track with dirty flag:', this.trackData.dirty);
         this.get()._updateState('tracks', (prevTracks) => {
             if (prevTracks.some(t => t.id === this.trackData.id)) {
                 return prevTracks; 

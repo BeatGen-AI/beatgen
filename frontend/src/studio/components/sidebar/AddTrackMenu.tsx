@@ -6,9 +6,11 @@ import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import { VirtualInstrumentsModal } from '../modals/VirtualInstrumentsModal';
 import { DrumMachineModal } from '../modals/drum-machine/DrumMachineModal';
+import { AudioTracksModal } from '../modals/AudioTracksModal';
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
+import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
 // Import types from store types file
-import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload } from '../../stores/types';
+import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload, AudioTrackPayload } from '../../stores/types';
 
 interface AddTrackMenuProps {
   isOpen: boolean;
@@ -30,6 +32,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
   const theme = useTheme();
   const [isVirtualInstrumentModalOpen, setIsVirtualInstrumentModalOpen] = useState(false);
   const [isDrumMachineModalOpen, setIsDrumMachineModalOpen] = useState(false);
+  const [isAudioTracksModalOpen, setIsAudioTracksModalOpen] = useState(false);
   
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, isSampler: boolean = false) => {
     const files = event.target.files;
@@ -95,7 +98,10 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           <ListItemText primary="Drum Machine" />
         </MenuItem>
         
-        <MenuItem
+        <MenuItem onClick={() => {
+          setIsAudioTracksModalOpen(true);
+          onClose();
+        }}
           sx={{ 
             fontSize: '13px',
             py: 1,
@@ -104,16 +110,8 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
             }
           }}
         >
-          <label style={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
-            <ListItemIcon><AudioFileIcon sx={{ color: '#4caf50' }} /></ListItemIcon>
-            <ListItemText primary="Import Audio" />
-            <input 
-              type="file" 
-              accept="audio/*" 
-              style={{ display: 'none' }} 
-              onChange={(e) => handleFileUpload(e, false)}
-            />
-          </label>
+          <ListItemIcon><AudioFileIcon sx={{ color: '#4caf50' }} /></ListItemIcon>
+          <ListItemText primary="Audio Tracks" />
         </MenuItem>
         <MenuItem
           sx={{ 
@@ -153,6 +151,20 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           const payload: DrumTrackPayload = { samples: selectedSamples };
           onAddTrack('DRUM', payload);
           setIsDrumMachineModalOpen(false);
+        }}
+      />
+      <AudioTracksModal
+        open={isAudioTracksModalOpen}
+        onClose={() => setIsAudioTracksModalOpen(false)}
+        onSelectTrack={(track: AudioTrackRead) => {
+          onAddTrack('AUDIO', { audioTrackData: track });
+          setIsAudioTracksModalOpen(false);
+        }}
+        onFileUpload={(file: File) => {
+          if (onFileUpload) {
+            onFileUpload(file, false);
+          }
+          setIsAudioTracksModalOpen(false);
         }}
       />
     </>

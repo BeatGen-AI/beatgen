@@ -107,6 +107,35 @@ export class BeatGenDB extends Dexie {
         return id;
     }
 
+    async upsertAudioFile(id: string, file: File, duration?: number): Promise<string> {
+        console.log(`Upserting audio file ${file.name} with id ${id}`);
+        this.logOperation('Upserting audio file', {
+            id: id,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            duration: duration
+        });
+        
+        // Get metadata, ensuring only AudioFile compatible props are added initially
+        const metadataBase = this.createFileMetadata(file, { duration });
+        
+        // Fix: Cast the result of createFileMetadata to ensure compatibility before adding id
+        const audioSpecificMetadata = metadataBase as Omit<AudioFile, 'id'>;
+
+        // Create the full object including the string id
+        const audioFileData: AudioFile = {
+            ...audioSpecificMetadata,
+            id: id // Explicitly set the string ID
+        };
+        
+        // Use put instead of add to handle existing keys
+        await this.audioFiles.put(audioFileData); 
+        
+        await this.logDbState();
+        return id;
+    }
+
     async getAudioFile(id: string): Promise<AudioFile | undefined> {
         this.logOperation('Getting audio file', { id });
         const file = await this.audioFiles.get(id);
