@@ -29,7 +29,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   className,
   color
 }) => {
-  console.log('AudioPreview: Component render with audioUrl:', audioUrl);
   
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,18 +46,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
 
   // Track waveform data changes
   useEffect(() => {
-    const prevLength = prevWaveformDataRef.current.length;
-    console.log('AudioPreview: WaveformData state changed from', prevLength, 'to', waveformData.length, 'bars');
-    
-    if (waveformData.length > 0) {
-      console.log('AudioPreview: New waveform data sample:', waveformData.slice(0, 10));
-    }
-    
-    if (prevLength > 0 && waveformData.length === 0) {
-      console.warn('AudioPreview: WAVEFORM DATA WAS CLEARED! Previous had', prevLength, 'bars');
-      console.trace('AudioPreview: Stack trace for waveform clearing');
-    }
-    
     prevWaveformDataRef.current = waveformData;
   }, [waveformData]);
 
@@ -95,11 +82,8 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   const analyzeAudio = async (storageKey: string, barCount: number): Promise<number[]> => {
     const cacheKey = `${storageKey}_${barCount}`;
     
-    console.log('AudioPreview: analyzeAudio called with storageKey:', storageKey);
-    
     // Check cache first
     if (cacheRef.current.has(cacheKey)) {
-      console.log('AudioPreview: Found cached waveform data');
       return cacheRef.current.get(cacheKey)!;
     }
 
@@ -109,36 +93,28 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
         throw new Error('Invalid storage key');
       }
 
-      console.log('AudioPreview: Getting audio context');
       
       // Use global audio context
       const audioContext = getGlobalAudioContext();
-      console.log('AudioPreview: Audio context state:', audioContext.state);
       
       // Resume audio context if it's suspended
       if (audioContext.state === 'suspended') {
-        console.log('AudioPreview: Resuming suspended audio context');
         await audioContext.resume();
       }
 
-      console.log('AudioPreview: Downloading audio file for storage key:', storageKey);
       
       // Download audio file using the API
       const audioBlob = await downloadAudioTrackFile(storageKey);
-      console.log('AudioPreview: Downloaded blob size:', audioBlob.size, 'type:', audioBlob.type);
       
       const arrayBuffer = await audioBlob.arrayBuffer();
-      console.log('AudioPreview: ArrayBuffer size:', arrayBuffer.byteLength);
       
       if (arrayBuffer.byteLength === 0) {
         throw new Error('Empty audio file');
       }
       
-      console.log('AudioPreview: Decoding audio data...');
       
       // Decode audio data
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      console.log('AudioPreview: Audio decoded successfully - duration:', audioBuffer.duration, 'channels:', audioBuffer.numberOfChannels);
       
       if (audioBuffer.length === 0) {
         throw new Error('Invalid audio data');
@@ -146,7 +122,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       
       // Extract channel data (use first channel)
       const channelData = audioBuffer.getChannelData(0);
-      console.log('AudioPreview: Channel data length:', channelData.length);
       
       // Calculate samples per bar
       const samplesPerBar = Math.floor(channelData.length / barCount);
@@ -173,9 +148,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       // Cache the result
       cacheRef.current.set(cacheKey, normalizedData);
       
-      console.log('AudioPreview: Analysis complete! Generated waveform data:', normalizedData.length, 'bars');
-      console.log('AudioPreview: Sample waveform values:', normalizedData.slice(0, 10));
-      console.log('AudioPreview: Max amplitude in generated data:', Math.max(...normalizedData));
       
       return normalizedData;
       
@@ -187,32 +159,22 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
 
   useEffect(() => {
     effectRunCount.current += 1;
-    console.log('AudioPreview: MAIN EFFECT RUNNING! (run #' + effectRunCount.current + ')');
-    console.log('AudioPreview: Effect triggered with audioUrl:', audioUrl, 'type:', typeof audioUrl, 'trimmed:', audioUrl?.trim());
-    console.log('AudioPreview: Effect dependencies - variant:', variant, 'duration:', duration);
-    console.log('AudioPreview: Current waveformData length:', waveformData.length);
     
     if (!audioUrl || audioUrl.trim() === '') {
-      console.log('AudioPreview: No audio URL provided, showing fallback (effect run #' + effectRunCount.current + ')');
       // Generate fallback waveform for missing URL
       const fallbackData = Array.from({ length: getBarCount() }, () => Math.random() * 0.3);
-      console.log('AudioPreview: Setting fallback data:', fallbackData.slice(0, 5), '(effect run #' + effectRunCount.current + ')');
-      console.log('AudioPreview: Current waveform data before fallback:', waveformData.length, 'bars');
       setWaveformData(fallbackData);
       setIsLoading(false);
       setError(null);
       return;
     }
 
-    console.log('AudioPreview: Loading waveform for storage key:', audioUrl);
 
     const loadWaveform = async () => {
-      console.log('AudioPreview: Starting waveform load');
       
       // Check if we already have cached data for this exact configuration
       const cacheKey = `${audioUrl}_${getBarCount()}`;
       if (cacheRef.current.has(cacheKey)) {
-        console.log('AudioPreview: Using cached waveform data');
         const cachedData = cacheRef.current.get(cacheKey)!;
         setWaveformData(cachedData);
         setIsLoading(false);
@@ -225,18 +187,12 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       
       try {
         const data = await analyzeAudio(audioUrl, getBarCount());
-        console.log('AudioPreview: Waveform data generated:', data.length, 'bars, sample values:', data.slice(0, 10));
-        console.log('AudioPreview: About to set waveform data in state (effect run #' + effectRunCount.current + ')');
-        console.log('AudioPreview: Current waveform data before setting:', waveformData.length, 'bars');
         setWaveformData(data);
-        console.log('AudioPreview: setWaveformData called with:', data.length, 'bars (effect run #' + effectRunCount.current + ')');
       } catch (err) {
         console.error('AudioPreview: Failed to load waveform:', err);
         setError(err instanceof Error ? err.message : 'Failed to load audio');
         // Generate fallback waveform for error state
         const fallbackData = Array.from({ length: getBarCount() }, () => Math.random() * 0.3);
-        console.log('AudioPreview: Setting error fallback data:', fallbackData.slice(0, 5), '(effect run #' + effectRunCount.current + ')');
-        console.log('AudioPreview: Current waveform data before error fallback:', waveformData.length, 'bars');
         setWaveformData(fallbackData);
       } finally {
         setIsLoading(false);
@@ -246,28 +202,12 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     loadWaveform();
   }, [audioUrl, variant]);
 
-  // Debug useEffect to track individual dependency changes
-  useEffect(() => {
-    console.log('AudioPreview: audioUrl dependency changed to:', audioUrl);
-  }, [audioUrl]);
-  
-  useEffect(() => {
-    console.log('AudioPreview: variant dependency changed to:', variant);
-  }, [variant]);
-  
-  useEffect(() => {
-    console.log('AudioPreview: duration dependency changed to:', duration);
-  }, [duration]);
 
   // Note: We're using a global audio context that persists across component lifecycles
 
   const renderBars = () => {
     const barCount = getBarCount();
     const data = waveformData.length > 0 ? waveformData : Array(barCount).fill(0);
-    
-    console.log('AudioPreview: Rendering bars with data:', data.length, 'bars, isLoading:', isLoading);
-    console.log('AudioPreview: Sample amplitude values:', data.slice(0, 10));
-    console.log('AudioPreview: Max amplitude:', Math.max(...data));
     
     return data.map((amplitude, index) => {
       const height = Math.max(2, amplitude * 100); // Convert to percentage
@@ -308,14 +248,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     ));
   };
 
-  console.log('AudioPreview: Rendering component with state:', {
-    audioUrl,
-    isLoading,
-    error,
-    waveformDataLength: waveformData.length,
-    width: getContainerWidth(),
-    height: getContainerHeight()
-  });
 
   return (
     <div 

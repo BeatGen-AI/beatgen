@@ -407,11 +407,6 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
     try {
       const result = await getSoundsPaginated(page, ITEMS_PER_PAGE);
       
-      console.log('AudioTracksModal: Fetched tracks:', result.items?.length || 0, 'tracks');
-      if (result.items && result.items.length > 0) {
-        console.log('AudioTracksModal: Sample track data:', result.items[0]);
-      }
-      
       if (append) {
         setTracks(prev => [...prev, ...(result.items || [])]);
         setCurrentPage(prev => prev + 1);
