@@ -3,12 +3,13 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { subscriptionApi } from '../../api/subscriptions';
+import { useUser } from '../../context/UserContext';
 
 export const CheckoutReturn: React.FC = () => {
   const navigate = useNavigate();
   const searchParams = useSearch({ from: '/checkout/return' });
   const sessionId = searchParams.session_id;
+  const { refreshSubscription } = useUser();
   
   const [status, setStatus] = useState<'loading' | 'success' | 'canceled' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -32,10 +33,10 @@ export const CheckoutReturn: React.FC = () => {
       // Give the webhook a moment to process
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Check subscription status
-      const status = await subscriptionApi.getStatus();
+      // Refresh subscription status from UserContext
+      const subscriptionStatus = await refreshSubscription();
       
-      if (status.status === 'active' || status.status === 'trialing') {
+      if (subscriptionStatus && (subscriptionStatus.status === 'active' || subscriptionStatus.status === 'trialing')) {
         setStatus('success');
       } else {
         setStatus('canceled');

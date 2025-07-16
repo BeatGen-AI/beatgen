@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useSubscriptionStore, selectCurrentPlan } from '../../stores/subscriptionStore';
+import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../auth/auth-context';
 import { SUBSCRIPTION_PLANS, getMonthlyPlans, getYearlyPlans } from '../../config/subscription-plans';
 import { EmbeddedCheckoutForm } from './EmbeddedCheckout';
@@ -24,7 +24,8 @@ interface PricingCheckoutDialogProps {
 
 export const PricingCheckoutDialog: React.FC<PricingCheckoutDialogProps> = ({ open, onOpenChange }) => {
   const { user } = useAuth();
-  const currentPlan = useSubscriptionStore(selectCurrentPlan);
+  const { subscription } = useUser();
+  const currentPlan = subscription?.plan || null;
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedPriceId, setSelectedPriceId] = useState<string | null>(null);
 

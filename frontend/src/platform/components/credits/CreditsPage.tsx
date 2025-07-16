@@ -6,12 +6,11 @@ import { format } from 'date-fns';
 import { CreditsHistory } from './CreditsHistory';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useSubscriptionStore } from '../../stores/subscriptionStore';
 import { useUser } from '../../context/UserContext';
 
 export const CreditsPage: React.FC = () => {
-  const { credits, creditsLoading: isLoading } = useUser();
-  const currentPlan = useSubscriptionStore(state => state.currentPlan);
+  const { credits, creditsLoading: isLoading, subscription } = useUser();
+  const currentPlan = subscription?.plan || null;
 
   if (isLoading) {
     return (

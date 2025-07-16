@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useSubscriptionStore, selectIsSubscribed, selectCurrentPlan } from '../../stores/subscriptionStore';
+import React, { useState } from 'react';
 import { subscriptionApi } from '../../api/subscriptions';
 import { Loader2, Crown, AlertCircle, ExternalLink, Coins } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
@@ -22,7 +21,6 @@ import { format } from 'date-fns';
 
 export const SubscriptionStatus: React.FC = () => {
   const { subscription: status, subscriptionLoading: isLoading, subscriptionError: error, credits, refreshSubscription } = useUser();
-  const { cancelSubscription } = useSubscriptionStore();
   const isSubscribed = status?.status === 'active' || status?.status === 'trialing';
   const currentPlan = status?.plan || null;
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -46,7 +44,8 @@ export const SubscriptionStatus: React.FC = () => {
       setIsCanceling(true);
       setCancelError(null);
       
-      await cancelSubscription(true); // Cancel at period end
+      await subscriptionApi.cancelSubscription(true); // Cancel at period end
+      await refreshSubscription(); // Refresh subscription data
       
       setShowCancelDialog(false);
     } catch (error) {
