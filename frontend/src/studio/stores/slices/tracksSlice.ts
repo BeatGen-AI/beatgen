@@ -325,7 +325,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         try {
           // Ensure the audio file is cached with the preserved track ID
           await db.upsertAudioFile(trackId, file, (options as any).audio_file_duration || 0);
-          console.log(`✅ Ensured audio file cache for existing track: ${trackId}`);
         } catch (error) {
           console.warn('Failed to ensure audio file cache for existing track:', error);
         }

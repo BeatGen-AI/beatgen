@@ -193,16 +193,6 @@ export const saveProjectWithSounds = async (
   projectData: ProjectUpdate,
   tracks: CombinedTrack[]
 ): Promise<Project> => {
-  console.log("Saving project with sounds:", projectId, projectData, tracks);
-  
-  // Log track types for debugging
-  const trackTypes = tracks.map(t => ({
-    id: t.id,
-    name: t.name,
-    type: t.track_type,
-    hasStorageKey: !!(t.track as any).audio_file_storage_key
-  }));
-  console.log("Track upload analysis:", trackTypes);
   
   for (const track of tracks) {
     switch (track.track_type) {
