@@ -6,7 +6,7 @@ from typing import List
 import uuid
 from sqlmodel import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 
 from app2.models.track_models.drum_track import (
     DrumTrack,
@@ -22,13 +22,21 @@ class DrumTrackRepository(BaseRepository[DrumTrack]):
 
     async def get(self, track_id: uuid.UUID) -> DrumTrack:
         """Get a drum track by ID"""
-        query = select(DrumTrack).where(DrumTrack.id == track_id)
+        query = (
+            select(DrumTrack)
+            .options(selectinload(DrumTrack.sampler_tracks))
+            .where(DrumTrack.id == track_id)
+        )
         result = await self.session.execute(query)
         return result.scalars().first()
 
     async def get_by_user_id(self, user_id: uuid.UUID) -> List[DrumTrack]:
         """Get all drum tracks for a specific user"""
-        query = select(DrumTrack).where(DrumTrack.user_id == user_id)
+        query = (
+            select(DrumTrack)
+            .options(selectinload(DrumTrack.sampler_tracks))
+            .where(DrumTrack.user_id == user_id)
+        )
         result = await self.session.execute(query)
         return result.scalars().all()
 
@@ -39,7 +47,7 @@ class DrumTrackRepository(BaseRepository[DrumTrack]):
         # Query for items with joined relationships
         items_query = (
             select(DrumTrack)
-            .options(joinedload(DrumTrack.sampler_tracks))
+            .options(selectinload(DrumTrack.sampler_tracks))
             .where(DrumTrack.user_id == user_id)
             .offset(skip)
             .limit(limit)

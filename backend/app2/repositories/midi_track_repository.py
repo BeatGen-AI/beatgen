@@ -6,7 +6,7 @@ from typing import List, Optional
 import uuid
 from sqlmodel import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 
 from app2.models.track_models.midi_track import (
     MidiTrack,
@@ -22,13 +22,21 @@ class MidiTrackRepository(BaseRepository[MidiTrack]):
 
     async def get(self, midi_track_id: uuid.UUID) -> Optional[MidiTrack]:
         """Get a midi track by ID"""
-        query = select(MidiTrack).where(MidiTrack.id == midi_track_id)
+        query = (
+            select(MidiTrack)
+            .options(selectinload(MidiTrack.instrument_file))
+            .where(MidiTrack.id == midi_track_id)
+        )
         result = await self.session.execute(query)
         return result.scalars().first()
 
     async def get_by_user_id(self, user_id: uuid.UUID) -> List[MidiTrack]:
         """Get all midi tracks for a specific user"""
-        query = select(MidiTrack).where(MidiTrack.user_id == user_id)
+        query = (
+            select(MidiTrack)
+            .options(selectinload(MidiTrack.instrument_file))
+            .where(MidiTrack.user_id == user_id)
+        )
         result = await self.session.execute(query)
         return result.scalars().all()
 
@@ -39,7 +47,7 @@ class MidiTrackRepository(BaseRepository[MidiTrack]):
         # Query for items with joined relationship
         items_query = (
             select(MidiTrack)
-            .options(joinedload(MidiTrack.instrument_file))
+            .options(selectinload(MidiTrack.instrument_file))
             .where(MidiTrack.user_id == user_id)
             .offset(skip)
             .limit(limit)

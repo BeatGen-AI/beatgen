@@ -433,7 +433,9 @@ class TrackService:
             logger.info(
                 f"Created MIDI track with ID: {track.id} for user ID: {user_id}"
             )
-            return MidiTrackRead.model_validate(track)
+            # Reload track with relationships for safe serialization
+            track_with_relationships = await self.midi_repository.get(track.id)
+            return MidiTrackRead.model_validate(track_with_relationships)
         except Exception as e:
             logger.error(f"Error creating MIDI track: {str(e)}")
             logger.error(traceback.format_exc())
@@ -534,7 +536,9 @@ class TrackService:
             logger.info(
                 f"Created drum track with ID: {track.id} for user ID: {user_id}"
             )
-            return DrumTrackRead.model_validate(track)
+            # Reload track with relationships for safe serialization
+            track_with_relationships = await self.drum_repository.get(track.id)
+            return DrumTrackRead.model_validate(track_with_relationships)
         except Exception as e:
             logger.error(f"Error creating drum track: {str(e)}")
             logger.error(traceback.format_exc())

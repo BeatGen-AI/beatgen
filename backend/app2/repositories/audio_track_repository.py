@@ -6,7 +6,6 @@ from typing import List
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, func
-from sqlalchemy.orm import joinedload
 
 from app2.models.track_models.audio_track import (
     AudioTrack,
