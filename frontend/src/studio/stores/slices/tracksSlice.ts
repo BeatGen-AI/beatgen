@@ -1121,26 +1121,45 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
               // 2. Check for samples payload and add corresponding Sampler Tracks
               if (payload && 'samples' in payload && Array.isArray(payload.samples)) {
-                  const drumPayload = payload as DrumTrackPayload;
+                  const samplerTracks = payload.samples;
                   
-                  // Sequentially add sampler tracks using the dedicated action
-                  for (const sample of drumPayload.samples) {
+                  // Check if these are full sampler track objects (SamplerTrackRead) or old drum sample format
+                  for (const samplerTrackData of samplerTracks) {
                       try {
-                          // Prepare sampleData for the action (ensure fields match)
-                          const sampleDataForAction = {
-                              id: sample.id, // Assuming DrumSamplePublicRead has id
-                              display_name: sample.display_name, // Assuming DrumSamplePublicRead has display_name
-                              storage_key: sample.storage_key, // Assuming DrumSamplePublicRead has storage_key
-                              // Add other necessary fields if addSamplerTrackToDrumTrack expects them
-                          };
-                          // Call action to create sampler and link it (handles history)
-                          await addSamplerTrackToDrumTrack(mainDrumTrackId, sampleDataForAction);
+                          console.log(`Adding sampler track to drum track:`, samplerTrackData);
+                          
+                          // If this is a full SamplerTrackRead object, create the sampler track directly
+                          if (samplerTrackData.audio_storage_key && samplerTrackData.name) {
+                              // Add the sampler track with full data and MIDI notes
+                              const samplerTrackOptions: SamplerTrackOptions = {
+                                  id: samplerTrackData.id,
+                                  name: samplerTrackData.name,
+                                  storage_key: samplerTrackData.audio_storage_key,
+                                  baseMidiNote: samplerTrackData.base_midi_note,
+                                  grainSize: samplerTrackData.grain_size,
+                                  overlap: samplerTrackData.overlap,
+                                  drum_track_id: mainDrumTrackId,
+                                  waveform_data: samplerTrackData.waveform_data,
+                                  isExistingTrack: true, // Flag to preserve original name and data
+                              };
+                              
+                              // Create the sampler track (MIDI notes are loaded during creation)
+                              const samplerTrack = await createTrackAndRegisterWithHistory('SAMPLER', samplerTrackData.name, samplerTrackOptions);
+                              console.log(`Created sampler track ${samplerTrack?.id} for drum track ${mainDrumTrackId}`);
+                              
+                          } else {
+                              // Fallback: treat as old DrumSamplePublicRead format
+                              const sampleDataForAction = {
+                                  id: samplerTrackData.id,
+                                  display_name: samplerTrackData.display_name || samplerTrackData.name,
+                                  storage_key: samplerTrackData.storage_key || samplerTrackData.audio_storage_key,
+                              };
+                              await addSamplerTrackToDrumTrack(mainDrumTrackId, sampleDataForAction);
+                          }
                       } catch (error) {
-                          console.error(`Failed to add sampler track for sample ${sample.display_name} to drum track ${mainDrumTrackId}:`, error);
-                          // Decide whether to continue or stop if one sampler fails
+                          console.error(`Failed to add sampler track ${samplerTrackData.name || samplerTrackData.id} to drum track ${mainDrumTrackId}:`, error);
                       }
                   }
-              } else {
               }
               
               // 3. Open UI (optional)
@@ -1158,7 +1177,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           let instrumentNameStd: string | undefined;
           let trackOptionsStd: TrackOptions = {};
           if (type === 'MIDI' && payload && 'instrumentId' in payload) {
-              const midiPayload = payload as MidiTrackPayload & { midiTrackData?: any };
+              const midiPayload = payload as MidiTrackPayload & { midiTrackData?: any; midiNotes?: any[] };
               const existingMidiTrack = midiPayload.midiTrackData;
               
               if (existingMidiTrack) {
@@ -1173,7 +1192,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   instrumentId: midiPayload.instrumentId,
                   instrumentName: midiPayload.instrumentName,
                   instrumentStorageKey: midiPayload.instrumentStorageKey,
-                  midiNotes: existingMidiTrack?.midi_notes_json?.notes || [],
                   isExistingTrack: !!existingMidiTrack
               };
           } else if (type === 'AUDIO' && payload && 'audioTrackData' in payload) {
@@ -1203,7 +1221,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   trackOptionsStd = {
                       id: existingTrack.id, // Use original track ID instead of generating new UUID
                       name: existingTrack.name,
-                      storage_key: existingTrack.audio_file_storage_key || existingTrack.audio_storage_key,
+                      storage_key: existingTrack.audio_file_storage_key,
                       audio_file_format: existingTrack.audio_file_format,
                       audio_file_size: existingTrack.audio_file_size,
                       audio_file_duration: existingTrack.audio_file_duration,
@@ -1223,7 +1241,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               }
           } else if (type === 'SAMPLER' && payload && 'audioTrackData' in payload) {
               // Handle sampler tracks specifically
-              const samplerPayload = payload as AudioTrackPayload & { samplerTrackData?: any };
+              const samplerPayload = payload as AudioTrackPayload & { samplerTrackData?: any; midiNotes?: any[] };
               const existingSamplerTrack = samplerPayload.samplerTrackData || samplerPayload.audioTrackData;
               
               if (existingSamplerTrack) {

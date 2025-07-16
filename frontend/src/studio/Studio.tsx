@@ -28,6 +28,7 @@ import { StudioSettingsModal } from './components/modals/StudioSettingsModal';
 import { ExportDialog } from './components/export/ExportDialog';
 import { useAppTheme } from '../platform/theme/ThemeContext';
 import { studioLightTheme, studioDarkTheme } from '../platform/theme/ThemeContext';
+import { db } from './core/db/dexie-client';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconChevronLeftPipe, IconChevronRightPipe } from '@tabler/icons-react';
 import { GridSnapOption } from './components/piano-roll2/gridConstants';
@@ -297,6 +298,28 @@ function Studio({ projectId, initialTrackId, initialTrackType }: StudioProps) {
     if (initialTrackId && initialTrackType && isInitialized && !projectId) {
       console.log(`Loading initial track: ${initialTrackId} (${initialTrackType})`);
       
+      const loadMidiNotesForTrack = async (track: any, midiNotesJson: any) => {
+        if (!track || !midiNotesJson) return;
+        
+        try {
+          // Import the working conversion function
+          const { convertJsonToNotes } = await import('../types/note');
+          
+          // Convert using the proven working pattern
+          const convertedNotes = convertJsonToNotes(midiNotesJson, track.id);
+          console.log(`Loading ${convertedNotes.length} MIDI notes for track ${track.id}`);
+          
+          // Get MIDI manager and load notes
+          const midiManager = store?.getMidiManager();
+          if (midiManager) {
+            midiManager.updateTrack(track.id, convertedNotes);
+          }
+        } catch (error) {
+          console.error(`Failed to load MIDI notes for track ${track.id}:`, error);
+        }
+      };
+      
+
       const loadInitialTrack = async () => {
         try {
           // Import the API functions dynamically to avoid circular dependencies
@@ -365,9 +388,11 @@ function Studio({ projectId, initialTrackId, initialTrackType }: StudioProps) {
               samplerTrackData: trackData // Pass full sampler track data
             };
           } else if (initialTrackType === 'drum') {
-            // For drum tracks, we might need to pass samples
+            // For drum tracks, just pass the drum track data - let the existing logic handle the samplers
+            console.log(`Processing drum track with ${trackData.sampler_tracks?.length || 0} sampler tracks`);
+            
             payload = { 
-              samples: trackData.sampler_tracks || [],
+              samples: trackData.sampler_tracks || [], // Use the sampler tracks from drum track data directly
               drumTrackData: trackData
             };
           }
@@ -375,15 +400,12 @@ function Studio({ projectId, initialTrackId, initialTrackType }: StudioProps) {
           const createdTrack = await handleAddTrack(initialTrackType.toUpperCase() as any, payload);
           console.log(`Successfully loaded initial track: ${initialTrackId}`);
           
-          // For MIDI and Sampler tracks, load the notes into the MIDI manager
-          if ((initialTrackType === 'midi' || initialTrackType === 'sampler') && trackData.midi_notes_json?.notes && createdTrack) {
-            const midiManager = store?.getMidiManager();
-            if (midiManager && midiManager.hasTrack(createdTrack.id)) {
-              console.log(`Loading ${trackData.midi_notes_json.notes.length} MIDI notes for ${initialTrackType} track ${createdTrack.id}`);
-              // Use updateInstanceNotes to set all notes at once
-              midiManager.updateInstanceNotes(createdTrack.id, '', trackData.midi_notes_json.notes);
-            }
+          // For all track types, load MIDI notes using the simple working pattern
+          if (trackData.midi_notes_json?.notes && trackData.midi_notes_json.notes.length > 0) {
+            await loadMidiNotesForTrack(createdTrack, trackData.midi_notes_json);
           }
+          
+          // For drum tracks, the MIDI notes will be loaded by the existing drum track creation logic
           
           
           // Clear the track parameters from URL after successful loading

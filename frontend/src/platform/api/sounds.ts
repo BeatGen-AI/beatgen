@@ -302,23 +302,71 @@ const downloadFile = async (prefix: string, storageKey: string): Promise<Blob> =
  * @returns The file as a Blob
  */
 export const downloadAudioTrackFile = async (storageKey: string): Promise<Blob> => {
-  // Define the specific prefix for audio tracks
-  const prefix = 'storage/v1/object/public/tracks'; 
-  try {
-    console.log(`Attempting to download audio track file (storageKey ${storageKey}) from tracks prefix.`);
-    return await downloadFile(prefix, storageKey);
-  } catch (error) {
-    console.warn(`Failed to download audio track file from tracks prefix (storageKey ${storageKey}). Falling back to drum samples.`);
+  // Clean the storage key - remove trailing dots and ensure proper format
+  const cleanStorageKey = storageKey.replace(/\.$/, '');
+  
+  // Try multiple storage configurations
+  const attempts = [];
+  
+  // If the storage key already starts with 'audio/', it's likely a full path
+  if (cleanStorageKey.startsWith('audio/')) {
+    // Try with base URL directly (no additional prefix)
+    attempts.push({
+      baseUrl: process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co',
+      path: `storage/v1/object/public/tracks/${cleanStorageKey}`,
+      description: 'direct tracks path'
+    });
+    attempts.push({
+      baseUrl: process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co',
+      path: `storage/v1/object/public/assets/drum_samples_public/${cleanStorageKey}`,
+      description: 'direct drum samples path'
+    });
+    
+    // Also try without the audio/ prefix in case it's duplicated
+    const keyWithoutAudioPrefix = cleanStorageKey.replace(/^audio\//, '');
+    attempts.push({
+      baseUrl: process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co',
+      path: `storage/v1/object/public/tracks/${keyWithoutAudioPrefix}`,
+      description: 'tracks without audio prefix'
+    });
+    attempts.push({
+      baseUrl: process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co',
+      path: `storage/v1/object/public/assets/drum_samples_public/${keyWithoutAudioPrefix}`,
+      description: 'drum samples without audio prefix'
+    });
+  } else {
+    // Standard attempts for keys without audio/ prefix
+    attempts.push({
+      baseUrl: process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co',
+      path: `storage/v1/object/public/tracks/${cleanStorageKey}`,
+      description: 'standard tracks path'
+    });
+    attempts.push({
+      baseUrl: process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co',
+      path: `storage/v1/object/public/assets/drum_samples_public/${cleanStorageKey}`,
+      description: 'standard drum samples path'
+    });
+  }
+  
+  // Try each configuration
+  for (const attempt of attempts) {
     try {
-      console.log(`Attempting to download drum sample file (storageKey ${storageKey}) as fallback.`);
-      return await downloadDrumSampleFile(storageKey);
-    } catch (fallbackError) {
-      console.error(`Error downloading file after fallback to drum samples (storageKey ${storageKey}): ${fallbackError}`);
-      // Re-throw the original error or the fallback error, depending on desired behavior.
-      // Throwing the fallback error might be more informative here.
-      throw fallbackError; 
+      const fullUrl = `${attempt.baseUrl}/${attempt.path}`;
+      console.log(`Attempting to download audio file from ${attempt.description}: ${fullUrl}`);
+      
+      const response = await fetch(fullUrl, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+      }
+      
+      return await response.blob();
+    } catch (error) {
+      console.warn(`Failed to download from ${attempt.description}:`, error.message);
     }
   }
+  
+  // If all attempts failed, throw the last error
+  throw new Error(`Failed to download audio file with storageKey ${cleanStorageKey} from all storage locations`);
 };
 
 export const downloadDrumSampleFile = async (storageKey: string): Promise<Blob> => {

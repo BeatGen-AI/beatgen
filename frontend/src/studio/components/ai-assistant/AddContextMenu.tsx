@@ -33,7 +33,7 @@ const AddContextMenu: React.FC<AddContextMenuProps> = ({
   // Filter tracks and update selection based on search term
   useEffect(() => {
     const filtered = tracks.filter(track => 
-      track.name.toLowerCase().startsWith(searchTerm.toLowerCase())
+      track.name && track.name.toLowerCase().startsWith(searchTerm.toLowerCase())
     );
     setFilteredTracks(filtered);
     // Reset selection index when filtered results change
@@ -169,7 +169,7 @@ const AddContextMenu: React.FC<AddContextMenuProps> = ({
             }
           }}
         >
-          {track.name}
+          {track.name || 'Unnamed Track'}
         </MenuItem>
       ))}
       {filteredTracks.length === 0 && (
