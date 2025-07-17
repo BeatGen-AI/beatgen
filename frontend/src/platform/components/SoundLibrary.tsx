@@ -8,7 +8,7 @@ import { useAudioTracksPagination } from '../hooks/usePagination';
 import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/pagination';
 
 // API and types
-import { getSoundsPaginated, deleteSound } from '../api/sounds';
+import { getSoundsPaginated, deleteSound, downloadAudioTrackFile } from '../api/sounds';
 import { AudioTrackRead } from '../types/dto/track_models/audio_track';
 import AudioTrackCard from './DisplayCards/AudioTrackCard';
 
@@ -62,7 +62,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
   }, [audioElement]);
   
   // Play sound handler
-  const handlePlaySound = (sound: AudioTrackRead) => {
+  const handlePlaySound = async (sound: AudioTrackRead) => {
     if (playingId === sound.id && audioElement) {
       audioElement.pause();
       setPlayingId(null);
@@ -74,27 +74,42 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
       setCurrentTime(0);
     }
     
-    const audio = new Audio();
-    
-    const baseUrl = process.env.REACT_APP_SUPABASE_URL || '';
-    const url = `${baseUrl}/storage/v1/object/public/tracks/${sound.audio_file_storage_key}`;
-    console.log('Audio URL:', url);
-    
-    audio.crossOrigin = "anonymous";
-    audio.src = url;
-    audio.preload = "metadata";
-    
-    audio.addEventListener('error', (e) => {
-      console.error('Audio error details:', audio.error);
-    });
-    
-    audio.play().catch(err => {
-      console.error('Failed to play sound:', err);
-    });
-    
-    setAudioElement(audio);
-    setPlayingId(sound.id);
-    setCurrentTime(0);
+    try {
+      // Use the proper API function to download the audio file
+      const audioBlob = await downloadAudioTrackFile(sound.audio_file_storage_key);
+      const url = URL.createObjectURL(audioBlob);
+      
+      const audio = new Audio();
+      audio.src = url;
+      audio.preload = "metadata";
+      
+      audio.addEventListener('error', (e) => {
+        console.error('Audio error details:', audio.error);
+        URL.revokeObjectURL(url); // Clean up on error
+      });
+      
+      audio.addEventListener('ended', () => {
+        setPlayingId(null);
+        setAudioElement(null);
+        setCurrentTime(0);
+        URL.revokeObjectURL(url); // Clean up when finished
+      });
+      
+      audio.addEventListener('timeupdate', () => {
+        setCurrentTime(audio.currentTime);
+      });
+      
+      audio.play().catch(err => {
+        console.error('Failed to play sound:', err);
+        URL.revokeObjectURL(url); // Clean up on error
+      });
+      
+      setAudioElement(audio);
+      setPlayingId(sound.id);
+      setCurrentTime(0);
+    } catch (error) {
+      console.error('Failed to download audio file:', error);
+    }
   };
   
   // Seek handler
