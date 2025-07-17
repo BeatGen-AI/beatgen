@@ -4,41 +4,48 @@ import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon 
 import { AudioWaveform } from 'lucide-react';
 import { AudioTrackRead as Sound } from '../../../platform/types/dto/track_models/audio_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
-import AudioPreview from '../../../studio/components/shared/AudioPreview';
+import AudioPlayer from '../../../studio/components/shared/AudioPlayer';
 import BaseTrackCard from './BaseTrackCard';
+import { downloadAudioTrackFile } from '../../api/sounds';
+import { useState, useEffect } from 'react';
 
 interface AudioTrackCardProps {
   sound: Sound;
-  playingId: string | null;
-  currentTime: number;
-  duration: number | null;
-  handlePlaySound: (sound: Sound) => void;
   handleDeleteSound: (soundId: string) => void;
-  handleSeek: (soundId: string, position: number) => void;
   sectionColor: string;
 }
 
 const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
   sound,
-  playingId,
-  handlePlaySound,
   handleDeleteSound,
   sectionColor,
 }) => {
-  const isPlaying = playingId === sound.id;
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [isLoadingBlob, setIsLoadingBlob] = useState(false);
+
+  const loadAudioBlob = async () => {
+    if (audioBlob || isLoadingBlob) return;
+    
+    setIsLoadingBlob(true);
+    try {
+      const blob = await downloadAudioTrackFile(sound.audio_file_storage_key);
+      setAudioBlob(blob);
+    } catch (error) {
+      console.error('Failed to load audio blob:', error);
+    } finally {
+      setIsLoadingBlob(false);
+    }
+  };
+
+  // Auto-load audio when component mounts
+  useEffect(() => {
+    loadAudioBlob();
+  }, [sound.audio_file_storage_key]);
 
   const icon = <AudioWaveform className="text-primary" size={18} />;
   
   const headerActions = (
     <>
-      <Button 
-        variant="ghost"
-        size="icon"
-        onClick={() => handlePlaySound(sound)}
-        className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-7 w-7"
-      >
-        {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
-      </Button>
       <Button 
         variant="ghost" 
         size="icon"
@@ -51,14 +58,20 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
   );
 
   const previewContent = (
-    <div className="w-full h-[50px] flex items-center justify-center">
-      <AudioPreview
-        audioUrl={sound.audio_file_storage_key || ''}
-        variant="card"
-        duration={sound.audio_file_duration}
-        isPlaying={isPlaying}
-        color={sectionColor}
-      />
+    <div className="w-full h-[80px] flex items-center justify-center p-2">
+      {audioBlob ? (
+        <AudioPlayer
+          audioBlob={audioBlob}
+          fileName={`${sound.name}.wav`}
+          className="w-full"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-muted/20 rounded">
+          <span className="text-sm text-muted-foreground">
+            {isLoadingBlob ? 'Loading...' : 'Loading audio...'}
+          </span>
+        </div>
+      )}
     </div>
   );
 

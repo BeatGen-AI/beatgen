@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IconPlayerPlay, IconPlayerPause, IconPlayerSkipBack } from '@tabler/icons-react';
+import { IconPlayerPlay, IconPlayerPause, IconPlayerSkipBack, IconDownload } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import AudioPreview from './AudioPreview';
@@ -9,13 +9,15 @@ interface AudioPlayerProps {
   className?: string;
   onTimeUpdate?: (currentTime: number) => void;
   onDurationChange?: (duration: number) => void;
+  fileName?: string; // Optional filename for download
 }
 
 const AudioPlayer: React.FC<AudioPlayerProps> = ({
   audioBlob,
   className,
   onTimeUpdate,
-  onDurationChange
+  onDurationChange,
+  fileName
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -98,6 +100,19 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     setCurrentTime(0);
   };
 
+  const handleDownload = () => {
+    if (!audioBlob) return;
+
+    const url = URL.createObjectURL(audioBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName || 'audio-download.wav';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (!audioUrl) {
     return (
       <div className={cn('flex items-center justify-center p-4', className)}>
@@ -109,26 +124,37 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   return (
     <div className={cn('space-y-2', className)}>
       {/* Control buttons - Above the waveform */}
-      <div className="flex gap-1">
+      <div className="flex justify-between items-center">
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handlePlayPause}
+            className="h-6 w-6 bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border/50"
+          >
+            {isPlaying ? (
+              <IconPlayerPause size={12} />
+            ) : (
+              <IconPlayerPlay size={12} />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleSkipToStart}
+            className="h-6 w-6 bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border/50"
+          >
+            <IconPlayerSkipBack size={12} />
+          </Button>
+        </div>
+        
         <Button
           variant="ghost"
           size="icon"
-          onClick={handlePlayPause}
+          onClick={handleDownload}
           className="h-6 w-6 bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border/50"
         >
-          {isPlaying ? (
-            <IconPlayerPause size={12} />
-          ) : (
-            <IconPlayerPlay size={12} />
-          )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleSkipToStart}
-          className="h-6 w-6 bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border/50"
-        >
-          <IconPlayerSkipBack size={12} />
+          <IconDownload size={12} />
         </Button>
       </div>
 
