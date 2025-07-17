@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { interactWithAssistant, StreamCallbacks } from '../../../platform/api/assistant';
 import GenerationPromptControl from '../shared/GenerationPromptControl';
 import AudioPreview from '../shared/AudioPreview';
+import AudioPlayer from '../shared/AudioPlayer';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import SampleManager from '../../core/samples/sampleManager';
 
@@ -280,6 +281,8 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   const [generationStatus, setGenerationStatus] = useState('');
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [streamConnection, setStreamConnection] = useState<{ close: () => void } | null>(null);
+  const [generatedTrack, setGeneratedTrack] = useState<AudioTrackRead | null>(null);
+  const [generatedAudioBlob, setGeneratedAudioBlob] = useState<Blob | null>(null);
   
   const ITEMS_PER_PAGE = 12;
 
@@ -341,10 +344,13 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
             // Convert the track data to AudioTrackRead
             const trackData = action.data.track_data as AudioTrackRead;
             
-            // Download and cache the audio file before selecting the track
+            // Download and cache the audio file
             if (trackData.audio_file_storage_key) {
               try {
-                setGenerationStatus('Caching audio file...');
+                setGenerationStatus('Downloading audio file...');
+                const audioBlob = await downloadAudioTrackFile(trackData.audio_file_storage_key);
+                
+                // Cache the file
                 const sampleManager = SampleManager.getInstance(db);
                 await sampleManager.getSampleBlob(
                   trackData.id, 
@@ -352,19 +358,17 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                   'audio_track', 
                   trackData.name
                 );
+                
+                // Store the generated track and blob for the AudioPlayer
+                setGeneratedTrack(trackData);
+                setGeneratedAudioBlob(audioBlob);
+                setGenerationStatus('Audio generated successfully!');
               } catch (error) {
-                console.error('Failed to cache generated audio file:', error);
-                setGenerationError('Failed to cache audio file');
+                console.error('Failed to download generated audio file:', error);
+                setGenerationError('Failed to download audio file');
                 return;
               }
             }
-            
-            // Now select the track (it will have the cached audio file)
-            onSelectTrack(trackData);
-            setGenerationStatus('Audio generated successfully!');
-            setTimeout(() => {
-              onClose();
-            }, 1500);
           }
         },
         onComplete: () => {
@@ -413,6 +417,36 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
     setIsGenerating(false);
     setGenerationStatus('');
     setGenerationError(null);
+  };
+
+  // Generated audio action handlers
+  const handleUseAudio = () => {
+    if (generatedTrack) {
+      onSelectTrack(generatedTrack);
+      onClose();
+    }
+  };
+
+  const handleSaveAudio = () => {
+    if (generatedAudioBlob && generatedTrack) {
+      // Create download link
+      const url = URL.createObjectURL(generatedAudioBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${generatedTrack.name}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleResetGeneration = () => {
+    setGeneratedTrack(null);
+    setGeneratedAudioBlob(null);
+    setGenerationStatus('');
+    setGenerationError(null);
+    setGeneratePrompt('');
   };
 
   // Fetch tracks function
@@ -678,33 +712,84 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
 
             <TabsContent value="generate" className="flex-grow overflow-hidden m-0">
               <div className="h-full flex flex-col p-6">
-                {/* Header and Tips - Top Section */}
-                <div className="flex-shrink-0 space-y-6 mb-6">
-                  <div className="text-center">
-                    <Music className="w-12 h-12 mx-auto mb-3 text-primary" />
-                    <h3 className="text-lg font-semibold mb-2">Generate Audio</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Describe the audio you want to generate and let AI create it for you
-                    </p>
+                {/* Show AudioPlayer if audio has been generated */}
+                {generatedTrack && generatedAudioBlob ? (
+                  <div className="h-full flex flex-col space-y-6">
+                    {/* Header */}
+                    <div className="text-center">
+                      <Music className="w-12 h-12 mx-auto mb-3 text-primary" />
+                      <h3 className="text-lg font-semibold mb-2">{generatedTrack.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Your generated audio is ready!
+                      </p>
+                    </div>
+
+                    {/* AudioPlayer */}
+                    <div className="flex-grow flex items-center justify-center">
+                      <div className="w-full max-w-2xl">
+                        <AudioPlayer
+                          audioBlob={generatedAudioBlob}
+                          className="w-full border rounded-lg p-4 bg-background"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex-shrink-0 flex justify-center gap-3">
+                      {!useUiMode && (
+                        <Button
+                          onClick={handleUseAudio}
+                          className="min-w-24"
+                        >
+                          Use Audio
+                        </Button>
+                      )}
+                      <Button
+                        onClick={handleSaveAudio}
+                        variant="outline"
+                        className="min-w-24"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Save Audio
+                      </Button>
+                      <Button
+                        onClick={handleResetGeneration}
+                        variant="outline"
+                        className="min-w-24"
+                      >
+                        Reset
+                      </Button>
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    {/* Header and Tips - Top Section */}
+                    <div className="flex-shrink-0 space-y-6 mb-6">
+                      <div className="text-center">
+                        <Music className="w-12 h-12 mx-auto mb-3 text-primary" />
+                        <h3 className="text-lg font-semibold mb-2">Generate Audio</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Describe the audio you want to generate and let AI create it for you
+                        </p>
+                      </div>
 
-                  {/* Help Text */}
-                  <div className="bg-muted/30 rounded-lg p-4">
-                    <h4 className="font-medium mb-2">Tips for better results:</h4>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• Be specific about the instrument (e.g., "acoustic guitar", "piano")</li>
-                      <li>• Mention the style or genre if desired</li>
-                      <li>• Specify key signature for musical coherence</li>
-                      <li>• Keep descriptions clear and concise</li>
-                    </ul>
-                  </div>
-                </div>
+                      {/* Help Text */}
+                      <div className="bg-muted/30 rounded-lg p-4">
+                        <h4 className="font-medium mb-2">Tips for better results:</h4>
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          <li>• Be specific about the instrument (e.g., "acoustic guitar", "piano")</li>
+                          <li>• Mention the style or genre if desired</li>
+                          <li>• Specify key signature for musical coherence</li>
+                          <li>• Keep descriptions clear and concise</li>
+                        </ul>
+                      </div>
+                    </div>
 
-                {/* Flexible space to push textarea to bottom */}
-                <div className="flex-grow"></div>
+                    {/* Flexible space to push textarea to bottom */}
+                    <div className="flex-grow"></div>
 
-                {/* Textarea and Controls - Bottom Section */}
-                <div className="flex-shrink-0 space-y-4">
+                    {/* Textarea and Controls - Bottom Section */}
+                    <div className="flex-shrink-0 space-y-4">
                   <GenerationPromptControl
                     prompt={generatePrompt}
                     onPromptChange={setGeneratePrompt}
@@ -741,15 +826,17 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                         </span>
                       </div>
                     </div>
-                  )}
+                    )}
 
-                  {/* Generation Error */}
-                  {generationError && (
-                    <Alert variant="destructive">
-                      {generationError}
-                    </Alert>
-                  )}
-                </div>
+                    {/* Generation Error */}
+                    {generationError && (
+                      <Alert variant="destructive">
+                        {generationError}
+                      </Alert>
+                    )}
+                  </div>
+                </>
+                )}
               </div>
             </TabsContent>
           </Tabs>

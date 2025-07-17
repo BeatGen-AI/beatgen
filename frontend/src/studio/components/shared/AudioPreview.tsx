@@ -13,12 +13,13 @@ const getGlobalAudioContext = () => {
 };
 
 interface AudioPreviewProps {
-  audioUrl: string; // Storage key for the audio file (not a full URL)
+  audioUrl: string; // Storage key for the audio file or blob URL
   variant: 'track' | 'card';
   duration?: number; // Required for track variant
   isPlaying?: boolean;
   className?: string;
   color?: string;
+  onWaveformClick?: (position: number) => void; // Callback for clicking on waveform (position 0-1)
 }
 
 const AudioPreview: React.FC<AudioPreviewProps> = ({
@@ -27,7 +28,8 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   duration,
   isPlaying = false,
   className,
-  color
+  color,
+  onWaveformClick
 }) => {
   
   const [waveformData, setWaveformData] = useState<number[]>([]);
@@ -79,8 +81,8 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     }
   };
 
-  const analyzeAudio = async (storageKey: string, barCount: number): Promise<number[]> => {
-    const cacheKey = `${storageKey}_${barCount}`;
+  const analyzeAudio = async (audioUrlOrKey: string, barCount: number): Promise<number[]> => {
+    const cacheKey = `${audioUrlOrKey}_${barCount}`;
     
     // Check cache first
     if (cacheRef.current.has(cacheKey)) {
@@ -88,9 +90,9 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     }
 
     try {
-      // Validate storage key first
-      if (!storageKey || storageKey.trim() === '') {
-        throw new Error('Invalid storage key');
+      // Validate input first
+      if (!audioUrlOrKey || audioUrlOrKey.trim() === '') {
+        throw new Error('Invalid audio URL or storage key');
       }
 
       
@@ -103,8 +105,16 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       }
 
       
-      // Download audio file using the API
-      const audioBlob = await downloadAudioTrackFile(storageKey);
+      // Determine if this is a blob URL or storage key
+      let audioBlob: Blob;
+      if (audioUrlOrKey.startsWith('blob:')) {
+        // Fetch from blob URL
+        const response = await fetch(audioUrlOrKey);
+        audioBlob = await response.blob();
+      } else {
+        // Download audio file using the API (storage key)
+        audioBlob = await downloadAudioTrackFile(audioUrlOrKey);
+      }
       
       const arrayBuffer = await audioBlob.arrayBuffer();
       
@@ -249,10 +259,20 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   };
 
 
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (onWaveformClick) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const position = clickX / rect.width;
+      onWaveformClick(Math.max(0, Math.min(1, position))); // Clamp between 0 and 1
+    }
+  };
+
   return (
     <div 
       className={cn(
         'flex items-center gap-0.5 px-2 py-1 rounded overflow-hidden relative',
+        onWaveformClick && 'cursor-pointer',
         className
       )}
       style={{
@@ -260,6 +280,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
         height: getContainerHeight(),
         backgroundColor: backgroundColor
       }}
+      onClick={handleClick}
     >
       {isLoading ? renderSkeletonBars() : renderBars()}
       
