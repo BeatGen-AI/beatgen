@@ -96,10 +96,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
     audioRef.current.currentTime = 0;
     setCurrentTime(0);
-    if (!isPlaying) {
-      audioRef.current.play();
-      setIsPlaying(true);
-    }
   };
 
   if (!audioUrl) {

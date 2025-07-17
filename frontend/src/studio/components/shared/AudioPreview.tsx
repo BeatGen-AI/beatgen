@@ -245,7 +245,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
           key={index}
           className={cn(
             'flex-1 rounded-full transition-all duration-200 ease-out',
-            isPlaying && 'animate-pulse',
             className
           )}
           style={{
