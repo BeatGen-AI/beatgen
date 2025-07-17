@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IconPlayerPlay, IconPlayerPause } from '@tabler/icons-react';
+import { IconPlayerPlay, IconPlayerPause, IconPlayerSkipBack } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import AudioPreview from './AudioPreview';
@@ -91,6 +91,17 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     setCurrentTime(seekTime);
   };
 
+  const handleSkipToStart = () => {
+    if (!audioRef.current) return;
+
+    audioRef.current.currentTime = 0;
+    setCurrentTime(0);
+    if (!isPlaying) {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
   if (!audioUrl) {
     return (
       <div className={cn('flex items-center justify-center p-4', className)}>
@@ -100,30 +111,41 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   }
 
   return (
-    <div className={cn('relative', className)}>
+    <div className={cn('space-y-2', className)}>
+      {/* Control buttons - Above the waveform */}
+      <div className="flex gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handlePlayPause}
+          className="h-6 w-6 bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border/50"
+        >
+          {isPlaying ? (
+            <IconPlayerPause size={12} />
+          ) : (
+            <IconPlayerPlay size={12} />
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleSkipToStart}
+          className="h-6 w-6 bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border/50"
+        >
+          <IconPlayerSkipBack size={12} />
+        </Button>
+      </div>
+
       {/* Waveform with AudioPreview */}
       <AudioPreview
         audioUrl={audioUrl}
         variant="card"
         duration={duration}
         isPlaying={isPlaying}
+        currentTime={currentTime}
         onWaveformClick={handleSeek}
         className="w-full"
       />
-
-      {/* Play/Pause Button - Overlayed on top left */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={handlePlayPause}
-        className="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-8 w-8 bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border/50"
-      >
-        {isPlaying ? (
-          <IconPlayerPause size={16} />
-        ) : (
-          <IconPlayerPlay size={16} />
-        )}
-      </Button>
     </div>
   );
 };

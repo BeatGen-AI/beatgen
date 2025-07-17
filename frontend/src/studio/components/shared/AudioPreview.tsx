@@ -19,6 +19,7 @@ interface AudioPreviewProps {
   isPlaying?: boolean;
   className?: string;
   color?: string;
+  currentTime?: number; // Current playback time in seconds
   onWaveformClick?: (position: number) => void; // Callback for clicking on waveform (position 0-1)
 }
 
@@ -29,6 +30,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   isPlaying = false,
   className,
   color,
+  currentTime = 0,
   onWaveformClick
 }) => {
   
@@ -219,8 +221,24 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     const barCount = getBarCount();
     const data = waveformData.length > 0 ? waveformData : Array(barCount).fill(0);
     
+    // Calculate the current position as a ratio (0-1) of total duration
+    const currentPosition = duration ? currentTime / duration : 0;
+    const currentBarIndex = Math.floor(currentPosition * barCount);
+    
     return data.map((amplitude, index) => {
       const height = Math.max(2, amplitude * 100); // Convert to percentage
+      const isPlayed = currentTime > 0 && index < currentBarIndex;
+      
+      // Use a lighter/muted color for unplayed portions
+      const barColor = isPlayed ? waveformColor : waveformColor.replace(/rgba?\(([^)]+)\)/, (match, contents) => {
+        const values = contents.split(',').map((v: string) => v.trim());
+        if (values.length >= 3) {
+          // Reduce opacity for unplayed sections
+          const opacity = values.length === 4 ? parseFloat(values[3]) * 0.3 : 0.3;
+          return `rgba(${values[0]}, ${values[1]}, ${values[2]}, ${opacity})`;
+        }
+        return waveformColor;
+      });
       
       return (
         <div
@@ -232,7 +250,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
           )}
           style={{
             height: `${height}%`,
-            backgroundColor: waveformColor,
+            backgroundColor: barColor,
             opacity: isLoading ? 0.5 : 1.0,
             minHeight: '2px',
             marginRight: index < data.length - 1 ? '1px' : '0'
