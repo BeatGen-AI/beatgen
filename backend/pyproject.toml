@@ -18,6 +18,7 @@ dependencies = [
     "pydantic-ai-slim[openai]>=0.0.31",
     "json-repair>=0.44.1",
     "fal-client>=0.7.0",
+    "asyncpg>=0.30.0",
 ]
 
 [tool.pytest.ini_options]
