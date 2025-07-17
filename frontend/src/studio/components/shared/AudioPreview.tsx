@@ -230,15 +230,38 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       const isPlayed = currentTime > 0 && index < currentBarIndex;
       
       // Use a lighter/muted color for unplayed portions
-      const barColor = isPlayed ? waveformColor : waveformColor.replace(/rgba?\(([^)]+)\)/, (match, contents) => {
-        const values = contents.split(',').map((v: string) => v.trim());
-        if (values.length >= 3) {
-          // Reduce opacity for unplayed sections
-          const opacity = values.length === 4 ? parseFloat(values[3]) * 0.3 : 0.3;
-          return `rgba(${values[0]}, ${values[1]}, ${values[2]}, ${opacity})`;
+      let barColor: string;
+      if (isPlayed) {
+        barColor = waveformColor;
+      } else {
+        // Handle different color formats
+        if (waveformColor.startsWith('rgba(')) {
+          // Extract values from rgba
+          const match = waveformColor.match(/rgba?\(([^)]+)\)/);
+          if (match) {
+            const values = match[1].split(',').map((v: string) => v.trim());
+            if (values.length >= 3) {
+              const opacity = values.length === 4 ? parseFloat(values[3]) * 0.3 : 0.3;
+              barColor = `rgba(${values[0]}, ${values[1]}, ${values[2]}, ${opacity})`;
+            } else {
+              barColor = waveformColor;
+            }
+          } else {
+            barColor = waveformColor;
+          }
+        } else if (waveformColor.startsWith('rgb(')) {
+          // Convert rgb to rgba with reduced opacity
+          const match = waveformColor.match(/rgb\(([^)]+)\)/);
+          if (match) {
+            barColor = `rgba(${match[1]}, 0.3)`;
+          } else {
+            barColor = waveformColor;
+          }
+        } else {
+          // For hex colors or named colors, use CSS opacity
+          barColor = waveformColor;
         }
-        return waveformColor;
-      });
+      }
       
       return (
         <div
@@ -250,7 +273,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
           style={{
             height: `${height}%`,
             backgroundColor: barColor,
-            opacity: isLoading ? 0.5 : 1.0,
+            opacity: isLoading ? 0.5 : (!isPlayed && !barColor.includes('rgba') ? 0.3 : 1.0),
             minHeight: '2px',
             marginRight: index < data.length - 1 ? '1px' : '0'
           }}

@@ -63,6 +63,7 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
         <AudioPlayer
           audioBlob={audioBlob}
           fileName={`${sound.name}.wav`}
+          color={sectionColor}
           className="w-full"
         />
       ) : (

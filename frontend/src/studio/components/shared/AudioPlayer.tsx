@@ -10,6 +10,7 @@ interface AudioPlayerProps {
   onTimeUpdate?: (currentTime: number) => void;
   onDurationChange?: (duration: number) => void;
   fileName?: string; // Optional filename for download
+  color?: string; // Color for the waveform
 }
 
 const AudioPlayer: React.FC<AudioPlayerProps> = ({
@@ -17,7 +18,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   className,
   onTimeUpdate,
   onDurationChange,
-  fileName
+  fileName,
+  color
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -166,6 +168,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         isPlaying={isPlaying}
         currentTime={currentTime}
         onWaveformClick={handleSeek}
+        color={color}
         className="w-full"
       />
     </div>
