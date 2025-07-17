@@ -132,67 +132,74 @@ class ProjectService:
                     "You do not have permission to access this project"
                 )
 
-            # Get all tracks with their project-specific settings
-            tracks_with_settings = (
+            # Get all tracks with their project-specific settings (relationships pre-loaded)
+            project_tracks = (
                 await self.project_track_repository.get_track_with_settings(project_id)
             )
-            logger.info(f"tracks_with_settings: {tracks_with_settings}")
-            # Create CombinedTrack objects
+            logger.info(f"Found {len(project_tracks)} project tracks")
+            
+            # Create CombinedTrack objects from SQLModel objects
             combined_tracks = []
-            for track_data in tracks_with_settings:
-                if "track" in track_data and track_data["track"]:
-                    # Handle instance_metadata - ensure it's a list
-                    instance_metadata = track_data.get("instance_metadata")
+            for project_track in project_tracks:
+                # Handle instance_metadata - ensure it's a list
+                instance_metadata = project_track.instance_metadata
+                if instance_metadata is None or not isinstance(instance_metadata, list):
+                    instance_metadata = []
+                
+                # Create default instance if none exist (for backwards compatibility)
+                if not instance_metadata or len(instance_metadata) == 0:
+                    # Create default instance based on track position data
+                    instance_metadata = [{
+                        "id": f"{project_track.track_id}_instance_1",
+                        "x_position": 0,
+                        "y_position": 0,
+                        "trim_start_ticks": 0,
+                        "trim_end_ticks": project_track.duration_ticks
+                    }]
+                    logger.info(f"Created default instance for track {project_track.track_id}: {instance_metadata}")
+                
+                # Convert SQLModel track to read model
+                track_read = None
+                track_type = project_track.track_type
+                
+                if track_type == TrackType.AUDIO and project_track.audio_track:
+                    from app2.models.track_models.audio_track import AudioTrackRead
+                    track_read = AudioTrackRead.model_validate(project_track.audio_track)
+                elif track_type == TrackType.MIDI and project_track.midi_track:
+                    from app2.models.track_models.midi_track import MidiTrackRead
+                    track_read = MidiTrackRead.model_validate(project_track.midi_track)
+                elif track_type == TrackType.SAMPLER and project_track.sampler_track:
+                    from app2.models.track_models.sampler_track import SamplerTrackRead
+                    track_read = SamplerTrackRead.model_validate(project_track.sampler_track)
+                elif track_type == TrackType.DRUM and project_track.drum_track:
+                    from app2.models.track_models.drum_track import DrumTrackRead
+                    # Convert sampler tracks to read models
+                    sampler_tracks_read = []
+                    for sampler_track in project_track.drum_track.sampler_tracks:
+                        from app2.models.track_models.sampler_track import SamplerTrackRead
+                        sampler_tracks_read.append(SamplerTrackRead.model_validate(sampler_track))
                     
-                    # Create default instance if none exist (for backwards compatibility)
-                    if instance_metadata is None or \
-                       (isinstance(instance_metadata, dict) and not instance_metadata) or \
-                       (isinstance(instance_metadata, list) and len(instance_metadata) == 0):
-                        # Create default instance based on track position data
-                        instance_metadata = [{
-                            "id": f"{track_data['track_id']}_instance_1",
-                            "x_position": track_data.get("x_position", 0),
-                            "y_position": track_data.get("y_position", 0),
-                            "trim_start_ticks": track_data.get("trim_start_ticks", 0),
-                            "trim_end_ticks": track_data.get("trim_end_ticks", track_data.get("duration_ticks", 0))
-                        }]
-                        logger.info(f"Created default instance for track {track_data['track_id']}: {instance_metadata}")
-                    elif isinstance(instance_metadata, dict):
-                        # If it's a non-empty dict, it might be in wrong format
-                        logger.warning(f"instance_metadata is dict, expected list: {instance_metadata}")
-                        # Try to convert or create default
-                        instance_metadata = [{
-                            "id": f"{track_data['track_id']}_instance_1",
-                            "x_position": track_data.get("x_position", 0),
-                            "y_position": track_data.get("y_position", 0),
-                            "trim_start_ticks": track_data.get("trim_start_ticks", 0),
-                            "trim_end_ticks": track_data.get("trim_end_ticks", track_data.get("duration_ticks", 0))
-                        }]
-                    elif not isinstance(instance_metadata, list):
-                        # If it's not a list, log and create default
-                        logger.warning(f"instance_metadata has unexpected type {type(instance_metadata)}: {instance_metadata}")
-                        instance_metadata = [{
-                            "id": f"{track_data['track_id']}_instance_1",
-                            "x_position": track_data.get("x_position", 0),
-                            "y_position": track_data.get("y_position", 0),
-                            "trim_start_ticks": track_data.get("trim_start_ticks", 0),
-                            "trim_end_ticks": track_data.get("trim_end_ticks", track_data.get("duration_ticks", 0))
-                        }]
-                    
+                    # Create DrumTrackRead with proper data
+                    drum_track_dict = project_track.drum_track.model_dump()
+                    drum_track_dict['sampler_tracks'] = sampler_tracks_read
+                    drum_track_dict['sampler_track_ids'] = [st.id for st in sampler_tracks_read]
+                    track_read = DrumTrackRead.model_validate(drum_track_dict)
+                
+                if track_read:
                     # Create a combined track with all data
                     combined_track = CombinedTrack(
-                        id=track_data["track_id"],
-                        name=track_data["name"],
-                        track_type=track_data["track_type"],
+                        id=project_track.track_id,
+                        name=project_track.name,
+                        track_type=project_track.track_type,
                         # Project-specific track properties
-                        volume=track_data["volume"],
-                        pan=track_data["pan"],
-                        mute=track_data["mute"],
-                        duration_ticks=track_data["duration_ticks"],
-                        track_number=track_data["track_number"],
+                        volume=project_track.volume,
+                        pan=project_track.pan,
+                        mute=project_track.mute,
+                        duration_ticks=project_track.duration_ticks,
+                        track_number=project_track.track_number,
                         instance_metadata=instance_metadata,
-                        # Specialized track data
-                        track=track_data["track"],
+                        # Specialized track data (now as read model)
+                        track=track_read,
                     )
                     combined_tracks.append(combined_track)
 

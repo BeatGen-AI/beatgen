@@ -80,8 +80,8 @@ class RequestManager:
         # Set of request IDs per user
         self._user_requests: Dict[str, Set[str]] = {}
 
-        # Start cleanup task
-        self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+        # Initialize cleanup task as None - will be started when needed
+        self._cleanup_task = None
 
         self._initialized = True
         logger.info("Request manager initialized")
@@ -97,6 +97,15 @@ class RequestManager:
                 break
             except Exception as e:
                 logger.error(f"Error in cleanup loop: {str(e)}")
+
+    def _ensure_cleanup_task(self):
+        """Ensure cleanup task is running"""
+        if self._cleanup_task is None or self._cleanup_task.done():
+            try:
+                self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+            except RuntimeError:
+                # No event loop running, cleanup task will be started later
+                pass
 
     def _cleanup_expired_requests(self):
         """Clean up expired requests"""
@@ -188,10 +197,14 @@ class RequestManager:
         # Add to user requests
         if user_id not in self._user_requests:
             self._user_requests[user_id] = set()
-            logger.info(
-                f"🔵 REQUEST_MANAGER - Created new user_requests entry for user: {user_id}"
-            )
+        
+        # Ensure cleanup task is running
+        self._ensure_cleanup_task()
+        
         self._user_requests[user_id].add(request_id)
+        logger.info(
+            f"🔵 REQUEST_MANAGER - Created new user_requests entry for user: {user_id}"
+        )
 
         logger.info(
             f"🔵 REQUEST_MANAGER (Instance: {id(self)}) - Created request {request_id} for user {user_id}, mode: {mode}"

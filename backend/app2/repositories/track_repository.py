@@ -4,7 +4,8 @@ Handles basic CRUD operations for track entities
 """
 
 from typing import Dict, Any, List, Union
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 import traceback
 import uuid
@@ -24,7 +25,7 @@ Track = Union[AudioTrack, MidiTrack, SamplerTrack, DrumTrack]
 class TrackRepository:
     """Repository for track operations"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         """
         Initialize the repository with database session
 
@@ -74,7 +75,8 @@ class TrackRepository:
         self.logger.info(f"Getting track with ID: {track_id}")
         try:
             statement = select(Track).where(Track.id == track_id)
-            track = self.session.exec(statement).first()
+            result = await self.session.execute(statement)
+            track = result.scalars().first()
 
             if not track:
                 self.logger.error(f"Track with ID {track_id} not found")
@@ -117,7 +119,8 @@ class TrackRepository:
                 .where(Track.id == track_id)
             )
 
-            track = self.session.exec(statement).first()
+            result = await self.session.execute(statement)
+            track = result.scalars().first()
 
             if not track:
                 self.logger.error(f"Track with ID {track_id} not found")
@@ -157,7 +160,8 @@ class TrackRepository:
                     query = query.where(getattr(Track, key) == value)
 
             # Execute query
-            results = self.session.exec(query).all()
+            result_exec = await self.session.execute(query)
+            results = result_exec.scalars().all()
 
             self.logger.info(f"Found {len(results)} tracks")
             return results
@@ -210,7 +214,8 @@ class TrackRepository:
             field_name = self._get_file_field(file_type)
 
             statement = select(Track).where(getattr(Track, field_name) == file_id)
-            tracks = self.session.exec(statement).all()
+            result = await self.session.execute(statement)
+            tracks = result.scalars().all()
 
             self.logger.info(
                 f"Found {len(tracks)} tracks for {file_type.value} file: {file_id}"
@@ -250,13 +255,13 @@ class TrackRepository:
 
             # Add to session and commit
             self.session.add(track)
-            self.session.commit()
-            self.session.refresh(track)
+            await self.session.commit()
+            await self.session.refresh(track)
 
             self.logger.info(f"Created track with ID: {track.id}")
             return track
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             self.logger.error(f"Error creating track: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to create track: {str(e)}")
@@ -290,13 +295,13 @@ class TrackRepository:
 
             # Commit changes
             self.session.add(track)
-            self.session.commit()
-            self.session.refresh(track)
+            await self.session.commit()
+            await self.session.refresh(track)
 
             self.logger.info(f"Updated track with ID: {track_id}")
             return track
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
             self.logger.error(f"Error updating track: {str(e)}")
@@ -324,12 +329,12 @@ class TrackRepository:
 
             # Delete the track
             self.session.delete(track)
-            self.session.commit()
+            await self.session.commit()
 
             self.logger.info(f"Deleted track with ID: {track_id}")
             return True
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
             self.logger.error(f"Error deleting track: {str(e)}")

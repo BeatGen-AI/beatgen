@@ -2,7 +2,8 @@
 Repository for auth identity operations
 """
 from typing import Optional, List
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 import traceback
 
@@ -15,7 +16,7 @@ from .base_repository import BaseRepository
 class AuthIdentityRepository(BaseRepository[AuthIdentity]):
     """Repository for auth identity operations"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         """Initialize the repository with AuthIdentity model and session"""
         super().__init__(AuthIdentity, session)
 
@@ -36,17 +37,18 @@ class AuthIdentityRepository(BaseRepository[AuthIdentity]):
             statement = select(self.model_class).where(
                 self.model_class.auth_provider_id == auth_provider_id
             )
-            result = self.session.exec(statement).first()
+            result = await self.session.execute(statement)
+            auth_identity = result.scalars().first()
             
-            if result:
+            if auth_identity:
                 self.logger.info(
                     f"Found auth identity for provider ID {auth_provider_id}: "
-                    f"user_profile_id={result.user_profile_id}"
+                    f"user_profile_id={auth_identity.user_profile_id}"
                 )
             else:
                 self.logger.info(f"No auth identity found for provider ID: {auth_provider_id}")
                 
-            return result
+            return auth_identity
         except Exception as e:
             self.logger.error(f"Error finding auth identity: {str(e)}")
             self.logger.error(traceback.format_exc())
@@ -69,7 +71,8 @@ class AuthIdentityRepository(BaseRepository[AuthIdentity]):
             statement = select(self.model_class).where(
                 self.model_class.user_profile_id == user_profile_id
             )
-            results = self.session.exec(statement).all()
+            result = await self.session.execute(statement)
+            results = result.scalars().all()
             
             self.logger.info(
                 f"Found {len(results)} auth identities for user profile: {user_profile_id}"
@@ -99,14 +102,15 @@ class AuthIdentityRepository(BaseRepository[AuthIdentity]):
                 self.model_class.email == email,
                 self.model_class.provider == provider
             )
-            result = self.session.exec(statement).first()
+            result = await self.session.execute(statement)
+            auth_identity = result.scalars().first()
             
-            if result:
+            if auth_identity:
                 self.logger.info(f"Found auth identity for {email}/{provider}")
             else:
                 self.logger.info(f"No auth identity found for {email}/{provider}")
                 
-            return result
+            return auth_identity
         except Exception as e:
             self.logger.error(f"Error finding auth identity: {str(e)}")
             self.logger.error(traceback.format_exc())

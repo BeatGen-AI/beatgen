@@ -5,7 +5,7 @@ import logging
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from sqlmodel import Session, select
+from sqlmodel import select
 
 from app2.models.user import User
 from app2.models.credits import UserCredits, CreditTransaction, CreditTransactionType
@@ -31,8 +31,8 @@ class CreditsService:
         async with get_async_session() as session:
             # Check if user already has credits
             stmt = select(UserCredits).where(UserCredits.user_id == user.id)
-            result = session.exec(stmt)
-            existing_credits = result.first()
+            result = await session.execute(stmt)
+            existing_credits = result.scalars().first()
             
             if existing_credits:
                 logger.info(f"User {user.id} already has credits initialized")
@@ -66,7 +66,7 @@ class CreditsService:
                 session.add(transaction)
             
             
-            session.commit()
+            await session.commit()
             logger.info(f"Initialized credits for user {user.id} with {tier} tier")
             
             return user_credits
@@ -76,12 +76,12 @@ class CreditsService:
         async with get_async_session() as session:
             # Get user credits
             stmt = select(UserCredits).where(UserCredits.user_id == user_id)
-            result = session.exec(stmt)
-            user_credits = result.first()
+            result = await session.execute(stmt)
+            user_credits = result.scalars().first()
             
             if not user_credits:
                 # Initialize if doesn't exist
-                user = session.get(User, user_id)
+                user = await session.get(User, user_id)
                 if not user:
                     raise ValueError(f"User {user_id} not found")
                 return await self.initialize_user_credits(user, new_tier)
@@ -126,7 +126,7 @@ class CreditsService:
                 user_credits.balance = 999999  # Effectively unlimited
             
             session.add(user_credits)
-            session.commit()
+            await session.commit()
             
             logger.info(f"Updated user {user_id} from {old_tier} to {new_tier} tier")
             return user_credits
@@ -136,8 +136,8 @@ class CreditsService:
         async with get_async_session() as session:
             # Get user credits
             stmt = select(UserCredits).where(UserCredits.user_id == user_id)
-            result = session.exec(stmt)
-            user_credits = result.first()
+            result = await session.execute(stmt)
+            user_credits = result.scalars().first()
             
             if not user_credits:
                 logger.warning(f"No credits found for user {user_id}")
@@ -165,7 +165,7 @@ class CreditsService:
                 session.add(transaction)
             
             session.add(user_credits)
-            session.commit()
+            await session.commit()
             
             logger.info(f"Removed {old_balance} credits from user {user_id} due to subscription cancellation")
     
@@ -174,8 +174,8 @@ class CreditsService:
         async with get_async_session() as session:
             # Get user credits and schedule
             stmt = select(UserCredits).where(UserCredits.user_id == user_id)
-            result = session.exec(stmt)
-            user_credits = result.first()
+            result = await session.execute(stmt)
+            user_credits = result.scalars().first()
             
             if not user_credits:
                 logger.warning(f"No credits found for user {user_id}")
@@ -217,7 +217,7 @@ class CreditsService:
             
             
             session.add(user_credits)
-            session.commit()
+            await session.commit()
             
             logger.info(f"Allocated {new_credits} credits to user {user_id} (rollover: {rollover_amount})")
             return user_credits
@@ -241,8 +241,8 @@ class CreditsService:
         async with get_async_session() as session:
             # Get user credits
             stmt = select(UserCredits).where(UserCredits.user_id == user_id)
-            result = session.exec(stmt)
-            user_credits = result.first()
+            result = await session.execute(stmt)
+            user_credits = result.scalars().first()
             
             if not user_credits:
                 logger.error(f"No credits found for user {user_id}")
@@ -273,7 +273,7 @@ class CreditsService:
                 session.add(transaction)
                 user_credits.total_used += amount
                 session.add(user_credits)
-                session.commit()
+                await session.commit()
                 return True
             
             # Check if enough credits
@@ -309,7 +309,7 @@ class CreditsService:
             
             session.add(transaction)
             session.add(user_credits)
-            session.commit()
+            await session.commit()
             
             logger.info(f"User {user_id} used {amount} credits for: {description}")
             return True
@@ -318,8 +318,8 @@ class CreditsService:
         """Get user's current credit status"""
         async with get_async_session() as session:
             stmt = select(UserCredits).where(UserCredits.user_id == user_id)
-            result = session.exec(stmt)
-            user_credits = result.first()
+            result = await session.execute(stmt)
+            user_credits = result.scalars().first()
             
             if not user_credits:
                 return None
@@ -349,8 +349,8 @@ class CreditsService:
                 .order_by(CreditTransaction.created_at.desc())
                 .limit(limit)
             )
-            result = session.exec(stmt)
-            transactions = result.all()
+            result = await session.execute(stmt)
+            transactions = result.scalars().all()
             
             return [
                 {

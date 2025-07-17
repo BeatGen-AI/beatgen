@@ -61,7 +61,7 @@ export default defineConfig(({ command }) => {
           secure: false,
           agent: new https.Agent({ minVersion: 'TLSv1.2' })
         },
-        '/projects': {
+        '/projects/': {
           target: 'https://localhost:8000',
           changeOrigin: true,
           secure: false,

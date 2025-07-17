@@ -4,7 +4,8 @@ Handles basic CRUD operations for project entities
 """
 
 from typing import Dict, Any, List
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 import asyncio
@@ -20,12 +21,12 @@ from app2.models.project import Project
 class ProjectRepository:
     """Repository for project operations"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         """
         Initialize the repository with database session
 
         Args:
-            session: The SQLModel session for database operations
+            session: The async SQLModel session for database operations
         """
         self.session = session
         self.logger = get_repository_logger("project")
@@ -46,8 +47,13 @@ class ProjectRepository:
         """
         self.logger.info(f"Getting project with ID: {project_id}")
         try:
-            statement = select(Project).where(Project.id == project_id)
-            project = self.session.exec(statement).first()
+            statement = (
+                select(Project)
+                .options(selectinload(Project.project_tracks))
+                .where(Project.id == project_id)
+            )
+            result = await self.session.execute(statement)
+            project = result.scalars().first()
 
             if not project:
                 self.logger.error(f"Project with ID {project_id} not found")
@@ -78,28 +84,39 @@ class ProjectRepository:
         """
         self.logger.info(f"Getting project with ID: {project_id} with tracks and files")
         try:
-            # We need a query with multiple selectinload calls to eagerly load tracks and related files
-            from app2.models.track import Track
+            # We need a query with multiple selectinload calls to eagerly load project tracks and related track files
+            from app2.models.project_track import ProjectTrack
 
             statement = (
                 select(Project)
                 .options(
-                    selectinload(Project.tracks).options(
-                        selectinload(Track.audio_file),
-                        selectinload(Track.midi_file),
-                        selectinload(Track.instrument_file),
+                    selectinload(Project.project_tracks).options(
+                        selectinload(ProjectTrack.audio_track).options(
+                            selectinload(ProjectTrack.audio_track.audio_file)
+                        ),
+                        selectinload(ProjectTrack.midi_track).options(
+                            selectinload(ProjectTrack.midi_track.midi_file),
+                            selectinload(ProjectTrack.midi_track.instrument_file)
+                        ),
+                        selectinload(ProjectTrack.sampler_track).options(
+                            selectinload(ProjectTrack.sampler_track.drum_track)
+                        ),
+                        selectinload(ProjectTrack.drum_track).options(
+                            selectinload(ProjectTrack.drum_track.sampler_tracks)
+                        )
                     )
                 )
                 .where(Project.id == project_id)
             )
 
-            project = self.session.exec(statement).first()
+            result = await self.session.execute(statement)
+            project = result.scalars().first()
 
             if not project:
                 self.logger.error(f"Project with ID {project_id} not found")
                 raise NotFoundException("Project", project_id)
 
-            track_count = len(project.tracks) if project.tracks else 0
+            track_count = len(project.project_tracks) if project.project_tracks else 0
             self.logger.info(
                 f"Found project with ID: {project_id} with {track_count} tracks"
             )
@@ -107,18 +124,18 @@ class ProjectRepository:
             # Log file counts for debugging
             audio_file_count = sum(
                 1
-                for t in project.tracks
-                if hasattr(t, "audio_file") and t.audio_file is not None
+                for pt in project.project_tracks
+                if pt.audio_track and hasattr(pt.audio_track, "audio_file") and pt.audio_track.audio_file is not None
             )
             midi_file_count = sum(
                 1
-                for t in project.tracks
-                if hasattr(t, "midi_file") and t.midi_file is not None
+                for pt in project.project_tracks
+                if pt.midi_track and hasattr(pt.midi_track, "midi_file") and pt.midi_track.midi_file is not None
             )
             instrument_file_count = sum(
                 1
-                for t in project.tracks
-                if hasattr(t, "instrument_file") and t.instrument_file is not None
+                for pt in project.project_tracks
+                if pt.midi_track and hasattr(pt.midi_track, "instrument_file") and pt.midi_track.instrument_file is not None
             )
 
             self.logger.info(
@@ -150,13 +167,17 @@ class ProjectRepository:
         self.logger.info(f"Getting projects with filters: {filter_str}")
         try:
             # Build query with filters
-            query = select(Project)
+            query = (
+                select(Project)
+                .options(selectinload(Project.project_tracks))
+            )
             for key, value in filters.items():
                 if hasattr(Project, key):
                     query = query.where(getattr(Project, key) == value)
 
             # Execute query
-            results = self.session.exec(query).all()
+            result = await self.session.execute(query)
+            results = result.scalars().all()
 
             self.logger.info(f"Found {len(results)} projects")
             return results
@@ -210,30 +231,26 @@ class ProjectRepository:
             offset = (page - 1) * size
 
             # Query for items on the current page
-            def _get_items():
-                return (
-                    self.session.exec(
-                        select(Project)
-                        .where(Project.user_id == user_id)
-                        .offset(offset)
-                        .limit(size)
-                        .order_by(Project.created_at.desc())
-                    )
-                    .all()
-                )
-            items_result = await asyncio.to_thread(_get_items)
+            # Query for items on the current page
+            items_statement = (
+                select(Project)
+                .options(selectinload(Project.project_tracks))
+                .where(Project.user_id == user_id)
+                .offset(offset)
+                .limit(size)
+                .order_by(Project.created_at.desc())
+            )
+            items_result_exec = await self.session.execute(items_statement)
+            items_result = items_result_exec.scalars().all()
 
             # Query for total count
-            def _get_count():
-                return (
-                    self.session.exec(
-                        select(func.count())
-                        .select_from(Project)
-                        .where(Project.user_id == user_id)
-                    )
-                    .one()
-                )
-            total_items_result = await asyncio.to_thread(_get_count)
+            count_statement = (
+                select(func.count())
+                .select_from(Project)
+                .where(Project.user_id == user_id)
+            )
+            total_items_result_exec = await self.session.execute(count_statement)
+            total_items_result = total_items_result_exec.scalar()
 
             self.logger.info(
                 f"Found {len(items_result)} projects (total: {total_items_result}) for user: {user_id}"
@@ -261,13 +278,23 @@ class ProjectRepository:
         """
         self.logger.info(f"Getting projects for user: {user_id} with tracks")
         try:
+            from app2.models.project_track import ProjectTrack
+
             statement = (
                 select(Project)
-                .options(selectinload(Project.tracks))
+                .options(
+                    selectinload(Project.project_tracks).options(
+                        selectinload(ProjectTrack.audio_track),
+                        selectinload(ProjectTrack.midi_track),
+                        selectinload(ProjectTrack.sampler_track),
+                        selectinload(ProjectTrack.drum_track)
+                    )
+                )
                 .where(Project.user_id == user_id)
             )
 
-            projects = self.session.exec(statement).all()
+            result = await self.session.execute(statement)
+            projects = result.scalars().all()
 
             self.logger.info(f"Found {len(projects)} projects for user: {user_id}")
             return projects
@@ -304,13 +331,13 @@ class ProjectRepository:
 
             # Add to session and commit
             self.session.add(project)
-            self.session.commit()
-            self.session.refresh(project)
+            await self.session.commit()
+            await self.session.refresh(project)
 
             self.logger.info(f"Created project with ID: {project.id}")
             return project
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             self.logger.error(f"Error creating project: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to create project: {str(e)}")
@@ -365,13 +392,13 @@ class ProjectRepository:
 
             # Commit changes
             self.session.add(project)
-            self.session.commit()
-            self.session.refresh(project)
+            await self.session.commit()
+            await self.session.refresh(project)
 
             self.logger.info(f"Updated project with ID: {project_id}, new version: {project.version}")
             return project
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
             self.logger.error(f"Error updating project: {str(e)}")
@@ -400,12 +427,12 @@ class ProjectRepository:
             # Delete the project (associated ProjectTrack entries should be deleted
             # by the service layer before calling this method)
             self.session.delete(project)
-            self.session.commit()
+            await self.session.commit()
 
             self.logger.info(f"Deleted project with ID: {project_id}")
             return True
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
             self.logger.error(f"Error deleting project: {str(e)}")

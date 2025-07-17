@@ -3,52 +3,64 @@ ProjectTrack repository for database operations using SQLModel
 Handles operations on the project-track join table with the new track model structure
 """
 
-from typing import Dict, Any, List, Optional
-from sqlmodel import Session, select
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 import traceback
 from datetime import datetime
 import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
+from sqlalchemy.orm import selectinload
 
 from app2.core.exceptions import DatabaseException, NotFoundException
 from app2.core.logging import get_repository_logger
 from app2.models.project_track import ProjectTrack
+from app2.models.track_models.midi_track import MidiTrack
+from app2.models.track_models.drum_track import DrumTrack
 from app2.types.track_types import TrackType
 
 
 class ProjectTrackRepository:
     """Repository for project-track relationship operations"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         """
         Initialize the repository with database session
 
         Args:
-            session: The SQLModel session for database operations
+            session: The async SQLModel session for database operations
         """
         self.session = session
         self.logger = get_repository_logger("project_track")
 
     async def get_by_project_id(self, project_id: uuid.UUID) -> List[ProjectTrack]:
         """
-        Get all project-track associations for a project
+        Get all project-track associations for a project with all relationships loaded
 
         Args:
             project_id: The ID of the project
 
         Returns:
-            List of project-track associations
+            List of project-track associations with all relationships loaded
 
         Raises:
             DatabaseException: If there's a database error
         """
         self.logger.info(f"Getting project-tracks for project {project_id}")
         try:
-            statement = select(ProjectTrack).where(
-                ProjectTrack.project_id == project_id
+            statement = (
+                select(ProjectTrack)
+                .options(
+                    selectinload(ProjectTrack.audio_track),
+                    selectinload(ProjectTrack.midi_track).selectinload(MidiTrack.instrument_file),
+                    selectinload(ProjectTrack.sampler_track),
+                    selectinload(ProjectTrack.drum_track).selectinload(DrumTrack.sampler_tracks)
+                )
+                .where(ProjectTrack.project_id == project_id)
             )
-            results = self.session.exec(statement).all()
+            result = await self.session.execute(statement)
+            results = result.scalars().all()
 
             self.logger.info(
                 f"Found {len(results)} project-tracks for project {project_id}"
@@ -78,11 +90,22 @@ class ProjectTrackRepository:
         self.logger.info(f"Getting project-tracks for {track_type} track {track_id}")
         try:
             # Select based on track_id and track_type
-            statement = select(ProjectTrack).where(
-                ProjectTrack.track_type == track_type, ProjectTrack.track_id == track_id
+            statement = (
+                select(ProjectTrack)
+                .options(
+                    selectinload(ProjectTrack.audio_track),
+                    selectinload(ProjectTrack.midi_track),
+                    selectinload(ProjectTrack.sampler_track),
+                    selectinload(ProjectTrack.drum_track)
+                )
+                .where(
+                    ProjectTrack.track_type == track_type,
+                    ProjectTrack.track_id == track_id
+                )
             )
 
-            results = self.session.exec(statement).all()
+            result = await self.session.execute(statement)
+            results = result.scalars().all()
 
             self.logger.info(
                 f"Found {len(results)} project-tracks for {track_type} track {track_id}"
@@ -115,13 +138,23 @@ class ProjectTrackRepository:
         )
         try:
             # Select based on project_id, track_id and track_type
-            statement = select(ProjectTrack).where(
-                ProjectTrack.project_id == project_id,
-                ProjectTrack.track_type == track_type,
-                ProjectTrack.track_id == track_id,
+            statement = (
+                select(ProjectTrack)
+                .options(
+                    selectinload(ProjectTrack.audio_track),
+                    selectinload(ProjectTrack.midi_track),
+                    selectinload(ProjectTrack.sampler_track),
+                    selectinload(ProjectTrack.drum_track)
+                )
+                .where(
+                    ProjectTrack.project_id == project_id,
+                    ProjectTrack.track_type == track_type,
+                    ProjectTrack.track_id == track_id,
+                )
             )
 
-            result = self.session.exec(statement).first()
+            result = await self.session.execute(statement)
+            result = result.scalars().first()
 
             if result:
                 self.logger.info(
@@ -167,15 +200,15 @@ class ProjectTrackRepository:
 
             # Add to session and commit
             self.session.add(project_track)
-            self.session.commit()
-            self.session.refresh(project_track)
+            await self.session.commit()
+            await self.session.refresh(project_track)
 
             self.logger.info(
                 f"Created project-track for project {project_track.project_id}"
             )
             return project_track
         except IntegrityError as e:
-            self.session.rollback()
+            await self.session.rollback()
             # Handle duplicate key constraint violation
             if "duplicate key value violates unique constraint" in str(e):
                 self.logger.info(f"ProjectTrack already exists, attempting update instead")
@@ -190,7 +223,7 @@ class ProjectTrackRepository:
                 self.logger.error(f"Integrity constraint violation: {str(e)}")
                 raise DatabaseException(f"Constraint violation: {str(e)}")
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             self.logger.error(f"Error creating project-track: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to create project-track: {str(e)}")
@@ -253,15 +286,15 @@ class ProjectTrackRepository:
 
             # Commit changes
             self.session.add(project_track)
-            self.session.commit()
-            self.session.refresh(project_track)
+            await self.session.commit()
+            await self.session.refresh(project_track)
 
             self.logger.info(
                 f"Updated project-track for project {project_id} and {track_type} track {track_id}"
             )
             return project_track
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
             self.logger.error(f"Error updating project-track: {str(e)}")
@@ -302,14 +335,14 @@ class ProjectTrackRepository:
 
             # Delete from database
             self.session.delete(project_track)
-            self.session.commit()
+            await self.session.commit()
 
             self.logger.info(
                 f"Deleted project-track for project {project_id} and {track_type} track {track_id}"
             )
             return True
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             self.logger.error(f"Error deleting project-track: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to delete project-track: {str(e)}")
@@ -337,14 +370,14 @@ class ProjectTrackRepository:
                 self.session.delete(pt)
 
             # Commit changes
-            self.session.commit()
+            await self.session.commit()
 
             self.logger.info(
                 f"Deleted {len(project_tracks)} project-tracks for project {project_id}"
             )
             return len(project_tracks)
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             self.logger.error(f"Error deleting project-tracks: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to delete project-tracks: {str(e)}")
@@ -375,14 +408,14 @@ class ProjectTrackRepository:
                 self.session.delete(pt)
 
             # Commit changes
-            self.session.commit()
+            await self.session.commit()
 
             self.logger.info(
                 f"Deleted {len(project_tracks)} project-tracks for {track_type} track {track_id}"
             )
             return len(project_tracks)
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             self.logger.error(f"Error deleting project-tracks: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to delete project-tracks: {str(e)}")
@@ -466,8 +499,8 @@ class ProjectTrackRepository:
                 "instance_metadata": instance_metadata,
             }
             
-            result = self.session.execute(query, upsert_data)
-            self.session.commit()
+            result = await self.session.execute(query, upsert_data)
+            await self.session.commit()
             
             # Convert result to ProjectTrack object
             row = result.fetchone()
@@ -479,7 +512,7 @@ class ProjectTrackRepository:
                 raise DatabaseException("Upsert operation did not return a result")
                 
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             self.logger.error(f"Error upserting project-track: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to upsert project-track: {str(e)}")
@@ -509,7 +542,7 @@ class ProjectTrackRepository:
             
         except Exception as e:
             self.logger.error(f"Error in batch upsert: {str(e)}")
-            raise DatabaseException(f"Failed to batch upsert project-tracks: {str(e)}")
+            raise DatabaseException(f"Failed to batch upsert project-tracks: {str(e)}") from e
 
     async def delete_by_track_ids(self, project_id: uuid.UUID, track_ids: List[uuid.UUID]) -> int:
         """
@@ -532,90 +565,50 @@ class ProjectTrackRepository:
                 ProjectTrack.project_id == project_id,
                 ProjectTrack.track_id.in_(track_ids)
             )
-            project_tracks = self.session.exec(statement).all()
+            result = await self.session.execute(statement)
+            project_tracks = result.scalars().all()
             
             # Delete all associations
             for pt in project_tracks:
                 self.session.delete(pt)
             
             # Commit changes
-            self.session.commit()
+            await self.session.commit()
             
             self.logger.info(
                 f"Deleted {len(project_tracks)} project-tracks for project {project_id}"
             )
             return len(project_tracks)
         except Exception as e:
-            self.session.rollback()
+            await self.session.rollback()
             self.logger.error(f"Error deleting project-tracks by track IDs: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to delete project-tracks: {str(e)}")
 
+
     async def get_track_with_settings(
         self, project_id: uuid.UUID
-    ) -> List[Dict[str, Any]]:
+    ) -> List[ProjectTrack]:
         """
         Get all tracks with their project-specific settings for a project
+        All relationships are eagerly loaded to prevent greenlet errors
 
         Args:
             project_id: The ID of the project
 
         Returns:
-            List of dictionaries with track data and settings
+            List of ProjectTrack objects with all relationships loaded
 
         Raises:
             DatabaseException: If there's a database error
         """
         self.logger.info(f"Getting tracks with settings for project {project_id}")
         try:
-            # Get all project-track associations for this project
+            # Get all project-track associations with all relationships loaded
             project_tracks = await self.get_by_project_id(project_id)
-
-            result = []
-
-            # For each association, load the track based on its type
-            for pt in project_tracks:
-                # Handle instance_metadata - pass it through as-is
-                instance_metadata = pt.instance_metadata
-                if instance_metadata is not None and not isinstance(instance_metadata, list):
-                    self.logger.warning(f"Unexpected instance_metadata type for track {pt.track_id}: {type(instance_metadata)}")
-                    # Convert to empty list if not a list
-                    instance_metadata = []
-                elif instance_metadata is None:
-                    # If None, use empty list
-                    instance_metadata = []
-                
-                track_data = {
-                    "project_id": pt.project_id,
-                    "track_id": pt.track_id,
-                    "name": pt.name,
-                    "volume": pt.volume,
-                    "pan": pt.pan,
-                    "mute": pt.mute,
-                    "duration_ticks": pt.duration_ticks,
-                    "track_number": pt.track_number,
-                    "track_type": pt.track_type,
-                    "instance_metadata": instance_metadata,
-                }
-
-                # Get track based on type
-                if pt.track_type == TrackType.AUDIO and pt.audio_track:
-                    track_data["track"] = pt.audio_track
-                elif pt.track_type == TrackType.MIDI and pt.midi_track:
-                    track_data["track"] = pt.midi_track
-                elif pt.track_type == TrackType.SAMPLER and pt.sampler_track:
-                    track_data["track"] = pt.sampler_track
-                elif pt.track_type == TrackType.DRUM and pt.drum_track:
-                    track_data["track"] = pt.drum_track
-
-                result.append(track_data)
-
-            self.logger.info(f"result: {result}")
-
-            self.logger.info(
-                f"Found {len(result)} tracks with settings for project {project_id}"
-            )
-            return result
+            
+            self.logger.info(f"Successfully loaded {len(project_tracks)} project tracks with relationships")
+            return project_tracks
         except Exception as e:
             self.logger.error(f"Error getting tracks with settings: {str(e)}")
             self.logger.error(traceback.format_exc())

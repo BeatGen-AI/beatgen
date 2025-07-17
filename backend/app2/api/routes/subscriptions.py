@@ -139,8 +139,8 @@ async def get_available_plans() -> Dict[str, Any]:
                 SubscriptionPlan.stripe_price_id != ''  # Only plans with prices
             ).order_by(SubscriptionPlan.price_cents)
             
-            result = session.exec(stmt)
-            plans = result.all()
+            result = await session.execute(stmt)
+            plans = result.scalars().all()
             
             # Format plans for API response
             formatted_plans = []
