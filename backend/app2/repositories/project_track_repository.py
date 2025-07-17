@@ -16,6 +16,8 @@ from sqlalchemy.orm import selectinload
 from app2.core.exceptions import DatabaseException, NotFoundException
 from app2.core.logging import get_repository_logger
 from app2.models.project_track import ProjectTrack
+from app2.models.track_models.midi_track import MidiTrack
+from app2.models.track_models.drum_track import DrumTrack
 from app2.types.track_types import TrackType
 
 
@@ -47,11 +49,6 @@ class ProjectTrackRepository:
         """
         self.logger.info(f"Getting project-tracks for project {project_id}")
         try:
-            from sqlalchemy.orm import selectinload
-            
-            from app2.models.track_models.midi_track import MidiTrack
-            from app2.models.track_models.drum_track import DrumTrack
-            
             statement = (
                 select(ProjectTrack)
                 .options(
@@ -140,8 +137,6 @@ class ProjectTrackRepository:
             f"Getting project-track for project {project_id} and {track_type} track {track_id}"
         )
         try:
-            from sqlalchemy.orm import selectinload
-            
             # Select based on project_id, track_id and track_type
             statement = (
                 select(ProjectTrack)
