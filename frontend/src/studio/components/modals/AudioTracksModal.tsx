@@ -742,7 +742,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                   {generatedTrack && generatedAudioBlob ? (
                     <div className="bg-muted/50 rounded-lg p-4 space-y-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Generated Audio: {generatedTrack.name}</span>
+                        <span className="text-sm font-medium">{generatedTrack.name}</span>
                       </div>
                       
                       {/* AudioPlayer */}
