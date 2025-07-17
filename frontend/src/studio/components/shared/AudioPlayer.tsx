@@ -100,13 +100,23 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   }
 
   return (
-    <div className={cn('relative flex items-center', className)}>
-      {/* Play/Pause Button - Top Left */}
+    <div className={cn('relative', className)}>
+      {/* Waveform with AudioPreview */}
+      <AudioPreview
+        audioUrl={audioUrl}
+        variant="card"
+        duration={duration}
+        isPlaying={isPlaying}
+        onWaveformClick={handleSeek}
+        className="w-full"
+      />
+
+      {/* Play/Pause Button - Overlayed on top left */}
       <Button
         variant="ghost"
         size="icon"
         onClick={handlePlayPause}
-        className="absolute left-2 top-2 z-10 h-8 w-8 bg-background/80 backdrop-blur-sm hover:bg-background/90"
+        className="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-8 w-8 bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border/50"
       >
         {isPlaying ? (
           <IconPlayerPause size={16} />
@@ -114,18 +124,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           <IconPlayerPlay size={16} />
         )}
       </Button>
-
-      {/* Waveform with AudioPreview */}
-      <div className="w-full pl-12"> {/* Padding to avoid overlap with play button */}
-        <AudioPreview
-          audioUrl={audioUrl}
-          variant="card"
-          duration={duration}
-          isPlaying={isPlaying}
-          onWaveformClick={handleSeek}
-          className="w-full"
-        />
-      </div>
     </div>
   );
 };
