@@ -1618,37 +1618,20 @@ Create rhythmic patterns that fit the composition style."""
                 logger.error(f"Drum selection failed: {selected_drum_sounds}")
                 raise selected_drum_sounds
             
-            # Steps 3-6: Chord, Melody, and Drum Beat Generation (run in parallel)
+            # Step 3: Chord Generation
             chord_task = self._wrap_step_with_output_capture(
                 3, self._generate_chords_and_send_sse, params, selected_instruments
             )
-            melody_task = self._wrap_step_with_output_capture(
-                4, self._generate_melody_notes_and_send_sse, params, selected_instruments
-            )
-            drum_beat_task = self._wrap_step_with_output_capture(
-                6, self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
-            )
+            chord_data = await chord_task
             
-            # Wait for all 3 generation tasks
-            chord_data, melody_data, drum_data = await asyncio.gather(
-                chord_task, melody_task, drum_beat_task,
-                return_exceptions=True
-            )
-            
-            # Handle exceptions from generation phase
+            # Handle exception from chord generation
             if isinstance(chord_data, Exception):
                 logger.error(f"Chord generation failed: {chord_data}")
                 raise chord_data
-            if isinstance(melody_data, Exception):
-                logger.error(f"Melody generation failed: {melody_data}")
-                raise melody_data
-            if isinstance(drum_data, Exception):
-                logger.error(f"Drum beat generation failed: {drum_data}")
-                raise drum_data
             
-            # Step 5: Melody Explanation (after melody is generated, before drum beat output)  
+            # Step 4: Melody Explanation (before melody generation)
             melody_explanation_task = self._wrap_step_with_output_capture(
-                5, self._stream_melody_explanation_standalone, params
+                4, self._stream_melody_explanation_standalone, params
             )
             _ = await melody_explanation_task
             
@@ -1656,6 +1639,28 @@ Create rhythmic patterns that fit the composition style."""
             if isinstance(_, Exception):
                 logger.error(f"Melody explanation failed: {_}")
                 raise _
+            
+            # Steps 5-6: Melody and Drum Beat Generation (run in parallel)
+            melody_task = self._wrap_step_with_output_capture(
+                5, self._generate_melody_notes_and_send_sse, params, selected_instruments
+            )
+            drum_beat_task = self._wrap_step_with_output_capture(
+                6, self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
+            )
+            
+            # Wait for melody and drum generation
+            melody_data, drum_data = await asyncio.gather(
+                melody_task, drum_beat_task,
+                return_exceptions=True
+            )
+            
+            # Handle exceptions from melody/drum generation
+            if isinstance(melody_data, Exception):
+                logger.error(f"Melody generation failed: {melody_data}")
+                raise melody_data
+            if isinstance(drum_data, Exception):
+                logger.error(f"Drum beat generation failed: {drum_data}")
+                raise drum_data
             
             # Ensure all buffered outputs are flushed
             await self.output_manager.flush_all_remaining()
