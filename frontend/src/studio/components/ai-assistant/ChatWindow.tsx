@@ -25,6 +25,8 @@ import MenuChip from './MenuChip';
 import AddContextChip from './AddContextChip';
 import AssistantChatBubble from './AssistantChatBubble';
 import UserChatBubble from './UserChatBubble';
+import StepRenderer from './StepRenderer';
+import { StepManager, Step } from './StepManager';
 import { GRID_CONSTANTS } from '../../constants/gridConstants';
 import { CombinedTrack } from '../../../platform/types/project';
 import ReactMarkdown from 'react-markdown'
@@ -89,6 +91,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   const [streamConnection, setStreamConnection] = useState<{ close: () => void } | null>(null);
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
   
+  // Step-based rendering state
+  const [stepManager] = useState(() => new StepManager());
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [isStepMode, setIsStepMode] = useState(false);
+  
   // Access the store for executing actions and project context
   const { 
     handleAddTrack, 
@@ -152,6 +159,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     }
   }, [isOpen, messages.length]);
   
+  // Listen to step manager updates
+  useEffect(() => {
+    const handleStepUpdate = (updatedSteps: Step[]) => {
+      setSteps(updatedSteps);
+    };
+
+    stepManager.addListener(handleStepUpdate);
+    return () => {
+      stepManager.removeListener(handleStepUpdate);
+    };
+  }, [stepManager]);
+
   // Debug log for streaming state changes
   useEffect(() => {
     console.log('🔄 STREAMING STATE CHANGED:', { 
@@ -240,6 +259,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       // New handlers for streaming text
       onEvent: (eventType, data) => {
         console.log(`⭐⭐⭐ RECEIVED CUSTOM EVENT: ${eventType}`, data);
+        
+        // Handle step events for music generation
+        if (eventType === 'step_event') {
+          console.log('🎵 STEP EVENT:', data);
+          stepManager.addEvent(data);
+          
+          // Execute actions immediately when they arrive
+          if (data.event_type === 'action' && data.action_type) {
+            handleAction(data.action_type, data.action_data);
+          }
+          return;
+        }
         
         // Handle response streaming events
         if (eventType === 'response_start') {
@@ -455,6 +486,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         apiMode = 'generate-audio';
       } else {
         apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat' | 'generate-audio';
+      }
+      
+      // Initialize step mode for generate requests
+      if (apiMode === 'generate') {
+        setIsStepMode(true);
+        stepManager.reset(); // Reset for new generation
+        console.log('🎵 Initialized step mode for music generation');
+      } else {
+        setIsStepMode(false);
       }
       
       // Get track ID if selected
@@ -960,23 +1000,44 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           flexDirection: 'column',
           gap: 1.5
         }}>
-          {messages.map((msg, index) => (
-            msg.isUser ? (
-              <UserChatBubble 
-                key={index} 
-                text={msg.text}
-                mode={msg.mode}
-                selectedTrack={msg.selectedTrack}
-              />
-            ) : (
-              <AssistantChatBubble 
-                key={index} 
-                text={msg.text}
-                action={msg.action}
-                onActionClick={msg.action && msg.actionData ? 
-                    () => handleAction(msg.action!, msg.actionData) : 
-                    undefined}
+          {isStepMode && steps.length > 0 ? (
+            // Step-based rendering for music generation
+            <>
+              {/* Show user message */}
+              {messages.filter(msg => msg.isUser).map((msg, index) => (
+                <UserChatBubble 
+                  key={index} 
+                  text={msg.text}
+                  mode={msg.mode}
+                  selectedTrack={msg.selectedTrack}
                 />
+              ))}
+              
+              {/* Show step progress */}
+              <StepRenderer 
+                steps={steps}
+                onActionClick={handleAction}
+              />
+            </>
+          ) : (
+            // Legacy message rendering for chat/edit modes
+            messages.map((msg, index) => 
+              msg.isUser ? (
+                <UserChatBubble 
+                  key={index} 
+                  text={msg.text}
+                  mode={msg.mode}
+                  selectedTrack={msg.selectedTrack}
+                />
+              ) : (
+                <AssistantChatBubble 
+                  key={index} 
+                  text={msg.text}
+                  action={msg.action}
+                  onActionClick={msg.action && msg.actionData ? 
+                      () => handleAction(msg.action!, msg.actionData) : 
+                      undefined}
+                  />
               )
             )
           )}

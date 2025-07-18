@@ -205,6 +205,37 @@ class SSEQueueManager:
         await self.queue.put(("cancelled", {"message": "Request cancelled"}))
         logger.info(f"Sent cancelled event for request {self.request_id}")
 
+    async def step_event(self, step_id: int, step_name: str, event_type: str, 
+                        content: str = None, title: str = None, 
+                        action_type: str = None, action_data: dict = None):
+        """
+        Send a step event for client-side ordering.
+        
+        Args:
+            step_id: Numeric step ID (1-6 for music generation)
+            step_name: Human readable step name
+            event_type: Type of event ('explanation', 'stage', 'status', 'action')
+            content: Event content text
+            title: Event title (for explanations)
+            action_type: Type of action (for action events)
+            action_data: Action data (for action events)
+        """
+        from datetime import datetime
+        
+        event_data = {
+            "step_id": step_id,
+            "step_name": step_name,
+            "event_type": event_type,
+            "content": content,
+            "title": title,
+            "action_type": action_type,
+            "action_data": action_data,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        await self.queue.put(("step_event", event_data))
+        logger.info(f"Sent step event: step_id={step_id}, type={event_type}, step_name={step_name}")
+
     async def heartbeat(self):
         """
         Send a heartbeat event to keep the connection alive.
