@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Music, Loader2, Play, Pause, Upload, Send, Download } from 'lucide-react';
+import { Music, Loader2, Upload, Send } from 'lucide-react';
 import { AudioTrackRead } from '../../../platform/types/dto/track_models/audio_track';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { db } from '../../core/db/dexie-client';
 import { cn } from '@/lib/utils';
 import { interactWithAssistant, StreamCallbacks } from '../../../platform/api/assistant';
 import GenerationPromptControl from '../shared/GenerationPromptControl';
-import AudioPreview from '../shared/AudioPreview';
+import AudioPlayer from '../shared/AudioPlayer';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import SampleManager from '../../core/samples/sampleManager';
 
@@ -19,20 +19,14 @@ import SampleManager from '../../core/samples/sampleManager';
 interface TrackCardProps {
   track: AudioTrackRead;
   onClick: () => void;
-  isPlaying: boolean;
-  onPlayToggle: () => void;
 }
 
 const TrackCard: React.FC<TrackCardProps> = ({
   track,
   onClick,
-  isPlaying,
-  onPlayToggle,
 }) => {
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isDownloadingFile, setIsDownloadingFile] = useState(false);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -47,15 +41,14 @@ const TrackCard: React.FC<TrackCardProps> = ({
 
   // Download and cache the audio file
   const downloadAndCacheAudio = useCallback(async () => {
-    if (!track.audio_file_storage_key || audioUrl) return;
+    if (!track.audio_file_storage_key || audioBlob) return;
 
     setIsDownloading(true);
     try {
       // Check if we already have this file in IndexedDB
       const existingFile = await db.getAudioFile(track.id);
       if (existingFile) {
-        const url = URL.createObjectURL(existingFile.data);
-        setAudioUrl(url);
+        setAudioBlob(existingFile.data);
         return;
       }
 
@@ -66,91 +59,18 @@ const TrackCard: React.FC<TrackCardProps> = ({
       const file = new File([blob], track.name, { type: blob.type });
       await db.upsertAudioFile(track.id, file, track.audio_file_duration);
       
-      // Create URL for playback
-      const url = URL.createObjectURL(blob);
-      setAudioUrl(url);
+      setAudioBlob(blob);
     } catch (error) {
       console.error('Failed to download audio track:', error);
     } finally {
       setIsDownloading(false);
     }
-  }, [track.id, track.audio_file_storage_key, track.name, track.audio_file_duration, audioUrl]);
+  }, [track.id, track.audio_file_storage_key, track.name, track.audio_file_duration, audioBlob]);
 
   // Auto-download when component mounts
   useEffect(() => {
     downloadAndCacheAudio();
   }, [downloadAndCacheAudio]);
-
-  // Handle play/pause
-  const handlePlayToggle = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (!audioUrl) {
-      downloadAndCacheAudio();
-      return;
-    }
-
-    if (isPlaying) {
-      audioRef.current?.pause();
-    } else {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(audioUrl);
-        audioRef.current.addEventListener('ended', () => {
-          onPlayToggle();
-        });
-      }
-      audioRef.current.play().catch(console.error);
-    }
-    onPlayToggle();
-  }, [audioUrl, isPlaying, onPlayToggle, downloadAndCacheAudio]);
-
-  // Handle download
-  const handleDownload = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (!track.audio_file_storage_key) return;
-    
-    setIsDownloadingFile(true);
-    try {
-      // Check if we already have this file cached
-      let blob: Blob;
-      const existingFile = await db.getAudioFile(track.id);
-      
-      if (existingFile) {
-        blob = existingFile.data;
-      } else {
-        // Download from remote storage
-        blob = await downloadAudioTrackFile(track.audio_file_storage_key);
-      }
-      
-      // Create download link
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${track.name}.${track.audio_file_format || 'wav'}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Failed to download audio file:', error);
-    } finally {
-      setIsDownloadingFile(false);
-    }
-  }, [track.id, track.audio_file_storage_key, track.name, track.audio_file_format]);
-
-  // Cleanup audio URL when component unmounts
-  useEffect(() => {
-    return () => {
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, [audioUrl]);
 
   return (
     <div 
@@ -198,46 +118,23 @@ const TrackCard: React.FC<TrackCardProps> = ({
             </span>
           </div>
         </div>
-
-        {/* Download and Play Buttons */}
-        <div className="flex items-center gap-0.5 ml-2">
-          <button
-            onClick={handleDownload}
-            className="p-1 rounded-full text-muted-foreground hover:text-primary transition-colors"
-            disabled={isDownloadingFile}
-            title="Download audio file"
-          >
-            {isDownloadingFile ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Download className="w-3.5 h-3.5" />
-            )}
-          </button>
-          <button
-            onClick={handlePlayToggle}
-            className="p-1 rounded-full text-muted-foreground hover:text-primary transition-colors"
-            disabled={isDownloading}
-            title={isPlaying ? "Pause" : "Play"}
-          >
-            {isDownloading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : isPlaying ? (
-              <Pause className="w-3.5 h-3.5" />
-            ) : (
-              <Play className="w-3.5 h-3.5" />
-            )}
-          </button>
-        </div>
       </div>
 
-      {/* Audio waveform preview */}
-      <div className="mb-2">
-        <AudioPreview 
-          audioUrl={track.audio_file_storage_key || ''}
-          variant="card"
-          duration={track.audio_file_duration}
-          isPlaying={isPlaying}
-        />
+      {/* AudioPlayer component */}
+      <div className="mb-2" onClick={(e) => e.stopPropagation()}>
+        {audioBlob ? (
+          <AudioPlayer
+            audioBlob={audioBlob}
+            fileName={`${track.name}.${track.audio_file_format || 'wav'}`}
+            className="w-full"
+          />
+        ) : (
+          <div className="w-full h-[80px] flex items-center justify-center bg-muted/20 rounded">
+            <span className="text-sm text-muted-foreground">
+              {isDownloading ? 'Loading...' : 'Loading audio...'}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -264,7 +161,6 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   const effectiveMode = useUiMode ? uiMode : studioMode;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(uploadModeOnly ? 'upload' : 'my-tracks');
-  const [playingId, setPlayingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [tracks, setTracks] = useState<AudioTrackRead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -280,6 +176,8 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   const [generationStatus, setGenerationStatus] = useState('');
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [streamConnection, setStreamConnection] = useState<{ close: () => void } | null>(null);
+  const [generatedTrack, setGeneratedTrack] = useState<AudioTrackRead | null>(null);
+  const [generatedAudioBlob, setGeneratedAudioBlob] = useState<Blob | null>(null);
   
   const ITEMS_PER_PAGE = 12;
 
@@ -288,9 +186,6 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
     onClose();
   };
 
-  const handlePlayToggle = (trackId: string) => {
-    setPlayingId(playingId === trackId ? null : trackId);
-  };
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
@@ -341,10 +236,13 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
             // Convert the track data to AudioTrackRead
             const trackData = action.data.track_data as AudioTrackRead;
             
-            // Download and cache the audio file before selecting the track
+            // Download and cache the audio file
             if (trackData.audio_file_storage_key) {
               try {
-                setGenerationStatus('Caching audio file...');
+                setGenerationStatus('Downloading audio file...');
+                const audioBlob = await downloadAudioTrackFile(trackData.audio_file_storage_key);
+                
+                // Cache the file
                 const sampleManager = SampleManager.getInstance(db);
                 await sampleManager.getSampleBlob(
                   trackData.id, 
@@ -352,19 +250,17 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                   'audio_track', 
                   trackData.name
                 );
+                
+                // Store the generated track and blob for the AudioPlayer
+                setGeneratedTrack(trackData);
+                setGeneratedAudioBlob(audioBlob);
+                setGenerationStatus('Audio generated successfully!');
               } catch (error) {
-                console.error('Failed to cache generated audio file:', error);
-                setGenerationError('Failed to cache audio file');
+                console.error('Failed to download generated audio file:', error);
+                setGenerationError('Failed to download audio file');
                 return;
               }
             }
-            
-            // Now select the track (it will have the cached audio file)
-            onSelectTrack(trackData);
-            setGenerationStatus('Audio generated successfully!');
-            setTimeout(() => {
-              onClose();
-            }, 1500);
           }
         },
         onComplete: () => {
@@ -413,6 +309,23 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
     setIsGenerating(false);
     setGenerationStatus('');
     setGenerationError(null);
+  };
+
+  // Generated audio action handlers
+  const handleUseAudio = () => {
+    if (generatedTrack) {
+      onSelectTrack(generatedTrack);
+      onClose();
+    }
+  };
+
+
+  const handleResetGeneration = () => {
+    setGeneratedTrack(null);
+    setGeneratedAudioBlob(null);
+    setGenerationStatus('');
+    setGenerationError(null);
+    setGeneratePrompt('');
   };
 
   // Fetch tracks function
@@ -599,8 +512,6 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                                 key={track.id}
                                 track={track}
                                 onClick={() => handleTrackSelect(track)}
-                                isPlaying={playingId === track.id}
-                                onPlayToggle={() => handlePlayToggle(track.id)}
                               />
                             ))
                           )}
@@ -717,8 +628,39 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                     submitButtonAriaLabel="Generate Audio"
                   />
 
-                  {/* Generation Status */}
-                  {(isGenerating || generationStatus) && (
+                  {/* Generated Audio Player or Generation Status */}
+                  {generatedTrack && generatedAudioBlob ? (
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{generatedTrack.name}</span>
+                      </div>
+                      
+                      {/* AudioPlayer */}
+                      <AudioPlayer
+                        audioBlob={generatedAudioBlob}
+                        className="w-full"
+                      />
+                      
+                      {/* Action Buttons */}
+                      <div className="flex justify-center gap-3">
+                        {!useUiMode && (
+                          <Button
+                            onClick={handleUseAudio}
+                            className="min-w-24"
+                          >
+                            Use Audio
+                          </Button>
+                        )}
+                        <Button
+                          onClick={handleResetGeneration}
+                          variant="outline"
+                          className="min-w-24"
+                        >
+                          Reset
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (isGenerating || generationStatus) ? (
                     <div className="bg-muted/50 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium">
@@ -741,7 +683,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                         </span>
                       </div>
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Generation Error */}
                   {generationError && (

@@ -8,7 +8,7 @@ import { useAudioTracksPagination } from '../hooks/usePagination';
 import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/pagination';
 
 // API and types
-import { getSoundsPaginated, deleteSound } from '../api/sounds';
+import { getSoundsPaginated, deleteSound, downloadAudioTrackFile } from '../api/sounds';
 import { AudioTrackRead } from '../types/dto/track_models/audio_track';
 import AudioTrackCard from './DisplayCards/AudioTrackCard';
 
@@ -25,6 +25,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [audioBlobs, setAudioBlobs] = useState<Record<string, Blob>>({});
 
   // Pagination using shared hook
   const pagination = useAudioTracksPagination(
@@ -62,10 +63,11 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
   }, [audioElement]);
   
   // Play sound handler
-  const handlePlaySound = (sound: AudioTrackRead) => {
+  const handlePlaySound = async (sound: AudioTrackRead) => {
     if (playingId === sound.id && audioElement) {
       audioElement.pause();
       setPlayingId(null);
+      setCurrentTime(0);
       return;
     }
     
@@ -74,27 +76,46 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
       setCurrentTime(0);
     }
     
-    const audio = new Audio();
-    
-    const baseUrl = process.env.REACT_APP_SUPABASE_URL || '';
-    const url = `${baseUrl}/storage/v1/object/public/tracks/${sound.audio_file_storage_key}`;
-    console.log('Audio URL:', url);
-    
-    audio.crossOrigin = "anonymous";
-    audio.src = url;
-    audio.preload = "metadata";
-    
-    audio.addEventListener('error', (e) => {
-      console.error('Audio error details:', audio.error);
-    });
-    
-    audio.play().catch(err => {
-      console.error('Failed to play sound:', err);
-    });
-    
-    setAudioElement(audio);
-    setPlayingId(sound.id);
-    setCurrentTime(0);
+    try {
+      // Use the proper API function to download the audio file
+      const audioBlob = await downloadAudioTrackFile(sound.audio_file_storage_key);
+      
+      // Store the blob for use by AudioPlayer
+      setAudioBlobs(prev => ({ ...prev, [sound.id]: audioBlob }));
+      
+      const url = URL.createObjectURL(audioBlob);
+      
+      const audio = new Audio();
+      audio.src = url;
+      audio.preload = "metadata";
+      
+      audio.addEventListener('error', (e) => {
+        console.error('Audio error details:', audio.error);
+        URL.revokeObjectURL(url); // Clean up on error
+      });
+      
+      audio.addEventListener('ended', () => {
+        setPlayingId(null);
+        setAudioElement(null);
+        setCurrentTime(0);
+        URL.revokeObjectURL(url); // Clean up when finished
+      });
+      
+      audio.addEventListener('timeupdate', () => {
+        setCurrentTime(audio.currentTime);
+      });
+      
+      audio.play().catch(err => {
+        console.error('Failed to play sound:', err);
+        URL.revokeObjectURL(url); // Clean up on error
+      });
+      
+      setAudioElement(audio);
+      setPlayingId(sound.id);
+      // currentTime will be updated via the timeupdate event listener
+    } catch (error) {
+      console.error('Failed to download audio file:', error);
+    }
   };
   
   // Seek handler
@@ -131,12 +152,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
   const renderAudioTrackCard = (sound: AudioTrackRead) => (
     <AudioTrackCard
       sound={sound}
-      playingId={playingId}
-      currentTime={currentTime}
-      duration={duration}
-      handlePlaySound={handlePlaySound}
       handleDeleteSound={handleDeleteSound}
-      handleSeek={handleSeek}
       sectionColor={sectionColor}
     />
   );

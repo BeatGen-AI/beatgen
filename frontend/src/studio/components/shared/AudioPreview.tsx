@@ -13,12 +13,14 @@ const getGlobalAudioContext = () => {
 };
 
 interface AudioPreviewProps {
-  audioUrl: string; // Storage key for the audio file (not a full URL)
+  audioUrl: string; // Storage key for the audio file or blob URL
   variant: 'track' | 'card';
   duration?: number; // Required for track variant
   isPlaying?: boolean;
   className?: string;
   color?: string;
+  currentTime?: number; // Current playback time in seconds
+  onWaveformClick?: (position: number) => void; // Callback for clicking on waveform (position 0-1)
 }
 
 const AudioPreview: React.FC<AudioPreviewProps> = ({
@@ -27,7 +29,9 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   duration,
   isPlaying = false,
   className,
-  color
+  color,
+  currentTime = 0,
+  onWaveformClick
 }) => {
   
   const [waveformData, setWaveformData] = useState<number[]>([]);
@@ -79,8 +83,8 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     }
   };
 
-  const analyzeAudio = async (storageKey: string, barCount: number): Promise<number[]> => {
-    const cacheKey = `${storageKey}_${barCount}`;
+  const analyzeAudio = async (audioUrlOrKey: string, barCount: number): Promise<number[]> => {
+    const cacheKey = `${audioUrlOrKey}_${barCount}`;
     
     // Check cache first
     if (cacheRef.current.has(cacheKey)) {
@@ -88,9 +92,9 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     }
 
     try {
-      // Validate storage key first
-      if (!storageKey || storageKey.trim() === '') {
-        throw new Error('Invalid storage key');
+      // Validate input first
+      if (!audioUrlOrKey || audioUrlOrKey.trim() === '') {
+        throw new Error('Invalid audio URL or storage key');
       }
 
       
@@ -103,8 +107,16 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       }
 
       
-      // Download audio file using the API
-      const audioBlob = await downloadAudioTrackFile(storageKey);
+      // Determine if this is a blob URL or storage key
+      let audioBlob: Blob;
+      if (audioUrlOrKey.startsWith('blob:')) {
+        // Fetch from blob URL
+        const response = await fetch(audioUrlOrKey);
+        audioBlob = await response.blob();
+      } else {
+        // Download audio file using the API (storage key)
+        audioBlob = await downloadAudioTrackFile(audioUrlOrKey);
+      }
       
       const arrayBuffer = await audioBlob.arrayBuffer();
       
@@ -209,21 +221,59 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     const barCount = getBarCount();
     const data = waveformData.length > 0 ? waveformData : Array(barCount).fill(0);
     
+    // Calculate the current position as a ratio (0-1) of total duration
+    const currentPosition = duration ? currentTime / duration : 0;
+    const currentBarIndex = Math.floor(currentPosition * barCount);
+    
     return data.map((amplitude, index) => {
       const height = Math.max(2, amplitude * 100); // Convert to percentage
+      const isPlayed = currentTime > 0 && index < currentBarIndex;
+      
+      // Use a lighter/muted color for unplayed portions
+      let barColor: string;
+      if (isPlayed) {
+        barColor = waveformColor;
+      } else {
+        // Handle different color formats
+        if (waveformColor.startsWith('rgba(')) {
+          // Extract values from rgba
+          const match = waveformColor.match(/rgba?\(([^)]+)\)/);
+          if (match) {
+            const values = match[1].split(',').map((v: string) => v.trim());
+            if (values.length >= 3) {
+              const opacity = values.length === 4 ? parseFloat(values[3]) * 0.3 : 0.3;
+              barColor = `rgba(${values[0]}, ${values[1]}, ${values[2]}, ${opacity})`;
+            } else {
+              barColor = waveformColor;
+            }
+          } else {
+            barColor = waveformColor;
+          }
+        } else if (waveformColor.startsWith('rgb(')) {
+          // Convert rgb to rgba with reduced opacity
+          const match = waveformColor.match(/rgb\(([^)]+)\)/);
+          if (match) {
+            barColor = `rgba(${match[1]}, 0.3)`;
+          } else {
+            barColor = waveformColor;
+          }
+        } else {
+          // For hex colors or named colors, use CSS opacity
+          barColor = waveformColor;
+        }
+      }
       
       return (
         <div
           key={index}
           className={cn(
             'flex-1 rounded-full transition-all duration-200 ease-out',
-            isPlaying && 'animate-pulse',
             className
           )}
           style={{
             height: `${height}%`,
-            backgroundColor: waveformColor,
-            opacity: isLoading ? 0.5 : 1.0,
+            backgroundColor: barColor,
+            opacity: isLoading ? 0.5 : (!isPlayed && !barColor.includes('rgba') ? 0.3 : 1.0),
             minHeight: '2px',
             marginRight: index < data.length - 1 ? '1px' : '0'
           }}
@@ -249,10 +299,20 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
   };
 
 
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (onWaveformClick) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const position = clickX / rect.width;
+      onWaveformClick(Math.max(0, Math.min(1, position))); // Clamp between 0 and 1
+    }
+  };
+
   return (
     <div 
       className={cn(
         'flex items-center gap-0.5 px-2 py-1 rounded overflow-hidden relative',
+        onWaveformClick && 'cursor-pointer',
         className
       )}
       style={{
@@ -260,19 +320,20 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
         height: getContainerHeight(),
         backgroundColor: backgroundColor
       }}
+      onClick={handleClick}
     >
       {isLoading ? renderSkeletonBars() : renderBars()}
       
-      {error && (
+      {/* {error && (
         <div 
           className="absolute inset-0 flex items-center justify-center rounded"
           style={{ backgroundColor: errorBg }}
         >
           <span className="text-xs" style={{ color: errorText }}>
-            Failed to load
+            {error}
           </span>
         </div>
-      )}
+      )} */}
     </div>
   );
 };
