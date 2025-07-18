@@ -35,10 +35,11 @@ export class StepManager {
   }
 
   /**
-   * Initialize the 6 expected music generation steps
+   * Initialize the 7 expected music generation steps
    */
   initializeMusicGeneration() {
     const expectedSteps = [
+      { id: 0, name: "Determine Musical Parameters" },
       { id: 1, name: "Instrument Selection" },
       { id: 2, name: "Drum Selection" },
       { id: 3, name: "Chord Generation" },
@@ -59,7 +60,7 @@ export class StepManager {
       });
     });
 
-    console.log('🎵 StepManager: Initialized 6 music generation steps');
+    console.log('🎵 StepManager: Initialized 7 music generation steps');
   }
 
   /**
@@ -106,6 +107,7 @@ export class StepManager {
     }
 
     console.log(`📡 StepManager: Added ${event.type} event for step ${eventData.step_id} (${eventData.step_name})`);
+    console.log(`📡 StepManager: Current steps:`, this.getOrderedSteps().map(s => ({ id: s.id, name: s.name, status: s.status, eventCount: s.events.length })));
     
     // Notify listeners
     this.notifyListeners();

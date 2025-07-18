@@ -56,9 +56,8 @@ const StepCard: React.FC<StepCardProps> = ({ step, onActionClick }) => {
     return null;
   };
 
-  // Get the explanation event for this step
-  const explanationEvent = step.events.find(e => e.type === 'explanation');
-  const hasContent = explanationEvent && explanationEvent.content;
+  // Check if step has any content to show
+  const hasContent = step.events.length > 0;
 
   return (
     <Paper 
@@ -70,8 +69,8 @@ const StepCard: React.FC<StepCardProps> = ({ step, onActionClick }) => {
       }}
     >
       <Accordion 
-        defaultExpanded={hasContent}
-        disabled={!hasContent}
+        defaultExpanded={false}
+        disabled={false}
         sx={{
           '&.Mui-disabled': {
             backgroundColor: 'transparent'
@@ -82,7 +81,7 @@ const StepCard: React.FC<StepCardProps> = ({ step, onActionClick }) => {
         }}
       >
         <AccordionSummary
-          expandIcon={hasContent ? <IconChevronDown size={20} /> : null}
+          expandIcon={<IconChevronDown size={20} />}
           sx={{ 
             '& .MuiAccordionSummary-content': {
               alignItems: 'center'
@@ -105,19 +104,26 @@ const StepCard: React.FC<StepCardProps> = ({ step, onActionClick }) => {
           </Box>
         </AccordionSummary>
         
-        {hasContent && (
-          <AccordionDetails sx={{ pt: 0 }}>
-            <Box sx={{ pl: 2 }}>
-              {step.events.map(event => (
+        <AccordionDetails sx={{ pt: 0 }}>
+          <Box sx={{ pl: 2 }}>
+            {step.events.length > 0 ? (
+              step.events.map(event => (
                 <StepEventRenderer 
                   key={event.id} 
                   event={event} 
                   onActionClick={onActionClick}
                 />
-              ))}
-            </Box>
-          </AccordionDetails>
-        )}
+              ))
+            ) : (
+              <Typography 
+                variant="body2" 
+                sx={{ color: 'text.secondary', fontStyle: 'italic' }}
+              >
+                {step.status === 'pending' ? 'Step not started yet' : 'No events recorded'}
+              </Typography>
+            )}
+          </Box>
+        </AccordionDetails>
       </Accordion>
     </Paper>
   );
