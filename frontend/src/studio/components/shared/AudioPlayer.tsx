@@ -63,27 +63,36 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       setCurrentTime(0);
     };
 
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
 
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
       audio.pause();
     };
   }, [audioUrl, onTimeUpdate, onDurationChange]);
 
   const handlePlayPause = () => {
     if (!audioRef.current) return;
-
+    
     if (isPlaying) {
       audioRef.current.pause();
-      setIsPlaying(false);
+      // state will update via the 'pause' event listener
     } else {
-      audioRef.current.play();
-      setIsPlaying(true);
+      audioRef.current.play().catch(() => {
+        setIsPlaying(false);
+      });
+      // state will update via the 'play' event listener if successful
     }
   };
 
