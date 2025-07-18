@@ -156,19 +156,32 @@ class OrderedOutputManager:
         while self.next_step_to_output in self.step_outputs:
             output = self.step_outputs[self.next_step_to_output]
             if output.completed:
-                logger.info(f"[OrderedOutputManager] Flushing step {self.next_step_to_output} output ({len(output.content_chunks)} chunks)")
-                # Stream content chunks in order
-                for chunk in output.content_chunks:
-                    await self.queue.add_chunk(chunk)
+                logger.info(f"[OrderedOutputManager] Flushing step {self.next_step_to_output} output ({len(output.content_chunks)} chunks, {len(output.sse_actions)} actions)")
                 
-                # Execute SSE actions in order
-                for action in output.sse_actions:
-                    await self.queue.action(action)
+                try:
+                    # Stream content chunks in order
+                    for i, chunk in enumerate(output.content_chunks):
+                        if chunk:  # Only send non-empty chunks
+                            await self.queue.add_chunk(chunk)
+                    
+                    # Execute SSE actions in order
+                    for i, action in enumerate(output.sse_actions):
+                        if action:  # Only send valid actions
+                            await self.queue.action(action)
+                    
+                    logger.info(f"[OrderedOutputManager] Successfully flushed step {self.next_step_to_output}")
+                    
+                except Exception as e:
+                    logger.error(f"[OrderedOutputManager] Error flushing step {self.next_step_to_output}: {e}")
+                    # Continue processing even if one step fails
                 
                 # Move to completed and clean up
                 self.completed_outputs[self.next_step_to_output] = output
                 del self.step_outputs[self.next_step_to_output]
                 self.next_step_to_output += 1
+                
+                # Continue flushing next steps if available
+                continue
             else:
                 logger.debug(f"[OrderedOutputManager] Step {self.next_step_to_output} not ready yet")
                 break
@@ -176,6 +189,30 @@ class OrderedOutputManager:
     async def add_cancellation_message(self):
         """Add cancellation message to output"""
         await self.queue.add_chunk("\n\n[Generation cancelled by user]\n")
+    
+    async def flush_all_remaining(self):
+        """Flush all remaining buffered outputs in order"""
+        async with self.lock:
+            logger.info(f"[OrderedOutputManager] Flushing all remaining outputs. Pending steps: {list(self.step_outputs.keys())}")
+            max_attempts = 10  # Prevent infinite loops
+            attempt = 0
+            
+            while self.step_outputs and attempt < max_attempts:
+                attempt += 1
+                initial_count = len(self.step_outputs)
+                await self._flush_ready_outputs()
+                
+                # If no progress was made, log the issue
+                if len(self.step_outputs) == initial_count:
+                    missing_step = self.next_step_to_output
+                    pending_steps = list(self.step_outputs.keys())
+                    logger.warning(f"[OrderedOutputManager] Waiting for step {missing_step}, but have steps: {pending_steps}")
+                    break
+            
+            if self.step_outputs:
+                logger.error(f"[OrderedOutputManager] Still have unflushed outputs: {list(self.step_outputs.keys())}")
+            else:
+                logger.info(f"[OrderedOutputManager] All outputs successfully flushed")
     
     def get_aggregated_tokens(self) -> Dict[str, int]:
         """Get aggregated token usage from all completed steps"""
@@ -1619,6 +1656,9 @@ Create rhythmic patterns that fit the composition style."""
             if isinstance(_, Exception):
                 logger.error(f"Melody explanation failed: {_}")
                 raise _
+            
+            # Ensure all buffered outputs are flushed
+            await self.output_manager.flush_all_remaining()
             
             logger.info("All generation tasks completed in original order")
             
