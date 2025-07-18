@@ -1443,9 +1443,10 @@ Create rhythmic patterns that fit the composition style."""
             research_addition += f"\n\nChord progression research:\n{chord_research_result}"
         user_prompt_with_research = request.user_prompt + research_addition
 
-        # For now, let the musical parameters output directly since it needs to complete first
-        # The parallel steps will start from step 1 after this completes
-        params = await self.determine_musical_parameters(
+        # Step 0: Determine musical parameters first (required for all other steps)
+        params = await self._emit_step_events(
+            0, "Determine Musical Parameters", 
+            self.determine_musical_parameters,
             user_prompt=user_prompt_with_research,
             duration_bars=request.duration_bars
         )

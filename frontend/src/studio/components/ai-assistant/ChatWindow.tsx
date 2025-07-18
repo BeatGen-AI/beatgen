@@ -94,7 +94,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   // Step-based rendering state
   const [stepManager] = useState(() => new StepManager());
   const [steps, setSteps] = useState<Step[]>([]);
-  const [isStepMode, setIsStepMode] = useState(false);
+  const [isStepMode, setIsStepMode] = useState(true);
   
   // Access the store for executing actions and project context
   const { 
@@ -262,7 +262,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         
         // Handle step events for music generation
         if (eventType === 'step_event') {
-          console.log('🎵 STEP EVENT:', data);
+          console.log('🎵🎵🎵 STEP EVENT RECEIVED:', data);
+          console.log('🎵🎵🎵 Current isStepMode:', isStepMode);
           stepManager.addEvent(data);
           
           // Execute actions immediately when they arrive
