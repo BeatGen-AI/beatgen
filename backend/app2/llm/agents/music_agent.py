@@ -147,6 +147,7 @@ class OrderedOutputManager:
     async def add_step_output(self, step_id: int, output: StepOutput):
         """Add output from a completed step and flush any ready outputs"""
         async with self.lock:
+            logger.debug(f"[OrderedOutputManager] Adding step {step_id} output, next_step_to_output={self.next_step_to_output}")
             self.step_outputs[step_id] = output
             await self._flush_ready_outputs()
     
@@ -155,6 +156,7 @@ class OrderedOutputManager:
         while self.next_step_to_output in self.step_outputs:
             output = self.step_outputs[self.next_step_to_output]
             if output.completed:
+                logger.debug(f"[OrderedOutputManager] Flushing step {self.next_step_to_output} output ({len(output.content_chunks)} chunks)")
                 # Stream content chunks in order
                 for chunk in output.content_chunks:
                     await self.queue.add_chunk(chunk)
@@ -168,6 +170,7 @@ class OrderedOutputManager:
                 del self.step_outputs[self.next_step_to_output]
                 self.next_step_to_output += 1
             else:
+                logger.debug(f"[OrderedOutputManager] Step {self.next_step_to_output} not ready yet")
                 break
     
     async def add_cancellation_message(self):
@@ -705,7 +708,7 @@ Output only the JSON object."""
             
         return SelectInstruments(instrument_selections=validated_selections)
 
-    async def _generate_chords_and_send_sse(self, params: FullMusicalParameters, selected_instruments: SelectInstruments, queue: SSEQueueManager):
+    async def _generate_chords_and_send_sse(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
         """Finds chord instrument, generates notes, and sends add_midi_track SSE action."""
         logger.info("Starting chord generation...")
         chord_instrument_selection = next((
@@ -753,7 +756,7 @@ Output only the JSON object."""
                             )
                             
                             logger.info(f"Sending add_midi_track action for chords: {chord_track.name}")
-                            await queue.action(AssistantAction.add_midi_track(track=chord_track))
+                            await self.context.queue.action(AssistantAction.add_midi_track(track=chord_track))
 
                 except Exception as e:
                     logger.info(f"Error during chord generation/SSE: {str(e)}")
@@ -764,29 +767,25 @@ Output only the JSON object."""
         else:
             logger.info("Warning: No instrument with role 'chords' selected. Skipping chord generation.")
 
-    async def _generate_melody_and_send_sse(self, params: FullMusicalParameters, selected_instruments: SelectInstruments, queue: SSEQueueManager):
-        """Streams melody explanation, then generates notes and sends add_midi_track SSE action."""
-        logger.info("Starting melody generation process...")
-
+    async def _stream_melody_explanation(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
+        """Streams melody explanation separately to ensure proper ordering"""
+        logger.info("Starting melody explanation...")
+        
         melody_instrument_selection = next((
             item for item in selected_instruments.instrument_selections
             if item.role.lower() == "melody"
         ), None)
-
+        
         if not melody_instrument_selection:
-            logger.info("Warning: No instrument with role 'melody' selected. Skipping melody generation.")
-            return
-
-        melody_instrument_name = melody_instrument_selection.instrument_name
-        if melody_instrument_name not in self._soundfont_map:
-            logger.info(f"Warning: Selected melody instrument '{melody_instrument_name}' not found in soundfont map. Skipping melody generation.")
+            logger.info("Warning: No instrument with role 'melody' selected. Skipping melody explanation.")
             return
         
-        melody_instrument_details = self._soundfont_map[melody_instrument_name]
-        logger.info(f"Found melody instrument: {melody_instrument_name}")
-
-        # 1. Stream Explanation for Melody
-        # Create a fresh session for melody explanation
+        melody_instrument_name = melody_instrument_selection.instrument_name
+        if melody_instrument_name not in self._soundfont_map:
+            logger.info(f"Warning: Selected melody instrument '{melody_instrument_name}' not found in soundfont map. Skipping melody explanation.")
+            return
+        
+        # Stream Explanation for Melody
         melody_explanation_prompt = f"""You are an AI music composer creating a melody.
 
 Current composition:
@@ -819,24 +818,87 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
         except Exception as e:
             logger.error(f"Error streaming melody explanation: {e}")
             await self.context.queue.error("Failed to stream melody explanation.")
-            # Return if explanation fails as it might indicate a larger issue
             return
 
         await self.context.queue.add_chunk("\n\n")
         await self.context.queue.add_chunk("---")
         await self.context.queue.add_chunk("\n\n")
-        # 2. Generate Melody Notes (Focused Call internally within generate_melody_notes)
-        logger.info(f"Proceeding to generate actual melody notes for {melody_instrument_name}...")
+    
+    async def _stream_melody_explanation_standalone(self, params: FullMusicalParameters):
+        """Streams melody explanation as a standalone step without dependencies"""
+        logger.info("Starting standalone melody explanation...")
+        
+        # Create a general melody explanation based on musical parameters
+        melody_explanation_prompt = f"""You are an AI music composer creating a melody.
+
+Current composition:
+- Key: {params.key} {params.mode}
+- Tempo: {params.tempo} BPM
+- Chord Progression: {params.chord_progression}
+- User Request: {params.original_user_prompt}
+
+Your task: Describe the style, mood, and characteristics of the melody you are about to compose."""
+        
+        explanation_session = self._create_fresh_chat_session(melody_explanation_prompt)
+        
+        explanation_prompt_melody = f"""Now I'm going to create a melody.
+Based on the key of {params.key} {params.mode}, tempo {params.tempo} BPM, the chord progression '{params.chord_progression}', and the user's request for '{params.original_user_prompt}', describe the style, mood, and characteristics of the melody you are about to compose.
+
+Keep it concise and conversational. Do NOT generate the actual musical notes or JSON in this step."""
+
+        logger.info("Streaming standalone melody explanation...")
+        try:
+            async for text_chunk in await explanation_session.send_message_async(
+                user_prompt_content=explanation_prompt_melody,
+                stream=True
+            ):
+                if isinstance(text_chunk, str):
+                    logger.debug(f"STANDALONE MELODY EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
+                    await self.context.queue.add_chunk(text_chunk)
+            logger.info("Finished streaming standalone melody explanation.")
+            # Track tokens for the explanation phase
+            self._track_stage_tokens("generate_melody_explanation_standalone", explanation_session.get_token_usage())
+        except Exception as e:
+            logger.error(f"Error streaming standalone melody explanation: {e}")
+            await self.context.queue.error("Failed to stream melody explanation.")
+            return
+
+        await self.context.queue.add_chunk("\n\n")
+        await self.context.queue.add_chunk("---")
+        await self.context.queue.add_chunk("\n\n")
+    
+    async def _generate_melody_notes_and_send_sse(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
+        """Generates melody notes and sends SSE action (no explanation)"""
+        logger.info("Starting melody note generation...")
+
+        melody_instrument_selection = next((
+            item for item in selected_instruments.instrument_selections
+            if item.role.lower() == "melody"
+        ), None)
+
+        if not melody_instrument_selection:
+            logger.info("Warning: No instrument with role 'melody' selected. Skipping melody generation.")
+            return
+
+        melody_instrument_name = melody_instrument_selection.instrument_name
+        if melody_instrument_name not in self._soundfont_map:
+            logger.info(f"Warning: Selected melody instrument '{melody_instrument_name}' not found in soundfont map. Skipping melody generation.")
+            return
+        
+        melody_instrument_details = self._soundfont_map[melody_instrument_name]
+        logger.info(f"Found melody instrument: {melody_instrument_name}")
+
+        # Generate Melody Notes (no explanation, just processing)
+        logger.info(f"Generating melody notes for {melody_instrument_name}...")
         try:
             melody_data = await self.generate_melody_notes(
                 current_params=params,
                 selected_instruments=selected_instruments 
             )
-            # Note: melody tokens already tracked in generate_melody_notes
 
             if not melody_data or not melody_data.bars:
                 logger.error("Melody generation returned empty or invalid result from generate_melody_notes.")
-                await queue.error("Melody generation failed to produce notes.")
+                await self.context.queue.error("Melody generation failed to produce notes.")
                 raise Exception("Melody generation failed to produce notes")
             
             logger.info(f"Generated {len(melody_data.bars)} melody bars and {sum(len(bar.notes) for bar in melody_data.bars)} notes.")
@@ -853,13 +915,13 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
             )
             
             logger.info(f"Sending add_midi_track action for melody: {melody_track.name}")
-            await queue.action(AssistantAction.add_midi_track(track=melody_track))
+            await self.context.queue.action(AssistantAction.add_midi_track(track=melody_track))
 
         except Exception as e:
             logger.error(f"Error during melody note generation or SSE: {str(e)}", exc_info=True)
-            await queue.error(f"Failed to generate melody notes: {str(e)}")
-            
-    async def _generate_drum_beat_patterns_and_send_sse(self, params: FullMusicalParameters, selected_drums_data: SelectDrumSounds, queue: SSEQueueManager, drum_research_result: Optional[str] = None):
+            await self.context.queue.error(f"Failed to generate melody notes: {str(e)}")
+    
+    async def _generate_drum_beat_patterns_and_send_sse(self, params: FullMusicalParameters, selected_drums_data: SelectDrumSounds, drum_research_result: Optional[str] = None):
         """Streams explanation, then generates drum beat patterns via LLM call."""
         logger.info(f"Step 'generate_drum_beat_patterns' called for song: {params.song_title if params.song_title else 'Untitled'}")
         drum_track = await self.generate_drum_beat_patterns(
@@ -868,7 +930,7 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
             drum_research_result=drum_research_result
         )
         
-        await queue.action(AssistantAction.add_drum_track(track=drum_track))
+        await self.context.queue.action(AssistantAction.add_drum_track(track=drum_track))
 
 
     async def generate_melody_notes(self, current_params: FullMusicalParameters, selected_instruments: SelectInstruments) -> MelodyData:
@@ -1437,8 +1499,7 @@ Create rhythmic patterns that fit the composition style."""
         logger.info(f"Available soundfonts length: {len(self._available_soundfonts)}")
         logger.info(f"Available drum samples length: {len(self._available_drum_samples)}")
         
-        # Initialize the output manager for parallel execution
-        self.output_manager = OrderedOutputManager(queue)
+        # Note: Using sequential execution for proper explanation ordering
         
         await queue.add_chunk(f"Doing research for prompt: '{request.user_prompt}'...\n\n")
         
@@ -1478,6 +1539,8 @@ Create rhythmic patterns that fit the composition style."""
             research_addition += f"\n\nChord progression research:\n{chord_research_result}"
         user_prompt_with_research = request.user_prompt + research_addition
 
+        # For now, let the musical parameters output directly since it needs to complete first
+        # The parallel steps will start from step 1 after this completes
         params = await self.determine_musical_parameters(
             user_prompt=user_prompt_with_research,
             duration_bars=request.duration_bars
@@ -1490,21 +1553,29 @@ Create rhythmic patterns that fit the composition style."""
             params.mode = sanitized_mode
 
         try:
-            # Phase 1: Parallel instrument and drum selection
-            logger.info("Starting Phase 1: Parallel instrument and drum selection")
+            # Initialize output manager for ordered output
+            self.output_manager = OrderedOutputManager(queue)
+            
+            # Run everything in parallel for maximum speed
+            logger.info("Starting all tasks in parallel...")
+            
             instrument_task = self._wrap_step_with_output_capture(
-                3, self.select_instruments, params
+                1, self.select_instruments, params
             )
             drum_selection_task = self._wrap_step_with_output_capture(
-                6, self.select_drum_sounds, params, drum_research_result
+                2, self.select_drum_sounds, params, drum_research_result
+            )
+            melody_explanation_task = self._wrap_step_with_output_capture(
+                3, self._stream_melody_explanation_standalone, params
             )
             
-            selected_instruments, selected_drum_sounds = await asyncio.gather(
-                instrument_task, drum_selection_task,
+            # Wait for steps 1-3 to complete (needed for generation tasks)
+            selected_instruments, selected_drum_sounds, _ = await asyncio.gather(
+                instrument_task, drum_selection_task, melody_explanation_task,
                 return_exceptions=True
             )
             
-            # Handle exceptions from Phase 1
+            # Handle exceptions from first phase
             if isinstance(selected_instruments, Exception):
                 logger.error(f"Instrument selection failed: {selected_instruments}")
                 raise selected_instruments
@@ -1512,18 +1583,15 @@ Create rhythmic patterns that fit the composition style."""
                 logger.error(f"Drum selection failed: {selected_drum_sounds}")
                 raise selected_drum_sounds
             
-            logger.info("Phase 1 completed successfully")
-            
-            # Phase 2: Parallel generation tasks
-            logger.info("Starting Phase 2: Parallel generation tasks")
+            # Start generation tasks (these need the results from above)
             chord_task = self._wrap_step_with_output_capture(
-                4, self._generate_chords_and_send_sse, params, selected_instruments, queue
+                4, self._generate_chords_and_send_sse, params, selected_instruments
             )
             melody_task = self._wrap_step_with_output_capture(
-                5, self._generate_melody_and_send_sse, params, selected_instruments, queue
+                5, self._generate_melody_notes_and_send_sse, params, selected_instruments
             )
             drum_beat_task = self._wrap_step_with_output_capture(
-                7, self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, queue, drum_research_result
+                6, self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
             )
             
             chord_result, melody_result, drum_result = await asyncio.gather(
@@ -1531,7 +1599,7 @@ Create rhythmic patterns that fit the composition style."""
                 return_exceptions=True
             )
             
-            # Handle exceptions from Phase 2
+            # Handle exceptions from generation tasks
             errors = []
             if isinstance(chord_result, Exception):
                 logger.error(f"Chord generation failed: {chord_result}")
@@ -1546,29 +1614,29 @@ Create rhythmic patterns that fit the composition style."""
             if errors:
                 error_msg = f"Generation errors: {'; '.join(errors)}"
                 logger.error(error_msg)
-                await queue.error(error_msg)
+                await self.context.queue.error(error_msg)
                 # Continue with partial results rather than failing completely
             
-            logger.info("Phase 2 completed")
+            logger.info("Parallel generation tasks completed")
             
         except asyncio.CancelledError:
             logger.info("Music generation cancelled by user")
-            await self.output_manager.add_cancellation_message()
+            await self.context.queue.add_chunk("\n\n[Generation cancelled by user]\n")
             raise
         except Exception as e:
             logger.error(f"Error during parallel execution: {e}")
-            await queue.error(f"Generation failed: {str(e)}")
+            await self.context.queue.error(f"Generation failed: {str(e)}")
             raise
         
         logger.info(f"MusicGenerationAgent run finished. Title: {params.song_title}")
         
-        # Calculate total tokens from output manager
+        # Calculate total tokens from output manager and sequential steps
         aggregated_tokens = self.output_manager.get_aggregated_tokens()
         
-        # Also include tokens from the sequential steps (research and musical parameters)
+        # Add tokens from sequential steps (research and musical parameters)
         sequential_tokens = {"request_tokens": 0, "response_tokens": 0}
         for stage_name, tokens in self.stage_tokens.items():
-            if stage_name == "determine_musical_parameters":
+            if stage_name in ["determine_musical_parameters"]:
                 sequential_tokens["request_tokens"] += tokens.get("request_tokens", 0)
                 sequential_tokens["response_tokens"] += tokens.get("response_tokens", 0)
         
@@ -1589,8 +1657,8 @@ Create rhythmic patterns that fit the composition style."""
             "response_tokens": total_response,
             "total_tokens": total_request + total_response,
             "stage_tokens": self.stage_tokens,  # Include stage-by-stage token breakdown
-            "parallel_execution": True,  # Flag to indicate parallel execution was used
-            "phases_completed": 2  # Number of parallel phases completed
+            "sequential_execution": True,  # Flag to indicate sequential execution for proper ordering
+            "generation_steps_completed": 5  # Number of generation steps completed
         }
 
 # Singleton instance
