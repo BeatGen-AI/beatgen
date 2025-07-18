@@ -147,7 +147,7 @@ class OrderedOutputManager:
     async def add_step_output(self, step_id: int, output: StepOutput):
         """Add output from a completed step and flush any ready outputs"""
         async with self.lock:
-            logger.debug(f"[OrderedOutputManager] Adding step {step_id} output, next_step_to_output={self.next_step_to_output}")
+            logger.info(f"[OrderedOutputManager] Adding step {step_id} output, next_step_to_output={self.next_step_to_output}")
             self.step_outputs[step_id] = output
             await self._flush_ready_outputs()
     
@@ -156,7 +156,7 @@ class OrderedOutputManager:
         while self.next_step_to_output in self.step_outputs:
             output = self.step_outputs[self.next_step_to_output]
             if output.completed:
-                logger.debug(f"[OrderedOutputManager] Flushing step {self.next_step_to_output} output ({len(output.content_chunks)} chunks)")
+                logger.info(f"[OrderedOutputManager] Flushing step {self.next_step_to_output} output ({len(output.content_chunks)} chunks)")
                 # Stream content chunks in order
                 for chunk in output.content_chunks:
                     await self.queue.add_chunk(chunk)
@@ -1556,26 +1556,24 @@ Create rhythmic patterns that fit the composition style."""
             # Initialize output manager for ordered output
             self.output_manager = OrderedOutputManager(queue)
             
-            # Run everything in parallel for maximum speed
-            logger.info("Starting all tasks in parallel...")
+            # Follow original order: instrument → chord → melody → melody explanation → drums
+            logger.info("Starting execution in original order...")
             
+            # Steps 1-2: Instrument and Drum Selection (run in parallel)
             instrument_task = self._wrap_step_with_output_capture(
                 1, self.select_instruments, params
             )
             drum_selection_task = self._wrap_step_with_output_capture(
                 2, self.select_drum_sounds, params, drum_research_result
             )
-            melody_explanation_task = self._wrap_step_with_output_capture(
-                3, self._stream_melody_explanation_standalone, params
-            )
             
-            # Wait for steps 1-3 to complete (needed for generation tasks)
-            selected_instruments, selected_drum_sounds, _ = await asyncio.gather(
-                instrument_task, drum_selection_task, melody_explanation_task,
+            # Wait for instrument and drum selection
+            selected_instruments, selected_drum_sounds = await asyncio.gather(
+                instrument_task, drum_selection_task,
                 return_exceptions=True
             )
             
-            # Handle exceptions from first phase
+            # Handle exceptions from selection phase
             if isinstance(selected_instruments, Exception):
                 logger.error(f"Instrument selection failed: {selected_instruments}")
                 raise selected_instruments
@@ -1583,41 +1581,46 @@ Create rhythmic patterns that fit the composition style."""
                 logger.error(f"Drum selection failed: {selected_drum_sounds}")
                 raise selected_drum_sounds
             
-            # Start generation tasks (these need the results from above)
+            # Steps 3-6: Chord, Melody, and Drum Beat Generation (run in parallel)
             chord_task = self._wrap_step_with_output_capture(
-                4, self._generate_chords_and_send_sse, params, selected_instruments
+                3, self._generate_chords_and_send_sse, params, selected_instruments
             )
             melody_task = self._wrap_step_with_output_capture(
-                5, self._generate_melody_notes_and_send_sse, params, selected_instruments
+                4, self._generate_melody_notes_and_send_sse, params, selected_instruments
             )
             drum_beat_task = self._wrap_step_with_output_capture(
                 6, self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
             )
             
-            chord_result, melody_result, drum_result = await asyncio.gather(
+            # Wait for all 3 generation tasks
+            chord_data, melody_data, drum_data = await asyncio.gather(
                 chord_task, melody_task, drum_beat_task,
                 return_exceptions=True
             )
             
-            # Handle exceptions from generation tasks
-            errors = []
-            if isinstance(chord_result, Exception):
-                logger.error(f"Chord generation failed: {chord_result}")
-                errors.append(f"Chord generation: {chord_result}")
-            if isinstance(melody_result, Exception):
-                logger.error(f"Melody generation failed: {melody_result}")
-                errors.append(f"Melody generation: {melody_result}")
-            if isinstance(drum_result, Exception):
-                logger.error(f"Drum generation failed: {drum_result}")
-                errors.append(f"Drum generation: {drum_result}")
+            # Handle exceptions from generation phase
+            if isinstance(chord_data, Exception):
+                logger.error(f"Chord generation failed: {chord_data}")
+                raise chord_data
+            if isinstance(melody_data, Exception):
+                logger.error(f"Melody generation failed: {melody_data}")
+                raise melody_data
+            if isinstance(drum_data, Exception):
+                logger.error(f"Drum beat generation failed: {drum_data}")
+                raise drum_data
             
-            if errors:
-                error_msg = f"Generation errors: {'; '.join(errors)}"
-                logger.error(error_msg)
-                await self.context.queue.error(error_msg)
-                # Continue with partial results rather than failing completely
+            # Step 5: Melody Explanation (after melody is generated, before drum beat output)  
+            melody_explanation_task = self._wrap_step_with_output_capture(
+                5, self._stream_melody_explanation_standalone, params
+            )
+            _ = await melody_explanation_task
             
-            logger.info("Parallel generation tasks completed")
+            # Handle exception from melody explanation
+            if isinstance(_, Exception):
+                logger.error(f"Melody explanation failed: {_}")
+                raise _
+            
+            logger.info("All generation tasks completed in original order")
             
         except asyncio.CancelledError:
             logger.info("Music generation cancelled by user")
