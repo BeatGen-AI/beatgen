@@ -98,6 +98,98 @@ class MusicGenerationContext:
     queue: Optional[SSEQueueManager] = None
 
 
+# --- Parallel Execution Support Classes ---
+@dataclass
+class StepOutput:
+    """Captures output from a single generation step"""
+    step_id: int
+    content_chunks: List[str]
+    sse_actions: List[AssistantAction]
+    tokens_used: Dict[str, int]
+    completed: bool = False
+
+
+class CapturingSSEQueue:
+    """SSE queue that captures output instead of sending it immediately"""
+    
+    def __init__(self, chunks_buffer: List[str], actions_buffer: List[AssistantAction]):
+        self.chunks_buffer = chunks_buffer
+        self.actions_buffer = actions_buffer
+        self.tokens_used = {"request_tokens": 0, "response_tokens": 0, "total_tokens": 0}
+    
+    async def add_chunk(self, chunk: str):
+        """Capture text chunks for later ordered output"""
+        self.chunks_buffer.append(chunk)
+    
+    async def action(self, action: AssistantAction):
+        """Capture SSE actions for later ordered execution"""
+        self.actions_buffer.append(action)
+    
+    async def error(self, message: str):
+        """Capture error messages"""
+        self.chunks_buffer.append(f"ERROR: {message}")
+    
+    async def stage(self, title: str, description: str):
+        """Capture stage messages"""
+        self.chunks_buffer.append(f"STAGE: {title} - {description}")
+
+
+class OrderedOutputManager:
+    """Manages ordered output from parallel execution steps"""
+    
+    def __init__(self, queue: SSEQueueManager):
+        self.queue = queue
+        self.step_outputs: Dict[int, StepOutput] = {}
+        self.next_step_to_output = 1
+        self.lock = asyncio.Lock()
+        self.completed_outputs: Dict[int, StepOutput] = {}
+    
+    async def add_step_output(self, step_id: int, output: StepOutput):
+        """Add output from a completed step and flush any ready outputs"""
+        async with self.lock:
+            self.step_outputs[step_id] = output
+            await self._flush_ready_outputs()
+    
+    async def _flush_ready_outputs(self):
+        """Stream outputs in order as they become ready"""
+        while self.next_step_to_output in self.step_outputs:
+            output = self.step_outputs[self.next_step_to_output]
+            if output.completed:
+                # Stream content chunks in order
+                for chunk in output.content_chunks:
+                    await self.queue.add_chunk(chunk)
+                
+                # Execute SSE actions in order
+                for action in output.sse_actions:
+                    await self.queue.action(action)
+                
+                # Move to completed and clean up
+                self.completed_outputs[self.next_step_to_output] = output
+                del self.step_outputs[self.next_step_to_output]
+                self.next_step_to_output += 1
+            else:
+                break
+    
+    async def add_cancellation_message(self):
+        """Add cancellation message to output"""
+        await self.queue.add_chunk("\n\n[Generation cancelled by user]\n")
+    
+    def get_aggregated_tokens(self) -> Dict[str, int]:
+        """Get aggregated token usage from all completed steps"""
+        total_request = 0
+        total_response = 0
+        
+        for output in self.completed_outputs.values():
+            total_request += output.tokens_used.get("request_tokens", 0)
+            total_response += output.tokens_used.get("response_tokens", 0)
+        
+        return {
+            "request_tokens": total_request,
+            "response_tokens": total_response,
+            "total_tokens": total_request + total_response
+        }
+
+
 # --- Music Generation Agent State Keys ---
 class MusicAgentStateKeys:
     SONG_REQUEST = "song_request"
@@ -132,6 +224,9 @@ class MusicGenerationAgent:
         
         # Context for sharing info across stages
         self.context: Optional[MusicGenerationContext] = None
+        
+        # Parallel execution manager
+        self.output_manager: Optional[OrderedOutputManager] = None
 
     def _track_stage_tokens(self, stage_name: str, tokens: Optional[Dict[str, int]] = None, append: bool = False):
         """Track token usage for a specific stage"""
@@ -156,6 +251,64 @@ class MusicGenerationAgent:
                 "total_tokens": usage.get('total_tokens', 0)
             }
         logger.info(f"Stage '{stage_name}' tokens - Request: {usage.get('request_tokens', 0)}, Response: {usage.get('response_tokens', 0)}")
+    
+    async def _wrap_step_with_output_capture(self, step_id: int, step_func, *args, **kwargs):
+        """Wrapper to capture streaming output and SSE actions from parallel steps"""
+        captured_chunks = []
+        captured_actions = []
+        
+        # Create a capturing queue that buffers instead of sending
+        capturing_queue = CapturingSSEQueue(captured_chunks, captured_actions)
+        
+        # Temporarily replace the queue in context
+        original_queue = self.context.queue
+        self.context.queue = capturing_queue
+        
+        try:
+            logger.info(f"Starting parallel step {step_id}: {step_func.__name__}")
+            result = await step_func(*args, **kwargs)
+            
+            # For methods that track their own tokens, get them from the stage_tokens
+            # Find the most recent token entry that matches this step
+            step_tokens = {"request_tokens": 0, "response_tokens": 0, "total_tokens": 0}
+            
+            # Get tokens from the capturing queue if available, otherwise from stage_tokens
+            if hasattr(capturing_queue, 'tokens_used') and capturing_queue.tokens_used:
+                step_tokens = capturing_queue.tokens_used
+            elif self.stage_tokens:
+                # Get the most recent token entry - this is a bit hacky but works
+                latest_stage = list(self.stage_tokens.keys())[-1] if self.stage_tokens else None
+                if latest_stage:
+                    step_tokens = self.stage_tokens[latest_stage]
+            
+            step_output = StepOutput(
+                step_id=step_id,
+                content_chunks=captured_chunks,
+                sse_actions=captured_actions,
+                tokens_used=step_tokens,
+                completed=True
+            )
+            
+            await self.output_manager.add_step_output(step_id, step_output)
+            logger.info(f"Completed parallel step {step_id}: {step_func.__name__}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in parallel step {step_id}: {step_func.__name__}: {e}")
+            # Still record the step output with error
+            step_output = StepOutput(
+                step_id=step_id,
+                content_chunks=captured_chunks + [f"ERROR: {str(e)}"],
+                sse_actions=captured_actions,
+                tokens_used={"request_tokens": 0, "response_tokens": 0, "total_tokens": 0},
+                completed=True
+            )
+            await self.output_manager.add_step_output(step_id, step_output)
+            raise
+            
+        finally:
+            # Restore original queue
+            self.context.queue = original_queue
         
     async def _init_real_data(self, session: Session):
         _drum_file_repository = get_drum_sample_public_repository(session)
@@ -1263,12 +1416,12 @@ Create rhythmic patterns that fit the composition style."""
                 return parts[0], parts[1].lower()
         return key, mode.lower() if mode else "major"
 
-    # --- Main Orchestration Method ---
+    # --- Main Orchestration Method (Parallel Execution) ---
     async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: Session, user_id: str = None):
         """
-        Main execution flow for the music generation agent.
+        Main execution flow for the music generation agent with parallel execution.
         Processes the request through various stages, using LLM calls for decisions
-        and transformations, and sends progress/results via the SSE queue.
+        and transformations, and sends progress/results via the SSE queue in correct order.
 
         Args:
             request_id: The unique ID for this assistant request.
@@ -1277,16 +1430,19 @@ Create rhythmic patterns that fit the composition style."""
             queue: The SSE queue manager for sending events to the client.
             db_session: The database session for any database operations.
         """
-        logger.info(f"MusicGenerationAgent run started for request_id: {request_id}, prompt: '{request.user_prompt}', duration: {request.duration_bars} bars")
+        logger.info(f"MusicGenerationAgent run started (PARALLEL) for request_id: {request_id}, prompt: '{request.user_prompt}', duration: {request.duration_bars} bars")
         
         await self._init_real_data(db_session) # Initialize soundfonts and drum samples
 
         logger.info(f"Available soundfonts length: {len(self._available_soundfonts)}")
         logger.info(f"Available drum samples length: {len(self._available_drum_samples)}")
         
+        # Initialize the output manager for parallel execution
+        self.output_manager = OrderedOutputManager(queue)
+        
         await queue.add_chunk(f"Doing research for prompt: '{request.user_prompt}'...\n\n")
         
-        # --- 1. Research Step (NEW, like music_gen_service.py) ---
+        # --- 1. Research Step (already parallel) ---
         logger.info("Starting research using MusicResearcher...")
         
         await queue.stage(
@@ -1294,7 +1450,7 @@ Create rhythmic patterns that fit the composition style."""
             "Doing research online to find the best musical parameters...",
         )
         await queue.stage(
-            "Starting research...",
+            "Starting research...", 
             "Doing research online to find the best musical parameters...",
         )
         research_result, chord_research_result, drum_research_result = await asyncio.gather(
@@ -1314,7 +1470,7 @@ Create rhythmic patterns that fit the composition style."""
             queue=queue
         )
 
-        # 2. Determine Core Musical Parameters (now with research context)
+        # 2. Determine Core Musical Parameters (Sequential - needed by everything else)
         research_addition = ""
         if research_result and isinstance(research_result, dict) and research_result.get("prompt_addition"):
             research_addition += research_result["prompt_addition"]
@@ -1333,25 +1489,91 @@ Create rhythmic patterns that fit the composition style."""
             params.key = sanitized_key
             params.mode = sanitized_mode
 
-        # 3. Select Instruments
-        selected_instruments = await self.select_instruments(determined_params=params)
-        # 3. Generate Chords and Send SSE
-        await self._generate_chords_and_send_sse(params, selected_instruments, queue)
-        # 4. Generate Melody (assuming for primary melody role for now)
-        await self._generate_melody_and_send_sse(params, selected_instruments, queue)
-        # 5. Select Drum Sounds (now with drum research context)
-        selected_drum_sounds = await self.select_drum_sounds(
-            determined_params=params, 
-            drum_research_result=drum_research_result
-        )
-        # 6. Generate Drum Beat
-        await self._generate_drum_beat_patterns_and_send_sse(params, selected_drum_sounds, queue, drum_research_result)
+        try:
+            # Phase 1: Parallel instrument and drum selection
+            logger.info("Starting Phase 1: Parallel instrument and drum selection")
+            instrument_task = self._wrap_step_with_output_capture(
+                3, self.select_instruments, params
+            )
+            drum_selection_task = self._wrap_step_with_output_capture(
+                6, self.select_drum_sounds, params, drum_research_result
+            )
+            
+            selected_instruments, selected_drum_sounds = await asyncio.gather(
+                instrument_task, drum_selection_task,
+                return_exceptions=True
+            )
+            
+            # Handle exceptions from Phase 1
+            if isinstance(selected_instruments, Exception):
+                logger.error(f"Instrument selection failed: {selected_instruments}")
+                raise selected_instruments
+            if isinstance(selected_drum_sounds, Exception):
+                logger.error(f"Drum selection failed: {selected_drum_sounds}")
+                raise selected_drum_sounds
+            
+            logger.info("Phase 1 completed successfully")
+            
+            # Phase 2: Parallel generation tasks
+            logger.info("Starting Phase 2: Parallel generation tasks")
+            chord_task = self._wrap_step_with_output_capture(
+                4, self._generate_chords_and_send_sse, params, selected_instruments, queue
+            )
+            melody_task = self._wrap_step_with_output_capture(
+                5, self._generate_melody_and_send_sse, params, selected_instruments, queue
+            )
+            drum_beat_task = self._wrap_step_with_output_capture(
+                7, self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, queue, drum_research_result
+            )
+            
+            chord_result, melody_result, drum_result = await asyncio.gather(
+                chord_task, melody_task, drum_beat_task,
+                return_exceptions=True
+            )
+            
+            # Handle exceptions from Phase 2
+            errors = []
+            if isinstance(chord_result, Exception):
+                logger.error(f"Chord generation failed: {chord_result}")
+                errors.append(f"Chord generation: {chord_result}")
+            if isinstance(melody_result, Exception):
+                logger.error(f"Melody generation failed: {melody_result}")
+                errors.append(f"Melody generation: {melody_result}")
+            if isinstance(drum_result, Exception):
+                logger.error(f"Drum generation failed: {drum_result}")
+                errors.append(f"Drum generation: {drum_result}")
+            
+            if errors:
+                error_msg = f"Generation errors: {'; '.join(errors)}"
+                logger.error(error_msg)
+                await queue.error(error_msg)
+                # Continue with partial results rather than failing completely
+            
+            logger.info("Phase 2 completed")
+            
+        except asyncio.CancelledError:
+            logger.info("Music generation cancelled by user")
+            await self.output_manager.add_cancellation_message()
+            raise
+        except Exception as e:
+            logger.error(f"Error during parallel execution: {e}")
+            await queue.error(f"Generation failed: {str(e)}")
+            raise
         
         logger.info(f"MusicGenerationAgent run finished. Title: {params.song_title}")
         
-        # Calculate total tokens from stage tokens to avoid double counting
-        total_request = sum(stage.get("request_tokens", 0) for stage in self.stage_tokens.values())
-        total_response = sum(stage.get("response_tokens", 0) for stage in self.stage_tokens.values())
+        # Calculate total tokens from output manager
+        aggregated_tokens = self.output_manager.get_aggregated_tokens()
+        
+        # Also include tokens from the sequential steps (research and musical parameters)
+        sequential_tokens = {"request_tokens": 0, "response_tokens": 0}
+        for stage_name, tokens in self.stage_tokens.items():
+            if stage_name == "determine_musical_parameters":
+                sequential_tokens["request_tokens"] += tokens.get("request_tokens", 0)
+                sequential_tokens["response_tokens"] += tokens.get("response_tokens", 0)
+        
+        total_request = aggregated_tokens["request_tokens"] + sequential_tokens["request_tokens"]
+        total_response = aggregated_tokens["response_tokens"] + sequential_tokens["response_tokens"]
         
         logger.info(f"Total token usage - Request: {total_request}, Response: {total_response}")
         
@@ -1366,7 +1588,9 @@ Create rhythmic patterns that fit the composition style."""
             "request_tokens": total_request,
             "response_tokens": total_response,
             "total_tokens": total_request + total_response,
-            "stage_tokens": self.stage_tokens  # Include stage-by-stage token breakdown
+            "stage_tokens": self.stage_tokens,  # Include stage-by-stage token breakdown
+            "parallel_execution": True,  # Flag to indicate parallel execution was used
+            "phases_completed": 2  # Number of parallel phases completed
         }
 
 # Singleton instance
