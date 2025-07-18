@@ -98,136 +98,8 @@ class MusicGenerationContext:
     queue: Optional[SSEQueueManager] = None
 
 
-# --- Parallel Execution Support Classes ---
-@dataclass
-class StepOutput:
-    """Captures output from a single generation step"""
-    step_id: int
-    content_chunks: List[str]
-    sse_actions: List[AssistantAction]
-    tokens_used: Dict[str, int]
-    completed: bool = False
-
-
-class CapturingSSEQueue:
-    """SSE queue that captures output instead of sending it immediately"""
-    
-    def __init__(self, chunks_buffer: List[str], actions_buffer: List[AssistantAction]):
-        self.chunks_buffer = chunks_buffer
-        self.actions_buffer = actions_buffer
-        self.tokens_used = {"request_tokens": 0, "response_tokens": 0, "total_tokens": 0}
-    
-    async def add_chunk(self, chunk: str):
-        """Capture text chunks for later ordered output"""
-        self.chunks_buffer.append(chunk)
-    
-    async def action(self, action: AssistantAction):
-        """Capture SSE actions for later ordered execution"""
-        self.actions_buffer.append(action)
-    
-    async def error(self, message: str):
-        """Capture error messages"""
-        self.chunks_buffer.append(f"ERROR: {message}")
-    
-    async def stage(self, title: str, description: str):
-        """Capture stage messages"""
-        self.chunks_buffer.append(f"STAGE: {title} - {description}")
-
-
-class OrderedOutputManager:
-    """Manages ordered output from parallel execution steps"""
-    
-    def __init__(self, queue: SSEQueueManager):
-        self.queue = queue
-        self.step_outputs: Dict[int, StepOutput] = {}
-        self.next_step_to_output = 1
-        self.lock = asyncio.Lock()
-        self.completed_outputs: Dict[int, StepOutput] = {}
-    
-    async def add_step_output(self, step_id: int, output: StepOutput):
-        """Add output from a completed step and flush any ready outputs"""
-        async with self.lock:
-            logger.info(f"[OrderedOutputManager] Adding step {step_id} output, next_step_to_output={self.next_step_to_output}")
-            self.step_outputs[step_id] = output
-            await self._flush_ready_outputs()
-    
-    async def _flush_ready_outputs(self):
-        """Stream outputs in order as they become ready"""
-        while self.next_step_to_output in self.step_outputs:
-            output = self.step_outputs[self.next_step_to_output]
-            if output.completed:
-                logger.info(f"[OrderedOutputManager] Flushing step {self.next_step_to_output} output ({len(output.content_chunks)} chunks, {len(output.sse_actions)} actions)")
-                
-                try:
-                    # Stream content chunks in order
-                    for i, chunk in enumerate(output.content_chunks):
-                        if chunk:  # Only send non-empty chunks
-                            await self.queue.add_chunk(chunk)
-                    
-                    # Execute SSE actions in order
-                    for i, action in enumerate(output.sse_actions):
-                        if action:  # Only send valid actions
-                            await self.queue.action(action)
-                    
-                    logger.info(f"[OrderedOutputManager] Successfully flushed step {self.next_step_to_output}")
-                    
-                except Exception as e:
-                    logger.error(f"[OrderedOutputManager] Error flushing step {self.next_step_to_output}: {e}")
-                    # Continue processing even if one step fails
-                
-                # Move to completed and clean up
-                self.completed_outputs[self.next_step_to_output] = output
-                del self.step_outputs[self.next_step_to_output]
-                self.next_step_to_output += 1
-                
-                # Continue flushing next steps if available
-                continue
-            else:
-                logger.debug(f"[OrderedOutputManager] Step {self.next_step_to_output} not ready yet")
-                break
-    
-    async def add_cancellation_message(self):
-        """Add cancellation message to output"""
-        await self.queue.add_chunk("\n\n[Generation cancelled by user]\n")
-    
-    async def flush_all_remaining(self):
-        """Flush all remaining buffered outputs in order"""
-        async with self.lock:
-            logger.info(f"[OrderedOutputManager] Flushing all remaining outputs. Pending steps: {list(self.step_outputs.keys())}")
-            max_attempts = 10  # Prevent infinite loops
-            attempt = 0
-            
-            while self.step_outputs and attempt < max_attempts:
-                attempt += 1
-                initial_count = len(self.step_outputs)
-                await self._flush_ready_outputs()
-                
-                # If no progress was made, log the issue
-                if len(self.step_outputs) == initial_count:
-                    missing_step = self.next_step_to_output
-                    pending_steps = list(self.step_outputs.keys())
-                    logger.warning(f"[OrderedOutputManager] Waiting for step {missing_step}, but have steps: {pending_steps}")
-                    break
-            
-            if self.step_outputs:
-                logger.error(f"[OrderedOutputManager] Still have unflushed outputs: {list(self.step_outputs.keys())}")
-            else:
-                logger.info(f"[OrderedOutputManager] All outputs successfully flushed")
-    
-    def get_aggregated_tokens(self) -> Dict[str, int]:
-        """Get aggregated token usage from all completed steps"""
-        total_request = 0
-        total_response = 0
-        
-        for output in self.completed_outputs.values():
-            total_request += output.tokens_used.get("request_tokens", 0)
-            total_response += output.tokens_used.get("response_tokens", 0)
-        
-        return {
-            "request_tokens": total_request,
-            "response_tokens": total_response,
-            "total_tokens": total_request + total_response
-        }
+# --- Parallel Execution Support (Simplified) ---
+# All buffering/ordering logic removed - events are emitted immediately
 
 
 # --- Music Generation Agent State Keys ---
@@ -265,8 +137,7 @@ class MusicGenerationAgent:
         # Context for sharing info across stages
         self.context: Optional[MusicGenerationContext] = None
         
-        # Parallel execution manager
-        self.output_manager: Optional[OrderedOutputManager] = None
+        # Parallel execution - simplified with immediate emission
 
     def _track_stage_tokens(self, stage_name: str, tokens: Optional[Dict[str, int]] = None, append: bool = False):
         """Track token usage for a specific stage"""
@@ -292,63 +163,26 @@ class MusicGenerationAgent:
             }
         logger.info(f"Stage '{stage_name}' tokens - Request: {usage.get('request_tokens', 0)}, Response: {usage.get('response_tokens', 0)}")
     
-    async def _wrap_step_with_output_capture(self, step_id: int, step_func, *args, **kwargs):
-        """Wrapper to capture streaming output and SSE actions from parallel steps"""
-        captured_chunks = []
-        captured_actions = []
-        
-        # Create a capturing queue that buffers instead of sending
-        capturing_queue = CapturingSSEQueue(captured_chunks, captured_actions)
-        
-        # Temporarily replace the queue in context
-        original_queue = self.context.queue
-        self.context.queue = capturing_queue
-        
+    async def _emit_step_events(self, step_id: int, step_name: str, step_func, *args, **kwargs):
+        """Simple wrapper that emits step events immediately (no buffering)"""
         try:
-            logger.info(f"Starting parallel step {step_id}: {step_func.__name__}")
+            # Emit start event
+            await self.context.queue.step_event(step_id, step_name, "stage", f"Starting {step_name}...")
+            logger.info(f"Starting step {step_id}: {step_name}")
+            
+            # Execute the step function directly
             result = await step_func(*args, **kwargs)
             
-            # For methods that track their own tokens, get them from the stage_tokens
-            # Find the most recent token entry that matches this step
-            step_tokens = {"request_tokens": 0, "response_tokens": 0, "total_tokens": 0}
+            # Emit completion event
+            await self.context.queue.step_event(step_id, step_name, "status", f"{step_name} completed")
+            logger.info(f"Completed step {step_id}: {step_name}")
             
-            # Get tokens from the capturing queue if available, otherwise from stage_tokens
-            if hasattr(capturing_queue, 'tokens_used') and capturing_queue.tokens_used:
-                step_tokens = capturing_queue.tokens_used
-            elif self.stage_tokens:
-                # Get the most recent token entry - this is a bit hacky but works
-                latest_stage = list(self.stage_tokens.keys())[-1] if self.stage_tokens else None
-                if latest_stage:
-                    step_tokens = self.stage_tokens[latest_stage]
-            
-            step_output = StepOutput(
-                step_id=step_id,
-                content_chunks=captured_chunks,
-                sse_actions=captured_actions,
-                tokens_used=step_tokens,
-                completed=True
-            )
-            
-            await self.output_manager.add_step_output(step_id, step_output)
-            logger.info(f"Completed parallel step {step_id}: {step_func.__name__}")
             return result
             
         except Exception as e:
-            logger.error(f"Error in parallel step {step_id}: {step_func.__name__}: {e}")
-            # Still record the step output with error
-            step_output = StepOutput(
-                step_id=step_id,
-                content_chunks=captured_chunks + [f"ERROR: {str(e)}"],
-                sse_actions=captured_actions,
-                tokens_used={"request_tokens": 0, "response_tokens": 0, "total_tokens": 0},
-                completed=True
-            )
-            await self.output_manager.add_step_output(step_id, step_output)
+            logger.error(f"Error in step {step_id} ({step_name}): {e}")
+            await self.context.queue.step_event(step_id, step_name, "status", f"Error in {step_name}: {str(e)}")
             raise
-            
-        finally:
-            # Restore original queue
-            self.context.queue = original_queue
         
     async def _init_real_data(self, session: Session):
         _drum_file_repository = get_drum_sample_public_repository(session)
@@ -663,6 +497,9 @@ Do NOT output JSON in this step, just your conversational reasoning."""
 
         logger.info("Streaming explanation for instrument selection...")
         logger.info(f"length of available soundfonts: {len(self._available_soundfonts)}")
+        
+        # Capture the full explanation for step event emission
+        explanation_text = ""
         try:
             async for text_chunk in await chat_session.send_message_async(
                 user_prompt_content=explanation_prompt_instruments,
@@ -670,11 +507,19 @@ Do NOT output JSON in this step, just your conversational reasoning."""
             ):
                 if isinstance(text_chunk, str):
                     logger.debug(f"INSTRUMENT EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
-                    await self.context.queue.add_chunk(text_chunk)
+                    explanation_text += text_chunk
+            
+            # Emit the complete explanation as a step event
+            await self.context.queue.step_event(
+                1, "Instrument Selection", "explanation", 
+                content=explanation_text, title="Instrument Selection"
+            )
             logger.info("Finished streaming instrument selection explanation.")
         except Exception as e:
             logger.error(f"Error streaming instrument selection explanation: {e}")
-            await self.context.queue.error("Failed to stream instrument selection explanation.")
+            await self.context.queue.step_event(
+                1, "Instrument Selection", "status", f"Error: {str(e)}"
+            )
             raise
 
         await self.context.queue.add_chunk("\n\n")
@@ -884,6 +729,9 @@ Based on the key of {params.key} {params.mode}, tempo {params.tempo} BPM, the ch
 Keep it concise and conversational. Do NOT generate the actual musical notes or JSON in this step."""
 
         logger.info("Streaming standalone melody explanation...")
+        
+        # Capture the full explanation for step event emission
+        explanation_text = ""
         try:
             async for text_chunk in await explanation_session.send_message_async(
                 user_prompt_content=explanation_prompt_melody,
@@ -891,13 +739,21 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
             ):
                 if isinstance(text_chunk, str):
                     logger.debug(f"STANDALONE MELODY EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
-                    await self.context.queue.add_chunk(text_chunk)
+                    explanation_text += text_chunk
+            
+            # Emit the complete explanation as a step event
+            await self.context.queue.step_event(
+                4, "Melody Explanation", "explanation", 
+                content=explanation_text, title="Melody Explanation"
+            )
             logger.info("Finished streaming standalone melody explanation.")
             # Track tokens for the explanation phase
             self._track_stage_tokens("generate_melody_explanation_standalone", explanation_session.get_token_usage())
         except Exception as e:
             logger.error(f"Error streaming standalone melody explanation: {e}")
-            await self.context.queue.error("Failed to stream melody explanation.")
+            await self.context.queue.step_event(
+                4, "Melody Explanation", "status", f"Error: {str(e)}"
+            )
             return
 
         await self.context.queue.add_chunk("\n\n")
@@ -1204,6 +1060,9 @@ Please explain your choices for 4-5 drum sounds from the available list that wou
 Do NOT output JSON in this step, just your conversational reasoning."""
 
         logger.info("Streaming explanation for drum sound selection...")
+        
+        # Capture the full explanation for step event emission
+        explanation_text = ""
         try:
             async for text_chunk in await chat_session.send_message_async(
                 user_prompt_content=explanation_prompt_drums,
@@ -1211,11 +1070,19 @@ Do NOT output JSON in this step, just your conversational reasoning."""
             ):
                 if isinstance(text_chunk, str):
                     logger.debug(f"Drum explanation chunk: '{text_chunk}'") 
-                    await self.context.queue.add_chunk(text_chunk)
+                    explanation_text += text_chunk
+            
+            # Emit the complete explanation as a step event
+            await self.context.queue.step_event(
+                2, "Drum Selection", "explanation", 
+                content=explanation_text, title="Drum Selection"
+            )
             logger.info("Finished streaming drum sound selection explanation.")
         except Exception as e:
             logger.error(f"Error streaming drum sound selection explanation: {e}")
-            await self.context.queue.error("Failed to stream drum sound explanation.")
+            await self.context.queue.step_event(
+                2, "Drum Selection", "status", f"Error: {str(e)}"
+            )
             raise
 
         await self.context.queue.add_chunk("\n\n")
@@ -1590,18 +1457,15 @@ Create rhythmic patterns that fit the composition style."""
             params.mode = sanitized_mode
 
         try:
-            # Initialize output manager for ordered output
-            self.output_manager = OrderedOutputManager(queue)
-            
-            # Follow original order: instrument → chord → melody → melody explanation → drums
-            logger.info("Starting execution in original order...")
+            # Use simplified immediate emission (no buffering/ordering)
+            logger.info("Starting parallel execution with immediate event emission...")
             
             # Steps 1-2: Instrument and Drum Selection (run in parallel)
-            instrument_task = self._wrap_step_with_output_capture(
-                1, self.select_instruments, params
+            instrument_task = self._emit_step_events(
+                1, "Instrument Selection", self.select_instruments, params
             )
-            drum_selection_task = self._wrap_step_with_output_capture(
-                2, self.select_drum_sounds, params, drum_research_result
+            drum_selection_task = self._emit_step_events(
+                2, "Drum Selection", self.select_drum_sounds, params, drum_research_result
             )
             
             # Wait for instrument and drum selection
@@ -1619,8 +1483,8 @@ Create rhythmic patterns that fit the composition style."""
                 raise selected_drum_sounds
             
             # Step 3: Chord Generation
-            chord_task = self._wrap_step_with_output_capture(
-                3, self._generate_chords_and_send_sse, params, selected_instruments
+            chord_task = self._emit_step_events(
+                3, "Chord Generation", self._generate_chords_and_send_sse, params, selected_instruments
             )
             chord_data = await chord_task
             
@@ -1630,8 +1494,8 @@ Create rhythmic patterns that fit the composition style."""
                 raise chord_data
             
             # Step 4: Melody Explanation (before melody generation)
-            melody_explanation_task = self._wrap_step_with_output_capture(
-                4, self._stream_melody_explanation_standalone, params
+            melody_explanation_task = self._emit_step_events(
+                4, "Melody Explanation", self._stream_melody_explanation_standalone, params
             )
             _ = await melody_explanation_task
             
@@ -1641,11 +1505,11 @@ Create rhythmic patterns that fit the composition style."""
                 raise _
             
             # Steps 5-6: Melody and Drum Beat Generation (run in parallel)
-            melody_task = self._wrap_step_with_output_capture(
-                5, self._generate_melody_notes_and_send_sse, params, selected_instruments
+            melody_task = self._emit_step_events(
+                5, "Melody Generation", self._generate_melody_notes_and_send_sse, params, selected_instruments
             )
-            drum_beat_task = self._wrap_step_with_output_capture(
-                6, self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
+            drum_beat_task = self._emit_step_events(
+                6, "Drum Beat Generation", self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
             )
             
             # Wait for melody and drum generation
@@ -1662,10 +1526,7 @@ Create rhythmic patterns that fit the composition style."""
                 logger.error(f"Drum beat generation failed: {drum_data}")
                 raise drum_data
             
-            # Ensure all buffered outputs are flushed
-            await self.output_manager.flush_all_remaining()
-            
-            logger.info("All generation tasks completed in original order")
+            logger.info("All generation tasks completed with immediate emission")
             
         except asyncio.CancelledError:
             logger.info("Music generation cancelled by user")
@@ -1678,18 +1539,12 @@ Create rhythmic patterns that fit the composition style."""
         
         logger.info(f"MusicGenerationAgent run finished. Title: {params.song_title}")
         
-        # Calculate total tokens from output manager and sequential steps
-        aggregated_tokens = self.output_manager.get_aggregated_tokens()
-        
-        # Add tokens from sequential steps (research and musical parameters)
-        sequential_tokens = {"request_tokens": 0, "response_tokens": 0}
+        # Calculate total tokens from all tracked stages
+        total_request = 0
+        total_response = 0
         for stage_name, tokens in self.stage_tokens.items():
-            if stage_name in ["determine_musical_parameters"]:
-                sequential_tokens["request_tokens"] += tokens.get("request_tokens", 0)
-                sequential_tokens["response_tokens"] += tokens.get("response_tokens", 0)
-        
-        total_request = aggregated_tokens["request_tokens"] + sequential_tokens["request_tokens"]
-        total_response = aggregated_tokens["response_tokens"] + sequential_tokens["response_tokens"]
+            total_request += tokens.get("request_tokens", 0)
+            total_response += tokens.get("response_tokens", 0)
         
         logger.info(f"Total token usage - Request: {total_request}, Response: {total_response}")
         
