@@ -324,16 +324,16 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     >
       {isLoading ? renderSkeletonBars() : renderBars()}
       
-      {error && (
+      {/* {error && (
         <div 
           className="absolute inset-0 flex items-center justify-center rounded"
           style={{ backgroundColor: errorBg }}
         >
           <span className="text-xs" style={{ color: errorText }}>
-            Failed to load
+            {error}
           </span>
         </div>
-      )}
+      )} */}
     </div>
   );
 };
