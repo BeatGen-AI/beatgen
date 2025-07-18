@@ -295,7 +295,7 @@ def duration_str_to_beats(duration_str: str, tempo: int) -> float:
 
 def convert_interval_melody_to_absolute_melody(interval_melody: "IntervalMelodyOutput", key_name: str, mode_name: str) -> "MelodyData":
     absolute_melody_bars: List[Bar] = []
-    current_midi_note = get_key_root_midi(key_name, interval_melody.starting_octave)
+    current_midi_note = get_key_root_midi(key_name, interval_melody.starting_octave) - 12  # Lower by 1 octave
     initial_midi_note_for_bar_start = current_midi_note # Keep track of the first note for the entire melody
     
     # The first note's interval is relative to this initial_midi_note_for_bar_start if it's the very first note overall.
