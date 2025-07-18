@@ -37,9 +37,9 @@ if "?" in ASYNC_DATABASE_URL:
 # Supabase uses Supavisor connection pooler (not pgbouncer)
 logger.info(f"ASYNC_DATABASE_URL: {ASYNC_DATABASE_URL}")
 # Detect connection type
-is_direct_connection = ".supabase.co:5432/" in ASYNC_DATABASE_URL
-is_session_mode = ".pooler.supabase.com:5432/" in ASYNC_DATABASE_URL
-is_transaction_mode = ".pooler.supabase.com:6543/" in ASYNC_DATABASE_URL
+is_direct_connection = ".supabase.co:5432" in ASYNC_DATABASE_URL
+is_session_mode = ".pooler.supabase.com:5432" in ASYNC_DATABASE_URL
+is_transaction_mode = ".pooler.supabase.com:6543" in ASYNC_DATABASE_URL
 
 if is_direct_connection:
     connection_mode = "Direct Connection"
