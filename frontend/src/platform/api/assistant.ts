@@ -210,6 +210,12 @@ export const streamAssistantResponse = (
       callbacks.onEvent?.('response_end', data);
     });
     
+    // Add step_event listener for music generation steps
+    eventSource.addEventListener('step_event', (event: StreamEvent) => {
+      const data = JSON.parse(event.data);
+      callbacks.onEvent?.('step_event', data);
+    });
+    
     // Return a function to close the connection
     return {
       close: () => {
