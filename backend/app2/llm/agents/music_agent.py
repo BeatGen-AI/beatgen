@@ -424,13 +424,13 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
             # Emit the captured explanation as a step event
             if explanation_text.strip():
                 await self.context.queue.step_event(
-                    step_id=0,
+                    step_id=1,
                     step_name="Determine Musical Parameters",
                     event_type="explanation",
                     content=explanation_text.strip(),
                     title="Musical Parameters Explanation"
                 )
-                logger.info("🎵🎵🎵 BACKEND: Emitted explanation event for step 0")
+                logger.info("🎵🎵🎵 BACKEND: Emitted explanation event for step 1")
                 
         except asyncio.CancelledError:
             logger.info("determine_musical_parameters: Streaming explanation task explicitly cancelled.")
@@ -534,14 +534,14 @@ Do NOT output JSON in this step, just your conversational reasoning."""
             
             # Emit the complete explanation as a step event
             await self.context.queue.step_event(
-                1, "Instrument Selection", "explanation", 
+                2, "Instrument Selection", "explanation", 
                 content=explanation_text, title="Instrument Selection"
             )
             logger.info("Finished streaming instrument selection explanation.")
         except Exception as e:
             logger.error(f"Error streaming instrument selection explanation: {e}")
             await self.context.queue.step_event(
-                1, "Instrument Selection", "status", f"Error: {str(e)}"
+                2, "Instrument Selection", "status", f"Error: {str(e)}"
             )
             raise
 
@@ -766,7 +766,7 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
             
             # Emit the complete explanation as a step event
             await self.context.queue.step_event(
-                4, "Melody Explanation", "explanation", 
+                6, "Melody Explanation", "explanation", 
                 content=explanation_text, title="Melody Explanation"
             )
             logger.info("Finished streaming standalone melody explanation.")
@@ -775,7 +775,7 @@ Keep it concise and conversational. Do NOT generate the actual musical notes or 
         except Exception as e:
             logger.error(f"Error streaming standalone melody explanation: {e}")
             await self.context.queue.step_event(
-                4, "Melody Explanation", "status", f"Error: {str(e)}"
+                6, "Melody Explanation", "status", f"Error: {str(e)}"
             )
             return
 
@@ -1097,14 +1097,14 @@ Do NOT output JSON in this step, just your conversational reasoning."""
             
             # Emit the complete explanation as a step event
             await self.context.queue.step_event(
-                2, "Drum Selection", "explanation", 
+                3, "Drum Selection", "explanation", 
                 content=explanation_text, title="Drum Selection"
             )
             logger.info("Finished streaming drum sound selection explanation.")
         except Exception as e:
             logger.error(f"Error streaming drum sound selection explanation: {e}")
             await self.context.queue.step_event(
-                2, "Drum Selection", "status", f"Error: {str(e)}"
+                3, "Drum Selection", "status", f"Error: {str(e)}"
             )
             raise
 
