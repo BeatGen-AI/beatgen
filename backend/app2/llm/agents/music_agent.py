@@ -408,6 +408,7 @@ Choose sounds that fit the tempo and style of the composition."""
 Provide only your reasoning and suggestions conversationally. Do NOT output JSON in this step."""
         
         logger.info("Streaming explanation for musical parameters...")
+        explanation_text = ""
         try:
             async for text_chunk in await chat_session.send_message_async(
                 user_prompt_content=explanation_prompt,
@@ -415,9 +416,22 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
             ):
                 if isinstance(text_chunk, str): 
                     logger.debug(f"STREAMING TEXT CHUNK: '{text_chunk}'") 
+                    explanation_text += text_chunk
                     await self.context.queue.add_chunk(text_chunk)
 
             logger.info("Finished streaming explanation.")
+            
+            # Emit the captured explanation as a step event
+            if explanation_text.strip():
+                await self.context.queue.step_event(
+                    step_id=0,
+                    step_name="Determine Musical Parameters",
+                    event_type="explanation",
+                    content=explanation_text.strip(),
+                    title="Musical Parameters Explanation"
+                )
+                logger.info("🎵🎵🎵 BACKEND: Emitted explanation event for step 0")
+                
         except asyncio.CancelledError:
             logger.info("determine_musical_parameters: Streaming explanation task explicitly cancelled.")
             raise
