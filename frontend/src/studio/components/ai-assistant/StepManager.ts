@@ -35,17 +35,18 @@ export class StepManager {
   }
 
   /**
-   * Initialize the 7 expected music generation steps
+   * Initialize the 8 expected music generation steps
    */
   initializeMusicGeneration() {
     const expectedSteps = [
-      { id: 0, name: "Determine Musical Parameters" },
-      { id: 1, name: "Instrument Selection" },
-      { id: 2, name: "Drum Selection" },
-      { id: 3, name: "Drum Beat Generation" },
-      { id: 4, name: "Chord Generation" },
-      { id: 5, name: "Melody Explanation" },
-      { id: 6, name: "Melody Generation" }
+      { id: 0, name: "Researching Musical Context" },
+      { id: 1, name: "Determine Musical Parameters" },
+      { id: 2, name: "Instrument Selection" },
+      { id: 3, name: "Drum Selection" },
+      { id: 4, name: "Drum Beat Generation" },
+      { id: 5, name: "Chord Generation" },
+      { id: 6, name: "Melody Explanation" },
+      { id: 7, name: "Melody Generation" }
     ];
 
     this.steps.clear();
@@ -60,7 +61,7 @@ export class StepManager {
       });
     });
 
-    console.log('🎵 StepManager: Initialized 7 music generation steps');
+    console.log('🎵 StepManager: Initialized 8 music generation steps');
   }
 
   /**
@@ -114,7 +115,7 @@ export class StepManager {
   }
 
   /**
-   * Get all steps in logical order (1 → 6) for display
+   * Get all steps in logical order (0 → 7) for display
    */
   getOrderedSteps(): Step[] {
     return Array.from(this.steps.values()).sort((a, b) => a.id - b.id);

@@ -1430,33 +1430,36 @@ Create rhythmic patterns that fit the composition style."""
         
         await queue.add_chunk(f"Doing research for prompt: '{request.user_prompt}'...\n\n")
         
-        # --- 1. Research Step (already parallel) ---
-        logger.info("Starting research using MusicResearcher...")
-        
-        await queue.stage(
-            "Starting research...",
-            "Doing research online to find the best musical parameters...",
-        )
-        await queue.stage(
-            "Starting research...", 
-            "Doing research online to find the best musical parameters...",
-        )
-        research_result, chord_research_result, drum_research_result = await asyncio.gather(
-            self._music_researcher.enhance_description(request.user_prompt),
-            self._music_researcher.research_chord_progression(request.user_prompt),
-            self._music_researcher.research_drum_sounds(request.user_prompt)
-        )
-
-        # Initialize context with all necessary info
+        # Initialize context first (needed for _emit_step_events)
         self.context = MusicGenerationContext(
             user_prompt=request.user_prompt,
             duration_bars=request.duration_bars,
-            general_research=research_result.get("prompt_addition") if research_result and isinstance(research_result, dict) else None,
-            chord_research=chord_research_result,
-            drum_research=drum_research_result,
+            general_research=None,  # Will be updated after research
+            chord_research=None,    # Will be updated after research
+            drum_research=None,     # Will be updated after research
             model_info=model_info,
             queue=queue
         )
+        
+        # --- 1. Research Step (already parallel) ---
+        logger.info("Starting research using MusicResearcher...")
+        
+        # Step 0: Research Musical Context
+        async def do_research():
+            return await asyncio.gather(
+                self._music_researcher.enhance_description(request.user_prompt),
+                self._music_researcher.research_chord_progression(request.user_prompt),
+                self._music_researcher.research_drum_sounds(request.user_prompt)
+            )
+        
+        research_result, chord_research_result, drum_research_result = await self._emit_step_events(
+            0, "Researching Musical Context", do_research
+        )
+
+        # Update context with research results
+        self.context.general_research = research_result.get("prompt_addition") if research_result and isinstance(research_result, dict) else None
+        self.context.chord_research = chord_research_result
+        self.context.drum_research = drum_research_result
 
         # 2. Determine Core Musical Parameters (Sequential - needed by everything else)
         research_addition = ""
@@ -1466,9 +1469,9 @@ Create rhythmic patterns that fit the composition style."""
             research_addition += f"\n\nChord progression research:\n{chord_research_result}"
         user_prompt_with_research = request.user_prompt + research_addition
 
-        # Step 0: Determine musical parameters first (required for all other steps)
+        # Step 1: Determine musical parameters (required for all other steps)
         params = await self._emit_step_events(
-            0, "Determine Musical Parameters", 
+            1, "Determine Musical Parameters", 
             self.determine_musical_parameters,
             user_prompt=user_prompt_with_research,
             duration_bars=request.duration_bars
@@ -1484,12 +1487,12 @@ Create rhythmic patterns that fit the composition style."""
             # Use simplified immediate emission (no buffering/ordering)
             logger.info("Starting parallel execution with immediate event emission...")
             
-            # Steps 1-2: Instrument and Drum Selection (run in parallel)
+            # Steps 2-3: Instrument and Drum Selection (run in parallel)
             instrument_task = self._emit_step_events(
-                1, "Instrument Selection", self.select_instruments, params
+                2, "Instrument Selection", self.select_instruments, params
             )
             drum_selection_task = self._emit_step_events(
-                2, "Drum Selection", self.select_drum_sounds, params, drum_research_result
+                3, "Drum Selection", self.select_drum_sounds, params, drum_research_result
             )
             
             # Wait for instrument and drum selection
@@ -1506,17 +1509,17 @@ Create rhythmic patterns that fit the composition style."""
                 logger.error(f"Drum selection failed: {selected_drum_sounds}")
                 raise selected_drum_sounds
             
-            # Step 3: Start drum beat generation immediately after drum selection
+            # Step 4: Start drum beat generation immediately after drum selection
             drum_beat_task = self._emit_step_events(
-                3, "Drum Beat Generation", self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
+                4, "Drum Beat Generation", self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
             )
             
-            # Steps 4-5: Chord Generation and Melody Explanation (run in parallel after instrument selection)
+            # Steps 5-6: Chord Generation and Melody Explanation (run in parallel after instrument selection)
             chord_task = self._emit_step_events(
-                4, "Chord Generation", self._generate_chords_and_send_sse, params, selected_instruments
+                5, "Chord Generation", self._generate_chords_and_send_sse, params, selected_instruments
             )
             melody_explanation_task = self._emit_step_events(
-                5, "Melody Explanation", self._stream_melody_explanation_standalone, params
+                6, "Melody Explanation", self._stream_melody_explanation_standalone, params
             )
             
             # Wait for chord generation and melody explanation to complete
@@ -1533,9 +1536,9 @@ Create rhythmic patterns that fit the composition style."""
                 logger.error(f"Melody explanation failed: {_}")
                 raise _
             
-            # Step 6: Melody Generation (after melody explanation completes)
+            # Step 7: Melody Generation (after melody explanation completes)
             melody_task = self._emit_step_events(
-                6, "Melody Generation", self._generate_melody_notes_and_send_sse, params, selected_instruments
+                7, "Melody Generation", self._generate_melody_notes_and_send_sse, params, selected_instruments
             )
             
             # Wait for both melody generation and drum beat generation to complete
