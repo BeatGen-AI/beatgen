@@ -20,7 +20,7 @@ export const StepRenderer: React.FC<StepRendererProps> = ({ steps, onActionClick
     <div className="flex flex-col gap-2">
       {steps.map(step => (
         <StepCard 
-          key={step.id} 
+          key={step.id + 1} 
           step={step} 
           onActionClick={onActionClick}
         />
@@ -89,11 +89,11 @@ const StepCard: React.FC<StepCardProps> = ({ step, onActionClick }) => {
   return (
     <div className={`rounded-md ${getBackgroundClass()} transition-opacity duration-200 ${step.status === 'pending' ? 'opacity-60' : 'opacity-100'}`}>
       <Accordion type="single" collapsible>
-        <AccordionItem value={`step-${step.id}`} className="border-none">
+        <AccordionItem value={`step-${step.id + 1}`} className="border-none">
           <AccordionTrigger className={`px-3 py-2 hover:no-underline ${getTextClass()}`}>
             <div className="flex items-center gap-2 w-full">
               <div className={getBadgeClass()}>
-                {step.id}
+                {step.id + 1}
               </div>
               <span className={`font-medium text-sm flex-1 text-left ${getTextClass()}`}>
                 {step.name}
