@@ -42,10 +42,10 @@ export class StepManager {
       { id: 0, name: "Determine Musical Parameters" },
       { id: 1, name: "Instrument Selection" },
       { id: 2, name: "Drum Selection" },
-      { id: 3, name: "Chord Generation" },
-      { id: 4, name: "Melody Explanation" },
-      { id: 5, name: "Melody Generation" },
-      { id: 6, name: "Drum Beat Generation" }
+      { id: 3, name: "Drum Beat Generation" },
+      { id: 4, name: "Chord Generation" },
+      { id: 5, name: "Melody Explanation" },
+      { id: 6, name: "Melody Generation" }
     ];
 
     this.steps.clear();
