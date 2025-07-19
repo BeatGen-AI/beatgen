@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import traceback
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict, Type
 import uuid
@@ -166,22 +167,30 @@ class MusicGenerationAgent:
     async def _emit_step_events(self, step_id: int, step_name: str, step_func, *args, **kwargs):
         """Simple wrapper that emits step events immediately (no buffering)"""
         try:
+            logger.info(f"🎵🎵🎵 BACKEND: _emit_step_events called for step {step_id}: {step_name}")
+            logger.info(f"🎵🎵🎵 BACKEND: Queue type: {type(self.context.queue)}")
+            logger.info(f"🎵🎵🎵 BACKEND: Queue has step_event: {hasattr(self.context.queue, 'step_event')}")
+            
             # Emit start event
             await self.context.queue.step_event(step_id, step_name, "stage", f"Starting {step_name}...")
-            logger.info(f"Starting step {step_id}: {step_name}")
+            logger.info(f"🎵🎵🎵 BACKEND: Successfully emitted start event for step {step_id}: {step_name}")
             
             # Execute the step function directly
             result = await step_func(*args, **kwargs)
             
             # Emit completion event
             await self.context.queue.step_event(step_id, step_name, "status", f"{step_name} completed")
-            logger.info(f"Completed step {step_id}: {step_name}")
+            logger.info(f"🎵🎵🎵 BACKEND: Successfully emitted completion event for step {step_id}: {step_name}")
             
             return result
             
         except Exception as e:
-            logger.error(f"Error in step {step_id} ({step_name}): {e}")
-            await self.context.queue.step_event(step_id, step_name, "status", f"Error in {step_name}: {str(e)}")
+            logger.error(f"🎵🎵🎵 BACKEND: Error in step {step_id} ({step_name}): {e}")
+            logger.error(f"🎵🎵🎵 BACKEND: Exception traceback: {traceback.format_exc()}")
+            try:
+                await self.context.queue.step_event(step_id, step_name, "status", f"Error in {step_name}: {str(e)}")
+            except Exception as emit_error:
+                logger.error(f"🎵🎵🎵 BACKEND: Failed to emit error event: {emit_error}")
             raise
         
     async def _init_real_data(self, session: Session):
