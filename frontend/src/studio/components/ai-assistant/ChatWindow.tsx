@@ -997,6 +997,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           flex: 1, 
           overflowY: 'auto',
           p: 2,
+          px: 1,
           display: 'flex',
           flexDirection: 'column',
           gap: 1.5
