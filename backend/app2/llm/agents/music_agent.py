@@ -165,32 +165,18 @@ class MusicGenerationAgent:
         logger.info(f"Stage '{stage_name}' tokens - Request: {usage.get('request_tokens', 0)}, Response: {usage.get('response_tokens', 0)}")
     
     async def _emit_step_events(self, step_id: int, step_name: str, step_func, *args, **kwargs):
-        """Simple wrapper that emits step events immediately (no buffering)"""
+        """Wrapper that emits step events for step lifecycle"""
         try:
-            logger.info(f"🎵🎵🎵 BACKEND: _emit_step_events called for step {step_id}: {step_name}")
-            logger.info(f"🎵🎵🎵 BACKEND: Queue type: {type(self.context.queue)}")
-            logger.info(f"🎵🎵🎵 BACKEND: Queue has step_event: {hasattr(self.context.queue, 'step_event')}")
-            
-            # Emit start event
             await self.context.queue.step_event(step_id, step_name, "stage", f"Starting {step_name}...")
-            logger.info(f"🎵🎵🎵 BACKEND: Successfully emitted start event for step {step_id}: {step_name}")
-            
-            # Execute the step function directly
             result = await step_func(*args, **kwargs)
-            
-            # Emit completion event
             await self.context.queue.step_event(step_id, step_name, "status", f"{step_name} completed")
-            logger.info(f"🎵🎵🎵 BACKEND: Successfully emitted completion event for step {step_id}: {step_name}")
-            
             return result
-            
         except Exception as e:
-            logger.error(f"🎵🎵🎵 BACKEND: Error in step {step_id} ({step_name}): {e}")
-            logger.error(f"🎵🎵🎵 BACKEND: Exception traceback: {traceback.format_exc()}")
+            logger.error(f"Error in step {step_id} ({step_name}): {e}")
             try:
                 await self.context.queue.step_event(step_id, step_name, "status", f"Error in {step_name}: {str(e)}")
             except Exception as emit_error:
-                logger.error(f"🎵🎵🎵 BACKEND: Failed to emit error event: {emit_error}")
+                logger.error(f"Failed to emit error event: {emit_error}")
             raise
         
     async def _init_real_data(self, session: Session):
@@ -430,7 +416,7 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
                     content=explanation_text.strip(),
                     title="Musical Parameters Explanation"
                 )
-                logger.info("🎵🎵🎵 BACKEND: Emitted explanation event for step 1")
+                logger.info("Emitted explanation event for musical parameters")
                 
         except asyncio.CancelledError:
             logger.info("determine_musical_parameters: Streaming explanation task explicitly cancelled.")
@@ -1426,23 +1412,18 @@ Create rhythmic patterns that fit the composition style."""
         logger.info(f"Available soundfonts length: {len(self._available_soundfonts)}")
         logger.info(f"Available drum samples length: {len(self._available_drum_samples)}")
         
-        # Note: Using sequential execution for proper explanation ordering
-        
         await queue.add_chunk(f"Doing research for prompt: '{request.user_prompt}'...\n\n")
         
-        # Initialize context first (needed for _emit_step_events)
+        # Initialize context (needed for _emit_step_events)
         self.context = MusicGenerationContext(
             user_prompt=request.user_prompt,
             duration_bars=request.duration_bars,
-            general_research=None,  # Will be updated after research
-            chord_research=None,    # Will be updated after research
-            drum_research=None,     # Will be updated after research
+            general_research=None,
+            chord_research=None,
+            drum_research=None,
             model_info=model_info,
             queue=queue
         )
-        
-        # --- 1. Research Step (already parallel) ---
-        logger.info("Starting research using MusicResearcher...")
         
         # Step 0: Research Musical Context
         async def do_research():
@@ -1461,7 +1442,7 @@ Create rhythmic patterns that fit the composition style."""
         self.context.chord_research = chord_research_result
         self.context.drum_research = drum_research_result
 
-        # 2. Determine Core Musical Parameters (Sequential - needed by everything else)
+        # Build research-enhanced prompt
         research_addition = ""
         if research_result and isinstance(research_result, dict) and research_result.get("prompt_addition"):
             research_addition += research_result["prompt_addition"]
@@ -1484,10 +1465,7 @@ Create rhythmic patterns that fit the composition style."""
             params.mode = sanitized_mode
 
         try:
-            # Use simplified immediate emission (no buffering/ordering)
-            logger.info("Starting parallel execution with immediate event emission...")
-            
-            # Steps 2-3: Instrument and Drum Selection (run in parallel)
+            # Steps 2-3: Instrument and Drum Selection (parallel)
             instrument_task = self._emit_step_events(
                 2, "Instrument Selection", self.select_instruments, params
             )
@@ -1514,7 +1492,7 @@ Create rhythmic patterns that fit the composition style."""
                 4, "Drum Beat Generation", self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
             )
             
-            # Steps 5-6: Chord Generation and Melody Explanation (run in parallel after instrument selection)
+            # Steps 5-6: Chord Generation and Melody Explanation (parallel)
             chord_task = self._emit_step_events(
                 5, "Chord Generation", self._generate_chords_and_send_sse, params, selected_instruments
             )

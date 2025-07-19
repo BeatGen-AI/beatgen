@@ -61,7 +61,7 @@ export class StepManager {
       });
     });
 
-    console.log('🎵 StepManager: Initialized 8 music generation steps');
+    console.log('StepManager: Initialized 8 music generation steps');
   }
 
   /**
@@ -107,8 +107,7 @@ export class StepManager {
       }
     }
 
-    console.log(`📡 StepManager: Added ${event.type} event for step ${eventData.step_id} (${eventData.step_name})`);
-    console.log(`📡 StepManager: Current steps:`, this.getOrderedSteps().map(s => ({ id: s.id, name: s.name, status: s.status, eventCount: s.events.length })));
+    console.log(`StepManager: Added ${event.type} event for step ${eventData.step_id}`);
     
     // Notify listeners
     this.notifyListeners();
