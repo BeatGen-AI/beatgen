@@ -1,18 +1,14 @@
 import React from 'react';
-import { 
-  Box, 
-  Paper, 
-  Typography, 
-  Chip, 
-  CircularProgress,
-  useTheme,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails
-} from '@mui/material';
-import { IconChevronDown } from '@tabler/icons-react';
+import { Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Step, StepEvent } from './StepManager';
+import { 
+  Accordion, 
+  AccordionContent, 
+  AccordionItem, 
+  AccordionTrigger 
+} from '@/components/ui/accordion';
+import { useAppTheme } from '../../../platform/theme/ThemeContext';
 
 interface StepRendererProps {
   steps: Step[];
@@ -21,7 +17,7 @@ interface StepRendererProps {
 
 export const StepRenderer: React.FC<StepRendererProps> = ({ steps, onActionClick }) => {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+    <div className="flex flex-col gap-2">
       {steps.map(step => (
         <StepCard 
           key={step.id} 
@@ -29,7 +25,7 @@ export const StepRenderer: React.FC<StepRendererProps> = ({ steps, onActionClick
           onActionClick={onActionClick}
         />
       ))}
-    </Box>
+    </div>
   );
 };
 
@@ -39,174 +35,169 @@ interface StepCardProps {
 }
 
 const StepCard: React.FC<StepCardProps> = ({ step, onActionClick }) => {
-  const theme = useTheme();
-  
-  const getStatusColor = () => {
-    switch (step.status) {
-      case 'completed': return 'success';
-      case 'in_progress': return 'primary';
-      default: return 'default';
+  const { studioMode } = useAppTheme();
+  const isDark = studioMode === 'dark';
+
+  const getBadgeClass = () => {
+    const baseClass = "min-w-[24px] h-5 flex items-center justify-center text-xs rounded-md border font-medium";
+    if (isDark) {
+      switch (step.status) {
+        case 'completed': return `${baseClass} bg-green-900/30 border-green-700 text-green-300`;
+        case 'in_progress': return `${baseClass} bg-blue-900/30 border-blue-700 text-blue-300`;
+        default: return `${baseClass} bg-gray-800 border-gray-600 text-gray-300`;
+      }
+    } else {
+      switch (step.status) {
+        case 'completed': return `${baseClass} bg-green-100 border-green-300 text-green-800`;
+        case 'in_progress': return `${baseClass} bg-blue-100 border-blue-300 text-blue-800`;
+        default: return `${baseClass} bg-gray-100 border-gray-300 text-gray-700`;
+      }
     }
   };
 
   const getStatusIcon = () => {
     if (step.status === 'in_progress') {
-      return <CircularProgress size={16} />;
+      return <Loader2 className="h-4 w-4 animate-spin" />;
     }
     return null;
   };
 
-  // Check if step has any content to show
-  const hasContent = step.events.length > 0;
+  const getBackgroundClass = () => {
+    if (isDark) {
+      switch (step.status) {
+        case 'completed': return 'bg-green-900/20';
+        case 'in_progress': return 'bg-blue-900/20';
+        default: return 'bg-gray-800/30';
+      }
+    } else {
+      switch (step.status) {
+        case 'completed': return 'bg-green-50';
+        case 'in_progress': return 'bg-blue-50';
+        default: return 'bg-gray-50';
+      }
+    }
+  };
+
+  const getTextClass = () => {
+    return isDark ? 'text-gray-100' : 'text-gray-900';
+  };
+
+  const getMutedTextClass = () => {
+    return isDark ? 'text-gray-400' : 'text-gray-600';
+  };
 
   return (
-    <Paper 
-      sx={{ 
-        border: `2px solid`,
-        borderColor: `${getStatusColor()}.main`,
-        opacity: step.status === 'pending' ? 0.6 : 1,
-        transition: 'opacity 0.2s ease'
-      }}
-    >
-      <Accordion 
-        defaultExpanded={false}
-        disabled={false}
-        sx={{
-          '&.Mui-disabled': {
-            backgroundColor: 'transparent'
-          },
-          '& .MuiAccordionSummary-root.Mui-disabled': {
-            opacity: 1
-          }
-        }}
-      >
-        <AccordionSummary
-          expandIcon={<IconChevronDown size={20} />}
-          sx={{ 
-            '& .MuiAccordionSummary-content': {
-              alignItems: 'center'
-            }
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-            <Chip 
-              label={step.id} 
-              size="small" 
-              color={getStatusColor()}
-              sx={{ minWidth: 32 }}
-            />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-              {step.name}
-            </Typography>
-            <Box sx={{ marginLeft: 'auto' }}>
-              {getStatusIcon()}
-            </Box>
-          </Box>
-        </AccordionSummary>
-        
-        <AccordionDetails sx={{ pt: 0 }}>
-          <Box sx={{ pl: 2 }}>
-            {step.events.length > 0 ? (
-              step.events.map(event => (
-                <StepEventRenderer 
-                  key={event.id} 
-                  event={event} 
-                  onActionClick={onActionClick}
-                />
-              ))
-            ) : (
-              <Typography 
-                variant="body2" 
-                sx={{ color: 'text.secondary', fontStyle: 'italic' }}
-              >
-                {step.status === 'pending' ? 'Step not started yet' : 'No events recorded'}
-              </Typography>
-            )}
-          </Box>
-        </AccordionDetails>
+    <div className={`rounded-md ${getBackgroundClass()} transition-opacity duration-200 ${step.status === 'pending' ? 'opacity-60' : 'opacity-100'}`}>
+      <Accordion type="single" collapsible>
+        <AccordionItem value={`step-${step.id}`} className="border-none">
+          <AccordionTrigger className={`px-3 py-2 hover:no-underline ${getTextClass()}`}>
+            <div className="flex items-center gap-2 w-full">
+              <div className={getBadgeClass()}>
+                {step.id}
+              </div>
+              <span className={`font-medium text-sm flex-1 text-left ${getTextClass()}`}>
+                {step.name}
+              </span>
+              <div className="ml-auto">
+                {getStatusIcon()}
+              </div>
+            </div>
+          </AccordionTrigger>
+          
+          <AccordionContent className="px-3 pb-2 pt-0">
+            <div className="pl-1">
+              {step.events.length > 0 ? (
+                step.events.map(event => (
+                  <StepEventRenderer 
+                    key={event.id} 
+                    event={event} 
+                    onActionClick={onActionClick}
+                    isDark={isDark}
+                  />
+                ))
+              ) : (
+                <p className={`text-xs ${getMutedTextClass()} italic`}>
+                  {step.status === 'pending' ? 'Step not started yet' : 'No events recorded'}
+                </p>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
       </Accordion>
-    </Paper>
+    </div>
   );
 };
 
 interface StepEventRendererProps {
   event: StepEvent;
   onActionClick?: (actionType: string, actionData: any) => void;
+  isDark: boolean;
 }
 
-const StepEventRenderer: React.FC<StepEventRendererProps> = ({ event, onActionClick }) => {
-  const theme = useTheme();
+const StepEventRenderer: React.FC<StepEventRendererProps> = ({ event, onActionClick, isDark }) => {
+  const getTextClass = () => isDark ? 'text-gray-100' : 'text-gray-900';
+  const getMutedTextClass = () => isDark ? 'text-gray-400' : 'text-gray-600';
+  const getStageTextClass = () => isDark ? 'text-blue-400' : 'text-blue-600';
+  const getSuccessTextClass = () => isDark ? 'text-green-400' : 'text-green-600';
+  const getErrorTextClass = () => isDark ? 'text-red-400' : 'text-red-600';
+  
+  const getActionBadgeClass = () => {
+    if (isDark) {
+      return "text-xs cursor-pointer h-4 px-2 py-1 rounded border bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700";
+    } else {
+      return "text-xs cursor-pointer h-4 px-2 py-1 rounded border bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200";
+    }
+  };
 
   switch (event.type) {
     case 'explanation':
       return (
-        <Box sx={{ mb: 2 }}>
+        <div className="mb-2">
           {event.title && (
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            <h4 className={`font-medium text-xs mb-1 ${getTextClass()}`}>
               {event.title}
-            </Typography>
+            </h4>
           )}
           {event.content && (
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                color: theme.palette.text.secondary,
-                lineHeight: 1.6,
-                '& p': { margin: 0, mb: 1 },
-                '& p:last-child': { mb: 0 }
-              }}
-            >
+            <div className={`text-xs ${getMutedTextClass()} leading-relaxed prose prose-xs max-w-none`}>
               <ReactMarkdown>{event.content}</ReactMarkdown>
-            </Typography>
+            </div>
           )}
-        </Box>
+        </div>
       );
 
     case 'action':
       return (
-        <Box sx={{ mb: 1 }}>
-          <Chip
-            label={`Action: ${event.actionType}`}
-            size="small"
-            color="secondary"
-            variant="outlined"
+        <div className="mb-1">
+          <div
+            className={getActionBadgeClass()}
             onClick={() => onActionClick?.(event.actionType || '', event.actionData)}
-            clickable={!!onActionClick}
-            sx={{ fontSize: '0.75rem' }}
-          />
-        </Box>
+          >
+            Action: {event.actionType}
+          </div>
+        </div>
       );
 
     case 'stage':
       return (
-        <Box sx={{ mb: 1 }}>
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              color: theme.palette.primary.main,
-              fontStyle: 'italic'
-            }}
-          >
+        <div className="mb-1">
+          <p className={`text-xs ${getStageTextClass()} italic`}>
             {event.content}
-          </Typography>
-        </Box>
+          </p>
+        </div>
       );
 
     case 'status':
       return (
-        <Box sx={{ mb: 1 }}>
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              color: event.content?.includes('Error') 
-                ? theme.palette.error.main 
-                : theme.palette.success.main,
-              fontWeight: 500
-            }}
-          >
+        <div className="mb-1">
+          <p className={`text-xs font-medium ${
+            event.content?.includes('Error') 
+              ? getErrorTextClass()
+              : getSuccessTextClass()
+          }`}>
             {event.content}
-          </Typography>
-        </Box>
+          </p>
+        </div>
       );
 
     default:
