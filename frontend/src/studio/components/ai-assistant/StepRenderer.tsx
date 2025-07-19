@@ -179,13 +179,8 @@ const StepEventRenderer: React.FC<StepEventRendererProps> = ({ event, onActionCl
       );
 
     case 'stage':
-      return (
-        <div className="mb-1">
-          <p className={`text-xs ${getStageTextClass()} italic`}>
-            {event.content}
-          </p>
-        </div>
-      );
+      // Don't render stage events to reduce clutter
+      return null;
 
     case 'status':
       return (
