@@ -417,7 +417,9 @@ async def process_generate_request(
                         duration_bars=4),
             model_info=selected_model_info,
             queue=wrapped_queue,
-            db_session=session
+            db_session=session,
+            user_id=user_id,
+            generation_type=context.context.get('generation_type', 'midi') if context.context else 'midi'
         )
         
         # logger.info(

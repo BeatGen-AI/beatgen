@@ -25,6 +25,7 @@ export interface AssistantRequestOptions {
     };
     key_signature?: string;
     project_title?: string;
+    generation_type?: 'midi' | 'audio';
   };
 }
 
