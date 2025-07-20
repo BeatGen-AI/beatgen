@@ -39,6 +39,7 @@ import { alpha } from '@mui/material/styles';
 import ChatModelMenu from './ChatModelMenu';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { createDefaultInstance } from '../../utils/instanceHelpers';
+import { Button } from '@/components/ui/button';
 
 interface Message {
   text: string;
@@ -66,6 +67,36 @@ const AVAILABLE_MODELS = ["Deepseek R1", "Deepseek V3", "Claude 4 Sonnet", "Clau
 const CHAT_WINDOW_WIDTH = 350;
 const ANIMATION_DURATION = 225; // ms
 const DOT_ANIMATION_INTERVAL = 500; // ms
+
+// Generation choice buttons component
+interface GenerationChoiceButtonsProps {
+  onMidiChoice: () => void;
+  onAudioChoice: () => void;
+}
+
+const GenerationChoiceButtons: React.FC<GenerationChoiceButtonsProps> = ({ onMidiChoice, onAudioChoice }) => {
+  return (
+    <Box sx={{ 
+      p: 2, 
+      borderRadius: 1, 
+      border: '1px solid',
+      borderColor: 'divider',
+      mb: 1
+    }}>
+      <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+        Choose your generation method:
+      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Button onClick={onMidiChoice}>
+          Generate Midi Melody
+        </Button>
+        <Button onClick={onAudioChoice}>
+          Generate Audio Melody
+        </Button>
+      </Box>
+    </Box>
+  );
+};
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   const theme = useTheme();
@@ -95,6 +126,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   const [stepManager] = useState(() => new StepManager());
   const [steps, setSteps] = useState<Step[]>([]);
   const [isStepMode, setIsStepMode] = useState(true);
+  
+  // Generation choice state
+  const [showGenerationChoiceButtons, setShowGenerationChoiceButtons] = useState(false);
+  const [pendingPrompt, setPendingPrompt] = useState('');
+  const [pendingUserMessage, setPendingUserMessage] = useState<Message | null>(null);
+  const [selectedGenerationType, setSelectedGenerationType] = useState<'midi' | 'audio' | null>(null);
   
   // Access the store for executing actions and project context
   const { 
@@ -448,36 +485,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     }
   }
   
-  // Handle sending message to the AI
-  const handleSend = async () => {
-    setSelectedTrack(null);
-    if (!prompt.trim()) return;
-    
-    // First check if we need to cancel an active stream
-    if (streamConnection) {
-      streamConnection.close();
-      setStreamConnection(null);
-      setIsLoading(false);
-      setIsStreaming(false);
-      
-      // Also cancel the request on the server if we have a request ID
-      if (currentRequestId) {
-        handleCancel();
-      }
-      return;
-    }
-    
-    // Add user message to chat with current mode and selected track
-    const userMessage: Message = { 
-      text: prompt, 
-      isUser: true,
-      mode: mode,  // Add mode to message
-      selectedTrack: selectedTrack  // Add selected track to message
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
-    // Clear input and set loading state
-    setPrompt('');
+  // Common function to start assistant interaction
+  const startAssistantInteraction = async (promptText: string, generationType?: 'midi' | 'audio') => {
     setIsLoading(true);
     
     try {
@@ -504,7 +513,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       // Use the new POST-then-SSE pattern with interactWithAssistant
       const { requestId, close } = await interactWithAssistant(
         {
-          prompt,
+          prompt: promptText,
           mode: apiMode,
           model: selectedModel,
           context: { // Pass musical context for better AI generation
@@ -516,7 +525,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
               denominator: timeSignature[1]
             },
             key_signature: keySignature,
-            project_title: projectTitle
+            project_title: projectTitle,
+            generation_type: generationType || 'midi'
           }
         },
         setupStreamCallbacks()
@@ -525,14 +535,94 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       // Store request ID and connection for potential cancellation
       setCurrentRequestId(requestId);
       setStreamConnection({ close });
+      
     } catch (error) {
-      console.error('Error handling assistant response:', error);
+      console.error('Error starting assistant interaction:', error);
       setMessages(prev => [...prev, { 
         text: "Sorry, I encountered an error processing your request.", 
         isUser: false 
       }]);
       setIsLoading(false);
     }
+  };
+
+  // Handle sending message to the AI
+  const handleSend = async () => {
+    setSelectedTrack(null);
+    if (!prompt.trim()) return;
+    
+    // First check if we need to cancel an active stream
+    if (streamConnection) {
+      streamConnection.close();
+      setStreamConnection(null);
+      setIsLoading(false);
+      setIsStreaming(false);
+      
+      // Also cancel the request on the server if we have a request ID
+      if (currentRequestId) {
+        handleCancel();
+      }
+      return;
+    }
+    
+    // Check if this is Generate mode and we need to show choice buttons
+    if (mode === 'Generate' && !selectedGenerationType) {
+      // Add user message to chat with current mode and selected track
+      const userMessage: Message = { 
+        text: prompt, 
+        isUser: true,
+        mode: mode,
+        selectedTrack: selectedTrack
+      };
+      setMessages(prev => [...prev, userMessage]);
+      
+      // Store pending data and show choice buttons
+      setPendingPrompt(prompt);
+      setPendingUserMessage(userMessage);
+      setShowGenerationChoiceButtons(true);
+      setPrompt(''); // Clear input
+      return;
+    }
+    
+    // For non-Generate mode or when generation type is already selected, proceed normally
+    const userMessage: Message = { 
+      text: selectedGenerationType ? pendingPrompt : prompt, 
+      isUser: true,
+      mode: mode,
+      selectedTrack: selectedTrack
+    };
+    
+    // Only add user message if we haven't already (for choice flow)
+    if (!selectedGenerationType) {
+      setMessages(prev => [...prev, userMessage]);
+    }
+    
+    // Clear input and start interaction
+    setPrompt('');
+    await startAssistantInteraction(
+      selectedGenerationType ? pendingPrompt : prompt,
+      selectedGenerationType || undefined
+    );
+    
+    // Reset choice state after completion or error
+    setShowGenerationChoiceButtons(false);
+    setSelectedGenerationType(null);
+    setPendingPrompt('');
+    setPendingUserMessage(null);
+  };
+  
+  // Handle generation choice selection
+  const handleGenerationChoice = async (generationType: 'midi' | 'audio') => {
+    setSelectedGenerationType(generationType);
+    setShowGenerationChoiceButtons(false);
+    
+    // Start the assistant interaction directly
+    await startAssistantInteraction(pendingPrompt, generationType);
+    
+    // Reset choice state after starting generation
+    setSelectedGenerationType(null);
+    setPendingPrompt('');
+    setPendingUserMessage(null);
   };
   
   // Helper function to create a CombinedTrack with instance metadata
@@ -1043,6 +1133,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
               )
             )
           )}
+          
+          {/* Generation choice buttons */}
+          {showGenerationChoiceButtons && (
+            <GenerationChoiceButtons 
+              onMidiChoice={() => handleGenerationChoice('midi')}
+              onAudioChoice={() => handleGenerationChoice('audio')}
+            />
+          )}
+          
           <div ref={messagesEndRef} />
         </Box>
 
