@@ -71,7 +71,7 @@ async def get_audio_duration(audio_source: Union[str, bytes]) -> float:
 
 def _get_duration_from_bytes(audio_data: bytes) -> float:
     """
-    Get the duration of audio from audio data bytes using mutagen
+    Get the duration of audio from audio data bytes using multiple methods
     
     Args:
         audio_data: Audio file content as bytes
@@ -79,8 +79,21 @@ def _get_duration_from_bytes(audio_data: bytes) -> float:
     Returns:
         Duration in seconds
     """
+    # Try pydub first (more reliable for duration detection)
     try:
-        # Use mutagen for audio metadata extraction
+        from pydub import AudioSegment
+        audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
+        duration_seconds = len(audio_segment) / 1000.0
+        logger.info(f"Audio duration detected: {duration_seconds:.2f} seconds")
+        return duration_seconds
+        
+    except ImportError:
+        logger.info("pydub not available, falling back to mutagen")
+    except Exception as e:
+        logger.warning(f"pydub duration detection failed: {str(e)}, falling back to mutagen")
+    
+    # Fallback to mutagen
+    try:
         audio_file = MutagenFile(io.BytesIO(audio_data))
         if audio_file is not None and hasattr(audio_file, 'info') and hasattr(audio_file.info, 'length'):
             duration = audio_file.info.length
