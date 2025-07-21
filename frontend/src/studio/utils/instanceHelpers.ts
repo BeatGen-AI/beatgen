@@ -1,4 +1,5 @@
 import { CombinedTrack, TrackInstance } from '../../platform/types/project';
+import { getAudioDuration, calculateAudioDurationTicks } from './audioAnalysis';
 
 export interface Position {
   x: number;
@@ -9,6 +10,24 @@ export interface Dimensions {
   start: number;
   end: number;
   width: number;
+}
+
+/**
+ * Calculate the effective duration_ticks for a track based on its type and content
+ * For audio tracks, calculates based on audio duration and BPM
+ * For other tracks, uses existing duration_ticks
+ */
+export function getEffectiveDurationTicks(track: CombinedTrack, bpm: number = 120): number {
+  // For audio tracks, calculate duration_ticks from audio duration
+  if (track.track_type === 'AUDIO') {
+    const audioDuration = getAudioDuration(track);
+    if (audioDuration > 0) {
+      return calculateAudioDurationTicks(audioDuration, bpm);
+    }
+  }
+  
+  // For other tracks or when audio duration is not available, use existing duration_ticks
+  return track.duration_ticks ?? 0;
 }
 
 /**

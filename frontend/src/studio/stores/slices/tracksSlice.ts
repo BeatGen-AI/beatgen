@@ -16,6 +16,7 @@ import { StoreApi } from 'zustand';
 import SampleManager from '../../core/samples/sampleManager';
 import { db } from '../../core/db/dexie-client';
 import { processAudioFile } from '../../utils/audioProcessing';
+import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
 
 // Define the state properties and actions for this slice
 export interface TracksSlice {
@@ -212,8 +213,40 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     }));
   };
 
+  // Helper to correct audio track durations directly in draft state
+  const correctAudioTrackDurations = (tracks: CombinedTrack[], currentBpm: number) => {
+      tracks.forEach(track => {
+          if (track.track_type === 'AUDIO' && track.instances) {
+              const audioDuration = getAudioDuration(track);
+              if (audioDuration > 0) {
+                  const correctDurationTicks = calculateAudioDurationTicks(audioDuration, currentBpm);
+                  
+                  // Check if instances need to be updated (have default/incorrect values)
+                  const needsUpdate = track.instances.some(instance => 
+                      instance.trim_end_ticks === 1920 || 
+                      instance.trim_end_ticks <= 0 ||
+                      isNaN(instance.trim_end_ticks)
+                  );
+                  
+                  if (needsUpdate) {
+                      // Update instances directly in the track (will be in draft state when called from setTracks)
+                      track.instances = track.instances.map(instance => ({
+                          ...instance,
+                          trim_end_ticks: correctDurationTicks
+                      }));
+                      
+                      // Update track duration directly
+                      track.duration_ticks = correctDurationTicks;
+                  }
+              }
+          }
+      });
+  };
+
   // Explicitly define setTracks within the slice scope
   const setTracks = (newTracks: CombinedTrack[]) => {
+      const currentBpm = rootGet().bpm || 120;
+      
       set(produce((draft: RootState) => {
           draft.tracks = newTracks;
           draft.tracks.forEach((track, index) => { 
@@ -234,6 +267,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               //     }];
               // }
           });
+          
+          // Correct audio track durations within the same state update
+          correctAudioTrackDurations(draft.tracks, currentBpm);
       }), true);
       
       // After setting tracks, register instances with MidiManager and migrate notes
@@ -339,6 +375,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       // TODO: Confirm PULSES_PER_QUARTER_NOTE is appropriate for ticks calculation relative to project settings
       const defaultDurationTicks = totalBeats * PULSES_PER_QUARTER_NOTE; 
       
+      // Calculate duration_ticks for audio tracks
+      let calculatedDurationTicks = options.duration ?? defaultDurationTicks;
+      if (type === 'AUDIO') {
+        const audioDuration = (options as AudioTrackOptions).audio_file_duration;
+        if (audioDuration && audioDuration > 0) {
+          calculatedDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
+        }
+      }
+
       // Build base trackData (serializable)
       const trackData: Omit<CombinedTrack, 'track'> & { track?: any } = {
         id: trackId,
@@ -348,7 +393,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         volume: trackProps.volume,
         pan: trackProps.pan,
         mute: trackProps.muted, 
-        duration_ticks: options.duration ?? defaultDurationTicks,
+        duration_ticks: calculatedDurationTicks,
         dirty: true, // New tracks are dirty by default (need to be saved)
         // Initialize with empty instances array
         instances: [],
@@ -405,12 +450,28 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
            }
       }
       
+      // Calculate proper trim_end_ticks for audio tracks
+      let initialTrimEndTicks = options.trim_end_ticks;
+      if (!initialTrimEndTicks) {
+        if (type === 'AUDIO') {
+          // For audio tracks, calculate duration based on actual audio file
+          const audioDuration = (options as AudioTrackOptions).audio_file_duration;
+          if (audioDuration && audioDuration > 0) {
+            initialTrimEndTicks = calculateAudioDurationTicks(audioDuration, bpm);
+          } else {
+            initialTrimEndTicks = options.duration ?? defaultDurationTicks;
+          }
+        } else {
+          initialTrimEndTicks = options.duration ?? defaultDurationTicks;
+        }
+      }
+
       const initialInstance = {
           id: `${trackId}_instance_1`,
           x_position: position.x,
           y_position: position.y,
           trim_start_ticks: options.trim_start_ticks ?? 0,
-          trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
+          trim_end_ticks: initialTrimEndTicks
       };
       
       const finalTrackData = { 
@@ -1653,13 +1714,30 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       newPosition = { x: 0, y: 0 };
     }
     
+    // Calculate proper trim_end_ticks for audio tracks
+    let trimEndTicks = sourceInstance?.trim_end_ticks;
+    if (!trimEndTicks) {
+      if (track.track_type === 'AUDIO') {
+        // For audio tracks, calculate duration based on actual audio file
+        const audioDuration = getAudioDuration(track);
+        const currentBpm = rootGet().bpm || 120;
+        if (audioDuration > 0) {
+          trimEndTicks = calculateAudioDurationTicks(audioDuration, currentBpm);
+        } else {
+          trimEndTicks = track.duration_ticks || 1920;
+        }
+      } else {
+        trimEndTicks = track.duration_ticks || 1920;
+      }
+    }
+
     // Create new instance - use source instance data if provided
     const newInstance: TrackInstance = {
       id: instanceId,
       x_position: newPosition.x,
       y_position: newPosition.y,
       trim_start_ticks: sourceInstance?.trim_start_ticks ?? 0,
-      trim_end_ticks: sourceInstance?.trim_end_ticks ?? (track.duration_ticks || 1920)
+      trim_end_ticks: trimEndTicks
     };
     
     // Register instance with MidiManager for MIDI-based tracks

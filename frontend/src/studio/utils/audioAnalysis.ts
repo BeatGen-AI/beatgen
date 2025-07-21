@@ -13,11 +13,103 @@ const getGlobalAudioContext = () => {
 // Cache for analyzed audio data
 const audioAnalysisCache = new Map<string, number[]>();
 
+// Cache for high-resolution audio data
+const highResAudioCache = new Map<string, AudioAnalysisResult>();
+
 export interface AudioAnalysisResult {
   waveformData: number[];
   duration: number;
   sampleRate: number;
 }
+
+/**
+ * Analyzes audio file at high resolution and returns complete analysis result
+ * @param storageKey - The audio file storage key
+ * @returns Promise<AudioAnalysisResult> - High-resolution waveform data with metadata
+ */
+export const analyzeAudioFileHighRes = async (storageKey: string): Promise<AudioAnalysisResult> => {
+  const cacheKey = `${storageKey}_highres`;
+  
+  // Check cache first
+  if (highResAudioCache.has(cacheKey)) {
+    return highResAudioCache.get(cacheKey)!;
+  }
+
+  try {
+    // Validate storage key first
+    if (!storageKey || storageKey.trim() === '') {
+      throw new Error('Invalid storage key');
+    }
+
+    // Use global audio context
+    const audioContext = getGlobalAudioContext();
+    
+    // Resume audio context if it's suspended
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+    
+    // Download audio file using the API
+    const audioBlob = await downloadAudioTrackFile(storageKey);
+    
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    
+    if (arrayBuffer.byteLength === 0) {
+      throw new Error('Empty audio file');
+    }
+    
+    // Decode audio data
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    
+    if (audioBuffer.length === 0) {
+      throw new Error('Invalid audio data');
+    }
+    
+    // Extract channel data (use first channel)
+    const channelData = audioBuffer.getChannelData(0);
+    
+    // Generate high-resolution waveform data (1 sample per 5ms = 200 samples per second)
+    const targetSamplesPerSecond = 400;
+    const totalSamples = Math.floor(audioBuffer.duration * targetSamplesPerSecond);
+    const samplesPerDataPoint = Math.floor(channelData.length / totalSamples);
+    
+    const highResWaveformData: number[] = [];
+    
+    // Generate high-res waveform data using RMS
+    for (let i = 0; i < totalSamples; i++) {
+      const startIndex = i * samplesPerDataPoint;
+      const endIndex = Math.min(startIndex + samplesPerDataPoint, channelData.length);
+      
+      // Calculate RMS (Root Mean Square) for better visual representation
+      let sum = 0;
+      for (let j = startIndex; j < endIndex; j++) {
+        sum += channelData[j] * channelData[j];
+      }
+      const rms = Math.sqrt(sum / (endIndex - startIndex));
+      highResWaveformData.push(rms || 0); // Fallback to 0 if NaN
+    }
+    
+    // Normalize to 0-1 range
+    const maxAmplitude = Math.max(...highResWaveformData);
+    const normalizedData = highResWaveformData.map(val => maxAmplitude > 0 ? val / maxAmplitude : 0);
+    
+    const result: AudioAnalysisResult = {
+      waveformData: normalizedData,
+      duration: audioBuffer.duration,
+      sampleRate: audioBuffer.sampleRate
+    };
+    
+    // Cache the result
+    highResAudioCache.set(cacheKey, result);
+    
+    
+    return result;
+    
+  } catch (err) {
+    console.error('AudioAnalysis: High-res audio analysis failed:', err);
+    throw err;
+  }
+};
 
 /**
  * Analyzes audio file and returns normalized waveform data
@@ -28,11 +120,8 @@ export interface AudioAnalysisResult {
 export const analyzeAudioFile = async (storageKey: string, barCount: number): Promise<number[]> => {
   const cacheKey = `${storageKey}_${barCount}`;
   
-  console.log('AudioAnalysis: Analyzing audio file with storageKey:', storageKey, 'barCount:', barCount);
-  
   // Check cache first
   if (audioAnalysisCache.has(cacheKey)) {
-    console.log('AudioAnalysis: Found cached waveform data');
     return audioAnalysisCache.get(cacheKey)!;
   }
 
@@ -155,8 +244,23 @@ export const getAudioDuration = (track: any): number => {
 };
 
 /**
+ * Calculate duration in ticks for an audio track based on its duration and BPM
+ * @param durationInSeconds - Audio duration in seconds
+ * @param bpm - Project BPM
+ * @returns number - Duration in ticks
+ */
+export const calculateAudioDurationTicks = (durationInSeconds: number, bpm: number): number => {
+  if (durationInSeconds <= 0 || bpm <= 0) return 0;
+  
+  // 480 ticks per beat (quarter note)
+  const ticksPerSecond = 480 * bpm / 60;
+  return Math.round(durationInSeconds * ticksPerSecond);
+};
+
+/**
  * Clear the audio analysis cache
  */
 export const clearAudioAnalysisCache = () => {
   audioAnalysisCache.clear();
+  highResAudioCache.clear();
 };

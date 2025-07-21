@@ -1,7 +1,7 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { Group, Line, Rect, Shape } from 'react-konva';
 import { CombinedTrack } from 'src/platform/types/project';
-import { analyzeAudioFile, getAudioStorageKey, getAudioDuration } from '../../../../utils/audioAnalysis';
+import { analyzeAudioFileHighRes, getAudioStorageKey, getAudioDuration, AudioAnalysisResult } from '../../../../utils/audioAnalysis';
 
 export interface AudioTrackRendererProps {
   track: CombinedTrack;
@@ -25,7 +25,7 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   color,
   bpm
 }) => {
-  const [realWaveformData, setRealWaveformData] = useState<number[]>([]);
+  const [highResAnalysis, setHighResAnalysis] = useState<AudioAnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,9 +51,9 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
     return width;
   }, [audioDuration, pixelsPerTick, bpm]);
 
-  // Load real waveform data
+  // Load high-resolution waveform data once
   useEffect(() => {
-    const loadWaveform = async () => {
+    const loadHighResWaveform = async () => {
       if (!audioStorageKey) {
         setError('No audio storage key available');
         setIsLoading(false);
@@ -64,33 +64,55 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
         setIsLoading(true);
         setError(null);
         
-        // Calculate number of bars based on actual width
-        const barCount = Math.floor(actualWidth / 2); // One bar every 2 pixels
-        const waveformData = await analyzeAudioFile(audioStorageKey, barCount);
+        // Load high-resolution analysis data (cached per audio file)
+        const analysisResult = await analyzeAudioFileHighRes(audioStorageKey);
         
-        setRealWaveformData(waveformData);
+        setHighResAnalysis(analysisResult);
       } catch (err) {
-        console.error('AudioTrackRenderer: Failed to load waveform:', err);
+        console.error('AudioTrackRenderer: Failed to load high-res waveform:', err);
         setError(err instanceof Error ? err.message : 'Failed to load waveform');
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadWaveform();
-  }, [audioStorageKey, actualWidth]);
+    loadHighResWaveform();
+  }, [audioStorageKey]); // Only re-analyze when audio file changes, not on zoom
 
-  // Generate waveform points from real data only
+  // Generate adaptive waveform points that fill the entire actualWidth
   const waveformData = useMemo(() => {
     const points: number[] = [];
     const centerY = height / 2;
     const maxAmplitude = height * 0.4; // 80% of height for waveform
     
-    if (realWaveformData.length > 0) {
-      // Use real waveform data
-      for (let i = 0; i < realWaveformData.length; i++) {
-        const x = i * 2; // 2 pixels per bar
-        const amplitude = realWaveformData[i] * maxAmplitude;
+    if (highResAnalysis && highResAnalysis.waveformData.length > 0) {
+      const highResData = highResAnalysis.waveformData;
+      
+      // Calculate how many pixels we want to render (target around 1-2 pixels per data point for smooth curves)
+      const targetPoints = Math.max(Math.floor(actualWidth / 2), 1);
+      
+      // Calculate how many high-res samples to average per target point
+      const samplesPerPoint = highResData.length / targetPoints;
+      
+      
+      // Generate waveform points by sampling from high-res data
+      for (let i = 0; i < targetPoints; i++) {
+        const x = (i * actualWidth) / targetPoints; // Spread points across actualWidth
+        
+        // Calculate which high-res samples to average for this point
+        const startSample = Math.floor(i * samplesPerPoint);
+        const endSample = Math.min(Math.floor((i + 1) * samplesPerPoint), highResData.length);
+        
+        // Average the samples in this range
+        let sum = 0;
+        let count = 0;
+        for (let j = startSample; j < endSample; j++) {
+          sum += highResData[j];
+          count++;
+        }
+        
+        const averageAmplitude = count > 0 ? sum / count : 0;
+        const amplitude = averageAmplitude * maxAmplitude;
         
         // Upper waveform
         points.push(x, centerY - amplitude);
@@ -101,7 +123,7 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
     }
     
     return points;
-  }, [realWaveformData, height]);
+  }, [highResAnalysis, height, actualWidth]);
   
   // Split points into upper and lower waveforms
   const upperPoints = [];
@@ -157,8 +179,8 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
       
       {/* Content elements - use contentOffset for translation (like MIDI) */}
       <Group x={contentOffset} y={0}>
-        {/* Only render waveform if we have real data */}
-        {realWaveformData.length > 0 && (
+        {/* Only render waveform if we have high-res data */}
+        {highResAnalysis && highResAnalysis.waveformData.length > 0 && (
           <>
             {/* Filled waveform area */}
             <Shape

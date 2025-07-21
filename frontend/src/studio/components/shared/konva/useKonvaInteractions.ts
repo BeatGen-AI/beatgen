@@ -463,11 +463,6 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
 
   // Update resize
   const updateResize = useCallback((mousePos: Position) => {
-    console.log('🔄 updateResize called', {
-      isResizing,
-      hasResizeStartRef: !!resizeStartRef.current,
-      mousePos
-    });
     if (!isResizing || !resizeStartRef.current) {
       console.log('⚠️ updateResize early return', { isResizing, hasRef: !!resizeStartRef.current });
       return;

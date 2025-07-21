@@ -25,6 +25,7 @@ import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstant
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import { useTheme } from '@mui/material/styles';
 import Konva from 'konva';
+import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
 
 export interface KonvaTimelineProps {
   tracks: CombinedTrack[];
@@ -199,7 +200,18 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       if (track.instances) {
         track.instances.forEach(instance => {
           // Calculate the right edge of this instance in pixels
-          const instanceRight = (instance.x_position + (instance.trim_end_ticks - instance.trim_start_ticks)) * pixelsPerTick;
+          let instanceWidth = instance.trim_end_ticks - instance.trim_start_ticks;
+          
+          // For AUDIO tracks, use calculated duration only if trim values are invalid
+          if (track.track_type === 'AUDIO' && (instanceWidth <= 0 || isNaN(instanceWidth))) {
+            const audioDuration = getAudioDuration(track);
+            if (audioDuration > 0) {
+              const calculatedDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
+              instanceWidth = calculatedDurationTicks - (instance.trim_start_ticks || 0);
+            }
+          }
+          
+          const instanceRight = (instance.x_position + instanceWidth) * pixelsPerTick;
           maxRightEdge = Math.max(maxRightEdge, instanceRight);
         });
       }
@@ -254,7 +266,16 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             y = dragPreview.y;
           }
           
-          const width = instance.trim_end_ticks - instance.trim_start_ticks;
+          let width = instance.trim_end_ticks - instance.trim_start_ticks;
+          
+          // For AUDIO tracks, use calculated duration only if trim values are invalid
+          if (track.track_type === 'AUDIO' && (width <= 0 || isNaN(width))) {
+            const audioDuration = getAudioDuration(track);
+            if (audioDuration > 0) {
+              const calculatedDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
+              width = calculatedDurationTicks - (instance.trim_start_ticks || 0);
+            }
+          }
           
           // Skip invalid instances
           if (isNaN(x) || isNaN(y) || isNaN(width) || width <= 0) {
@@ -690,8 +711,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     
     // Only handle zoom with Ctrl/Cmd
     if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      
       // Get the mouse position relative to the timeline for zoom centering
       const rect = containerRef.current?.getBoundingClientRect();
       const mouseX = rect ? e.clientX - rect.left + scrollX : scrollX;
