@@ -235,8 +235,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
         const audioDuration = getAudioDuration(track);
         if (audioDuration > 0) {
           const calculatedDurationTicks = calculateDurationTicks(audioDuration, bpm);
-          // Update track duration_ticks if it's missing or significantly different
-          if (!track.duration_ticks || Math.abs(track.duration_ticks - calculatedDurationTicks) > 100) {
+          // Always update track duration_ticks for audio tracks to reflect current BPM
+          if (!track.duration_ticks || track.duration_ticks !== calculatedDurationTicks) {
             console.log(`🎵 Adjusting track ${track.id} duration:`, {
               audioDuration,
               originalDurationTicks: track.duration_ticks,
@@ -316,7 +316,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     });
     
     return items;
-  }, [tracks, resizePreviewPositions, resizePreviewWidths, dragPreviewPositions, pixelsPerTick]);
+  }, [tracks, resizePreviewPositions, resizePreviewWidths, dragPreviewPositions, pixelsPerTick, bpm]);
   
   // Filter konva items to only include visible ones (viewport culling)
   const visibleKonvaItems = useMemo(() => {
