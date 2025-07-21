@@ -10,6 +10,7 @@ export interface AudioTrackRendererProps {
   pixelsPerTick: number;
   contentOffset: number;
   color: string;
+  bpm: number;
 }
 
 /**
@@ -21,7 +22,8 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   height,
   pixelsPerTick,
   contentOffset,
-  color
+  color,
+  bpm
 }) => {
   const [realWaveformData, setRealWaveformData] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,16 +40,25 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   const audioDuration = getAudioDuration(track);
   
   // Calculate the actual width based on audio duration and pixelsPerTick
-  // For timeline tracks, we want the waveform to represent the actual duration
+  // Always use the actual audio duration, not the container width
   const actualWidth = useMemo(() => {
     if (audioDuration > 0) {
-      // Convert duration to ticks (assuming 480 ticks per beat at 120 BPM)
-      const ticksPerSecond = 480 * 120 / 60; // 480 ticks per beat, 120 BPM = 2 beats per second
+      // Convert duration to ticks using actual project BPM
+      const ticksPerSecond = 480 * bpm / 60; // 480 ticks per beat, using project BPM
       const durationTicks = audioDuration * ticksPerSecond;
-      return Math.max(durationTicks * pixelsPerTick, width);
+      const calculatedWidth = durationTicks * pixelsPerTick;
+      console.log(`🎵 AudioTrackRenderer width calculation:`, {
+        audioDuration,
+        bpm,
+        ticksPerSecond,
+        durationTicks,
+        pixelsPerTick,
+        calculatedWidth
+      });
+      return calculatedWidth;
     }
     return width;
-  }, [audioDuration, pixelsPerTick, width]);
+  }, [audioDuration, pixelsPerTick, width, bpm]);
 
   // Load real waveform data
   useEffect(() => {
@@ -112,49 +123,49 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   
   return (
     <Group>
-      {/* Waveform background */}
+      {/* Waveform background - use container width, not content width */}
       <Rect
         x={0}
         y={0}
-        width={actualWidth}
+        width={width}
         height={height}
         fill={`${color}20`}
       />
       
-      {/* Center line */}
+      {/* Center line - use container width */}
       <Line
-        points={[0, height / 2, actualWidth, height / 2]}
+        points={[0, height / 2, width, height / 2]}
         stroke={`${color}40`}
         strokeWidth={1}
       />
       
-      {/* Loading indicator */}
+      {/* Loading indicator - use container width */}
       {isLoading && (
         <Rect
           x={0}
           y={0}
-          width={actualWidth}
+          width={width}
           height={height}
           fill={`${color}10`}
           opacity={0.5}
         />
       )}
       
-      {/* Error state */}
+      {/* Error state - use container width */}
       {error && (
         <Rect
           x={0}
           y={0}
-          width={actualWidth}
+          width={width}
           height={height}
           fill={`${color}15`}
           opacity={0.3}
         />
       )}
       
-      {/* Only render waveform if we have real data */}
+      {/* Only render waveform if we have real data - use Group with translation */}
       {realWaveformData.length > 0 && (
-        <>
+        <Group x={contentOffset} y={0}>
           {/* Filled waveform area */}
           <Shape
             sceneFunc={(context, shape) => {
@@ -204,22 +215,24 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
             lineCap="round"
             opacity={0.95}
           />
-        </>
+        </Group>
       )}
       
-      {/* Add some visual markers for beats (optional) */}
-      {Array.from({ length: Math.floor(actualWidth / (pixelsPerTick * 480)) }).map((_, i) => {
-        const x = i * pixelsPerTick * 480; // Every beat
-        return (
-          <Line
-            key={i}
-            points={[x, 0, x, height]}
-            stroke={`${color}20`}
-            strokeWidth={1}
-            dash={[2, 4]}
-          />
-        );
-      })}
+      {/* Beat markers - use Group with translation like the waveform */}
+      <Group x={contentOffset} y={0}>
+        {Array.from({ length: Math.floor(actualWidth / (pixelsPerTick * 480)) }).map((_, i) => {
+          const x = i * pixelsPerTick * 480; // Every beat
+          return (
+            <Line
+              key={i}
+              points={[x, 0, x, height]}
+              stroke={`${color}20`}
+              strokeWidth={1}
+              dash={[2, 4]}
+            />
+          );
+        })}
+      </Group>
     </Group>
   );
 };

@@ -271,10 +271,11 @@ export function useResizeDrag<T extends DraggableResizableItem>(
           newWidth = rightEdge - newStart;
         }
 
-        // Ensure minimum width
-        if (newWidth < gridSize) {
-          newWidth = gridSize;
-          newStart = initialDim.x + initialDim.width - gridSize;
+        // Ensure minimum width (much smaller for audio tracks)
+        const minWidth = 10; // Allow very small widths for precise audio trimming
+        if (newWidth < minWidth) {
+          newWidth = minWidth;
+          newStart = initialDim.x + initialDim.width - minWidth;
         }
 
         // Ensure non-negative start
@@ -290,8 +291,9 @@ export function useResizeDrag<T extends DraggableResizableItem>(
           newWidth = snapToGrid(newWidth);
         }
 
-        // Ensure minimum width
-        newWidth = Math.max(gridSize, newWidth);
+        // Ensure minimum width (much smaller for audio tracks)
+        const minWidth = 10; // Allow very small widths for precise audio trimming
+        newWidth = Math.max(minWidth, newWidth);
 
         updates.set(itemId, { width: newWidth });
       }

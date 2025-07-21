@@ -140,7 +140,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
     
     switch (track.track_type) {
       case 'AUDIO':
-        return <AudioTrackRenderer {...contentProps} />;
+        return <AudioTrackRenderer {...contentProps} bpm={bpm} />;
       case 'MIDI':
       case 'SAMPLER':
         return <MidiTrackRenderer {...contentProps} />;

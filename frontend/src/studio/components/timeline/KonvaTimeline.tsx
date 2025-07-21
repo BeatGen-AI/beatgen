@@ -24,6 +24,7 @@ import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import { useTheme } from '@mui/material/styles';
+import { getAudioDuration, calculateDurationTicks } from '../../utils/audioAnalysis';
 import Konva from 'konva';
 
 export interface KonvaTimelineProps {
@@ -228,12 +229,53 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     const items: KonvaItem[] = [];
     
     tracks.forEach((track, trackIndex) => {
+      // For audio tracks, ensure duration_ticks matches audio duration and current BPM
+      let adjustedTrack = track;
+      if ((track.track_type === 'AUDIO' || track.track_type === 'SAMPLER') && track.track && resizePreviewWidths.size === 0) {
+        const audioDuration = getAudioDuration(track);
+        if (audioDuration > 0) {
+          const calculatedDurationTicks = calculateDurationTicks(audioDuration, bpm);
+          // Always update track duration_ticks to reflect current BPM
+          if (!track.duration_ticks || track.duration_ticks !== calculatedDurationTicks) {
+            console.log(`🎵 Updating track ${track.id} duration for BPM:`, {
+              audioDuration,
+              originalDurationTicks: track.duration_ticks,
+              calculatedDurationTicks,
+              bpm
+            });
+            
+            // Update instances to match new duration (for unmodified instances)
+            const adjustedInstances = track.instances?.map(instance => {
+              const currentInstanceDuration = instance.trim_end_ticks - instance.trim_start_ticks;
+              const wasFullDuration = track.duration_ticks && currentInstanceDuration === track.duration_ticks;
+              
+              // Only auto-adjust if this instance was at full duration (not manually trimmed)
+              if (wasFullDuration || !track.duration_ticks) {
+                return {
+                  ...instance,
+                  trim_end_ticks: instance.trim_start_ticks + calculatedDurationTicks
+                };
+              }
+              
+              // Keep manually trimmed instances as-is
+              return instance;
+            }) || [];
+            
+            adjustedTrack = {
+              ...track,
+              duration_ticks: calculatedDurationTicks,
+              instances: adjustedInstances
+            };
+          }
+        }
+      }
+      
       // Create items for each instance. If no instances, nothing is rendered for this track.
-      if (track.instances) {
-        track.instances.forEach(instance => {
+      if (adjustedTrack.instances) {
+        adjustedTrack.instances.forEach(instance => {
           // Validate instance data
           if (!instance || typeof instance.trim_start_ticks !== 'number' || typeof instance.trim_end_ticks !== 'number') {
-            console.error(`Invalid instance data for track ${track.id}:`, instance);
+            console.error(`Invalid instance data for track ${adjustedTrack.id}:`, instance);
             return;
           }
           
@@ -278,14 +320,14 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               : width,
             height: GRID_CONSTANTS.trackHeight,
             type: 'track' as const,
-            data: { ...track, instanceId: instance.id, instance, trackIndex }
+            data: { ...adjustedTrack, instanceId: instance.id, instance, trackIndex }
           });
         });
       }
     });
     
     return items;
-  }, [tracks, resizePreviewPositions, resizePreviewWidths, dragPreviewPositions, pixelsPerTick]);
+  }, [tracks, resizePreviewPositions, resizePreviewWidths, dragPreviewPositions, pixelsPerTick, bpm, resizePreviewWidths.size]);
   
   // Filter konva items to only include visible ones (viewport culling)
   const visibleKonvaItems = useMemo(() => {
@@ -427,8 +469,49 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       
       updates.forEach((dim, instanceId) => {
         if (dim.width !== undefined) {
+          // Find the item and track to validate audio duration constraints
+          const item = konvaItems.find(item => item.id === instanceId);
+          let clampedWidth = dim.width;
+          
+          if (item && item.data) {
+            const track = tracks.find(t => t.id === item.data.id);
+            const instance = item.data.instance;
+            
+            // For audio tracks only, clamp width to valid bounds
+            // Sampler tracks can be extended beyond their sample duration (looping/stretching)
+            if (track && instance && track.track_type === 'AUDIO' && track.duration_ticks) {
+              const maxAllowedWidth = track.duration_ticks - instance.trim_start_ticks;
+              const minWidth = 480; // Minimum 1 beat width
+              
+              // Only clamp if we have a valid range
+              if (maxAllowedWidth > minWidth) {
+                clampedWidth = Math.min(dim.width, maxAllowedWidth);
+                clampedWidth = Math.max(clampedWidth, minWidth);
+                
+                if (clampedWidth !== dim.width) {
+                  console.log('🔒 Preview width clamped for audio track:', {
+                    instanceId,
+                    requestedWidth: dim.width,
+                    clampedWidth,
+                    maxAllowedWidth,
+                    minWidth,
+                    trackDuration: track.duration_ticks
+                  });
+                }
+              } else {
+                // Keep original width if range is invalid
+                console.warn('Invalid preview range for audio track:', {
+                  instanceId,
+                  maxAllowedWidth,
+                  minWidth,
+                  trackDuration: track.duration_ticks
+                });
+              }
+            }
+          }
+          
           // Convert logical width (ticks) to pixels for preview
-          const widthInPixels = dim.width * pixelsPerTick;
+          const widthInPixels = clampedWidth * pixelsPerTick;
           newPreviewWidths.set(instanceId, widthInPixels);
         }
         if (dim.start !== undefined) {
@@ -518,9 +601,33 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 });
                 instanceUpdates.push({ trackId, instanceId, widthDelta: deltaPixels, anchor: 'left' });
               } else if (dim.width !== undefined) {
-                // Right resize
+                // Right resize - for audio tracks, clamp to valid bounds
                 const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
-                const newWidthTicks = dim.width;
+                let newWidthTicks = dim.width;
+                
+                // For audio tracks only, clamp width to valid bounds  
+                const track = tracks.find(t => t.id === trackId);
+                if (track && track.track_type === 'AUDIO' && track.duration_ticks) {
+                  const maxAllowedWidth = track.duration_ticks - instance.trim_start_ticks;
+                  const minWidth = 480; // Minimum 1 beat width
+                  
+                  // Ensure we have a valid range
+                  if (maxAllowedWidth > minWidth) {
+                    newWidthTicks = Math.min(newWidthTicks, maxAllowedWidth);
+                    newWidthTicks = Math.max(newWidthTicks, minWidth);
+                  } else {
+                    // If the range is invalid, skip this instance in group resize
+                    console.warn('Invalid resize range for audio track in group:', {
+                      instanceId,
+                      maxAllowedWidth,
+                      minWidth,
+                      trimStart: instance.trim_start_ticks,
+                      trackDuration: track.duration_ticks
+                    });
+                    return; // Skip this instance
+                  }
+                }
+                
                 const deltaTicks = newWidthTicks - currentWidthTicks;
                 const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
                 instanceUpdates.push({ trackId, instanceId, widthDelta: deltaPixels, anchor: 'right' });
@@ -539,6 +646,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             const trackId = item.data.id;
             const instance = item.data.instance;
             if (instance && onInstanceResizeEnd) {
+              const track = tracks.find(t => t.id === trackId);
+              
               // For left resize, we need to update the trim
               if (dim.start !== undefined && dim.width !== undefined) {
                 // Left resize - pass the position change, not width change
@@ -555,9 +664,50 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 });
                 onInstanceResizeEnd(trackId, instanceId, deltaPixels, 'left');
               } else if (dim.width !== undefined) {
-                // Right resize - only width changed
+                // Right resize - for audio tracks, clamp to valid bounds
                 const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
-                const newWidthTicks = dim.width;
+                let newWidthTicks = dim.width;
+                
+                console.log('🔧 Single right resize debug:', {
+                  instanceId,
+                  requestedWidth: dim.width,
+                  currentWidth: currentWidthTicks,
+                  trimStart: instance.trim_start_ticks,
+                  trimEnd: instance.trim_end_ticks,
+                  trackType: track?.track_type,
+                  trackDuration: track?.duration_ticks
+                });
+                
+                // For audio tracks only, clamp width to valid bounds
+                if (track && track.track_type === 'AUDIO' && track.duration_ticks) {
+                  const maxAllowedWidth = track.duration_ticks - instance.trim_start_ticks;
+                  const minWidth = 480; // Minimum 1 beat width
+                  
+                  // Ensure we have a valid range
+                  if (maxAllowedWidth > minWidth) {
+                    const beforeClamp = newWidthTicks;
+                    newWidthTicks = Math.min(newWidthTicks, maxAllowedWidth);
+                    newWidthTicks = Math.max(newWidthTicks, minWidth);
+                    console.log('🔧 Single resize clamping logic applied:', {
+                      beforeClamp,
+                      afterClamp: newWidthTicks,
+                      maxAllowedWidth,
+                      minWidth,
+                      wasChanged: beforeClamp !== newWidthTicks
+                    });
+                  } else {
+                    // If the range is invalid, don't allow the resize
+                    console.warn('Invalid resize range for audio track:', {
+                      instanceId,
+                      maxAllowedWidth,
+                      minWidth,
+                      trimStart: instance.trim_start_ticks,
+                      trackDuration: track.duration_ticks
+                    });
+                    return; // Skip this resize
+                  }
+                }
+                
                 const deltaTicks = newWidthTicks - currentWidthTicks;
                 const deltaPixels = ticksToPixels(deltaTicks, bpm, timeSignature);
                 onInstanceResizeEnd(trackId, instanceId, deltaPixels, 'right');
