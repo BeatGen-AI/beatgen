@@ -231,7 +231,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     tracks.forEach((track, trackIndex) => {
       // For audio tracks, ensure duration_ticks matches audio duration and current BPM
       let adjustedTrack = track;
-      if ((track.track_type === 'AUDIO' || track.track_type === 'SAMPLER') && track.track) {
+      if ((track.track_type === 'AUDIO' || track.track_type === 'SAMPLER') && track.track && resizePreviewWidths.size === 0) {
         const audioDuration = getAudioDuration(track);
         if (audioDuration > 0) {
           const calculatedDurationTicks = calculateDurationTicks(audioDuration, bpm);
@@ -327,7 +327,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     });
     
     return items;
-  }, [tracks, resizePreviewPositions, resizePreviewWidths, dragPreviewPositions, pixelsPerTick, bpm]);
+  }, [tracks, resizePreviewPositions, resizePreviewWidths, dragPreviewPositions, pixelsPerTick, bpm, resizePreviewWidths.size]);
   
   // Filter konva items to only include visible ones (viewport culling)
   const visibleKonvaItems = useMemo(() => {
@@ -668,6 +668,16 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
                 let newWidthTicks = dim.width;
                 
+                console.log('🔧 Single right resize debug:', {
+                  instanceId,
+                  requestedWidth: dim.width,
+                  currentWidth: currentWidthTicks,
+                  trimStart: instance.trim_start_ticks,
+                  trimEnd: instance.trim_end_ticks,
+                  trackType: track?.track_type,
+                  trackDuration: track?.duration_ticks
+                });
+                
                 // For audio tracks only, clamp width to valid bounds
                 if (track && track.track_type === 'AUDIO' && track.duration_ticks) {
                   const maxAllowedWidth = track.duration_ticks - instance.trim_start_ticks;
@@ -675,8 +685,16 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   
                   // Ensure we have a valid range
                   if (maxAllowedWidth > minWidth) {
+                    const beforeClamp = newWidthTicks;
                     newWidthTicks = Math.min(newWidthTicks, maxAllowedWidth);
                     newWidthTicks = Math.max(newWidthTicks, minWidth);
+                    console.log('🔧 Single resize clamping logic applied:', {
+                      beforeClamp,
+                      afterClamp: newWidthTicks,
+                      maxAllowedWidth,
+                      minWidth,
+                      wasChanged: beforeClamp !== newWidthTicks
+                    });
                   } else {
                     // If the range is invalid, don't allow the resize
                     console.warn('Invalid resize range for audio track:', {
