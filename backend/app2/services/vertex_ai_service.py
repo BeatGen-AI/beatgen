@@ -14,6 +14,7 @@ import requests
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from app2.core.logging import get_service_logger
+from app2.utils.audio_utils import get_audio_duration
 
 from google.auth import default
 from google.auth.transport.requests import Request
@@ -112,16 +113,19 @@ class VertexAIService:
             if not audio_url:
                 raise Exception(f"No audio data found in Vertex AI response. Response: {result}")
             
-            # Create result object (Vertex AI Lyria2 generates 30-second clips at 48kHz)
+            # Get the actual duration from the audio file
+            actual_duration = await get_audio_duration(audio_url)
+            
+            # Create result object with actual duration
             audio_result = AudioGenerationResult(
                 audio_url=audio_url,
                 file_name=file_name,
-                duration=30.0,  # Vertex AI Lyria2 generates 30-second clips
+                duration=actual_duration,  # Use actual duration instead of hardcoded 30.0
                 sample_rate=48000,  # Vertex AI Lyria2 uses 48kHz
                 format="audio/wav"
             )
             
-            logger.info(f"Audio generation successful: {file_name}")
+            logger.info(f"Audio generation successful: {file_name}, duration: {actual_duration:.2f}s")
             return audio_result
                 
         except Exception as e:
