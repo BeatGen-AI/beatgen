@@ -10,6 +10,7 @@ export interface AudioTrackRendererProps {
   pixelsPerTick: number;
   contentOffset: number;
   color: string;
+  bpm: number;
 }
 
 /**
@@ -21,7 +22,8 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   height,
   pixelsPerTick,
   contentOffset,
-  color
+  color,
+  bpm
 }) => {
   const [realWaveformData, setRealWaveformData] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,13 +43,24 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   // For timeline tracks, we want the waveform to represent the actual duration
   const actualWidth = useMemo(() => {
     if (audioDuration > 0) {
-      // Convert duration to ticks (assuming 480 ticks per beat at 120 BPM)
-      const ticksPerSecond = 480 * 120 / 60; // 480 ticks per beat, 120 BPM = 2 beats per second
+      // Convert duration to ticks using actual project BPM
+      const ticksPerSecond = 480 * bpm / 60; // 480 ticks per beat, using project BPM
       const durationTicks = audioDuration * ticksPerSecond;
-      return Math.max(durationTicks * pixelsPerTick, width);
+      const calculatedWidth = durationTicks * pixelsPerTick;
+      console.log(`🎵 AudioTrackRenderer width calculation:`, {
+        audioDuration,
+        bpm,
+        ticksPerSecond,
+        durationTicks,
+        pixelsPerTick,
+        calculatedWidth,
+        inputWidth: width,
+        finalWidth: Math.max(calculatedWidth, width)
+      });
+      return Math.max(calculatedWidth, width);
     }
     return width;
-  }, [audioDuration, pixelsPerTick, width]);
+  }, [audioDuration, pixelsPerTick, width, bpm]);
 
   // Load real waveform data
   useEffect(() => {

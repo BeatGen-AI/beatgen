@@ -24,6 +24,7 @@ import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import { useTheme } from '@mui/material/styles';
+import { getAudioDuration, calculateDurationTicks } from '../../utils/audioAnalysis';
 import Konva from 'konva';
 
 export interface KonvaTimelineProps {
@@ -228,12 +229,42 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     const items: KonvaItem[] = [];
     
     tracks.forEach((track, trackIndex) => {
+      // For audio tracks, ensure duration_ticks is properly calculated from audio duration
+      let adjustedTrack = track;
+      if ((track.track_type === 'AUDIO' || track.track_type === 'SAMPLER') && track.track) {
+        const audioDuration = getAudioDuration(track);
+        if (audioDuration > 0) {
+          const calculatedDurationTicks = calculateDurationTicks(audioDuration, bpm);
+          // Update track duration_ticks if it's missing or significantly different
+          if (!track.duration_ticks || Math.abs(track.duration_ticks - calculatedDurationTicks) > 100) {
+            console.log(`🎵 Adjusting track ${track.id} duration:`, {
+              audioDuration,
+              originalDurationTicks: track.duration_ticks,
+              calculatedDurationTicks,
+              bpm
+            });
+            
+            // Also adjust instance trim_end_ticks to match the new duration
+            const adjustedInstances = track.instances?.map(instance => ({
+              ...instance,
+              trim_end_ticks: instance.trim_start_ticks + calculatedDurationTicks
+            })) || [];
+            
+            adjustedTrack = {
+              ...track,
+              duration_ticks: calculatedDurationTicks,
+              instances: adjustedInstances
+            };
+          }
+        }
+      }
+      
       // Create items for each instance. If no instances, nothing is rendered for this track.
-      if (track.instances) {
-        track.instances.forEach(instance => {
+      if (adjustedTrack.instances) {
+        adjustedTrack.instances.forEach(instance => {
           // Validate instance data
           if (!instance || typeof instance.trim_start_ticks !== 'number' || typeof instance.trim_end_ticks !== 'number') {
-            console.error(`Invalid instance data for track ${track.id}:`, instance);
+            console.error(`Invalid instance data for track ${adjustedTrack.id}:`, instance);
             return;
           }
           
@@ -278,7 +309,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               : width,
             height: GRID_CONSTANTS.trackHeight,
             type: 'track' as const,
-            data: { ...track, instanceId: instance.id, instance, trackIndex }
+            data: { ...adjustedTrack, instanceId: instance.id, instance, trackIndex }
           });
         });
       }

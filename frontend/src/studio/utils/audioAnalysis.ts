@@ -155,6 +155,20 @@ export const getAudioDuration = (track: any): number => {
 };
 
 /**
+ * Calculates duration_ticks from audio duration in seconds using project BPM
+ * @param durationInSeconds - Audio duration in seconds
+ * @param bpm - Project BPM
+ * @returns number - Duration in ticks (480 ticks per beat)
+ */
+export const calculateDurationTicks = (durationInSeconds: number, bpm: number): number => {
+  if (durationInSeconds <= 0 || bpm <= 0) return 0;
+  
+  // Convert duration to ticks using project BPM
+  const ticksPerSecond = 480 * bpm / 60; // 480 ticks per beat, using project BPM
+  return Math.round(durationInSeconds * ticksPerSecond);
+};
+
+/**
  * Clear the audio analysis cache
  */
 export const clearAudioAnalysisCache = () => {
