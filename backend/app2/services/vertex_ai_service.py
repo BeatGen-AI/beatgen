@@ -45,11 +45,23 @@ class VertexAIService:
         
         # Initialize credentials for authentication
         try:
-            self.credentials, _ = default()
+            self._setup_credentials()
             logger.info(f"Vertex AI service initialized for project: {self.project_id}, location: {self.location}")
         except Exception as e:
             logger.error(f"Failed to initialize Google credentials: {str(e)}")
             raise ValueError(f"Failed to initialize Google credentials: {str(e)}")
+    
+    def _setup_credentials(self):
+        """Setup credentials for different deployment environments"""
+        # Initialize credentials (will use GOOGLE_APPLICATION_CREDENTIALS file or ADC)
+        self.credentials, _ = default()
+        
+        # Log which credential source we're using
+        creds_file = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if creds_file:
+            logger.info(f"Using service account credentials from file: {creds_file}")
+        else:
+            logger.info("Using Application Default Credentials")
     
     async def generate_audio(
         self,

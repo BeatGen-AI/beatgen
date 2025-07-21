@@ -244,7 +244,6 @@ class TrackRepository:
             DatabaseException: If there's a database error
         """
         self.logger.info("Creating new track")
-        self.logger.info(f"Track data: {track_data}")
         try:
             # Ensure the correct type is in the data dictionary
             track_data_with_type = track_data.copy()

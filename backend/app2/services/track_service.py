@@ -458,7 +458,6 @@ class TrackService:
             ServiceException: If the operation fails
         """
         logger.info(f"Creating sampler track for user ID: {user_id}")
-        logger.info(f"Track data: {track_data}")
         try:
             # Add user ID
             track_data["user_id"] = user_id

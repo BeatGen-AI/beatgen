@@ -47,6 +47,10 @@ __pycache__/
 # SSL certificates
 .cert/
 
+# Google Cloud service account keys
+*-key.json
+vertex-ai-*.json
+
 assets/
 
 dns-records-app.beatgen.com.txt
