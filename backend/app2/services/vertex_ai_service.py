@@ -11,14 +11,16 @@ import uuid
 import base64
 import tempfile
 import requests
+import json
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-from app2.core.logging import get_service_logger
-from app2.utils.audio_utils import get_audio_duration
 
 from google.auth import default
 from google.auth.transport.requests import Request
-import json
+from google.oauth2 import service_account
+
+from app2.core.logging import get_service_logger
+from app2.utils.audio_utils import get_audio_duration
 
 logger = get_service_logger("vertex_ai_service")
 
@@ -53,15 +55,19 @@ class VertexAIService:
             raise ValueError(f"Failed to initialize Google credentials: {str(e)}") from e
     
     def _setup_credentials(self):
-        """Setup credentials for different deployment environments"""
-        # Initialize credentials (will use GOOGLE_APPLICATION_CREDENTIALS file or ADC)
-        self.credentials, _ = default()
-        
-        # Log which credential source we're using
+        """Setup Google Cloud credentials with proper scopes"""
         creds_file = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if creds_file:
-            logger.info(f"Using service account credentials from file: {creds_file}")
+        scopes = ['https://www.googleapis.com/auth/cloud-platform']
+        
+        if creds_file and os.path.exists(creds_file):
+            # Load service account credentials with specific scopes
+            self.credentials = service_account.Credentials.from_service_account_file(
+                creds_file, scopes=scopes
+            )
+            logger.info(f"Using service account credentials from file")
         else:
+            # Fall back to Application Default Credentials
+            self.credentials, _ = default(scopes=scopes)
             logger.info("Using Application Default Credentials")
     
     async def generate_audio(
@@ -81,46 +87,33 @@ class VertexAIService:
         Returns:
             AudioGenerationResult with the generated audio information
         """
-        logger.info(f"Generating audio with Vertex AI prompt: '{prompt}'")
+        logger.info(f"Generating audio with Vertex AI")
         
-        # Prepare request parameters for Vertex AI Lyria2
-        parameters = {
-            "prompt": prompt
-        }
-        
-        # Add optional parameters if provided
+        # Prepare request parameters
+        parameters = {"prompt": prompt}
         if negative_prompt:
             parameters["negative_prompt"] = negative_prompt
         if seed is not None:
             parameters["seed"] = seed
         
         try:
-            # Get the event loop
-            loop = asyncio.get_event_loop()
-            
             # Run the Vertex AI prediction in a thread executor to avoid blocking
-            result = await loop.run_in_executor(
-                None,
-                self._generate_music_sync,
-                parameters
-            )
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self._generate_music_sync, parameters)
             
-            logger.info("Vertex AI generation completed successfully")
-            
-            # Extract audio data from response and save to temporary file
+            # Process the audio response
             audio_url, file_name = self._process_audio_response(result)
-            
             if not audio_url:
-                raise Exception(f"No audio data found in Vertex AI response. Response: {result}")
+                raise Exception("No audio data found in Vertex AI response")
             
-            # Get the actual duration from the audio file
+            # Get actual duration from the audio file
             actual_duration = await get_audio_duration(audio_url)
             
-            # Create result object with actual duration
+            # Create result object
             audio_result = AudioGenerationResult(
                 audio_url=audio_url,
                 file_name=file_name,
-                duration=actual_duration,  # Use actual duration instead of hardcoded 30.0
+                duration=actual_duration,
                 sample_rate=48000,  # Vertex AI Lyria2 uses 48kHz
                 format="audio/wav"
             )
@@ -134,21 +127,16 @@ class VertexAIService:
     
     def _generate_music_sync(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Synchronous method to call Vertex AI music generation using REST API"""
-        
         try:
             # Refresh credentials to get access token
             self.credentials.refresh(Request())
             access_token = self.credentials.token
             
-            # Construct the REST API endpoint URL for Lyria-002
+            # Construct the REST API endpoint URL
             url = f"https://{self.location}-aiplatform.googleapis.com/v1/projects/{self.project_id}/locations/{self.location}/publishers/google/models/lyria-002:predict"
             
-            # Prepare the request payload according to Vertex AI docs
-            instance = {
-                "prompt": parameters["prompt"]
-            }
-            
-            # Add optional parameters if provided
+            # Prepare the request payload
+            instance = {"prompt": parameters["prompt"]}
             if "negative_prompt" in parameters and parameters["negative_prompt"]:
                 instance["negative_prompt"] = parameters["negative_prompt"]
             if "seed" in parameters and parameters["seed"] is not None:
@@ -164,22 +152,18 @@ class VertexAIService:
                 "Content-Type": "application/json"
             }
             
-            logger.info(f"Calling Vertex AI REST API: {url}")
-            logger.info(f"Request payload: {json.dumps(payload, indent=2)}")
-            
             # Make the REST API call
             response = requests.post(url, headers=headers, json=payload, timeout=120)
             
             if response.status_code != 200:
-                error_msg = f"Vertex AI API call failed: {response.status_code} - {response.text}"
-                logger.error(error_msg)
+                try:
+                    error_response = response.json()
+                    error_msg = f"Vertex AI API error ({response.status_code}): {error_response.get('error', {}).get('message', 'Unknown error')}"
+                except:
+                    error_msg = f"Vertex AI API error ({response.status_code}): {response.reason}"
                 raise Exception(error_msg)
             
-            result = response.json()
-            logger.info("Vertex AI generation completed successfully")
-            logger.info(f"Response keys: {list(result.keys())}")
-            
-            return result
+            return response.json()
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error calling Vertex AI: {str(e)}")
@@ -190,14 +174,10 @@ class VertexAIService:
     
     def _process_audio_response(self, result: Dict[str, Any]) -> Tuple[Optional[str], str]:
         """Process Vertex AI audio response and save to temporary file"""
-        
-        # Generate a unique filename
         file_name = f"vertex_ai_audio_{uuid.uuid4().hex[:8]}.wav"
         
-        # Extract audio content from response
+        # Extract audio content from response (base64 encoded)
         audio_content = None
-        
-        # Check for audioContent in response (base64 encoded)
         if "audioContent" in result:
             audio_content = result["audioContent"]
         elif "predictions" in result and result["predictions"]:
@@ -209,26 +189,17 @@ class VertexAIService:
                     audio_content = prediction["bytesBase64Encoded"]
         
         if not audio_content:
-            logger.error(f"No audioContent found in response: {result}")
             return None, file_name
         
         try:
-            # Decode base64 audio content
+            # Decode base64 audio content and save to temporary file
             audio_bytes = base64.b64decode(audio_content)
+            temp_file_path = os.path.join(tempfile.gettempdir(), file_name)
             
-            # Create temporary file
-            temp_dir = tempfile.gettempdir()
-            temp_file_path = os.path.join(temp_dir, file_name)
-            
-            # Write audio data to temporary file
             with open(temp_file_path, 'wb') as f:
                 f.write(audio_bytes)
             
-            logger.info(f"Audio saved to temporary file: {temp_file_path}")
-            
-            # Return file:// URL for local file access
-            file_url = f"file://{temp_file_path}"
-            return file_url, file_name
+            return f"file://{temp_file_path}", file_name
             
         except Exception as e:
             logger.error(f"Error processing audio content: {str(e)}")
@@ -244,33 +215,23 @@ class VertexAIService:
         Returns:
             Audio file content as bytes
         """
-        logger.info(f"Downloading audio from: {audio_url}")
-        
         try:
             # Handle local file:// URLs
             if audio_url.startswith("file://"):
                 file_path = audio_url[7:]  # Remove "file://" prefix
                 if os.path.exists(file_path):
                     with open(file_path, 'rb') as f:
-                        audio_data = f.read()
-                    logger.info(f"Successfully read {len(audio_data)} bytes from local file")
-                    return audio_data
+                        return f.read()
                 else:
                     raise Exception(f"Local file not found: {file_path}")
             
-            # Handle HTTP/HTTPS URLs (fallback for other providers)
+            # Handle HTTP/HTTPS URLs
             else:
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.get(audio_url)
-                    
                     if response.status_code != 200:
-                        error_msg = f"Failed to download audio: {response.status_code} - {response.text}"
-                        logger.error(error_msg)
-                        raise Exception(error_msg)
-                    
-                    audio_data = response.content
-                    logger.info(f"Successfully downloaded {len(audio_data)} bytes of audio data")
-                    return audio_data
+                        raise Exception(f"Failed to download audio: {response.status_code}")
+                    return response.content
                 
         except Exception as e:
             logger.error(f"Error downloading audio: {str(e)}")
@@ -288,20 +249,11 @@ class VertexAIService:
         Returns:
             Tuple of (audio_bytes, AudioGenerationResult)
         """
-        # Generate audio
-        result = await self.generate_audio(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            seed=seed
-        )
-        
-        # Download the audio file
+        result = await self.generate_audio(prompt=prompt, negative_prompt=negative_prompt, seed=seed)
         audio_data = await self.download_audio(result.audio_url)
-        
         return audio_data, result
 
 
-# Service factory function
 def get_vertex_ai_service() -> VertexAIService:
     """Get a new Vertex AI service instance"""
     return VertexAIService()
