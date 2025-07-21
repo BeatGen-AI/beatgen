@@ -202,8 +202,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
           // Calculate the right edge of this instance in pixels
           let instanceWidth = instance.trim_end_ticks - instance.trim_start_ticks;
           
-          // For AUDIO tracks, always calculate width from audio duration and BPM
-          if (track.track_type === 'AUDIO') {
+          // For AUDIO tracks, use calculated duration only if trim values are invalid
+          if (track.track_type === 'AUDIO' && (instanceWidth <= 0 || isNaN(instanceWidth))) {
             const audioDuration = getAudioDuration(track);
             if (audioDuration > 0) {
               const calculatedDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
@@ -268,18 +268,18 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
           
           let width = instance.trim_end_ticks - instance.trim_start_ticks;
           
-          // For AUDIO tracks, always calculate width from audio duration and BPM
-          if (track.track_type === 'AUDIO') {
+          // For AUDIO tracks, use calculated duration only if trim values are invalid
+          if (track.track_type === 'AUDIO' && (width <= 0 || isNaN(width))) {
             const audioDuration = getAudioDuration(track);
             if (audioDuration > 0) {
               const calculatedDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
               width = calculatedDurationTicks - (instance.trim_start_ticks || 0);
-              console.log(`Calculated audio track width for ${instance.id}:`, {
+              console.log(`Calculated audio track width for ${instance.id} (fallback):`, {
                 audioDuration,
                 calculatedDurationTicks,
                 trim_start_ticks: instance.trim_start_ticks,
                 finalWidth: width,
-                originalWidth: instance.trim_end_ticks - instance.trim_start_ticks
+                storedWidth: instance.trim_end_ticks - instance.trim_start_ticks
               });
             }
           }
