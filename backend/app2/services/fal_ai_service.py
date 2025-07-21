@@ -11,6 +11,7 @@ import uuid
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from app2.core.logging import get_service_logger
+from app2.utils.audio_utils import get_audio_duration
 
 # Import the official FAL client
 import fal_client
@@ -124,6 +125,12 @@ class FalAIService:
             if not audio_url:
                 raise Exception(f"No audio URL found in FAL-AI response. Response keys: {list(result.keys())}")
             
+<<<<<<< Updated upstream
+=======
+            # Get the actual duration from the audio file
+            actual_duration = await get_audio_duration(audio_url)
+            
+>>>>>>> Stashed changes
             # Generate a unique filename (FAL-AI Lyria2 outputs WAV)
             file_name = f"fal_ai_audio_{uuid.uuid4().hex[:8]}.wav"
             
