@@ -57,3 +57,6 @@ vertex-ai-*.json
 assets/
 
 dns-records-app.beatgen.com.txt
+
+# Test drum samples folder
+drum_samples_public/
