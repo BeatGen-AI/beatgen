@@ -56,9 +56,21 @@ class VertexAIService:
     
     def _setup_credentials(self):
         """Setup Google Cloud credentials with proper scopes"""
-        creds_file = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        app_env = os.getenv("APP_ENV", "prod")
         scopes = ['https://www.googleapis.com/auth/cloud-platform']
         
+        # Handle development environment with local credentials
+        if app_env == "dev":
+            local_creds = os.getenv("LOCAL_GOOGLE_APPLICATION_CREDENTIALS")
+            print(f"Local credentials: {local_creds}")
+            if local_creds and os.path.exists(local_creds):
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = local_creds
+                logger.info(f"Development mode: Using local credentials from: {local_creds}")
+            else:
+                logger.warning("APP_ENV=dev but LOCAL_GOOGLE_APPLICATION_CREDENTIALS not set or file not found")
+        
+        # Load credentials with proper scopes
+        creds_file = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         if creds_file and os.path.exists(creds_file):
             # Load service account credentials with specific scopes
             self.credentials = service_account.Credentials.from_service_account_file(
