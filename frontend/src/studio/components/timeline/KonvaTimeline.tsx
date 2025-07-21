@@ -274,13 +274,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             if (audioDuration > 0) {
               const calculatedDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
               width = calculatedDurationTicks - (instance.trim_start_ticks || 0);
-              console.log(`Calculated audio track width for ${instance.id} (fallback):`, {
-                audioDuration,
-                calculatedDurationTicks,
-                trim_start_ticks: instance.trim_start_ticks,
-                finalWidth: width,
-                storedWidth: instance.trim_end_ticks - instance.trim_start_ticks
-              });
             }
           }
           

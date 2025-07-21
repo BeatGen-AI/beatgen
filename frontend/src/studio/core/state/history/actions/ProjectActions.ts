@@ -44,11 +44,6 @@ export class BPMChangeAction extends BaseAction {
                         trim_end_ticks: newDurationTicks
                     }));
                     
-                    console.log(`Updated audio track ${track.id} instances for BPM ${bpm}:`, {
-                        audioDuration,
-                        newDurationTicks,
-                        instanceCount: updatedInstances.length
-                    });
                     
                     // Update the track state with new instances and duration_ticks
                     updateTrackState(track.id, {
