@@ -652,7 +652,7 @@ async def process_generate_audio_request(
     """
     try:
         # Import services we need
-        from app2.services.fal_ai_service import get_fal_ai_service
+        from app2.services.audio_generation_service import get_audio_generation_service
         from app2.services.file_service import FileService
         from app2.repositories.file_repository import FileRepository
         from app2.models.track_models.audio_track import AudioTrack, AudioTrackCreate, AudioTrackRead
@@ -739,18 +739,18 @@ async def process_generate_audio_request(
         
         await sse_queue.stage(
             name="generating_audio",
-            description=f"Generating audio with FAL-AI: '{enhanced_prompt}' ({duration:.1f}s, {bars} bars)"
+            description=f"Generating audio: '{enhanced_prompt}' ({duration:.1f}s, {bars} bars)"
         )
         
-        # Create FAL-AI service instance
-        fal_ai_service = get_fal_ai_service()
+        # Create audio generation service instance
+        audio_service = get_audio_generation_service()
         
         # Enhanced negative prompt to avoid complexity and ensure solo focus
         negative_prompt = "accompaniment, drums, background instruments, complex, layered, arrangement"
         
-        # Generate audio using FAL-AI
-        logger.info(f"Generating audio with FAL-AI - BPM: {bpm}, Key: {key_signature}, Bars: {bars}")
-        audio_data, generation_result = await fal_ai_service.generate_and_download_audio(
+        # Generate audio
+        logger.info(f"Generating audio - BPM: {bpm}, Key: {key_signature}, Bars: {bars}")
+        audio_data, generation_result = await audio_service.generate_and_download_audio(
             prompt=enhanced_prompt,
             negative_prompt=negative_prompt
         )
