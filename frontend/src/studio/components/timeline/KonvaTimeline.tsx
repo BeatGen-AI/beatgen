@@ -477,18 +477,33 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             const track = tracks.find(t => t.id === item.data.id);
             const instance = item.data.instance;
             
-            // For audio tracks only, clamp width to not exceed actual audio duration
+            // For audio tracks only, clamp width to valid bounds
             // Sampler tracks can be extended beyond their sample duration (looping/stretching)
             if (track && instance && track.track_type === 'AUDIO' && track.duration_ticks) {
               const maxAllowedWidth = track.duration_ticks - instance.trim_start_ticks;
-              clampedWidth = Math.min(dim.width, maxAllowedWidth);
+              const minWidth = 480; // Minimum 1 beat width
               
-              if (clampedWidth !== dim.width) {
-                console.log('🔒 Preview width clamped for audio track:', {
+              // Only clamp if we have a valid range
+              if (maxAllowedWidth > minWidth) {
+                clampedWidth = Math.min(dim.width, maxAllowedWidth);
+                clampedWidth = Math.max(clampedWidth, minWidth);
+                
+                if (clampedWidth !== dim.width) {
+                  console.log('🔒 Preview width clamped for audio track:', {
+                    instanceId,
+                    requestedWidth: dim.width,
+                    clampedWidth,
+                    maxAllowedWidth,
+                    minWidth,
+                    trackDuration: track.duration_ticks
+                  });
+                }
+              } else {
+                // Keep original width if range is invalid
+                console.warn('Invalid preview range for audio track:', {
                   instanceId,
-                  requestedWidth: dim.width,
-                  clampedWidth,
                   maxAllowedWidth,
+                  minWidth,
                   trackDuration: track.duration_ticks
                 });
               }
@@ -590,11 +605,27 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
                 let newWidthTicks = dim.width;
                 
-                // For audio tracks only, clamp width to not exceed actual audio duration
+                // For audio tracks only, clamp width to valid bounds  
                 const track = tracks.find(t => t.id === trackId);
                 if (track && track.track_type === 'AUDIO' && track.duration_ticks) {
                   const maxAllowedWidth = track.duration_ticks - instance.trim_start_ticks;
-                  newWidthTicks = Math.min(newWidthTicks, maxAllowedWidth);
+                  const minWidth = 480; // Minimum 1 beat width
+                  
+                  // Ensure we have a valid range
+                  if (maxAllowedWidth > minWidth) {
+                    newWidthTicks = Math.min(newWidthTicks, maxAllowedWidth);
+                    newWidthTicks = Math.max(newWidthTicks, minWidth);
+                  } else {
+                    // If the range is invalid, skip this instance in group resize
+                    console.warn('Invalid resize range for audio track in group:', {
+                      instanceId,
+                      maxAllowedWidth,
+                      minWidth,
+                      trimStart: instance.trim_start_ticks,
+                      trackDuration: track.duration_ticks
+                    });
+                    return; // Skip this instance
+                  }
                 }
                 
                 const deltaTicks = newWidthTicks - currentWidthTicks;
@@ -637,10 +668,26 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 const currentWidthTicks = instance.trim_end_ticks - instance.trim_start_ticks;
                 let newWidthTicks = dim.width;
                 
-                // For audio tracks only, clamp width to not exceed actual audio duration
+                // For audio tracks only, clamp width to valid bounds
                 if (track && track.track_type === 'AUDIO' && track.duration_ticks) {
                   const maxAllowedWidth = track.duration_ticks - instance.trim_start_ticks;
-                  newWidthTicks = Math.min(newWidthTicks, maxAllowedWidth);
+                  const minWidth = 480; // Minimum 1 beat width
+                  
+                  // Ensure we have a valid range
+                  if (maxAllowedWidth > minWidth) {
+                    newWidthTicks = Math.min(newWidthTicks, maxAllowedWidth);
+                    newWidthTicks = Math.max(newWidthTicks, minWidth);
+                  } else {
+                    // If the range is invalid, don't allow the resize
+                    console.warn('Invalid resize range for audio track:', {
+                      instanceId,
+                      maxAllowedWidth,
+                      minWidth,
+                      trimStart: instance.trim_start_ticks,
+                      trackDuration: track.duration_ticks
+                    });
+                    return; // Skip this resize
+                  }
                 }
                 
                 const deltaTicks = newWidthTicks - currentWidthTicks;
