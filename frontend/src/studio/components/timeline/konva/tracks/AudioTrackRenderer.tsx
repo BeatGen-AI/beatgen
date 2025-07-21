@@ -10,6 +10,7 @@ export interface AudioTrackRendererProps {
   pixelsPerTick: number;
   contentOffset: number;
   color: string;
+  bpm: number;
 }
 
 /**
@@ -21,7 +22,8 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   height,
   pixelsPerTick,
   contentOffset,
-  color
+  color,
+  bpm
 }) => {
   const [realWaveformData, setRealWaveformData] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,17 +39,17 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   const audioStorageKey = getAudioStorageKey(track);
   const audioDuration = getAudioDuration(track);
   
-  // Calculate the actual width based on audio duration and pixelsPerTick
+  // Calculate the actual width based on audio duration, BPM and pixelsPerTick
   // For timeline tracks, we want the waveform to represent the actual duration
   const actualWidth = useMemo(() => {
     if (audioDuration > 0) {
-      // Convert duration to ticks (assuming 480 ticks per beat at 120 BPM)
-      const ticksPerSecond = 480 * 120 / 60; // 480 ticks per beat, 120 BPM = 2 beats per second
+      // Convert duration to ticks using actual project BPM
+      const ticksPerSecond = 480 * bpm / 60; // 480 ticks per beat, using project BPM
       const durationTicks = audioDuration * ticksPerSecond;
-      return Math.max(durationTicks * pixelsPerTick, width);
+      return durationTicks * pixelsPerTick; // Use pure calculated width (no Math.max)
     }
     return width;
-  }, [audioDuration, pixelsPerTick, width]);
+  }, [audioDuration, pixelsPerTick, bpm]);
 
   // Load real waveform data
   useEffect(() => {
@@ -112,18 +114,19 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   
   return (
     <Group>
+      {/* Container elements - use container width for backgrounds/clipping */}
       {/* Waveform background */}
       <Rect
         x={0}
         y={0}
-        width={actualWidth}
+        width={width}
         height={height}
         fill={`${color}20`}
       />
       
       {/* Center line */}
       <Line
-        points={[0, height / 2, actualWidth, height / 2]}
+        points={[0, height / 2, width, height / 2]}
         stroke={`${color}40`}
         strokeWidth={1}
       />
@@ -133,7 +136,7 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
         <Rect
           x={0}
           y={0}
-          width={actualWidth}
+          width={width}
           height={height}
           fill={`${color}10`}
           opacity={0.5}
@@ -145,81 +148,84 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
         <Rect
           x={0}
           y={0}
-          width={actualWidth}
+          width={width}
           height={height}
           fill={`${color}15`}
           opacity={0.3}
         />
       )}
       
-      {/* Only render waveform if we have real data */}
-      {realWaveformData.length > 0 && (
-        <>
-          {/* Filled waveform area */}
-          <Shape
-            sceneFunc={(context, shape) => {
-              context.beginPath();
-              
-              // Draw upper waveform
-              for (let i = 0; i < upperPoints.length; i += 2) {
-                const x = upperPoints[i];
-                const y = upperPoints[i + 1];
-                if (i === 0) {
-                  context.moveTo(x, y);
-                } else {
+      {/* Content elements - use contentOffset for translation (like MIDI) */}
+      <Group x={contentOffset} y={0}>
+        {/* Only render waveform if we have real data */}
+        {realWaveformData.length > 0 && (
+          <>
+            {/* Filled waveform area */}
+            <Shape
+              sceneFunc={(context, shape) => {
+                context.beginPath();
+                
+                // Draw upper waveform
+                for (let i = 0; i < upperPoints.length; i += 2) {
+                  const x = upperPoints[i];
+                  const y = upperPoints[i + 1];
+                  if (i === 0) {
+                    context.moveTo(x, y);
+                  } else {
+                    context.lineTo(x, y);
+                  }
+                }
+                
+                // Draw lower waveform (in reverse to close the path)
+                for (let i = lowerPoints.length - 2; i >= 0; i -= 2) {
+                  const x = lowerPoints[i];
+                  const y = lowerPoints[i + 1];
                   context.lineTo(x, y);
                 }
-              }
-              
-              // Draw lower waveform (in reverse to close the path)
-              for (let i = lowerPoints.length - 2; i >= 0; i -= 2) {
-                const x = lowerPoints[i];
-                const y = lowerPoints[i + 1];
-                context.lineTo(x, y);
-              }
-              
-              context.closePath();
-              context.fillStrokeShape(shape);
-            }}
-            fill="white"
-            opacity={0.3}
-          />
-          
-          {/* Upper waveform outline */}
-          <Line
-            points={upperPoints}
-            stroke="white"
-            strokeWidth={2}
-            lineJoin="round"
-            lineCap="round"
-            opacity={0.95}
-          />
-          
-          {/* Lower waveform outline */}
-          <Line
-            points={lowerPoints}
-            stroke="white"
-            strokeWidth={2}
-            lineJoin="round"
-            lineCap="round"
-            opacity={0.95}
-          />
-        </>
-      )}
-      
-      {/* Add some visual markers for beats (optional) */}
-      {Array.from({ length: Math.floor(actualWidth / (pixelsPerTick * 480)) }).map((_, i) => {
-        const x = i * pixelsPerTick * 480; // Every beat
-        return (
-          <Line
-            key={i}
-            points={[x, 0, x, height]}
-            stroke={`${color}20`}
-            strokeWidth={1}
-            dash={[2, 4]}
-          />
-        );
-      })}
+                
+                context.closePath();
+                context.fillStrokeShape(shape);
+              }}
+              fill="white"
+              opacity={0.3}
+            />
+            
+            {/* Upper waveform outline */}
+            <Line
+              points={upperPoints}
+              stroke="white"
+              strokeWidth={2}
+              lineJoin="round"
+              lineCap="round"
+              opacity={0.95}
+            />
+            
+            {/* Lower waveform outline */}
+            <Line
+              points={lowerPoints}
+              stroke="white"
+              strokeWidth={2}
+              lineJoin="round"
+              lineCap="round"
+              opacity={0.95}
+            />
+          </>
+        )}
+        
+        {/* Beat markers */}
+        {Array.from({ length: Math.floor(actualWidth / (pixelsPerTick * 480)) }).map((_, i) => {
+          const x = i * pixelsPerTick * 480; // Every beat
+          return (
+            <Line
+              key={i}
+              points={[x, 0, x, height]}
+              stroke={`${color}20`}
+              strokeWidth={1}
+              dash={[2, 4]}
+            />
+          );
+        })}
+      </Group>
     </Group>
   );
 };
