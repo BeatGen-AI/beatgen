@@ -714,7 +714,6 @@ async def process_generate_audio_request(
             bars = int(bars_match.group(1))
             bars = min(max(bars, 1), 16)  # Clamp between 1-16 bars
         
-        
         # Match the exact successful format from the API docs example with simplicity emphasis
         enhanced_prompt = f"{prompt_text} solo, simple, minimalist, no accompaniment, no drums, no bass, acoustic"
         
