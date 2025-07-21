@@ -49,7 +49,7 @@ class VertexAIService:
             logger.info(f"Vertex AI service initialized for project: {self.project_id}, location: {self.location}")
         except Exception as e:
             logger.error(f"Failed to initialize Google credentials: {str(e)}")
-            raise ValueError(f"Failed to initialize Google credentials: {str(e)}")
+            raise ValueError(f"Failed to initialize Google credentials: {str(e)}") from e
     
     def _setup_credentials(self):
         """Setup credentials for different deployment environments"""
@@ -126,7 +126,7 @@ class VertexAIService:
                 
         except Exception as e:
             logger.error(f"Error generating audio with Vertex AI: {str(e)}")
-            raise Exception(f"Failed to generate audio: {str(e)}")
+            raise Exception(f"Failed to generate audio: {str(e)}") from e
     
     def _generate_music_sync(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Synchronous method to call Vertex AI music generation using REST API"""
@@ -179,10 +179,10 @@ class VertexAIService:
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error calling Vertex AI: {str(e)}")
-            raise Exception(f"Failed to call Vertex AI API: {str(e)}")
+            raise Exception(f"Failed to call Vertex AI API: {str(e)}") from e
         except Exception as e:
             logger.error(f"Error calling Vertex AI model: {str(e)}")
-            raise Exception(f"Vertex AI generation failed: {str(e)}")
+            raise Exception(f"Vertex AI generation failed: {str(e)}") from e
     
     def _process_audio_response(self, result: Dict[str, Any]) -> Tuple[Optional[str], str]:
         """Process Vertex AI audio response and save to temporary file"""
@@ -270,7 +270,7 @@ class VertexAIService:
                 
         except Exception as e:
             logger.error(f"Error downloading audio: {str(e)}")
-            raise Exception(f"Failed to download audio: {str(e)}")
+            raise Exception(f"Failed to download audio: {str(e)}") from e
     
     async def generate_and_download_audio(
         self,
