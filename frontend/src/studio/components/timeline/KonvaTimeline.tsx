@@ -235,7 +235,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
         const audioDuration = getAudioDuration(track);
         if (audioDuration > 0) {
           const calculatedDurationTicks = calculateDurationTicks(audioDuration, bpm);
-          // Always update track duration_ticks for audio tracks to reflect current BPM
+          // Update track duration_ticks for audio tracks to reflect current BPM
           if (!track.duration_ticks || track.duration_ticks !== calculatedDurationTicks) {
             console.log(`🎵 Adjusting track ${track.id} duration:`, {
               audioDuration,
@@ -244,11 +244,23 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
               bpm
             });
             
-            // Also adjust instance trim_end_ticks to match the new duration
-            const adjustedInstances = track.instances?.map(instance => ({
-              ...instance,
-              trim_end_ticks: instance.trim_start_ticks + calculatedDurationTicks
-            })) || [];
+            // Only adjust instance trim_end_ticks if the instance hasn't been manually resized
+            // Check if the current trim_end matches the previous full duration (not manually resized)
+            const adjustedInstances = track.instances?.map(instance => {
+              const currentInstanceDuration = instance.trim_end_ticks - instance.trim_start_ticks;
+              const wasFullDuration = track.duration_ticks && currentInstanceDuration === track.duration_ticks;
+              
+              // Only auto-adjust if this instance was at full duration (not manually resized)
+              if (wasFullDuration || !track.duration_ticks) {
+                return {
+                  ...instance,
+                  trim_end_ticks: instance.trim_start_ticks + calculatedDurationTicks
+                };
+              }
+              
+              // Keep manually resized instances as-is
+              return instance;
+            }) || [];
             
             adjustedTrack = {
               ...track,

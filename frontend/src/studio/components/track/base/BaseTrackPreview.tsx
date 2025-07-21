@@ -332,7 +332,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       
       if (propResizeDirection === 'right') {
         // Right resize - just change width
-        const newWidth = Math.max(48, initialDim.width + delta);
+        const newWidth = Math.max(20, initialDim.width + delta);
         trackRef.current.style.width = `${newWidth}px`;
         // Keep position unchanged
         const firstInstance = getFirstInstance(track);
@@ -340,7 +340,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         trackRef.current.style.left = `${currentPosPixels}px`;
       } else if (propResizeDirection === 'left') {
         // Left resize - change both position and width
-        const newWidth = Math.max(48, initialDim.width - delta);
+        const newWidth = Math.max(20, initialDim.width - delta);
         const widthDiff = initialDim.width - newWidth;
         const initialPosPixels = ticksToPixels(initialDim.x, bpm, timeSignature);
         const newX = initialPosPixels + widthDiff;
