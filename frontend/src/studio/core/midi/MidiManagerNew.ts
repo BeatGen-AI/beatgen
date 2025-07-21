@@ -85,16 +85,9 @@ export class MidiManager {
    * @returns The created track object
    */
   createTrack(trackId: string, instrumentId: string, name: string = `Track ${instrumentId}`): MidiTrack {
-    // Log entry and instance ID
-    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): ENTER createTrack - ID: ${trackId}`); 
-    
     // Initialize with empty notes array
     this.tracks.set(trackId, []);
     
-    // Log success and map state
-    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): EXIT createTrack - Added ID: ${trackId}. Map size: ${this.tracks.size}`);
-    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): Current track keys:`, Array.from(this.tracks.keys()));
-
     return {
       id: trackId,
       instrumentId,
@@ -111,9 +104,6 @@ export class MidiManager {
    * @throws Error if the track doesn't exist
    */
   updateTrack(trackId: string, notes: Note[]): void {
-    // Log notes being set
-    console.log(`MidiManager.updateTrack [${trackId}]: Setting notes:`, JSON.stringify(notes.slice(0, 5))); // Log first few
-    
     if (!this.tracks.has(trackId)) {
       throw new Error(`Cannot update track ${trackId}: track does not exist`);
     }
@@ -123,11 +113,6 @@ export class MidiManager {
     
     // Store the notes in our internal map
     this.tracks.set(trackId, notesCopy);
-
-    // Log first note for debugging
-    if (notes.length > 0) {
-      console.log(`MidiManager: First note in track ${trackId}:`, JSON.stringify(notes[0]));
-    }
     
     // Notify subscribers about the update
     this.notifyTrackSubscribers(trackId, notesCopy);
@@ -239,8 +224,6 @@ export class MidiManager {
    * @throws Error if the track doesn't exist or note not found
    */
   async updateNote(trackId: string, updatedNote: Note): Promise<void> {
-    console.log(`MidiManager: Updating note ${updatedNote.id} in track ${trackId}`);
-    
     // Get existing notes - will throw if track doesn't exist
     const notes = this.getTrackNotes(trackId);
     if (notes === null) {
@@ -277,14 +260,11 @@ export class MidiManager {
     trackSubscribers.push(callback);
     this.subscribers.set(trackId, trackSubscribers);
     
-    console.log(`MidiManager: Added subscriber to track ${trackId}, total: ${trackSubscribers.length}`);
-    
     // Return unsubscribe function
     return () => {
       const currentSubscribers = this.subscribers.get(trackId) || [];
       const filteredSubscribers = currentSubscribers.filter(cb => cb !== callback);
       this.subscribers.set(trackId, filteredSubscribers);
-      console.log(`MidiManager: Removed subscriber from track ${trackId}, remaining: ${filteredSubscribers.length}`);
     };
   }
 
@@ -295,12 +275,10 @@ export class MidiManager {
    */
   subscribeToAllUpdates(callback: TrackUpdateCallback): () => void {
     this.globalListeners.push(callback);
-    console.log(`MidiManager: Added global subscriber, total: ${this.globalListeners.length}`);
     
     // Return unsubscribe function
     return () => {
       this.globalListeners = this.globalListeners.filter(cb => cb !== callback);
-      console.log(`MidiManager: Removed global subscriber, remaining: ${this.globalListeners.length}`);
     };
   }
 
@@ -310,8 +288,6 @@ export class MidiManager {
    * @param notes The new notes array
    */
   private notifyTrackSubscribers(trackId: string, notes: Note[]): void {
-    console.log(`MidiManager: Notifying subscribers for track ${trackId} with ${notes.length} notes`);
-    
     // Notify track-specific subscribers
     if (this.subscribers.has(trackId)) {
       const trackSubscribers = this.subscribers.get(trackId)!;
@@ -609,14 +585,12 @@ export class MidiManager {
       instrumentId: 'default', 
       notes: notes.map(note => {
         // Log note being converted
-        console.log(`MidiManager.notesToMidi [${trackId}]: Converting note:`, JSON.stringify(note)); 
         const convertedNote = {
         ...note,
         velocity: note.velocity || 100,
           duration: note.length, // Convert ticks to seconds based on TICKS_PER_BEAT
           time: note.column // Convert ticks to seconds based on TICKS_PER_BEAT
         };
-        console.log(`MidiManager.notesToMidi [${trackId}]: Converted note result:`, JSON.stringify(convertedNote));
         return convertedNote;
       })
     };

@@ -450,7 +450,6 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       );
                   }
                   const convertedNotes = convertJsonToNotes(samplerTrackData?.midi_notes_json, track.id);
-                  console.log(`Converted ${convertedNotes.length} notes for sampler track ${track.id}: ${JSON.stringify(convertedNotes)}`);
                   midiManager.updateTrack(track.id, convertedNotes);
                   samplerController.registerTrackSubscription(track.id, midiManager);
                   
