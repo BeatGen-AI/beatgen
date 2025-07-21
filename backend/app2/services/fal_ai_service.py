@@ -8,6 +8,7 @@ import asyncio
 import os
 import httpx
 import uuid
+import io
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from app2.core.logging import get_service_logger
@@ -15,6 +16,9 @@ from app2.utils.audio_utils import get_audio_duration
 
 # Import the official FAL client
 import fal_client
+
+# Import for audio metadata extraction
+from mutagen import File as MutagenFile
 
 logger = get_service_logger("fal_ai_service")
 
@@ -47,6 +51,30 @@ class FalAIService:
         # Log that we found the API key
         logger.info(f"FAL-AI service initialized with API key: {self.api_key[:10]}...")
     
+    def _get_audio_duration(self, audio_data: bytes) -> float:
+        """
+        Get the duration of audio from audio data bytes
+        
+        Args:
+            audio_data: Audio file content as bytes
+            
+        Returns:
+            Duration in seconds
+        """
+        try:
+            # Use mutagen for audio metadata extraction
+            audio_file = MutagenFile(io.BytesIO(audio_data))
+            if audio_file is not None and hasattr(audio_file, 'info') and hasattr(audio_file.info, 'length'):
+                duration = audio_file.info.length
+                logger.info(f"Audio duration detected: {duration:.2f} seconds")
+                return duration
+            else:
+                logger.warning("Mutagen could not read audio file info")
+                return 30.0
+        except Exception as e:
+            logger.warning(f"Failed to detect audio duration: {str(e)}, falling back to 30.0 seconds")
+            return 30.0  # Fallback to the typical FAL-AI Lyria2 duration
+
     async def generate_audio(
         self,
         prompt: str,
@@ -131,7 +159,7 @@ class FalAIService:
             # Generate a unique filename (FAL-AI Lyria2 outputs WAV)
             file_name = f"fal_ai_audio_{uuid.uuid4().hex[:8]}.wav"
             
-            # Create result object (FAL-AI Lyria2 generates 30-second clips at 48kHz)
+            # Create result object with actual duration
             audio_result = AudioGenerationResult(
                 audio_url=audio_url,
                 file_name=file_name,
@@ -140,7 +168,7 @@ class FalAIService:
                 format="audio/wav"
             )
             
-            logger.info(f"Audio generation successful: {file_name}")
+            logger.info(f"Audio generation successful: {file_name}, duration: {actual_duration:.2f}s")
             return audio_result
                 
         except Exception as e:

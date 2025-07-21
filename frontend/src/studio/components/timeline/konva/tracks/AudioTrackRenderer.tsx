@@ -40,7 +40,7 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
   const audioDuration = getAudioDuration(track);
   
   // Calculate the actual width based on audio duration and pixelsPerTick
-  // For timeline tracks, we want the waveform to represent the actual duration
+  // Always use the actual audio duration, not the container width
   const actualWidth = useMemo(() => {
     if (audioDuration > 0) {
       // Convert duration to ticks using actual project BPM
@@ -53,11 +53,9 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
         ticksPerSecond,
         durationTicks,
         pixelsPerTick,
-        calculatedWidth,
-        inputWidth: width,
-        finalWidth: Math.max(calculatedWidth, width)
+        calculatedWidth
       });
-      return Math.max(calculatedWidth, width);
+      return calculatedWidth;
     }
     return width;
   }, [audioDuration, pixelsPerTick, width, bpm]);
