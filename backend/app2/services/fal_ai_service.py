@@ -125,12 +125,9 @@ class FalAIService:
             if not audio_url:
                 raise Exception(f"No audio URL found in FAL-AI response. Response keys: {list(result.keys())}")
             
-<<<<<<< Updated upstream
-=======
             # Get the actual duration from the audio file
             actual_duration = await get_audio_duration(audio_url)
             
->>>>>>> Stashed changes
             # Generate a unique filename (FAL-AI Lyria2 outputs WAV)
             file_name = f"fal_ai_audio_{uuid.uuid4().hex[:8]}.wav"
             
@@ -138,7 +135,7 @@ class FalAIService:
             audio_result = AudioGenerationResult(
                 audio_url=audio_url,
                 file_name=file_name,
-                duration=30.0,  # FAL-AI Lyria2 always generates 30-second clips
+                duration=actual_duration,  # FAL-AI Lyria2 always generates 30-second clips
                 sample_rate=48000,  # FAL-AI Lyria2 uses 48kHz
                 format="audio/wav"
             )
