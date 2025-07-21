@@ -25,6 +25,7 @@ import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstant
 import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import { useTheme } from '@mui/material/styles';
 import Konva from 'konva';
+import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
 
 export interface KonvaTimelineProps {
   tracks: CombinedTrack[];
@@ -199,7 +200,18 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
       if (track.instances) {
         track.instances.forEach(instance => {
           // Calculate the right edge of this instance in pixels
-          const instanceRight = (instance.x_position + (instance.trim_end_ticks - instance.trim_start_ticks)) * pixelsPerTick;
+          let instanceWidth = instance.trim_end_ticks - instance.trim_start_ticks;
+          
+          // For AUDIO tracks, always calculate width from audio duration and BPM
+          if (track.track_type === 'AUDIO') {
+            const audioDuration = getAudioDuration(track);
+            if (audioDuration > 0) {
+              const calculatedDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
+              instanceWidth = calculatedDurationTicks - (instance.trim_start_ticks || 0);
+            }
+          }
+          
+          const instanceRight = (instance.x_position + instanceWidth) * pixelsPerTick;
           maxRightEdge = Math.max(maxRightEdge, instanceRight);
         });
       }
@@ -254,7 +266,23 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             y = dragPreview.y;
           }
           
-          const width = instance.trim_end_ticks - instance.trim_start_ticks;
+          let width = instance.trim_end_ticks - instance.trim_start_ticks;
+          
+          // For AUDIO tracks, always calculate width from audio duration and BPM
+          if (track.track_type === 'AUDIO') {
+            const audioDuration = getAudioDuration(track);
+            if (audioDuration > 0) {
+              const calculatedDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
+              width = calculatedDurationTicks - (instance.trim_start_ticks || 0);
+              console.log(`Calculated audio track width for ${instance.id}:`, {
+                audioDuration,
+                calculatedDurationTicks,
+                trim_start_ticks: instance.trim_start_ticks,
+                finalWidth: width,
+                originalWidth: instance.trim_end_ticks - instance.trim_start_ticks
+              });
+            }
+          }
           
           // Skip invalid instances
           if (isNaN(x) || isNaN(y) || isNaN(width) || width <= 0) {

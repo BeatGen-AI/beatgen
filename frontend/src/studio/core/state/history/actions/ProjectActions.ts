@@ -4,6 +4,7 @@ import { calculateTrackWidth } from '../../../../constants/gridConstants';
 import { BaseAction } from './BaseAction';
 import { GetFn, RootState } from '../../../../stores/types';
 import { CombinedTrack } from 'src/platform/types/project';
+import { getAudioDuration, calculateAudioDurationTicks } from '../../../../utils/audioAnalysis';
 
 /**
  * Action for BPM changes without callbacks
@@ -26,7 +27,43 @@ export class BPMChangeAction extends BaseAction {
         this.timeSignature = timeSignature;
     }
     
+    private updateAudioTrackInstances(bpm: number): void {
+        const state = this.get();
+        const { updateTrackState } = state;
+        const tracks = state.tracks;
+        
+        tracks.forEach(track => {
+            if (track.track_type === 'AUDIO' && track.instances) {
+                const audioDuration = getAudioDuration(track);
+                if (audioDuration > 0) {
+                    const newDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
+                    
+                    // Create new instances array with updated trim_end_ticks
+                    const updatedInstances = track.instances.map(instance => ({
+                        ...instance,
+                        trim_end_ticks: newDurationTicks
+                    }));
+                    
+                    console.log(`Updated audio track ${track.id} instances for BPM ${bpm}:`, {
+                        audioDuration,
+                        newDurationTicks,
+                        instanceCount: updatedInstances.length
+                    });
+                    
+                    // Update the track state with new instances and duration_ticks
+                    updateTrackState(track.id, {
+                        instances: updatedInstances,
+                        duration_ticks: newDurationTicks
+                    });
+                }
+            }
+        });
+    }
+
     private updateBPM(bpm: number): void {
+        // Update audio track instances first
+        this.updateAudioTrackInstances(bpm);
+        
         Tone.getTransport().bpm.value = bpm;
         this.store.getTransport().setTempo(bpm);
         this.store.getProjectManager().setTempo(bpm);
