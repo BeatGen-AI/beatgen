@@ -714,18 +714,6 @@ async def process_generate_audio_request(
             bars = int(bars_match.group(1))
             bars = min(max(bars, 1), 16)  # Clamp between 1-16 bars
         
-        # Calculate duration based on BPM and bars for metadata (FAL-AI always generates 30s)
-        beats_per_bar = time_signature['numerator']
-        total_beats = bars * beats_per_bar
-        calculated_duration = (total_beats / bpm) * 60.0
-        
-        # Check for explicit duration in prompt (for metadata purposes)
-        duration_match = re.search(r'(\d+)\s*(?:second|sec|s)\b', prompt_text.lower())
-        if duration_match:
-            duration = float(duration_match.group(1))
-            duration = min(max(duration, 1.0), 30.0)
-        else:
-            duration = min(max(calculated_duration, 1.0), 30.0)
         
         # Match the exact successful format from the API docs example with simplicity emphasis
         enhanced_prompt = f"{prompt_text} solo, simple, minimalist, no accompaniment, no drums, no bass, acoustic"
@@ -739,7 +727,7 @@ async def process_generate_audio_request(
         
         await sse_queue.stage(
             name="generating_audio",
-            description=f"Generating audio: '{enhanced_prompt}' ({duration:.1f}s, {bars} bars)"
+            description=f"Generating audio: {enhanced_prompt}"
         )
         
         # Create audio generation service instance
@@ -779,7 +767,7 @@ async def process_generate_audio_request(
             "audio_file_storage_key": storage_key,
             "audio_file_format": "wav",
             "audio_file_size": len(audio_data),
-            "audio_file_duration": duration,
+            "audio_file_duration": generation_result.duration,  # Use actual duration from generated audio
             "audio_file_sample_rate": generation_result.sample_rate,
             "waveform_data": waveform_data,
             "user_id": user_id
@@ -830,7 +818,7 @@ async def process_generate_audio_request(
                     "key_signature": key_signature,
                     "time_signature": time_signature,
                     "bars": bars,
-                    "calculated_duration": duration,
+                    "calculated_duration": generation_result.duration,
                     "generation_type": "audio"
                 },
                 # AI-specific parameters
@@ -842,7 +830,7 @@ async def process_generate_audio_request(
             )
         
         # Send completion message
-        response_text = f"Successfully generated audio: '{prompt_text}' ({duration} seconds)"
+        response_text = f"Successfully generated audio: '{prompt_text}' ({generation_result.duration} seconds)"
         
         # Send completion
         final_response = AssistantResponse(response=response_text)
