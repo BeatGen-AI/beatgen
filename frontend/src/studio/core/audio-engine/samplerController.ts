@@ -367,8 +367,6 @@ export class SamplerController implements TrackPlayer {
      * @param midiManager Optional MidiManager for instance-aware playback
      */
     async play(startTime: number = 0, bpm: number = 120, tracks?: any[], midiManager?: any): Promise<void> {
-        console.log(`SamplerController: Starting playback for all samplers from ${startTime}s`);
-        
         // If tracks and midiManager are provided, use instance-aware playback
         if (tracks && midiManager) {
             for (const track of tracks) {

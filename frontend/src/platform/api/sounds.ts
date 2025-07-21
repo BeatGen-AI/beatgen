@@ -88,7 +88,6 @@ export const createMidiFileRecord = async (midiData: MidiTrackCreate): Promise<M
  * @returns The created sampler track object
  */
 export const createSamplerTrackRecord = async (samplerData: SamplerTrackCreate): Promise<SamplerTrackRead> => {
-  console.log('Creating sampler track record with data:', samplerData);
   
   try {
     // Transform the data to match backend expectations
@@ -98,8 +97,6 @@ export const createSamplerTrackRecord = async (samplerData: SamplerTrackCreate):
       duration: samplerData.audio_file_duration,
       sample_rate: samplerData.audio_file_sample_rate,
     };
-    
-    console.log('Transformed sampler track data:', transformedData);
     
     const response = await apiClient.post('/sounds/sampler', transformedData);
     console.log('Sampler track record created successfully:', response.data);
@@ -120,15 +117,11 @@ export const createSamplerTrackRecord = async (samplerData: SamplerTrackCreate):
  * @returns The created drum track object
  */
 export const createDrumTrackRecord = async (drumData: DrumTrackCreate): Promise<DrumTrackRead> => {
-  console.log('Creating drum track record with data:', drumData);
-  
   try {
     // Transform the data to match backend expectations
     const transformedData = {
       ...drumData,
     };
-    
-    console.log('Transformed drum track data:', transformedData);
     
     const response = await apiClient.post('/sounds/drum', transformedData);
     console.log('Drum track record created successfully:', response.data);

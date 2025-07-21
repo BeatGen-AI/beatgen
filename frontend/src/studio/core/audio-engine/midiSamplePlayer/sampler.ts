@@ -179,7 +179,6 @@ class MidiSampler {
         // Account for track's position offset
         const effectiveStartTime = startTime - this.offsetSeconds;
         
-        this.log(`Playing notes from ${startTime}s at ${bpm} BPM (track offset: ${this.offsetSeconds}s, effective: ${effectiveStartTime}s)`);
         this.isPlaying = true;
         this.onPlaybackStatusChange(true);
         
@@ -242,7 +241,6 @@ class MidiSampler {
                             }
                         }, time + noteDuration + 0.05); // 50ms grace period
                         
-                        this.log(`Playing note: ${Tone.Frequency(note.row, "midi").toNote()} at t=${time}, noteTime=${noteTimeInSeconds}s, offset=${this.offsetSeconds}s, absoluteTime=${absoluteTransportTime + lookAheadTime}s, transportTime=${Tone.Transport.seconds}s`);
                     } catch (error) {
                         this.log(`Error playing scheduled note: ${error}`);
                         // Ensure player is disposed even if there was an error
@@ -269,7 +267,6 @@ class MidiSampler {
         // Mark as stopped
         this.isPlaying = false;
         this.onPlaybackStatusChange(false);
-        this.log(`Playback stopped - all audio silenced and events cancelled`);
     }
     
     // Clean up all resources

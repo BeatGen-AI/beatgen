@@ -1536,8 +1536,8 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         logger.info(f"=== END PROMPT COMPARISON ===")
         
         try:
-            # Import FAL-AI service
-            from app2.services.fal_ai_service import get_fal_ai_service
+            # Import audio generation service
+            from app2.services.audio_generation_service import get_audio_generation_service
             from app2.services.file_service import FileService
             from app2.repositories.file_repository import FileRepository
             from app2.models.track_models.audio_track import AudioTrack
@@ -1559,11 +1559,11 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             file_repository = FileRepository(session)
             file_service = FileService(file_repository)
             
-            # Create FAL-AI service instance
-            fal_ai_service = get_fal_ai_service()
+            # Create audio generation service instance
+            audio_service = get_audio_generation_service()
             
             # Generate and download audio
-            audio_data, generation_result = await fal_ai_service.generate_and_download_audio(
+            audio_data, generation_result = await audio_service.generate_and_download_audio(
                 prompt=enhanced_prompt,
                 negative_prompt=negative_prompt
             )
