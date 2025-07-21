@@ -213,10 +213,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     }));
   };
 
-  // Helper to initialize audio track durations based on current BPM
-  const initializeAudioTrackDurations = (tracks: CombinedTrack[], currentBpm: number) => {
-      const { updateTrackState } = rootGet();
-      
+  // Helper to correct audio track durations directly in draft state
+  const correctAudioTrackDurations = (tracks: CombinedTrack[], currentBpm: number) => {
       tracks.forEach(track => {
           if (track.track_type === 'AUDIO' && track.instances) {
               const audioDuration = getAudioDuration(track);
@@ -231,17 +229,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   );
                   
                   if (needsUpdate) {
-                      const updatedInstances = track.instances.map(instance => ({
+                      // Update instances directly in the track (will be in draft state when called from setTracks)
+                      track.instances = track.instances.map(instance => ({
                           ...instance,
                           trim_end_ticks: correctDurationTicks
                       }));
                       
-                      
-                      // Update the track state with corrected durations
-                      updateTrackState(track.id, {
-                          instances: updatedInstances,
-                          duration_ticks: correctDurationTicks
-                      });
+                      // Update track duration directly
+                      track.duration_ticks = correctDurationTicks;
                   }
               }
           }
@@ -250,6 +245,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
   // Explicitly define setTracks within the slice scope
   const setTracks = (newTracks: CombinedTrack[]) => {
+      const currentBpm = rootGet().bpm || 120;
+      
       set(produce((draft: RootState) => {
           draft.tracks = newTracks;
           draft.tracks.forEach((track, index) => { 
@@ -270,14 +267,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               //     }];
               // }
           });
+          
+          // Correct audio track durations within the same state update
+          correctAudioTrackDurations(draft.tracks, currentBpm);
       }), true);
-      
-      // Initialize audio track durations after tracks are set
-      const currentBpm = rootGet().bpm || 120;
-      // Use setTimeout to ensure the state update has completed before initializing durations
-      setTimeout(() => {
-          initializeAudioTrackDurations(newTracks, currentBpm);
-      }, 0);
       
       // After setting tracks, register instances with MidiManager and migrate notes
       const midiManager = rootGet().store?.getMidiManager();

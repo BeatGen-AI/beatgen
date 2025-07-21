@@ -711,8 +711,6 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
     
     // Only handle zoom with Ctrl/Cmd
     if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      
       // Get the mouse position relative to the timeline for zoom centering
       const rect = containerRef.current?.getBoundingClientRect();
       const mouseX = rect ? e.clientX - rect.left + scrollX : scrollX;

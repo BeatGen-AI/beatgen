@@ -30,11 +30,8 @@ export interface AudioAnalysisResult {
 export const analyzeAudioFileHighRes = async (storageKey: string): Promise<AudioAnalysisResult> => {
   const cacheKey = `${storageKey}_highres`;
   
-  console.log('AudioAnalysis: High-res analysis for storageKey:', storageKey);
-  
   // Check cache first
   if (highResAudioCache.has(cacheKey)) {
-    console.log('AudioAnalysis: Found cached high-res waveform data');
     return highResAudioCache.get(cacheKey)!;
   }
 
@@ -44,36 +41,25 @@ export const analyzeAudioFileHighRes = async (storageKey: string): Promise<Audio
       throw new Error('Invalid storage key');
     }
 
-    console.log('AudioAnalysis: Getting audio context for high-res analysis');
-    
     // Use global audio context
     const audioContext = getGlobalAudioContext();
-    console.log('AudioAnalysis: Audio context state:', audioContext.state);
     
     // Resume audio context if it's suspended
     if (audioContext.state === 'suspended') {
-      console.log('AudioAnalysis: Resuming suspended audio context');
       await audioContext.resume();
     }
-
-    console.log('AudioAnalysis: Downloading audio file for storage key:', storageKey);
     
     // Download audio file using the API
     const audioBlob = await downloadAudioTrackFile(storageKey);
-    console.log('AudioAnalysis: Downloaded blob size:', audioBlob.size, 'type:', audioBlob.type);
     
     const arrayBuffer = await audioBlob.arrayBuffer();
-    console.log('AudioAnalysis: ArrayBuffer size:', arrayBuffer.byteLength);
     
     if (arrayBuffer.byteLength === 0) {
       throw new Error('Empty audio file');
     }
     
-    console.log('AudioAnalysis: Decoding audio data for high-res analysis...');
-    
     // Decode audio data
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    console.log('AudioAnalysis: Audio decoded successfully - duration:', audioBuffer.duration, 'channels:', audioBuffer.numberOfChannels, 'sampleRate:', audioBuffer.sampleRate);
     
     if (audioBuffer.length === 0) {
       throw new Error('Invalid audio data');
@@ -81,10 +67,9 @@ export const analyzeAudioFileHighRes = async (storageKey: string): Promise<Audio
     
     // Extract channel data (use first channel)
     const channelData = audioBuffer.getChannelData(0);
-    console.log('AudioAnalysis: Channel data length:', channelData.length);
     
     // Generate high-resolution waveform data (1 sample per 5ms = 200 samples per second)
-    const targetSamplesPerSecond = 200;
+    const targetSamplesPerSecond = 400;
     const totalSamples = Math.floor(audioBuffer.duration * targetSamplesPerSecond);
     const samplesPerDataPoint = Math.floor(channelData.length / totalSamples);
     
@@ -117,12 +102,6 @@ export const analyzeAudioFileHighRes = async (storageKey: string): Promise<Audio
     // Cache the result
     highResAudioCache.set(cacheKey, result);
     
-    console.log('AudioAnalysis: High-res analysis complete!', {
-      dataPoints: normalizedData.length,
-      duration: audioBuffer.duration,
-      samplesPerSecond: targetSamplesPerSecond,
-      maxAmplitude: Math.max(...normalizedData)
-    });
     
     return result;
     
@@ -141,11 +120,8 @@ export const analyzeAudioFileHighRes = async (storageKey: string): Promise<Audio
 export const analyzeAudioFile = async (storageKey: string, barCount: number): Promise<number[]> => {
   const cacheKey = `${storageKey}_${barCount}`;
   
-  console.log('AudioAnalysis: Analyzing audio file with storageKey:', storageKey, 'barCount:', barCount);
-  
   // Check cache first
   if (audioAnalysisCache.has(cacheKey)) {
-    console.log('AudioAnalysis: Found cached waveform data');
     return audioAnalysisCache.get(cacheKey)!;
   }
 

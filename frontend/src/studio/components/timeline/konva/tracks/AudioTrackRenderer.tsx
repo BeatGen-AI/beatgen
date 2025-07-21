@@ -94,12 +94,6 @@ export const AudioTrackRenderer: React.FC<AudioTrackRendererProps> = ({
       // Calculate how many high-res samples to average per target point
       const samplesPerPoint = highResData.length / targetPoints;
       
-      console.log('AudioTrackRenderer: Adaptive sampling', {
-        actualWidth,
-        targetPoints,
-        highResDataLength: highResData.length,
-        samplesPerPoint
-      });
       
       // Generate waveform points by sampling from high-res data
       for (let i = 0; i < targetPoints; i++) {
