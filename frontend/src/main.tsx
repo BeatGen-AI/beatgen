@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { PostHogProvider } from 'posthog-js/react';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
@@ -41,12 +42,12 @@ const router = createRouter({
   context: {
     queryClient,
   },
-})
+});
 
 // Register the router instance for type safety
 declare module '@tanstack/react-router' {
   interface Register {
-    router: typeof router
+    router: typeof router;
   }
 }
 
@@ -54,15 +55,25 @@ declare module '@tanstack/react-router' {
 if (document.getElementById('root')) {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <UserProvider>
-            <AppThemeProvider>
-              <RouterProvider router={router} />
-            </AppThemeProvider>
-          </UserProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      <PostHogProvider
+        apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY}
+        options={{
+          api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+          defaults: '2025-05-24',
+          capture_exceptions: true,
+          debug: import.meta.env.MODE === "development",
+        }}
+      >
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <UserProvider>
+              <AppThemeProvider>
+                <RouterProvider router={router} />
+              </AppThemeProvider>
+            </UserProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </PostHogProvider>
     </React.StrictMode>
   );
 }
