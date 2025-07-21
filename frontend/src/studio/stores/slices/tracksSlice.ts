@@ -235,13 +235,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                           trim_end_ticks: correctDurationTicks
                       }));
                       
-                      console.log(`Initialized audio track ${track.id} duration:`, {
-                          audioDuration,
-                          correctDurationTicks,
-                          bpm: currentBpm,
-                          oldValues: track.instances.map(i => i.trim_end_ticks),
-                          newValues: updatedInstances.map(i => i.trim_end_ticks)
-                      });
                       
                       // Update the track state with corrected durations
                       updateTrackState(track.id, {
