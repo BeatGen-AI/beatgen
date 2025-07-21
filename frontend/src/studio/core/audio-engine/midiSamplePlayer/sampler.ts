@@ -267,7 +267,6 @@ class MidiSampler {
         // Mark as stopped
         this.isPlaying = false;
         this.onPlaybackStatusChange(false);
-        this.log(`Playback stopped - all audio silenced and events cancelled`);
     }
     
     // Clean up all resources
