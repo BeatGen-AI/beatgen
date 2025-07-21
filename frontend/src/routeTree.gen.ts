@@ -28,10 +28,13 @@ import { Route as CreditsImport } from './routes/credits'
 import { Route as CompleteProfileImport } from './routes/complete-profile'
 import { Route as CheckoutImport } from './routes/checkout'
 import { Route as AudioTracksImport } from './routes/audio-tracks'
+import { Route as AdminImport } from './routes/admin'
 import { Route as IndexImport } from './routes/index'
 import { Route as SubscriptionSuccessImport } from './routes/subscription.success'
 import { Route as SubscriptionCancelImport } from './routes/subscription.cancel'
 import { Route as CheckoutReturnImport } from './routes/checkout/return'
+import { Route as AdminUpgradeUserImport } from './routes/admin.upgrade-user'
+import { Route as AdminAddSoundsImport } from './routes/admin.add-sounds'
 import { Route as AccountSubscriptionImport } from './routes/account.subscription'
 
 // Create/Update Routes
@@ -138,6 +141,12 @@ const AudioTracksRoute = AudioTracksImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
+const AdminRoute = AdminImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRoute,
+} as any)
+
 const IndexRoute = IndexImport.update({
   id: '/',
   path: '/',
@@ -162,6 +171,18 @@ const CheckoutReturnRoute = CheckoutReturnImport.update({
   getParentRoute: () => CheckoutRoute,
 } as any)
 
+const AdminUpgradeUserRoute = AdminUpgradeUserImport.update({
+  id: '/upgrade-user',
+  path: '/upgrade-user',
+  getParentRoute: () => AdminRoute,
+} as any)
+
+const AdminAddSoundsRoute = AdminAddSoundsImport.update({
+  id: '/add-sounds',
+  path: '/add-sounds',
+  getParentRoute: () => AdminRoute,
+} as any)
+
 const AccountSubscriptionRoute = AccountSubscriptionImport.update({
   id: '/account/subscription',
   path: '/account/subscription',
@@ -177,6 +198,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminImport
       parentRoute: typeof rootRoute
     }
     '/audio-tracks': {
@@ -305,6 +333,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountSubscriptionImport
       parentRoute: typeof rootRoute
     }
+    '/admin/add-sounds': {
+      id: '/admin/add-sounds'
+      path: '/add-sounds'
+      fullPath: '/admin/add-sounds'
+      preLoaderRoute: typeof AdminAddSoundsImport
+      parentRoute: typeof AdminImport
+    }
+    '/admin/upgrade-user': {
+      id: '/admin/upgrade-user'
+      path: '/upgrade-user'
+      fullPath: '/admin/upgrade-user'
+      preLoaderRoute: typeof AdminUpgradeUserImport
+      parentRoute: typeof AdminImport
+    }
     '/checkout/return': {
       id: '/checkout/return'
       path: '/return'
@@ -331,6 +373,18 @@ declare module '@tanstack/react-router' {
 
 // Create and export the route tree
 
+interface AdminRouteChildren {
+  AdminAddSoundsRoute: typeof AdminAddSoundsRoute
+  AdminUpgradeUserRoute: typeof AdminUpgradeUserRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAddSoundsRoute: AdminAddSoundsRoute,
+  AdminUpgradeUserRoute: AdminUpgradeUserRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 interface CheckoutRouteChildren {
   CheckoutReturnRoute: typeof CheckoutReturnRoute
 }
@@ -345,6 +399,7 @@ const CheckoutRouteWithChildren = CheckoutRoute._addFileChildren(
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
   '/complete-profile': typeof CompleteProfileRoute
@@ -363,6 +418,8 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/account/subscription': typeof AccountSubscriptionRoute
+  '/admin/add-sounds': typeof AdminAddSoundsRoute
+  '/admin/upgrade-user': typeof AdminUpgradeUserRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/subscription/cancel': typeof SubscriptionCancelRoute
   '/subscription/success': typeof SubscriptionSuccessRoute
@@ -370,6 +427,7 @@ export interface FileRoutesByFullPath {
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
   '/complete-profile': typeof CompleteProfileRoute
@@ -388,6 +446,8 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/account/subscription': typeof AccountSubscriptionRoute
+  '/admin/add-sounds': typeof AdminAddSoundsRoute
+  '/admin/upgrade-user': typeof AdminUpgradeUserRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/subscription/cancel': typeof SubscriptionCancelRoute
   '/subscription/success': typeof SubscriptionSuccessRoute
@@ -396,6 +456,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
   '/complete-profile': typeof CompleteProfileRoute
@@ -414,6 +475,8 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/account/subscription': typeof AccountSubscriptionRoute
+  '/admin/add-sounds': typeof AdminAddSoundsRoute
+  '/admin/upgrade-user': typeof AdminUpgradeUserRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/subscription/cancel': typeof SubscriptionCancelRoute
   '/subscription/success': typeof SubscriptionSuccessRoute
@@ -423,6 +486,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/audio-tracks'
     | '/checkout'
     | '/complete-profile'
@@ -441,12 +505,15 @@ export interface FileRouteTypes {
     | '/settings'
     | '/studio'
     | '/account/subscription'
+    | '/admin/add-sounds'
+    | '/admin/upgrade-user'
     | '/checkout/return'
     | '/subscription/cancel'
     | '/subscription/success'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/audio-tracks'
     | '/checkout'
     | '/complete-profile'
@@ -465,12 +532,15 @@ export interface FileRouteTypes {
     | '/settings'
     | '/studio'
     | '/account/subscription'
+    | '/admin/add-sounds'
+    | '/admin/upgrade-user'
     | '/checkout/return'
     | '/subscription/cancel'
     | '/subscription/success'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/audio-tracks'
     | '/checkout'
     | '/complete-profile'
@@ -489,6 +559,8 @@ export interface FileRouteTypes {
     | '/settings'
     | '/studio'
     | '/account/subscription'
+    | '/admin/add-sounds'
+    | '/admin/upgrade-user'
     | '/checkout/return'
     | '/subscription/cancel'
     | '/subscription/success'
@@ -497,6 +569,7 @@ export interface FileRouteTypes {
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AudioTracksRoute: typeof AudioTracksRoute
   CheckoutRoute: typeof CheckoutRouteWithChildren
   CompleteProfileRoute: typeof CompleteProfileRoute
@@ -521,6 +594,7 @@ export interface RootRouteChildren {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   AudioTracksRoute: AudioTracksRoute,
   CheckoutRoute: CheckoutRouteWithChildren,
   CompleteProfileRoute: CompleteProfileRoute,
@@ -554,6 +628,7 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
+        "/admin",
         "/audio-tracks",
         "/checkout",
         "/complete-profile",
@@ -578,6 +653,13 @@ export const routeTree = rootRoute
     },
     "/": {
       "filePath": "index.tsx"
+    },
+    "/admin": {
+      "filePath": "admin.tsx",
+      "children": [
+        "/admin/add-sounds",
+        "/admin/upgrade-user"
+      ]
     },
     "/audio-tracks": {
       "filePath": "audio-tracks.tsx"
@@ -635,6 +717,14 @@ export const routeTree = rootRoute
     },
     "/account/subscription": {
       "filePath": "account.subscription.tsx"
+    },
+    "/admin/add-sounds": {
+      "filePath": "admin.add-sounds.tsx",
+      "parent": "/admin"
+    },
+    "/admin/upgrade-user": {
+      "filePath": "admin.upgrade-user.tsx",
+      "parent": "/admin"
     },
     "/checkout/return": {
       "filePath": "checkout/return.tsx",
