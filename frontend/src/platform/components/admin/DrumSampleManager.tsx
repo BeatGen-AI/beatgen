@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Button } from '../../ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card'
-import { Alert, AlertDescription } from '../../ui/alert'
-import { Badge } from '../../ui/badge'
+import { Button } from '../../../components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
+import { Alert, AlertDescription } from '../../../components/ui/alert'
+import { Badge } from '../../../components/ui/badge'
 import { Loader2, Trash2, RefreshCw, Music } from 'lucide-react'
 import { adminApi, DrumSample } from '../../api/admin'
 

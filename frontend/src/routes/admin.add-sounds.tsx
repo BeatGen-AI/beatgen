@@ -4,9 +4,10 @@ import { useAuth } from '../platform/auth/auth-context'
 import { isAdminUser } from '../utils/adminUtils'
 import { Button } from '../components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { ArrowLeft, Upload, Library } from 'lucide-react'
+import { ArrowLeft, Upload, Library, FolderOpen } from 'lucide-react'
 import { DrumSampleUploadForm } from '../platform/components/admin/DrumSampleUploadForm'
 import { DrumSampleManager } from '../platform/components/admin/DrumSampleManager'
+import { BulkDrumSampleUpload } from '../platform/components/admin/BulkDrumSampleUpload'
 
 export const Route = createFileRoute('/admin/add-sounds')({
   component: AddSoundsPage,
@@ -47,6 +48,14 @@ function AddSoundsPage() {
     setActiveTab('library')
   }
 
+  const handleBulkUploadSuccess = (sampleIds: string[]) => {
+    console.log('Bulk upload successful:', sampleIds)
+    // Trigger refresh of the library tab
+    setRefreshKey(prev => prev + 1)
+    // Switch to library tab to see the new samples
+    setActiveTab('library')
+  }
+
   return (
     <div className="container mx-auto p-6">
       <div className="mb-8">
@@ -60,10 +69,14 @@ function AddSoundsPage() {
 
       <div className="max-w-6xl mx-auto">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="upload" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
-              Upload Sample
+              Single Upload
+            </TabsTrigger>
+            <TabsTrigger value="bulk" className="flex items-center gap-2">
+              <FolderOpen className="h-4 w-4" />
+              Bulk Upload
             </TabsTrigger>
             <TabsTrigger value="library" className="flex items-center gap-2">
               <Library className="h-4 w-4" />
@@ -74,6 +87,12 @@ function AddSoundsPage() {
           <TabsContent value="upload" className="mt-6">
             <DrumSampleUploadForm 
               onUploadSuccess={handleUploadSuccess}
+            />
+          </TabsContent>
+
+          <TabsContent value="bulk" className="mt-6">
+            <BulkDrumSampleUpload 
+              onUploadSuccess={handleBulkUploadSuccess}
             />
           </TabsContent>
 
