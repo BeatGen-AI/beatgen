@@ -60,6 +60,7 @@ class CORSConfig(BaseModel):
         "http://localhost:5173", # For local development (Vite dev server)
         "https://localhost:5173", # If using HTTPS locally
         "https://app.beatgen.com", # Production frontend
+        "https://beatgen.com", # Production frontend
     ]
     ALLOW_CREDENTIALS: bool = True
     ALLOW_METHODS: List[str] = ["*"] # Consider restricting this in the future
