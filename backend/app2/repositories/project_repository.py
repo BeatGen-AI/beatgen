@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 import asyncio
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from app2.core.exceptions import DatabaseException, NotFoundException
@@ -388,7 +388,7 @@ class ProjectRepository:
 
             # Update timestamp if it exists
             if hasattr(project, "updated_at"):
-                project.updated_at = datetime.utcnow()
+                project.updated_at = datetime.now(timezone.utc)
 
             # Commit changes
             self.session.add(project)

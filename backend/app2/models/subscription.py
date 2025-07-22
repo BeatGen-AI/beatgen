@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel, Field, Relationship, Column
 from sqlalchemy import JSON
 from typing import Optional, List, TYPE_CHECKING
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from enum import Enum
 
@@ -21,8 +21,8 @@ class StripeCustomer(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="users.id", unique=True, index=True)
     stripe_customer_id: str = Field(unique=True, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Relationships
     user: Optional["User"] = Relationship(back_populates="stripe_customer")
@@ -43,7 +43,7 @@ class SubscriptionPlan(SQLModel, table=True):
     billing_period: BillingPeriod
     features: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Relationships
     subscriptions: List["Subscription"] = Relationship(back_populates="plan")
@@ -67,8 +67,8 @@ class Subscription(SQLModel, table=True):
     canceled_at: Optional[datetime] = None
     trial_end: Optional[datetime] = None
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Relationships
     user: Optional["User"] = Relationship(back_populates="subscriptions")
@@ -94,7 +94,7 @@ class PaymentEvent(SQLModel, table=True):
     # Store full event for debugging
     event_data: dict = Field(sa_column=Column(JSON))
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Relationships
     user: Optional["User"] = Relationship()
