@@ -375,7 +375,7 @@ async def process_generate_request(
         if not user_credits_info:
             # Initialize credits if not found
             from app2.models.user import User
-            user = session.get(User, user_id)
+            user = await session.get(User, user_id)
             if user:
                 await credits_service.initialize_user_credits(user)
                 user_credits_info = await credits_service.get_user_credits(user_id)
@@ -678,7 +678,7 @@ async def process_generate_audio_request(
         user_credits_info = await credits_service.get_user_credits(user_id)
         if not user_credits_info:
             from app2.models.user import User
-            user = session.get(User, user_id)
+            user = await session.get(User, user_id)
             if user:
                 await credits_service.initialize_user_credits(user)
                 user_credits_info = await credits_service.get_user_credits(user_id)
