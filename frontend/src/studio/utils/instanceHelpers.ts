@@ -1,5 +1,6 @@
 import { CombinedTrack, TrackInstance } from '../../platform/types/project';
 import { getAudioDuration, calculateAudioDurationTicks } from './audioAnalysis';
+import { GRID_CONSTANTS } from '../constants/gridConstants';
 
 export interface Position {
   x: number;
@@ -141,9 +142,6 @@ export function getNextAvailableYPosition(tracks: CombinedTrack[]): number {
   const yPositions = tracks.flatMap(track => 
     track.instances?.map(inst => inst.y_position) || [0]
   );
-  
-  // Import GRID_CONSTANTS here to avoid circular dependency
-  const { GRID_CONSTANTS } = require('../constants/gridConstants');
   
   // Return the maximum y-position plus one track height
   return Math.max(...yPositions, 0) + GRID_CONSTANTS.trackHeight;

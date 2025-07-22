@@ -116,21 +116,10 @@ export default defineConfig(({ command }) => {
           agent: new https.Agent({ minVersion: 'TLSv1.2' })
         }
       },
-      https: isDev ? (() => {
-        const keyPath = path.resolve(__dirname, '.cert/key.pem');
-        const certPath = path.resolve(__dirname, '.cert/cert.pem');
-        
-        // Only enable HTTPS if certificate files exist
-        if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-          return {
-            key: fs.readFileSync(keyPath),
-            cert: fs.readFileSync(certPath)
-          };
-        }
-        
-        console.log('SSL certificates not found, running HTTP server on port 5173');
-        return false;
-      })() : undefined, // HTTPS only for dev server if certificates exist
+      https: isDev ? {
+        key: fs.readFileSync(path.resolve(__dirname, '.cert/key.pem')),
+        cert: fs.readFileSync(path.resolve(__dirname, '.cert/cert.pem'))
+      } : undefined, // HTTPS only for dev server
       host: true // This is important to expose the server to the network for local dev
     },
     // Log resolved paths for debugging
