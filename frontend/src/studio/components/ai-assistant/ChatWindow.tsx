@@ -666,6 +666,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           handleProjectParamChange('bpm', actionData.value);
         }
         break;
+      case 'change_key':
+        if (actionData?.value) {
+          handleProjectParamChange('keySignature', actionData.value);
+        }
+        break;
+      case 'change_project_name':
+        if (actionData?.name) {
+          handleProjectParamChange('projectTitle', actionData.name);
+        }
+        break;
       case 'add_drum_track':
         console.log('🟢 add_drum_track action received:', actionData);
         if (store) {

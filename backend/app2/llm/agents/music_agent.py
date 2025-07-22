@@ -261,6 +261,40 @@ Current composition:
 Your task: Select appropriate drum sounds for the rhythm section.
 Choose sounds that fit the tempo and style of the composition."""
 
+    def _convert_key_to_enum(self, key: str, mode: str) -> 'KeySignature':
+        """Convert LLM key+mode format to KeySignature enum value."""
+        from app2.types.assistant_actions import KeySignature
+        
+        # Normalize inputs
+        key = key.strip()
+        mode = mode.strip().lower()
+        
+        # Handle sharp/flat notation
+        key_mapping = {
+            'C#': 'C_SHARP', 'Db': 'D_FLAT', 'D#': 'D_SHARP', 'Eb': 'E_FLAT',
+            'F#': 'F_SHARP', 'Gb': 'G_FLAT', 'G#': 'G_SHARP', 'Ab': 'A_FLAT',
+            'A#': 'A_SHARP', 'Bb': 'B_FLAT'
+        }
+        
+        # Convert key notation
+        enum_key = key_mapping.get(key, key.upper())
+        
+        # Construct enum name
+        if mode in ['major', 'maj']:
+            enum_name = f"{enum_key}_MAJOR"
+        elif mode in ['minor', 'min', 'm']:
+            enum_name = f"{enum_key}_MINOR" 
+        else:
+            logger.warning(f"Unknown mode '{mode}', defaulting to major")
+            enum_name = f"{enum_key}_MAJOR"
+        
+        # Return enum value or default
+        try:
+            return getattr(KeySignature, enum_name)
+        except AttributeError:
+            logger.warning(f"Key signature '{enum_name}' not found, defaulting to C_MAJOR")
+            return KeySignature.C_MAJOR
+
     # --- Helper for Focused LLM Calls (No longer uses RunContext) ---
     async def _focused_llm_call(self, prompt: str, output_type: Type[BaseModel], 
                                chat_session: Optional[ChatSession] = None) -> BaseModel:
@@ -479,6 +513,28 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
 
         # Track stage tokens (full session cost)
         self._track_stage_tokens("determine_musical_parameters", chat_session.get_token_usage())
+
+        # Send actions to set project parameters immediately
+        from app2.types.assistant_actions import AssistantAction
+        
+        try:
+            # Set BPM
+            await self.context.queue.action(AssistantAction.change_bpm(float(full_params.tempo)))
+            logger.info(f"Sent change_bpm action: {full_params.tempo}")
+            
+            # Set key signature
+            key_signature = self._convert_key_to_enum(full_params.key, full_params.mode)
+            await self.context.queue.action(AssistantAction.change_key(key_signature))
+            logger.info(f"Sent change_key action: {full_params.key} {full_params.mode} -> {key_signature}")
+            
+            # Set project name if song title exists
+            if full_params.song_title:
+                await self.context.queue.action(AssistantAction.change_project_name(full_params.song_title))
+                logger.info(f"Sent change_project_name action: {full_params.song_title}")
+                
+        except Exception as e:
+            logger.error(f"Error sending parameter setting actions: {e}")
+            # Don't raise - continue with generation even if parameter setting fails
 
         logger.info(f"Step 'determine_musical_parameters' returning: {full_params.model_dump_json(indent=2)}")
         return full_params
