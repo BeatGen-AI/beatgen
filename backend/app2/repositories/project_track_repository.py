@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
@@ -282,7 +282,7 @@ class ProjectTrackRepository:
 
             # Update timestamp if it exists
             if hasattr(project_track, "updated_at"):
-                project_track.updated_at = datetime.utcnow()
+                project_track.updated_at = datetime.now(timezone.utc)
 
             # Commit changes
             self.session.add(project_track)
@@ -467,7 +467,7 @@ class ProjectTrackRepository:
             
             # Prepare data with defaults for missing fields
             from datetime import datetime
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
             
             # Handle instance_metadata - convert to JSON if needed
             import json
