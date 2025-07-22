@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel, Field, Relationship, Column
 from sqlalchemy import JSON
 from typing import Optional, List, TYPE_CHECKING, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from enum import Enum
 
@@ -34,7 +34,7 @@ class UserCredits(SQLModel, table=True):
     monthly_allocation: int = Field(default=10)  # Free plan default
     
     # Tracking for rollover
-    last_allocation_date: datetime = Field(default_factory=datetime.utcnow)
+    last_allocation_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     total_allocated: int = Field(default=0)  # Total credits ever allocated
     total_used: int = Field(default=0)  # Total credits ever used
     
@@ -42,8 +42,8 @@ class UserCredits(SQLModel, table=True):
     subscription_tier: Optional[str] = Field(default="free")  # free, starter, creator, pro
     has_rollover: bool = Field(default=False)  # Whether credits roll over
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Relationships
     user: Optional["User"] = Relationship(back_populates="credits")
@@ -79,7 +79,7 @@ class CreditTransaction(SQLModel, table=True):
     # Additional metadata as JSON for flexibility
     transaction_metadata: dict = Field(default={}, sa_column=Column(JSON))
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Relationships
     user: Optional["User"] = Relationship()

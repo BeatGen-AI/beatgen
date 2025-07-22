@@ -1,6 +1,6 @@
 import stripe
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlmodel import Session, select
 import logging
 
@@ -163,7 +163,7 @@ class StripeService:
                 subscription.cancel_at_period_end = at_period_end
                 if not at_period_end:
                     subscription.status = "canceled"
-                    subscription.canceled_at = datetime.utcnow()
+                    subscription.canceled_at = datetime.now(timezone.utc)
                 
                 session.add(subscription)
                 await session.commit()
@@ -243,7 +243,7 @@ class StripeService:
                 
                 # Update database
                 subscription.cancel_at_period_end = False
-                subscription.updated_at = datetime.utcnow()
+                subscription.updated_at = datetime.now(timezone.utc)
                 
                 session.add(subscription)
                 await session.commit()
@@ -367,7 +367,7 @@ class StripeService:
                     subscription.trial_end = datetime.fromtimestamp(
                         trial_end
                     )
-                subscription.updated_at = datetime.utcnow()
+                subscription.updated_at = datetime.now(timezone.utc)
             else:
                 # Create new subscription
                 subscription = Subscription(

@@ -4,7 +4,7 @@ Service for project operations with specialized track models
 
 from typing import Dict, Any, List
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from contextlib import asynccontextmanager
 
@@ -374,7 +374,7 @@ class ProjectService:
             }
 
             # Add updated timestamp
-            safe_data["updated_at"] = datetime.utcnow()
+            safe_data["updated_at"] = datetime.now(timezone.utc)
 
             # Update the project
             await self.project_repository.update(project_id, safe_data)

@@ -2,7 +2,7 @@
 Base models for SQL database entities
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Type, List
 from sqlmodel import SQLModel, Field
 from sqlalchemy import TIMESTAMP, Column
@@ -52,12 +52,12 @@ class TimestampMixin(SQLModel):
     """Mixin for created_at and updated_at timestamps"""
 
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         index=True,
         sa_type=TIMESTAMP(timezone=True)
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         index=True,
         sa_type=TIMESTAMP(timezone=True)
     )

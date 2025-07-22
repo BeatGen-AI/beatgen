@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 import uuid
 from enum import Enum
+from sqlalchemy import TIMESTAMP, Column
 
 
 class AuthProvider(str, Enum):
@@ -22,7 +23,10 @@ class AuthIdentityBase(SQLModel):
     auth_provider_id: uuid.UUID = Field(unique=True)
     provider: AuthProvider
     email: str = Field(index=True)
-    last_used_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_used_at: Optional[datetime] = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(TIMESTAMP(timezone=True))
+    )
 
 
 class AuthIdentity(AuthIdentityBase, table=True):
@@ -30,7 +34,10 @@ class AuthIdentity(AuthIdentityBase, table=True):
     __tablename__ = "auth_identities"
     
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(TIMESTAMP(timezone=True))
+    )
 
 
 class AuthIdentityCreate(SQLModel):

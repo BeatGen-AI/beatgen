@@ -167,8 +167,8 @@ class AuthIdentityRepository(BaseRepository[AuthIdentity]):
             identity_id: The identity ID to update
         """
         try:
-            from datetime import datetime
-            await self.update(str(identity_id), {"last_used_at": datetime.utcnow()})
+            from datetime import datetime, timezone
+            await self.update(str(identity_id), {"last_used_at": datetime.now(timezone.utc)})
             self.logger.info(f"Updated last_used_at for identity {identity_id}")
         except Exception as e:
             # Don't fail auth if we can't update timestamp

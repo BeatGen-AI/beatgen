@@ -3,7 +3,7 @@ Credits management service for handling user credits
 """
 import logging
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from sqlmodel import select
 
@@ -48,7 +48,7 @@ class CreditsService:
                 monthly_allocation=allocation["monthly"],
                 subscription_tier=tier,
                 has_rollover=allocation["rollover"],
-                last_allocation_date=datetime.utcnow()
+                last_allocation_date=datetime.now(timezone.utc)
             )
             
             session.add(user_credits)
@@ -94,7 +94,7 @@ class CreditsService:
             user_credits.subscription_tier = new_tier
             user_credits.monthly_allocation = allocation["monthly"]
             user_credits.has_rollover = allocation["rollover"]
-            user_credits.updated_at = datetime.utcnow()
+            user_credits.updated_at = datetime.now(timezone.utc)
             
             # If upgrading, give immediate bonus credits
             if old_tier and self._get_tier_level(new_tier) > self._get_tier_level(old_tier):
@@ -150,7 +150,7 @@ class CreditsService:
             user_credits.subscription_tier = "free"
             user_credits.monthly_allocation = CREDIT_ALLOCATIONS["free"]["monthly"]
             user_credits.has_rollover = CREDIT_ALLOCATIONS["free"]["rollover"]
-            user_credits.updated_at = datetime.utcnow()
+            user_credits.updated_at = datetime.now(timezone.utc)
             
             # Record the removal
             if old_balance > 0:
@@ -200,7 +200,7 @@ class CreditsService:
                 # Paid plans roll over
                 user_credits.balance = rollover_amount + new_credits
             
-            user_credits.last_allocation_date = datetime.utcnow()
+            user_credits.last_allocation_date = datetime.now(timezone.utc)
             user_credits.total_allocated += new_credits
             
             # Record allocation transaction
@@ -284,7 +284,7 @@ class CreditsService:
             # Deduct credits
             user_credits.balance -= amount
             user_credits.total_used += amount
-            user_credits.updated_at = datetime.utcnow()
+            user_credits.updated_at = datetime.now(timezone.utc)
             
             # Record transaction
             total_tokens = (request_tokens or 0) + (response_tokens or 0) if request_tokens or response_tokens else None

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException, Header
 from typing import Optional
 from sqlmodel import select
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import traceback
 
@@ -232,7 +232,7 @@ async def handle_subscription_deleted(subscription_data):
                 logger.info(f"🔵 SUB_DELETED - Removing credits for user {user_id} due to subscription deletion")
                 await credits_service.handle_subscription_cancellation(
                     str(user_id), 
-                    datetime.utcnow()  # Credits are removed immediately when subscription is deleted
+                    datetime.now(timezone.utc)  # Credits are removed immediately when subscription is deleted
                 )
                 logger.info(f"✅ SUB_DELETED - Completed credit removal for user {user_id}")
             else:
