@@ -226,9 +226,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         Tone.Transport.timeSignature = [ projectData.time_signature_numerator, projectData.time_signature_denominator ];
         
         // 4. Update TransportController and SoundfontEngineController BPM
-        console.log(`🎶 [ProjectSlice] About to set tempo to ${projectData.bpm} BPM`);
         await passedStore.getTransport().setTempo(projectData.bpm);
-        console.log(`🎶 [ProjectSlice] Finished setting tempo to ${projectData.bpm} BPM`);
         
         // Return the instance obtained from the manager
         return currentProjectInstance; // Return the instance we retrieved/created

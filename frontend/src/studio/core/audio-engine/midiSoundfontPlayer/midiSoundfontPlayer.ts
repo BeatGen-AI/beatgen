@@ -130,7 +130,6 @@ export class MidiSoundfontPlayer {
       const channel = options.channel ?? this.findFreeChannel();
       
       // Create sequencer wrapper
-      console.log(`🎶 [MidiSoundfontPlayer] About to create track "${id}" with BPM: ${this.bpm}`);
       const track = new SequencerWrapper(
         this.synth,
         sfontId,
@@ -139,7 +138,6 @@ export class MidiSoundfontPlayer {
         options.volume ?? 100,
         this.bpm // Pass current BPM to track
       );
-      console.log(`🎶 [MidiSoundfontPlayer] Created track "${id}" with BPM: ${this.bpm}`);
       
       // Initialize with MIDI data
       console.log(`Initializing track "${id}" with MIDI data...`);
@@ -499,12 +497,10 @@ export class MidiSoundfontPlayer {
       return;
     }
     
-    console.log(`🎶 [MidiSoundfontPlayer] Queuing tempo change to ${bpm} BPM`);
-    console.log(`🎶 [MidiSoundfontPlayer] Current BPM was: ${this.bpm}, setting to: ${bpm}`);
+    console.log(`Queuing tempo change to ${bpm} BPM`);
     
     // Update the instance BPM for future tracks
     this.bpm = bpm;
-    console.log(`🎶 [MidiSoundfontPlayer] BPM updated to: ${this.bpm}`);
     
     // If we're not playing, we can change the tempo immediately
     if (!this.isPlaying) {

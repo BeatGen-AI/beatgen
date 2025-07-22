@@ -540,11 +540,8 @@ export class TransportController implements Transport {
     public async setTempo(bpm: number): Promise<void> {
         // Add bounds checking
         const validBpm = Math.max(1, Math.min(bpm, 999));
-        console.log(`🎶 [TransportController] Setting tempo to ${validBpm} BPM`);
         Tone.getTransport().bpm.value = validBpm;
-        console.log(`🎶 [TransportController] About to call setGlobalBPM with ${validBpm} BPM`);
         await this.soundfontController.setGlobalBPM(validBpm);
-        console.log(`🎶 [TransportController] Finished setGlobalBPM call with ${validBpm} BPM`);
         
         // Update BPM for sampler tracks if they are playing
         if (this.isPlaying) {
