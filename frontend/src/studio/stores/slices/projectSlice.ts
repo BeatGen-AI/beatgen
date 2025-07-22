@@ -27,8 +27,8 @@ export interface ProjectSlice {
   loadProject: (projectId: string) => Promise<ProjectWithTracks | null>;
   loadTrack: (track: CombinedTrack) => Promise<void>;
   loadDrumTrack: (track: CombinedTrack) => Promise<void>;
-  handleProjectParamChange: (param: ProjectParam, value: any) => void;
-  handleKeySignatureChange: (keySignature: string) => void;
+  handleProjectParamChange: (param: ProjectParam, value: any) => Promise<void>;
+  handleKeySignatureChange: (keySignature: string) => Promise<void>;
 }
 
 // Create the slice function
@@ -36,7 +36,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
   const rootGet = get as GetFn; // Define rootGet once for convenience
 
   // Refactored helper using Immer
-  const handleProjectParamChange = (param: ProjectParam, value: any) => {
+  const handleProjectParamChange = async (param: ProjectParam, value: any) => {
     const { store, executeHistoryAction, _withStore } = rootGet();
     const oldValue = rootGet()[param];
     
@@ -55,7 +55,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
       case 'bpm':
         store.projectManager.setTempo(value as number);
         Tone.getTransport().bpm.value = value as number;
-        store.getTransport().setTempo(value as number);
+        await store.getTransport().setTempo(value as number);
         if (executeHistoryAction) {
             const bpmAction = new Actions.BPMChange(get, oldValue as number, value as number, rootGet().timeSignature);
             executeHistoryAction(bpmAction);
@@ -169,8 +169,8 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
   }
 
 
-  const handleKeySignatureChange = (keySignature: string) => {
-    handleProjectParamChange('keySignature', keySignature);
+  const handleKeySignatureChange = async (keySignature: string) => {
+    await handleProjectParamChange('keySignature', keySignature);
   }
 
   
@@ -190,7 +190,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
   // Helper to initialize project settings using Immer
   const initializeProjectSettings = async (projectData: ProjectWithTracks) => {
      const { _withStore, store } = rootGet();
-     const initSettings = (passedStore: Store, projectData: ProjectWithTracks) => {
+     const initSettings = async (passedStore: Store, projectData: ProjectWithTracks) => {
         // Update state using Immer
         set(produce((draft: RootState) => {
             draft.projectTitle = projectData.name;
@@ -225,12 +225,15 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         Tone.Transport.bpm.value = projectData.bpm;
         Tone.Transport.timeSignature = [ projectData.time_signature_numerator, projectData.time_signature_denominator ];
         
+        // 4. Update TransportController and SoundfontEngineController BPM
+        await passedStore.getTransport().setTempo(projectData.bpm);
+        
         // Return the instance obtained from the manager
         return currentProjectInstance; // Return the instance we retrieved/created
      }
      if (!_withStore) return null;
      // Pass projectData correctly
-     return _withStore((storeInstance) => initSettings(storeInstance, projectData))(); 
+     return _withStore(async (storeInstance) => await initSettings(storeInstance, projectData))(); 
   };
 
   // Refined processTrack for loading state (no history)

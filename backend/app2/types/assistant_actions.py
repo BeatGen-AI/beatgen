@@ -50,6 +50,7 @@ class KeySignature(str, Enum):
 class ActionType(str, Enum):
     CHANGE_BPM = "change_bpm"
     CHANGE_KEY = "change_key"
+    CHANGE_PROJECT_NAME = "change_project_name"
     CHANGE_TIME_SIGNATURE = "change_time_signature"
     ADD_TRACK = "add_track"
     ADD_AUDIO_TRACK = "add_audio_track"
@@ -76,6 +77,10 @@ class BPMData(ActionData):
 
 class KeyData(ActionData):
     value: KeySignature = Field(..., description="The new key value")
+
+
+class ProjectNameData(ActionData):
+    name: str = Field(..., description="The new project name")
 
 
 class TimeSignatureData(ActionData):
@@ -152,6 +157,10 @@ class AssistantAction(BaseModel):
     @classmethod
     def change_key(cls, value: KeySignature) -> "AssistantAction":
         return cls(action_type=ActionType.CHANGE_KEY, data=KeyData(value=value))
+
+    @classmethod
+    def change_project_name(cls, name: str) -> "AssistantAction":
+        return cls(action_type=ActionType.CHANGE_PROJECT_NAME, data=ProjectNameData(name=name))
 
     @classmethod
     def change_time_signature(

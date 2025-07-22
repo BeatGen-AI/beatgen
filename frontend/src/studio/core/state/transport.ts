@@ -29,10 +29,10 @@ export class TransportController implements Transport {
     private maxPosition: number = 3600;  // Default to 1 hour (3600 seconds) as safety
     private static FADE_TIME = 0.01; // 10ms fade
 
-    constructor() {
+    constructor(initialBpm: number = 120) {
         this.audioEngine = AudioFilePlayer.getInstance();
-        Tone.getTransport().bpm.value = 120;
-        this.soundfontController = new SoundfontEngineController();
+        Tone.getTransport().bpm.value = initialBpm;
+        this.soundfontController = new SoundfontEngineController(initialBpm);
         this.samplerController = new SamplerController();
         
         // We'll initialize the soundfont controller later when the audio context is available
@@ -537,11 +537,11 @@ export class TransportController implements Transport {
         }
     }
 
-    public setTempo(bpm: number): void {
+    public async setTempo(bpm: number): Promise<void> {
         // Add bounds checking
         const validBpm = Math.max(1, Math.min(bpm, 999));
         Tone.getTransport().bpm.value = validBpm;
-        this.soundfontController.setGlobalBPM(validBpm);
+        await this.soundfontController.setGlobalBPM(validBpm);
         
         // Update BPM for sampler tracks if they are playing
         if (this.isPlaying) {

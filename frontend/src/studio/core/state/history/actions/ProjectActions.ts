@@ -55,23 +55,23 @@ export class BPMChangeAction extends BaseAction {
         });
     }
 
-    private updateBPM(bpm: number): void {
+    private async updateBPM(bpm: number): Promise<void> {
         // Update audio track instances first
         this.updateAudioTrackInstances(bpm);
         
         Tone.getTransport().bpm.value = bpm;
-        this.store.getTransport().setTempo(bpm);
+        await this.store.getTransport().setTempo(bpm);
         this.store.getProjectManager().setTempo(bpm);
-        this.get().handleProjectParamChange('bpm', bpm);
+        await this.get().handleProjectParamChange('bpm', bpm);
     }
     
     async execute(): Promise<void> {
-        this.updateBPM(this.newBpm);
+        await this.updateBPM(this.newBpm);
         this.log('Execute', { from: this.oldBpm, to: this.newBpm });
     }
     
     async undo(): Promise<void> {
-        this.updateBPM(this.oldBpm);
+        await this.updateBPM(this.oldBpm);
         this.log('Undo', { from: this.newBpm, to: this.oldBpm });
     }
 }
@@ -132,21 +132,21 @@ export class KeySignatureAction extends BaseAction {
         this.newKeySignature = newKeySignature;
     }
     
-    private updateKeySignature(keySignature: string): void {
+    private async updateKeySignature(keySignature: string): Promise<void> {
         if (this.store.projectManager && typeof this.store.projectManager.setKey === 'function') {
             this.store.projectManager.setKey(keySignature);
         }
         
-        this.get().handleProjectParamChange('keySignature', keySignature);
+        await this.get().handleProjectParamChange('keySignature', keySignature);
     }
     
     async execute(): Promise<void> {
-        this.updateKeySignature(this.newKeySignature);
+        await this.updateKeySignature(this.newKeySignature);
         this.log('Execute', { from: this.oldKeySignature, to: this.newKeySignature });
     }
     
     async undo(): Promise<void> {
-        this.updateKeySignature(this.oldKeySignature);
+        await this.updateKeySignature(this.oldKeySignature);
         this.log('Undo', { from: this.newKeySignature, to: this.oldKeySignature });
     }
 }

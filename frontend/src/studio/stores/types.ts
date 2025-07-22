@@ -189,7 +189,7 @@ export interface RootState {
   bpm: number;
   timeSignature: [number, number];
   keySignature: string; 
-  handleProjectParamChange: (param: ProjectParam, value: any) => void;
+  handleProjectParamChange: (param: ProjectParam, value: any) => Promise<void>;
 
   // Fix: Use ProjectWithTracks directly
   loadProject: (projectId: string) => Promise<ProjectWithTracks | null>; 

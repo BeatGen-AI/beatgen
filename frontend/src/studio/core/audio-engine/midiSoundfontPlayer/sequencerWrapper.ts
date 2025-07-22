@@ -47,20 +47,23 @@ export class SequencerWrapper {
   private savedVolume: number | null = null;
   private _isPlaying: boolean = false;
   private ppq: number = MUSIC_CONSTANTS.pulsesPerQuarterNote; // Default MIDI Pulses Per Quarter Note
-  private currentBpm: number = 120; // Default tempo
+  private currentBpm: number; // Current tempo
 
   constructor(
     synth: AudioWorkletNodeSynthesizer, 
     sfontId: number, 
     channel: number, 
     startOffset: number = 0, // Now in ticks instead of ms
-    volume: number = 100
+    volume: number = 100,
+    initialBpm: number = 120 // Add BPM parameter
   ) {
     this.synth = synth;
     this.sfontId = sfontId;
     this.channel = channel;
     this.startOffset = startOffset; // Offset in ticks
     this.originalVolume = volume;
+    this.currentBpm = initialBpm;
+    console.log(`🎵 SequencerWrapper created with BPM: ${initialBpm}`);
   }
   
   async initialize(notes: Note[]): Promise<SequencerWrapper> {
@@ -184,10 +187,6 @@ export class SequencerWrapper {
     const ticksPerSecond = (this.currentBpm * this.ppq) / 60;
     const ticksToAdvance = (msecElapsed * ticksPerSecond) / 1000;
     
-    // console.log("________lastEventTick", lastEventTick);
-    // console.log("________ticksPerSecond", ticksPerSecond);
-    // console.log("________ticksToAdvance", ticksToAdvance);
-    // console.log("________currentLocalTick", this.currentLocalTick);
     // Only process the sequencer if we haven't reached the end of the track
     if (this.currentLocalTick <= lastEventTick + ticksPerSecond) { // Add ~1 second buffer for last note to finish playing
       // Process the sequencer using the calculated ticks
@@ -214,8 +213,6 @@ export class SequencerWrapper {
         if (event.event.type === 'note' && event.event.duration) {
           lastTick = Math.max(lastTick, event.tick + event.event.duration);
         }
-      } else {
-        console.log("________event.tick", event.tick);
       }
     }
     
@@ -335,8 +332,6 @@ export class SequencerWrapper {
   
   // Schedule events from current position
   private scheduleEvents(fromTick: number): void {
-
-    console.log("________noteEvents", this.noteEvents);
     // Always clear existing events before scheduling new ones
     // This ensures we don't have duplicate events
     this.sequencer.removeAllEvents();
@@ -362,8 +357,6 @@ export class SequencerWrapper {
     
     console.log(`Scheduled ${scheduledCount} events from tick ${fromTick} ` +
                 `(with offset: ${this.startOffset}) on channel ${this.channel}`);
-
-    console.log("________scheduledEvents", scheduledEvents);
   }
   
   // Silence all active notes and clear events
@@ -388,11 +381,6 @@ export class SequencerWrapper {
    * @param globalTick The current global timeline position
    */
   async play(globalTick: number): Promise<void> {
-    // console.log("______currentbpm", this.currentBpm);
-    // console.log("______currentppq", this.ppq);
-    // console.log("______currentstartoffset", this.startOffset);
-    // console.log("________play with values:", this.noteEvents);
-    // console.log("________len of note_events:", this.noteEvents.length);
     this._isPlaying = true;
     const localTick = this.globalToLocalTick(globalTick);
     this.currentLocalTick = localTick;
