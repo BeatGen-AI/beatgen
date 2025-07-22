@@ -53,7 +53,8 @@ export class Store implements StoreInterface {
     // Initialize SampleManager with the db instance
     this.sampleManager = SampleManager.getInstance(db); 
     
-    this.transportController = new TransportController();
+    // Initialize with default BPM, will be updated when project loads
+    this.transportController = new TransportController(120);
     // Set MidiManager reference in transport for instance-aware playback
     this.transportController.setMidiManager(this.midiManager);
   }

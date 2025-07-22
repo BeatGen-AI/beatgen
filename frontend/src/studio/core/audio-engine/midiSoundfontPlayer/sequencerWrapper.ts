@@ -47,20 +47,23 @@ export class SequencerWrapper {
   private savedVolume: number | null = null;
   private _isPlaying: boolean = false;
   private ppq: number = MUSIC_CONSTANTS.pulsesPerQuarterNote; // Default MIDI Pulses Per Quarter Note
-  private currentBpm: number = 120; // Default tempo
+  private currentBpm: number; // Current tempo
 
   constructor(
     synth: AudioWorkletNodeSynthesizer, 
     sfontId: number, 
     channel: number, 
     startOffset: number = 0, // Now in ticks instead of ms
-    volume: number = 100
+    volume: number = 100,
+    initialBpm: number = 120 // Add BPM parameter
   ) {
     this.synth = synth;
     this.sfontId = sfontId;
     this.channel = channel;
     this.startOffset = startOffset; // Offset in ticks
     this.originalVolume = volume;
+    this.currentBpm = initialBpm;
+    console.log(`🎵 SequencerWrapper created with BPM: ${initialBpm}`);
   }
   
   async initialize(notes: Note[]): Promise<SequencerWrapper> {

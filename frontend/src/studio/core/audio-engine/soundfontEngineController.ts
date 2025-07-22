@@ -13,8 +13,8 @@ export class SoundfontEngineController implements TrackPlayer{
     private midiPlayer: MidiSoundfontPlayer;
     private trackSubscriptions: Map<string, () => void> = new Map();
     
-    constructor() {
-        this.midiPlayer = new MidiSoundfontPlayer();
+    constructor(initialBpm: number) {
+        this.midiPlayer = new MidiSoundfontPlayer(initialBpm);
     }
     setTrackPan(id: string, pan: number): Promise<void> {
         throw new Error('Method not implemented.');
@@ -246,8 +246,10 @@ export class SoundfontEngineController implements TrackPlayer{
      * @param bpm Tempo in BPM
      */
     async setGlobalBPM(bpm: number): Promise<void> {
-        console.log(`SoundfontEngineController: Setting global BPM to ${bpm}`);
+        console.log(`🎶 [SoundfontEngineController] Setting global BPM to ${bpm}`);
+        console.log(`🎶 [SoundfontEngineController] About to call midiPlayer.setGlobalBPM with ${bpm}`);
         await this.midiPlayer.setGlobalBPM(bpm);
+        console.log(`🎶 [SoundfontEngineController] Finished midiPlayer.setGlobalBPM call with ${bpm}`);
     }
     
     /**
