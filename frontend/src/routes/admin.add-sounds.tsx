@@ -1,9 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useState } from 'react'
 import { useAuth } from '../platform/auth/auth-context'
 import { isAdminUser } from '../utils/adminUtils'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
-import { ArrowLeft } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { ArrowLeft, Upload, Library } from 'lucide-react'
+import { DrumSampleUploadForm } from '../platform/components/admin/DrumSampleUploadForm'
+import { DrumSampleManager } from '../platform/components/admin/DrumSampleManager'
 
 export const Route = createFileRoute('/admin/add-sounds')({
   component: AddSoundsPage,
@@ -11,6 +14,8 @@ export const Route = createFileRoute('/admin/add-sounds')({
 
 function AddSoundsPage() {
   const { user, loading } = useAuth()
+  const [activeTab, setActiveTab] = useState('upload')
+  const [refreshKey, setRefreshKey] = useState(0)
 
   if (loading) {
     return (
@@ -34,6 +39,14 @@ function AddSoundsPage() {
     )
   }
 
+  const handleUploadSuccess = (sampleId: string) => {
+    console.log('Upload successful:', sampleId)
+    // Trigger refresh of the library tab
+    setRefreshKey(prev => prev + 1)
+    // Optionally switch to library tab to see the new sample
+    setActiveTab('library')
+  }
+
   return (
     <div className="container mx-auto p-6">
       <div className="mb-8">
@@ -41,25 +54,36 @@ function AddSoundsPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Admin Dashboard
         </Link>
-        <h1 className="text-3xl font-bold mb-2">Add Sounds</h1>
+        <h1 className="text-3xl font-bold mb-2">Sound Management</h1>
         <p className="text-gray-600">Upload and manage sounds in the library</p>
       </div>
 
-      <div className="max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Sound Upload Tool</CardTitle>
-            <CardDescription>
-              This page will contain sound upload and management functionality
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600">
-              Sound upload and management functionality will be implemented here.
-            </p>
-            {/* TODO: Add sound upload forms, sound library management, etc. */}
-          </CardContent>
-        </Card>
+      <div className="max-w-6xl mx-auto">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="upload" className="flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              Upload Sample
+            </TabsTrigger>
+            <TabsTrigger value="library" className="flex items-center gap-2">
+              <Library className="h-4 w-4" />
+              Manage Library
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="upload" className="mt-6">
+            <DrumSampleUploadForm 
+              onUploadSuccess={handleUploadSuccess}
+            />
+          </TabsContent>
+
+          <TabsContent value="library" className="mt-6">
+            <DrumSampleManager 
+              key={refreshKey}
+              onRefresh={() => setRefreshKey(prev => prev + 1)}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )
