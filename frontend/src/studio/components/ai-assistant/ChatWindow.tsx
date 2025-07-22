@@ -38,7 +38,7 @@ import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track'
 import { alpha } from '@mui/material/styles';
 import ChatModelMenu from './ChatModelMenu';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
-import { createDefaultInstance } from '../../utils/instanceHelpers';
+import { createDefaultInstance, getNextAvailableYPosition } from '../../utils/instanceHelpers';
 import { Button } from '@/components/ui/button';
 
 interface Message {
@@ -629,9 +629,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   const createCombinedTrack = (
     trackData: MidiTrackRead | SamplerTrackRead | DrumTrackRead | AudioTrackRead,
     trackType: 'MIDI' | 'SAMPLER' | 'DRUM' | 'AUDIO',
+    currentTracks: CombinedTrack[] = [],
     isDirty: boolean = true  // AI-generated tracks should be marked as dirty by default
   ): CombinedTrack => {
     const defaultName = `New ${trackType.charAt(0) + trackType.slice(1).toLowerCase()} Track`;
+    const nextYPosition = getNextAvailableYPosition(currentTracks);
     
     return {
       id: trackData.id,
@@ -645,12 +647,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       track_number: 0,
       instance_metadata: [createDefaultInstance(
         trackData.id, 
-        { x: 0, y: 0 }, 
+        { x: 0, y: nextYPosition }, 
         MUSIC_CONSTANTS.pulsesPerQuarterNote * 16
       )],
       instances: [createDefaultInstance(
         trackData.id, 
-        { x: 0, y: 0 }, 
+        { x: 0, y: nextYPosition }, 
         MUSIC_CONSTANTS.pulsesPerQuarterNote * 16
       )],
       track: trackData
@@ -658,7 +660,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   };
 
   const handleAction = async (action: string, actionData: any) => {
-    const { store, updateTrackState } = useStudioStore.getState();
+    const { store, updateTrackState, tracks } = useStudioStore.getState();
     
     switch (action) {
       case 'change_bpm':
@@ -671,7 +673,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         if (store) {
           try {
             const drumTrackData = actionData.track_data as DrumTrackRead;
-            const combinedDrumTrack = createCombinedTrack(drumTrackData, 'DRUM');
+            const combinedDrumTrack = createCombinedTrack(drumTrackData, 'DRUM', tracks);
             console.log('🟢 Constructed CombinedTrack:', combinedDrumTrack);
             console.log('🟢 Track dirty flag before load:', combinedDrumTrack.dirty);
             await loadDrumTrack(combinedDrumTrack);
@@ -705,7 +707,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
             
             switch (trackType) {
               case 'MIDI':
-                const midiTrack = createCombinedTrack(trackData as MidiTrackRead, 'MIDI');
+                const midiTrack = createCombinedTrack(trackData as MidiTrackRead, 'MIDI', tracks);
                 console.log('🟢 Constructed MIDI track:', midiTrack);
                 console.log('🟢 Track dirty flag before load:', midiTrack.dirty);
                 await loadTrack(midiTrack);
@@ -719,7 +721,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                 break;
                 
               case 'SAMPLER':
-                const samplerTrack = createCombinedTrack(trackData as SamplerTrackRead, 'SAMPLER');
+                const samplerTrack = createCombinedTrack(trackData as SamplerTrackRead, 'SAMPLER', tracks);
                 console.log('🟢 Constructed SAMPLER track:', samplerTrack);
                 console.log('🟢 Track dirty flag before load:', samplerTrack.dirty);
                 await loadTrack(samplerTrack);
@@ -733,7 +735,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                 break;
                 
               case 'DRUM':
-                const drumTrack = createCombinedTrack(trackData as DrumTrackRead, 'DRUM');
+                const drumTrack = createCombinedTrack(trackData as DrumTrackRead, 'DRUM', tracks);
                 console.log('🟢 Constructed DRUM track:', drumTrack);
                 console.log('🟢 Track dirty flag before load:', drumTrack.dirty);
                 // For drum tracks, use loadDrumTrack instead of loadTrack
@@ -757,7 +759,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                 break;
                 
               case 'AUDIO':
-                const audioTrack = createCombinedTrack(trackData as AudioTrackRead, 'AUDIO');
+                const audioTrack = createCombinedTrack(trackData as AudioTrackRead, 'AUDIO', tracks);
                 console.log('🟢 Constructed AUDIO track:', audioTrack);
                 console.log('🟢 Track dirty flag before load:', audioTrack.dirty);
                 await loadTrack(audioTrack);
@@ -783,7 +785,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         if (store) {
           try {
             const audioTrackData = actionData.track_data as AudioTrackRead;
-            const combinedAudioTrack = createCombinedTrack(audioTrackData, 'AUDIO');
+            const combinedAudioTrack = createCombinedTrack(audioTrackData, 'AUDIO', tracks);
             console.log('🟢 Constructed Audio CombinedTrack:', combinedAudioTrack);
             console.log('🟢 Track dirty flag before load:', combinedAudioTrack.dirty);
             await loadTrack(combinedAudioTrack);

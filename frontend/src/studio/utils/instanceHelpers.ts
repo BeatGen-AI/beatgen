@@ -131,6 +131,25 @@ export function getFirstInstance(track: CombinedTrack): TrackInstance | undefine
 }
 
 /**
+ * Find the next available y-position for new tracks by finding the maximum
+ * y-position from all existing track instances and adding one track height
+ */
+export function getNextAvailableYPosition(tracks: CombinedTrack[]): number {
+  if (tracks.length === 0) return 0;
+  
+  // Find all y-positions from all track instances
+  const yPositions = tracks.flatMap(track => 
+    track.instances?.map(inst => inst.y_position) || [0]
+  );
+  
+  // Import GRID_CONSTANTS here to avoid circular dependency
+  const { GRID_CONSTANTS } = require('../constants/gridConstants');
+  
+  // Return the maximum y-position plus one track height
+  return Math.max(...yPositions, 0) + GRID_CONSTANTS.trackHeight;
+}
+
+/**
  * Create a default instance for a track
  */
 export function createDefaultInstance(

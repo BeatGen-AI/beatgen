@@ -17,6 +17,7 @@ import SampleManager from '../../core/samples/sampleManager';
 import { db } from '../../core/db/dexie-client';
 import { processAudioFile } from '../../utils/audioProcessing';
 import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
+import { getNextAvailableYPosition } from '../../utils/instanceHelpers';
 
 // Define the state properties and actions for this slice
 export interface TracksSlice {
@@ -127,6 +128,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     // !! IMPORTANT: Ensure CombinedTrack type includes `track_number?: number;` !!
     return rootGet().tracks.find((t) => t.id === trackId);
   };
+
 
   // Update a specific track's state in the tracks array
   const updateTrackState = (trackId: string, updates: Partial<CombinedTrack & TrackParameter>) => {
@@ -333,8 +335,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const createLogic = async (passedStore: Store): Promise<CombinedTrack | null> => {
       const trackId = (options.id || options.trackId) ?? crypto.randomUUID(); 
-      const tracksLength = rootGet().tracks.length;
-      const position = options.position as Position || { x: 0, y: tracksLength * GRID_CONSTANTS.trackHeight };
+      const nextYPosition = getNextAvailableYPosition(rootGet().tracks);
+      const position = options.position as Position || { x: 0, y: nextYPosition };
       
       const trackProps = {
         id: trackId,
@@ -389,7 +391,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         id: trackId,
         name: name, 
         track_type: type,
-        track_number: tracksLength + 1, // Add track number
+        track_number: rootGet().tracks.length + 1, // Add track number
         volume: trackProps.volume,
         pan: trackProps.pan,
         mute: trackProps.muted, 
@@ -528,8 +530,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const createLogic = async (passedStore: Store): Promise<{ trackData: CombinedTrack, file?: File } | null> => {
       const trackId = (options.id || options.trackId) ?? crypto.randomUUID(); 
-      const tracksLength = rootGet().tracks.length;
-      const position = options.position as Position || { x: 0, y: tracksLength * GRID_CONSTANTS.trackHeight };
+      const nextYPosition = getNextAvailableYPosition(rootGet().tracks);
+      const position = options.position as Position || { x: 0, y: nextYPosition };
       
       const trackProps = {
         id: trackId,
@@ -563,7 +565,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         id: trackId,
         name: name, 
         track_type: type,
-        track_number: tracksLength + 1, // Add track number
+        track_number: rootGet().tracks.length + 1, // Add track number
         volume: trackProps.volume,
         pan: trackProps.pan,
         mute: trackProps.muted, 
@@ -1704,14 +1706,18 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       // Place new instance after the last one
       const lastInstance = instances[instances.length - 1];
       const lastEndTicks = lastInstance.x_position + (lastInstance.trim_end_ticks - lastInstance.trim_start_ticks);
-      const gapTicks = pixelsToTicks(48, bpm, timeSignature); // 48px gap
+      const gapTicks = 0;
       newPosition = {
         x: lastEndTicks + gapTicks,
         y: lastInstance.y_position
       };
     } else if (!newPosition) {
-      // Default position if track has no instances
-      newPosition = { x: 0, y: 0 };
+      // Default position if track has no instances - use track's current position
+      const firstInstance = track.instances?.[0];
+      newPosition = { 
+        x: 0, 
+        y: firstInstance?.y_position ?? 0 
+      };
     }
     
     // Calculate proper trim_end_ticks for audio tracks
