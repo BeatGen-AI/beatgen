@@ -378,6 +378,113 @@ class CreditsService:
         """Get numeric level for tier comparison"""
         levels = {"free": 0, "starter": 1, "creator": 2, "pro": 3}
         return levels.get(tier, 0)
+    
+    async def add_credits_admin(
+        self,
+        user_id: str,
+        amount: int,
+        description: str,
+        admin_user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Add credits to a user account (admin only)"""
+        if amount <= 0:
+            raise ValueError("Credit amount must be positive")
+            
+        async with get_async_session() as session:
+            # Get user credits
+            stmt = select(UserCredits).where(UserCredits.user_id == user_id)
+            result = await session.execute(stmt)
+            user_credits = result.scalars().first()
+            
+            if not user_credits:
+                logger.error(f"No credits found for user {user_id}")
+                return None
+            
+            # Don't add credits to pro users (they have unlimited)
+            if user_credits.subscription_tier == "pro":
+                logger.info(f"User {user_id} has pro plan, skipping credit addition")
+                return None
+            
+            # Add credits to balance
+            old_balance = user_credits.balance
+            user_credits.balance += amount
+            user_credits.updated_at = datetime.utcnow()
+            
+            # Create admin adjustment transaction
+            transaction = CreditTransaction(
+                user_id=user_id,
+                user_credits_id=user_credits.id,
+                transaction_type=CreditTransactionType.ADMIN_ADJUSTMENT,
+                amount=amount,
+                balance_after=user_credits.balance,
+                description=description,
+                transaction_metadata={
+                    "admin_user_id": admin_user_id,
+                    "previous_balance": old_balance,
+                    "action": "add_credits"
+                }
+            )
+            session.add(transaction)
+            session.add(user_credits)
+            
+            await session.commit()
+            
+            logger.info(f"Admin {admin_user_id} added {amount} credits to user {user_id}. Balance: {old_balance} -> {user_credits.balance}")
+            
+            # Return updated credits status
+            return await self.get_user_credits(user_id)
+    
+    async def change_user_tier_admin(
+        self,
+        user_id: str,
+        new_tier: str,
+        admin_user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Change user's subscription tier (admin only)"""
+        if new_tier not in CREDIT_ALLOCATIONS:
+            raise ValueError(f"Invalid tier: {new_tier}")
+            
+        async with get_async_session() as session:
+            # Get current user credits
+            stmt = select(UserCredits).where(UserCredits.user_id == user_id)
+            result = await session.execute(stmt)
+            user_credits = result.scalars().first()
+            
+            if not user_credits:
+                # Initialize if doesn't exist
+                user = await session.get(User, user_id)
+                if not user:
+                    logger.error(f"User {user_id} not found")
+                    return None
+                user_credits = await self.initialize_user_credits(user, new_tier)
+            
+            old_tier = user_credits.subscription_tier
+            
+            # Use existing update_subscription_tier method
+            updated_credits = await self.update_subscription_tier(user_id, new_tier)
+            
+            # Add additional admin metadata transaction for audit
+            admin_transaction = CreditTransaction(
+                user_id=user_id,
+                user_credits_id=updated_credits.id,
+                transaction_type=CreditTransactionType.ADMIN_ADJUSTMENT,
+                amount=0,  # No credit change, just tier change record
+                balance_after=updated_credits.balance,
+                description=f"Admin tier change from {old_tier} to {new_tier}",
+                transaction_metadata={
+                    "admin_user_id": admin_user_id,
+                    "action": "tier_change",
+                    "old_tier": old_tier,
+                    "new_tier": new_tier
+                }
+            )
+            session.add(admin_transaction)
+            await session.commit()
+            
+            logger.info(f"Admin {admin_user_id} changed user {user_id} tier from {old_tier} to {new_tier}")
+            
+            # Return updated credits status
+            return await self.get_user_credits(user_id)
 
 
 # Create singleton instance

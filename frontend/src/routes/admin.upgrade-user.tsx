@@ -1,9 +1,13 @@
+import React, { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useAuth } from '../platform/auth/auth-context'
 import { isAdminUser } from '../utils/adminUtils'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Button } from '../components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ArrowLeft } from 'lucide-react'
+import { UserSearch } from '../platform/components/admin/UserSearch'
+import { AddCreditsForm } from '../platform/components/admin/AddCreditsForm'
+import { ChangePlanForm } from '../platform/components/admin/ChangePlanForm'
+import { AdminUserSearch } from '../platform/api/admin'
 
 export const Route = createFileRoute('/admin/upgrade-user')({
   component: UpgradeUserPage,
@@ -11,6 +15,7 @@ export const Route = createFileRoute('/admin/upgrade-user')({
 
 function UpgradeUserPage() {
   const { user, loading } = useAuth()
+  const [selectedUser, setSelectedUser] = useState<AdminUserSearch | null>(null)
 
   if (loading) {
     return (
@@ -34,32 +39,63 @@ function UpgradeUserPage() {
     )
   }
 
+  const handleUserSelect = (user: AdminUserSearch) => {
+    setSelectedUser(user)
+  }
+
+  const handleSuccess = (updatedCredits: any) => {
+    // Update the selected user's credits with the new data
+    if (selectedUser && selectedUser.credits) {
+      setSelectedUser({
+        ...selectedUser,
+        credits: updatedCredits
+      })
+    }
+  }
+
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto p-6 max-w-6xl">
       <div className="mb-8">
         <Link to="/admin" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-4">
           <ArrowLeft className="h-4 w-4" />
           Back to Admin Dashboard
         </Link>
-        <h1 className="text-3xl font-bold mb-2">Upgrade User</h1>
-        <p className="text-gray-600">Manage user account upgrades and permissions</p>
+        <h1 className="text-3xl font-bold mb-2">User Management</h1>
+        <p className="text-gray-600">Add credits and change subscription plans for users</p>
       </div>
 
-      <div className="max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>User Upgrade Tool</CardTitle>
-            <CardDescription>
-              This page will contain user upgrade functionality
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600">
-              User upgrade functionality will be implemented here.
-            </p>
-            {/* TODO: Add user search, upgrade forms, etc. */}
-          </CardContent>
-        </Card>
+      <div className="space-y-8">
+        {/* User Search - Always visible at the top */}
+        <div>
+          <UserSearch 
+            onUserSelect={handleUserSelect} 
+            selectedUser={selectedUser}
+          />
+        </div>
+
+        {/* Action Forms - Tabbed interface */}
+        <div>
+          <Tabs defaultValue="credits" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="credits">Add Credits</TabsTrigger>
+              <TabsTrigger value="plan">Change Plan</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="credits" className="space-y-4">
+              <AddCreditsForm 
+                selectedUser={selectedUser}
+                onSuccess={handleSuccess}
+              />
+            </TabsContent>
+            
+            <TabsContent value="plan" className="space-y-4">
+              <ChangePlanForm 
+                selectedUser={selectedUser}
+                onSuccess={handleSuccess}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   )

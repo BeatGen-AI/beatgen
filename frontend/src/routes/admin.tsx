@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useLocation } from '@tanstack/react-router'
 import { useAuth } from '../platform/auth/auth-context'
 import { isAdminUser } from '../utils/adminUtils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -14,6 +14,10 @@ export const Route = createFileRoute('/admin')({
 
 function AdminPage() {
   const { user, loading } = useAuth()
+  const location = useLocation()
+  
+  // Check if we're on the main admin page (not a subpage)
+  const isMainAdminPage = location.pathname === '/admin'
 
   if (loading) {
     return (
@@ -37,6 +41,12 @@ function AdminPage() {
     )
   }
 
+  // If we're on a subpage, render the child route
+  if (!isMainAdminPage) {
+    return <Outlet />
+  }
+
+  // Otherwise render the main admin dashboard
   return (
     <div className="container mx-auto p-6">
       <div className="mb-8">
