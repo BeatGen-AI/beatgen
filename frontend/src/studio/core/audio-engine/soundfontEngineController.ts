@@ -246,10 +246,8 @@ export class SoundfontEngineController implements TrackPlayer{
      * @param bpm Tempo in BPM
      */
     async setGlobalBPM(bpm: number): Promise<void> {
-        console.log(`🎶 [SoundfontEngineController] Setting global BPM to ${bpm}`);
-        console.log(`🎶 [SoundfontEngineController] About to call midiPlayer.setGlobalBPM with ${bpm}`);
+        console.log(`SoundfontEngineController: Setting global BPM to ${bpm}`);
         await this.midiPlayer.setGlobalBPM(bpm);
-        console.log(`🎶 [SoundfontEngineController] Finished midiPlayer.setGlobalBPM call with ${bpm}`);
     }
     
     /**
