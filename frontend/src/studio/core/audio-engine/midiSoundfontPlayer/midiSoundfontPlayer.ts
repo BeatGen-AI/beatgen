@@ -38,7 +38,7 @@ export class MidiSoundfontPlayer {
    * Create a new MidiSoundfontPlayer
    * @param audioContext The audio context to use
    */
-  constructor(bpm: number = 120) {
+  constructor(bpm: number) {
     // Initialize synthesizer
     this.synth = new AudioWorkletNodeSynthesizer();
     this.bpm = bpm;
@@ -130,13 +130,16 @@ export class MidiSoundfontPlayer {
       const channel = options.channel ?? this.findFreeChannel();
       
       // Create sequencer wrapper
+      console.log(`🎶 [MidiSoundfontPlayer] About to create track "${id}" with BPM: ${this.bpm}`);
       const track = new SequencerWrapper(
         this.synth,
         sfontId,
         channel, 
         options.startTimeOffset ?? 0, // Offset in ticks
-        options.volume ?? 100
+        options.volume ?? 100,
+        this.bpm // Pass current BPM to track
       );
+      console.log(`🎶 [MidiSoundfontPlayer] Created track "${id}" with BPM: ${this.bpm}`);
       
       // Initialize with MIDI data
       console.log(`Initializing track "${id}" with MIDI data...`);
@@ -496,7 +499,12 @@ export class MidiSoundfontPlayer {
       return;
     }
     
-    console.log(`Queuing tempo change to ${bpm} BPM`);
+    console.log(`🎶 [MidiSoundfontPlayer] Queuing tempo change to ${bpm} BPM`);
+    console.log(`🎶 [MidiSoundfontPlayer] Current BPM was: ${this.bpm}, setting to: ${bpm}`);
+    
+    // Update the instance BPM for future tracks
+    this.bpm = bpm;
+    console.log(`🎶 [MidiSoundfontPlayer] BPM updated to: ${this.bpm}`);
     
     // If we're not playing, we can change the tempo immediately
     if (!this.isPlaying) {
@@ -510,7 +518,6 @@ export class MidiSoundfontPlayer {
       // If we're playing, queue the tempo change for the next processing interval
       // This follows the FluidSynth documentation guidance to change tempo
       // during a sequencer callback or when no events are being dispatched
-      this.bpm = bpm;
       console.log(`Tempo change to ${bpm} BPM queued for next processing interval`);
     }
   }

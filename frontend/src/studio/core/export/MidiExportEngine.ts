@@ -80,7 +80,7 @@ export class MidiExportEngine extends BaseExportEngine {
       );
       
       // Create and initialize MIDI player
-      const midiPlayer = new MidiSoundfontPlayer();
+      const midiPlayer = new MidiSoundfontPlayer(120);
       await midiPlayer.initSynthesizer(offlineContext);
       
       // Convert Blob to ArrayBuffer
