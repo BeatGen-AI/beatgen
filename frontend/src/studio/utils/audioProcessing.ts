@@ -1,3 +1,5 @@
+import { audioContextManager } from '../core/audio/audioContextManager';
+
 /**
  * Converts a linear volume value (0-100) to decibels (-Infinity to 0)
  * @param linearVolume Volume on a scale of 0-100
@@ -182,9 +184,17 @@ export async function processAudioFile(file: File): Promise<{
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const AudioContextClass = (window.AudioContext || 
-          (window as any).webkitAudioContext) as typeof AudioContext;
-        const audioContext = new AudioContextClass();
+        // Use centralized audio context
+        let audioContext: AudioContext;
+        try {
+          audioContext = audioContextManager.getContext();
+        } catch (error) {
+          // Fallback to manual AudioContext creation if manager isn't initialized yet
+          console.warn('AudioContextManager not initialized, falling back to manual AudioContext creation');
+          const AudioContextClass = (window.AudioContext || 
+            (window as any).webkitAudioContext) as typeof AudioContext;
+          audioContext = new AudioContextClass();
+        }
         const audioBuffer = await audioContext.decodeAudioData(e.target.result as ArrayBuffer);
         
         const format = file.type.split('/')[1]?.toUpperCase() || 'UNKNOWN';

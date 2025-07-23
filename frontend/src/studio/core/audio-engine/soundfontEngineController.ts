@@ -39,12 +39,12 @@ export class SoundfontEngineController implements TrackPlayer{
     }
     
     /**
-     * Initialize the SoundfontPlayer with an AudioContext
+     * Initialize the SoundfontPlayer using centralized audio context
      */
-    async initialize(audioContext: AudioContext): Promise<void> {
+    async initialize(): Promise<void> {
         try {
-            console.log('Initializing SoundfontEngineController with AudioContext');
-            await this.midiPlayer.initSynthesizer(audioContext);
+            console.log('Initializing SoundfontEngineController with centralized audio context');
+            await this.midiPlayer.initSynthesizer();
             console.log('SoundfontEngineController initialized successfully');
         } catch (error) {
             console.error('Failed to initialize SoundfontEngineController:', error);

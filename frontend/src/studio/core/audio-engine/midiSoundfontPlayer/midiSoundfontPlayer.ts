@@ -2,6 +2,7 @@
 import { AudioWorkletNodeSynthesizer } from 'js-synthesizer';
 import { SequencerWrapper } from './sequencerWrapper';
 import { Note } from '../../../../types/note';
+import * as Tone from 'tone';
 
 /**
  * Options for adding a track to the player
@@ -45,10 +46,9 @@ export class MidiSoundfontPlayer {
   }
   
   /**
-   * Initialize the synthesizer
-   * @param audioContext The audio context to use
+   * Initialize the synthesizer using Tone.js context
    */
-  async initSynthesizer(audioContext: AudioContext): Promise<void> {
+  async initSynthesizer(): Promise<void> {
     // If already initializing, return the existing promise
     if (this.initPromise) {
       return this.initPromise;
@@ -58,19 +58,30 @@ export class MidiSoundfontPlayer {
     this.initPromise = new Promise<void>((resolve, reject) => {
       const initialize = async () => {
         try {
-          console.log('Initializing MidiSoundfontPlayer...');
-          // Register worklet processor - load libfluidsynth first, then the worklet
-          await audioContext.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
-          await audioContext.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
+          console.log('Initializing MidiSoundfontPlayer with Tone.js context...');
           
-          // Create node and connect
+          // Get the Tone.js AudioContext
+          const audioContext = Tone.context.rawContext as AudioContext;
+          
+          // AudioWorklet modules should already be loaded by AudioContextManager
+          // But we'll load them here as a fallback if needed
+          try {
+            await audioContext.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
+            await audioContext.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
+          } catch (workletError) {
+            // Modules might already be loaded, which is fine
+            console.log('AudioWorklet modules already loaded or failed to load:', workletError);
+          }
+          
+          // Create node and connect to Tone.js destination
           this.audioNode = this.synth.createAudioNode(audioContext, {
             polyphony: 256 // High polyphony for multiple tracks
           });
           
+          // Connect to Tone.js destination instead of directly to audioContext.destination
           this.audioNode.connect(audioContext.destination);
           
-          console.log('MidiSoundfontPlayer initialized successfully');
+          console.log('MidiSoundfontPlayer initialized successfully with Tone.js context');
           resolve();
         } catch (error) {
           console.error('Failed to initialize MidiSoundfontPlayer:', error);

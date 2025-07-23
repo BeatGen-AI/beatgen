@@ -1,13 +1,16 @@
 import { downloadAudioTrackFile } from '../../platform/api/sounds';
+import { audioContextManager } from '../core/audio/audioContextManager';
 
-// Global audio context to prevent it from being closed/recreated
-let globalAudioContext: AudioContext | null = null;
-
-const getGlobalAudioContext = () => {
-  if (!globalAudioContext || globalAudioContext.state === 'closed') {
-    globalAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+// Use centralized audio context instead of creating separate one
+const getAudioContext = (): AudioContext => {
+  // Try to get the initialized context from audioContextManager
+  try {
+    return audioContextManager.getContext();
+  } catch (error) {
+    // Fallback to Tone.js context if manager isn't initialized yet
+    console.warn('AudioContextManager not initialized, falling back to manual AudioContext creation');
+    return new (window.AudioContext || (window as any).webkitAudioContext)();
   }
-  return globalAudioContext;
 };
 
 // Cache for analyzed audio data
@@ -41,8 +44,8 @@ export const analyzeAudioFileHighRes = async (storageKey: string): Promise<Audio
       throw new Error('Invalid storage key');
     }
 
-    // Use global audio context
-    const audioContext = getGlobalAudioContext();
+    // Use centralized audio context
+    const audioContext = getAudioContext();
     
     // Resume audio context if it's suspended
     if (audioContext.state === 'suspended') {
@@ -133,8 +136,8 @@ export const analyzeAudioFile = async (storageKey: string, barCount: number): Pr
 
     console.log('AudioAnalysis: Getting audio context');
     
-    // Use global audio context
-    const audioContext = getGlobalAudioContext();
+    // Use centralized audio context
+    const audioContext = getAudioContext();
     console.log('AudioAnalysis: Audio context state:', audioContext.state);
     
     // Resume audio context if it's suspended

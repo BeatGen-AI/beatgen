@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Box } from '@mui/material';
+import { audioContextManager } from '../../core/audio/audioContextManager';
 
 interface WaveformDisplayProps {
   audioFile?: File;
@@ -81,8 +82,15 @@ export const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
         return;
       }
       
-      // Create audio context
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Use centralized audio context
+      let audioContext: AudioContext;
+      try {
+        audioContext = audioContextManager.getContext();
+      } catch (error) {
+        // Fallback to manual AudioContext creation if manager isn't initialized yet
+        console.warn('AudioContextManager not initialized, falling back to manual AudioContext creation');
+        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
       
       // Convert array buffer to audio buffer
       audioContext.decodeAudioData(event.target.result as ArrayBuffer)
