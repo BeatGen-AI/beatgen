@@ -1381,13 +1381,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       return null;
     }
 
-    // If this is a drum track, duplicate it together with all its samplers
+    // If this is a drum track, route through multi-track duplication to include samplers
     if (track.track_type === 'DRUM') {
-      const drumTrack = track.track as DrumTrackRead;
-      const allTrackIds = [trackId, ...(drumTrack.sampler_track_ids || [])];
       const offsetX = newPosition?.x || 0;
-      
-      const duplicatedTracks = await duplicateMultipleTracks(allTrackIds, offsetX);
+      const duplicatedTracks = await duplicateMultipleTracks([trackId], offsetX);
       return duplicatedTracks.find(t => t.track_type === 'DRUM') || null;
     }
     
@@ -1404,6 +1401,21 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
 
   const duplicateMultipleTracks = async (trackIds: string[], offsetX = 0): Promise<CombinedTrack[]> => {
+    // If any drum tracks are in the selection, include their samplers
+    const expandedTrackIds: string[] = [];
+    for (const trackId of trackIds) {
+      expandedTrackIds.push(trackId);
+      const track = findTrackById(trackId);
+      if (track?.track_type === 'DRUM' && track.track) {
+        const drumTrack = track.track as DrumTrackRead;
+        if (drumTrack.sampler_track_ids) {
+          expandedTrackIds.push(...drumTrack.sampler_track_ids);
+        }
+      }
+    }
+    // Remove duplicates
+    const finalTrackIds = [...new Set(expandedTrackIds)];
+
     const { tracks, bpm, timeSignature, executeHistoryAction } = rootGet();
     const updatedTracks: CombinedTrack[] = [];
     
@@ -1411,7 +1423,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     let baseOffsetX = offsetX;
     if (baseOffsetX === 0) {
       // Find the rightmost instance position among selected tracks
-      const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
+      const selectedTracks = tracks.filter(t => finalTrackIds.includes(t.id));
       let maxRightPosition = 0;
       
       selectedTracks.forEach(track => {
@@ -1431,7 +1443,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     }
 
     // Find the leftmost instance position to calculate relative positions
-    const selectedTracks = tracks.filter(t => trackIds.includes(t.id));
+    const selectedTracks = tracks.filter(t => finalTrackIds.includes(t.id));
     let minX = Infinity;
     
     selectedTracks.forEach(track => {
@@ -1445,7 +1457,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const instanceAddActions: InstanceAdd[] = [];
     
     // Create instances for each track
-    for (const trackId of trackIds) {
+    for (const trackId of finalTrackIds) {
       const track = tracks.find(t => t.id === trackId);
       if (!track) continue;
       
@@ -1499,13 +1511,13 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const groupAction = new Actions.GroupAction(
         get,
         instanceAddActions,
-        `Duplicate ${trackIds.length} track${trackIds.length > 1 ? 's' : ''}`
+        `Duplicate ${finalTrackIds.length} track${finalTrackIds.length > 1 ? 's' : ''}`
       );
       await executeHistoryAction(groupAction);
     }
     
     // Return the updated tracks
-    return trackIds.map(id => findTrackById(id)).filter(Boolean) as CombinedTrack[];
+    return finalTrackIds.map(id => findTrackById(id)).filter(Boolean) as CombinedTrack[];
   };
 
   const deleteMultipleTracks = async (trackIds: string[]): Promise<void> => {
