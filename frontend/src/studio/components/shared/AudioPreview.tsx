@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { downloadAudioTrackFile } from '../../../platform/api/sounds';
+import { audioContextManager } from '../../core/audio/audioContextManager';
 
-// Global audio context to prevent it from being closed/recreated
-let globalAudioContext: AudioContext | null = null;
-
-const getGlobalAudioContext = () => {
-  if (!globalAudioContext || globalAudioContext.state === 'closed') {
-    globalAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+// Use centralized audio context instead of creating separate one
+const getAudioContext = (): AudioContext => {
+  // Try to get the initialized context from audioContextManager
+  try {
+    return audioContextManager.getContext();
+  } catch (error) {
+    // Fallback to manual AudioContext creation if manager isn't initialized yet
+    console.warn('AudioContextManager not initialized, falling back to manual AudioContext creation');
+    return new (window.AudioContext || (window as any).webkitAudioContext)();
   }
-  return globalAudioContext;
 };
 
 interface AudioPreviewProps {
@@ -98,8 +101,8 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       }
 
       
-      // Use global audio context
-      const audioContext = getGlobalAudioContext();
+      // Use centralized audio context
+      const audioContext = getAudioContext();
       
       // Resume audio context if it's suspended
       if (audioContext.state === 'suspended') {
