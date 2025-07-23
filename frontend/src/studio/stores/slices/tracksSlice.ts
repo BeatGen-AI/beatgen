@@ -1873,7 +1873,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                 // Create instance updates for all tracks
                 const instanceUpdates = allTrackIds.map(tId => {
                     const targetTrack = findTrackById(tId);
-                    if (targetTrack && targetTrack.instances && targetTrack.instances[0]) {
+                    if (targetTrack?.instances?.[0]) {
                         return {
                             trackId: tId,
                             instanceId: targetTrack.instances[0].id,
@@ -1977,7 +1977,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             // Create instance updates for all tracks
             const instanceUpdates = allTrackIds.map(tId => {
                 const targetTrack = findTrackById(tId);
-                if (targetTrack && targetTrack.instances && targetTrack.instances[0]) {
+                if (targetTrack?.instances?.[0]) {
                     return {
                         trackId: tId,
                         instanceId: targetTrack.instances[0].id,
