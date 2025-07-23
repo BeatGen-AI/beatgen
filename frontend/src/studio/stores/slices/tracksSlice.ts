@@ -1903,7 +1903,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             await executeHistoryAction(action);
             
             // Update notes for this instance if it's a MIDI-based track
-            if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER') {
+            if (track.track_type === 'MIDI') {
                 const midiManager = storeInstance.getMidiManager();
                 if (midiManager) {
                     const deltaX = newPosition.x - oldPosition.x;
@@ -2009,7 +2009,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         await executeHistoryAction(action);
         
         // Update notes for this instance if it's a MIDI-based track
-        if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER') {
+        if (track.track_type === 'MIDI') {
             const midiManager = rootGet().store?.getMidiManager();
             if (midiManager) {
                 // Filter notes based on new trim values
