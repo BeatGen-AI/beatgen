@@ -13,6 +13,7 @@ from app2.infrastructure.database.sqlmodel_client import create_db_and_tables
 from app2.api.routes import assistant_streaming
 from app2.api.routes import drum_samples
 from app2.api.routes import subscriptions, stripe_webhooks, credits
+from app2.api.routes import admin
 
 # Configure logging
 logger = get_logger("beatgen.main")
@@ -146,6 +147,11 @@ app.include_router(
     credits.router,
     prefix="/credits",
     tags=["credits"],
+)
+app.include_router(
+    admin.router,
+    prefix="/admin",
+    tags=["admin"],
 )
 
 

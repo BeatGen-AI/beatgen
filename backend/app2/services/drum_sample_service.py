@@ -5,12 +5,16 @@ Service for managing public drum samples.
 from typing import Dict, Any, List, Optional
 import uuid
 import traceback
+import librosa
+import numpy as np
+import io
 
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import ServiceException, NotFoundException, StorageException
 from app2.repositories.drum_sample_public_repository import DrumSamplePublicRepository
 from app2.models.public_models.drum_samples import (
     DrumSamplePublicRead,
+    DrumSamplePublicCreate,
 )
 
 logger = get_service_logger("drum_sample_service")
@@ -241,3 +245,85 @@ class DrumSampleService:
             raise ServiceException(
                 f"Failed to create upload URL for drum sample: {str(e)}"
             )
+
+    async def create_public_sample(
+        self, sample_data: DrumSamplePublicCreate, file_content: bytes, admin_user_id: str
+    ) -> DrumSamplePublicRead:
+        """
+        Create a new public drum sample with file upload.
+        Admin-only operation.
+
+        Args:
+            sample_data: The drum sample data to create.
+            file_content: The audio file content.
+            admin_user_id: ID of the admin user performing the operation.
+
+        Returns:
+            The created drum sample data.
+
+        Raises:
+            ServiceException: If the creation fails.
+        """
+        logger.info(f"Admin {admin_user_id} creating public drum sample: {sample_data.display_name}")
+        try:
+            # Generate a unique ID for the sample
+            sample_id = uuid.uuid4()
+            
+            # Create storage key
+            file_extension = sample_data.file_format.lower()
+            storage_key = f"drum_samples_public/{sample_id}.{file_extension}"
+            
+            # Update sample data with processed information
+            sample_data.storage_key = storage_key
+            sample_data.file_size = len(file_content)
+            
+            # Upload to storage and create database record
+            created_sample = await self.drum_sample_repository.create_with_file(
+                sample_id, sample_data.model_dump(), file_content, storage_key
+            )
+            
+            logger.info(f"Successfully created public drum sample: {sample_id}")
+            return DrumSamplePublicRead.model_validate(created_sample)
+            
+        except Exception as e:
+            logger.error(f"Error creating public drum sample: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise ServiceException(f"Failed to create public drum sample: {str(e)}")
+
+    async def delete_sample(self, sample_id: uuid.UUID, admin_user_id: str) -> bool:
+        """
+        Delete a public drum sample and its associated file.
+        Admin-only operation.
+
+        Args:
+            sample_id: The ID of the sample to delete.
+            admin_user_id: ID of the admin user performing the operation.
+
+        Returns:
+            True if deletion was successful.
+
+        Raises:
+            ServiceException: If the deletion fails.
+        """
+        logger.info(f"Admin {admin_user_id} deleting drum sample: {sample_id}")
+        try:
+            # Get sample info first to get storage key
+            sample = await self.drum_sample_repository.get_by_id(sample_id)
+            if not sample:
+                return False
+            
+            # Delete from storage and database
+            deleted = await self.drum_sample_repository.delete_with_file(
+                sample_id, sample.storage_key
+            )
+            
+            logger.info(f"Successfully deleted drum sample: {sample_id}")
+            return deleted
+            
+        except NotFoundException:
+            logger.warning(f"Drum sample {sample_id} not found for deletion")
+            return False
+        except Exception as e:
+            logger.error(f"Error deleting drum sample {sample_id}: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise ServiceException(f"Failed to delete drum sample: {str(e)}")

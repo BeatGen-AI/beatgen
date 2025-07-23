@@ -287,3 +287,90 @@ class DrumSamplePublicRepository:
             self.logger.error(f"Error creating upload URL: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise StorageException(f"Failed to create upload URL: {str(e)}")
+
+    async def create_with_file(
+        self, file_id: uuid.UUID, file_data: Dict[str, Any], file_content: bytes, storage_key: str
+    ) -> DrumSamplePublic:
+        """
+        Create a new drum sample record and upload the file to storage
+
+        Args:
+            file_id: The ID for the new drum sample
+            file_data: The data for the new drum sample
+            file_content: The file content to upload
+            storage_key: The storage key/path for the file
+
+        Returns:
+            The created DrumSamplePublic model
+
+        Raises:
+            DatabaseException: If there's a database error
+            StorageException: If there's a storage error
+        """
+        self.logger.info(f"Creating Drum Sample with file upload: {file_id}")
+        try:
+            # Upload file to storage first
+            storage = self._get_storage_client()
+            await storage.upload_file(storage_key, file_content)
+
+            # Add ID to file_data and create database record
+            file_data['id'] = file_id
+            file_instance = await self.create(file_data)
+
+            self.logger.info(f"Created Drum Sample with file: {file_id}")
+            return file_instance
+
+        except Exception as e:
+            self.logger.error(f"Error creating Drum Sample with file: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            
+            # Clean up storage if database creation failed
+            try:
+                storage = self._get_storage_client()
+                await storage.delete_file(storage_key)
+            except Exception as cleanup_error:
+                self.logger.error(f"Failed to clean up storage after error: {cleanup_error}")
+            
+            if "storage" in str(e).lower():
+                raise StorageException(f"Failed to upload file: {str(e)}")
+            else:
+                raise DatabaseException(f"Failed to create Drum Sample: {str(e)}")
+
+    async def delete_with_file(self, file_id: uuid.UUID, storage_key: str) -> bool:
+        """
+        Delete a drum sample record and its associated file from storage
+
+        Args:
+            file_id: The ID of the drum sample to delete
+            storage_key: The storage key/path of the file to delete
+
+        Returns:
+            True if the drum sample and file were deleted successfully
+
+        Raises:
+            NotFoundException: If the drum sample is not found
+            DatabaseException: If there's a database error
+            StorageException: If there's a storage error
+        """
+        self.logger.info(f"Deleting Drum Sample with file: {file_id}")
+        try:
+            # Delete from database first
+            database_deleted = await self.delete(file_id)
+            
+            # Delete from storage
+            storage = self._get_storage_client()
+            await storage.delete_file(storage_key)
+
+            self.logger.info(f"Deleted Drum Sample with file: {file_id}")
+            return database_deleted
+
+        except Exception as e:
+            if isinstance(e, NotFoundException):
+                raise
+            self.logger.error(f"Error deleting Drum Sample with file: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            
+            if "storage" in str(e).lower():
+                raise StorageException(f"Failed to delete file: {str(e)}")
+            else:
+                raise DatabaseException(f"Failed to delete Drum Sample: {str(e)}")
