@@ -128,6 +128,23 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     return rootGet().tracks.find((t) => t.id === trackId);
   };
 
+  // Helper: expand selection to include sampler tracks when drum tracks are present
+  const expandDrumSelection = (trackIds: string[]): string[] => {
+    const expanded: string[] = [];
+    for (const trackId of trackIds) {
+      expanded.push(trackId);
+      const track = findTrackById(trackId);
+      if (track?.track_type === 'DRUM' && track.track) {
+        const drumTrack = track.track as DrumTrackRead;
+        if (drumTrack.sampler_track_ids) {
+          expanded.push(...drumTrack.sampler_track_ids);
+        }
+      }
+    }
+    return [...new Set(expanded)]; // Remove duplicates
+  };
+
+
   // Update a specific track's state in the tracks array
   const updateTrackState = (trackId: string, updates: Partial<CombinedTrack & TrackParameter>) => {
     set(produce((draft: RootState) => {
@@ -654,8 +671,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
       // If this is a drum track, delete it together with all its samplers
       if (trackToDelete.track_type === 'DRUM') {
-          const drumTrack = trackToDelete.track as DrumTrackRead;
-          const allTrackIds = [trackId, ...(drumTrack.sampler_track_ids || [])];
+          const allTrackIds = expandDrumSelection([trackId]);
           await deleteMultipleTracks(allTrackIds);
           return;
       }
@@ -1401,21 +1417,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
 
   const duplicateMultipleTracks = async (trackIds: string[], offsetX = 0): Promise<CombinedTrack[]> => {
-    // If any drum tracks are in the selection, include their samplers
-    const expandedTrackIds: string[] = [];
-    for (const trackId of trackIds) {
-      expandedTrackIds.push(trackId);
-      const track = findTrackById(trackId);
-      if (track?.track_type === 'DRUM' && track.track) {
-        const drumTrack = track.track as DrumTrackRead;
-        if (drumTrack.sampler_track_ids) {
-          expandedTrackIds.push(...drumTrack.sampler_track_ids);
-        }
-      }
-    }
-    // Remove duplicates
-    const finalTrackIds = [...new Set(expandedTrackIds)];
-
+    const finalTrackIds = expandDrumSelection(trackIds);
     const { tracks, bpm, timeSignature, executeHistoryAction } = rootGet();
     const updatedTracks: CombinedTrack[] = [];
     
@@ -1864,10 +1866,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         if (isDragEnd) {
             // If this is a drum track, move it together with all its samplers
             if (track.track_type === 'DRUM') {
-                const drumTrack = track.track as DrumTrackRead;
-                const allTrackIds = [trackId, ...(drumTrack.sampler_track_ids || [])];
                 const deltaX = newPosition.x - oldPosition.x;
                 const deltaY = newPosition.y - oldPosition.y;
+                const allTrackIds = expandDrumSelection([trackId]);
                 
                 // Create instance updates for all tracks
                 const instanceUpdates = allTrackIds.map(tId => {
@@ -1885,8 +1886,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
                 if (instanceUpdates.length > 0) {
                     updateMultipleInstancePositions(instanceUpdates);
-                    return; // Skip the single track logic below
                 }
+                return;
             }
 
             // Create instance-specific position action for history
@@ -1971,8 +1972,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
         // If this is a drum track, resize it together with all its samplers
         if (track.track_type === 'DRUM') {
-            const drumTrack = track.track as DrumTrackRead;
-            const allTrackIds = [trackId, ...(drumTrack.sampler_track_ids || [])];
+            const allTrackIds = expandDrumSelection([trackId]);
             
             // Create instance updates for all tracks
             const instanceUpdates = allTrackIds.map(tId => {
@@ -1990,8 +1990,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
             if (instanceUpdates.length > 0) {
                 resizeMultipleInstances(instanceUpdates);
-                return; // Skip the single track logic below
             }
+            return;
         }
 
         // Create instance-specific resize action for history
