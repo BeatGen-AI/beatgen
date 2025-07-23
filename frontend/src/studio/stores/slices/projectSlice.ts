@@ -147,7 +147,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
 
       // 4. Update Zustand state with all tracks together
       // Add the new tracks to the existing ones
-      updateTracks([...get().tracks, ...allTracksToLoad]); 
+      await updateTracks([...get().tracks, ...allTracksToLoad]); 
 
       // 5. Connect all tracks to engines
       await connectTracksToEngines(allTracksToLoad);
@@ -162,7 +162,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     const trackState = await processTrack(track, rootGet().tracks.length);
     
     // 5. Update Zustand state with initial track data
-    get().updateTracks([...get().tracks, trackState]);
+    await get().updateTracks([...get().tracks, trackState]);
     
     // 6. Connect tracks to engines (will load audio from Dexie)
     await connectTracksToEngines([trackState]);
@@ -588,7 +588,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         const trackStates = (await Promise.all(trackProcessingPromises)).filter(Boolean) as CombinedTrack[];
         
         // 5. Update Zustand state with initial track data
-        get().updateTracks(trackStates);
+        await get().updateTracks(trackStates);
         
         // 6. Connect tracks to engines (will load audio from Dexie)
         await connectTracksToEngines(trackStates);

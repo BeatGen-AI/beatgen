@@ -58,7 +58,7 @@ export const PrefetchStatus: React.FC<PrefetchStatusProps> = ({ projectId, getPr
 
   // Icon and color based on status
   let icon: React.ReactNode;
-  let className = 'w-4 h-4 ';
+  const className = 'w-4 h-4 ';
   
   if (isComplete) {
     icon = <CachedIcon className={className + 'text-green-500'} />;

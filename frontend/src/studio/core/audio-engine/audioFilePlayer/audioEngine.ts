@@ -18,34 +18,66 @@ export interface AudioTrack {
     x: number; // Position in ticks from left (musical time position)
     y: number; // Position in pixels from top (track order)
   };
+  // New instance-related properties
+  parentTrackId?: string; // For instances, this points to the original track ID
+  sharedBuffer?: Tone.ToneAudioBuffer; // Shared audio buffer for memory efficiency
 }
 
 class AudioFilePlayer implements TrackPlayer {
   private static instance: AudioFilePlayer;
   private mainOutput: Tone.Channel;
   private tracks: Map<string, AudioTrack>;
+  // Instance registration system (similar to MidiManager)
+  private registeredInstances: Map<string, Set<string>> = new Map(); // trackId -> Set of instanceIds
+  private sharedBuffers: Map<string, Tone.ToneAudioBuffer> = new Map(); // trackId -> shared buffer
 
   private constructor() {
     this.mainOutput = new Tone.Channel().toDestination();
     this.tracks = new Map();
   }
   setTrackPositionTicks(id: string, position: number): Promise<void> {
-    throw new Error('Method not implemented.');
+    this.setTrackPosition(id, position, 0);
+    return Promise.resolve();
   }
+  
   setTrackTrimStartTicks(id: string, start: number): Promise<void> {
-    throw new Error('Method not implemented.');
+    const track = this.tracks.get(id);
+    if (track && track.trimEndTicks !== undefined) {
+      this.setTrackTrim(id, start, track.trimEndTicks);
+    }
+    return Promise.resolve();
   }
+  
   setTrackTrimEndTicks(id: string, end: number): Promise<void> {
-    throw new Error('Method not implemented.');
+    const track = this.tracks.get(id);
+    if (track && track.trimStartTicks !== undefined) {
+      this.setTrackTrim(id, track.trimStartTicks, end);
+    }
+    return Promise.resolve();
   }
-  play(position: number): Promise<void> {
-    throw new Error('Method not implemented.');
+  
+  async play(position: number): Promise<void> {
+    try {
+      await Tone.start();
+      if (position > 0) {
+        Tone.Transport.position = Tone.Time(position / 1000).toBarsBeatsSixteenths();
+      }
+      Tone.Transport.start();
+    } catch (error) {
+      console.error('AudioEngine: Failed to start playback:', error);
+      throw error;
+    }
   }
-  pause(): Promise<void> {
-    throw new Error('Method not implemented.');
+  
+  async pause(): Promise<void> {
+    Tone.Transport.pause();
+    this.pauseAllPlayback();
   }
-  stop(): Promise<void> {
-    throw new Error('Method not implemented.');
+  
+  async stop(): Promise<void> {
+    this.stopAllPlayback();
+    Tone.Transport.stop();
+    Tone.Transport.position = 0;
   }
 
   public static getInstance(): AudioFilePlayer {
@@ -252,8 +284,17 @@ class AudioFilePlayer implements TrackPlayer {
   }
 
   public setTrackTrim(trackId: string, trimStartTicks: number, trimEndTicks: number): void {
+    console.log(`[AUDIO ENGINE] setTrackTrim called for ${trackId}:`, { trimStartTicks, trimEndTicks });
+    
     const track = this.tracks.get(trackId);
-    if (!track || !track.player) return;
+    if (!track) {
+      console.error(`[AUDIO ENGINE] Track ${trackId} not found in audio engine. Available tracks:`, Array.from(this.tracks.keys()));
+      return;
+    }
+    if (!track.player) {
+      console.error(`[AUDIO ENGINE] Track ${trackId} found but has no player`);
+      return;
+    }
     
     // Store trim values on the track
     track.trimStartTicks = trimStartTicks;
@@ -303,6 +344,95 @@ class AudioFilePlayer implements TrackPlayer {
     }
   }
 
+  // Create an instance track that shares a buffer with the parent track
+  public async createInstanceTrack(
+    parentTrackId: string, 
+    instanceId: string, 
+    name: string, 
+    audioFile?: File,
+    volume: number = 80,
+    pan: number = 0,
+    muted: boolean = false
+  ): Promise<AudioTrack> {
+    console.log(`Creating instance track ${instanceId} for parent ${parentTrackId}`);
+    
+    try {
+      // Validate inputs
+      if (!parentTrackId || !instanceId) {
+        throw new Error('Parent track ID and instance ID are required');
+      }
+      
+      if (volume < 0 || volume > 100) {
+        console.warn(`Invalid volume ${volume}, clamping to 0-100 range`);
+        volume = Math.max(0, Math.min(100, volume));
+      }
+      
+      if (pan < -100 || pan > 100) {
+        console.warn(`Invalid pan ${pan}, clamping to -100 to 100 range`);
+        pan = Math.max(-100, Math.min(100, pan));
+      }
+      
+      // Remove any existing instance track with this ID
+      this.removeTrack(instanceId);
+      
+      // Create channel for this instance
+      const channel = new Tone.Channel().connect(this.mainOutput);
+      channel.volume.value = convertVolumeToDecibels(volume, muted);
+      channel.pan.value = pan / 100; // Convert from UI range (-100 to 100) to Tone.js range (-1 to 1)
+      
+      const track: AudioTrack = {
+        id: instanceId,
+        name: name || `Instance ${instanceId}`,
+        channel,
+        volume,
+        pan,
+        muted,
+        soloed: false,
+        parentTrackId // Link back to parent track
+      };
+
+      // Handle audio file and buffer sharing
+      if (audioFile) {
+        let sharedBuffer = this.sharedBuffers.get(parentTrackId);
+        
+        if (!sharedBuffer) {
+          // First instance - load and store the shared buffer
+          console.log(`Loading shared buffer for parent track ${parentTrackId}`);
+          const buffer = await audioFile.arrayBuffer();
+          const audioBuffer = await Tone.getContext().decodeAudioData(buffer);
+          sharedBuffer = new Tone.ToneAudioBuffer(audioBuffer);
+          this.sharedBuffers.set(parentTrackId, sharedBuffer);
+        }
+        
+        // Create player with shared buffer
+        const player = new Tone.Player({
+          loop: false,
+          autostart: false,
+        }).connect(channel);
+        
+        // Share the buffer (similar to MidiSampler pattern)
+        player.buffer = sharedBuffer;
+        track.player = player;
+        track.sharedBuffer = sharedBuffer;
+        
+        console.log(`Instance ${instanceId} sharing buffer from parent ${parentTrackId}`);
+      }
+
+      // Register the instance
+      this.registerInstance(parentTrackId, instanceId);
+      
+      // Store the track
+      this.tracks.set(instanceId, track);
+      
+      return track;
+    } catch (error) {
+      console.error(`Failed to create instance track ${instanceId}:`, error);
+      // Clean up any partial state
+      this.removeTrack(instanceId);
+      throw error;
+    }
+  }
+
   public updateTrack(trackId: string, updatedTrack: AudioTrack): void {
     // Check if track exists in the map
     if (!this.tracks.has(trackId)) return;
@@ -323,6 +453,45 @@ class AudioFilePlayer implements TrackPlayer {
     if (updatedTrack.trimStartTicks !== undefined && updatedTrack.trimEndTicks !== undefined) {
       this.setTrackTrim(trackId, updatedTrack.trimStartTicks, updatedTrack.trimEndTicks);
     }
+  }
+
+  // Instance registration system (mimic MidiManager pattern)
+  public registerInstance(parentTrackId: string, instanceId: string): void {
+    if (!this.registeredInstances.has(parentTrackId)) {
+      this.registeredInstances.set(parentTrackId, new Set());
+    }
+    this.registeredInstances.get(parentTrackId)!.add(instanceId);
+    console.log(`AudioEngine: Registered instance ${instanceId} for track ${parentTrackId}`);
+  }
+
+  public unregisterInstance(parentTrackId: string, instanceId: string): void {
+    const instances = this.registeredInstances.get(parentTrackId);
+    if (instances) {
+      instances.delete(instanceId);
+      if (instances.size === 0) {
+        this.registeredInstances.delete(parentTrackId);
+        // Clean up shared buffer when no more instances exist
+        const sharedBuffer = this.sharedBuffers.get(parentTrackId);
+        if (sharedBuffer) {
+          sharedBuffer.dispose();
+          this.sharedBuffers.delete(parentTrackId);
+          console.log(`AudioEngine: Disposed shared buffer for track ${parentTrackId}`);
+        }
+      }
+    }
+    // Remove the audio engine track for this instance
+    this.removeTrack(instanceId);
+    console.log(`AudioEngine: Unregistered instance ${instanceId} for track ${parentTrackId}`);
+  }
+
+  public hasInstance(parentTrackId: string, instanceId: string): boolean {
+    const instances = this.registeredInstances.get(parentTrackId);
+    return instances ? instances.has(instanceId) : false;
+  }
+
+  public getRegisteredInstances(parentTrackId: string): string[] {
+    const instances = this.registeredInstances.get(parentTrackId);
+    return instances ? Array.from(instances) : [];
   }
 }
 

@@ -163,41 +163,41 @@ export class TransportController implements Transport {
                             const trimStartTicks = instance.trim_start_ticks;
                             const trimEndTicks = instance.trim_end_ticks;
                             
-                            // For audio tracks, get the player from audio engine
+                            // For audio tracks, get the player from audio engine using INSTANCE ID
                             if (track.track_type === 'AUDIO') {
-                                const audioTrack = this.audioEngine.getAllTracks().find(t => t.id === track.id);
-                                if (!audioTrack || !audioTrack.player) return;
+                                // Use instance ID as audio engine track ID (instance-as-track approach)
+                                const audioTrack = this.audioEngine.getAllTracks().find(t => t.id === instance.id);
+                                if (!audioTrack || !audioTrack.player) {
+                                    console.warn(`Audio track for instance ${instance.id} not found in audio engine`);
+                                    return;
+                                }
                                 
                                 // Calculate the offset when this instance should start playing
                                 const trackPositionOffset = this.getTrackTimeOffset(trackXTicks);
                                 
-                                // TODO: Handle instance-specific playback for audio tracks
-                                // For now, use the first instance only (temporary)
-                                if (instance.id.endsWith('_instance_1')) {
-                                    // Apply trim settings if needed
-                                    const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote;
-                                    const bpm = Tone.getTransport().bpm.value;
-                                    const trimStartSec = (trimStartTicks / ppq) * (60 / bpm);
-                                    const trimEndSec = (trimEndTicks / ppq) * (60 / bpm);
-                                    
-                                    if (trimStartTicks > 0 || trimEndTicks < track.duration_ticks) {
-                                        // Set trim on the player
-                                        (audioTrack.player as any)._trimSettings = {
-                                            trimEnabled: true,
-                                            trimStartSeconds: trimStartSec,
-                                            trimEndSeconds: trimEndSec
-                                        };
-                                    }
-                                    
-                                    // Schedule playback
-                                    if (trackPositionOffset <= transportPosition) {
-                                        const startOffset = Math.max(0, transportPosition - trackPositionOffset);
-                                        audioTrack.player.stop();
-                                        audioTrack.player.unsync();
-                                        audioTrack.player.start(0, trimStartSec + startOffset);
-                                        audioTrack.player.sync();
-                                        console.log(`Audio track ${track.id} instance ${instance.id} synced, starting at offset ${startOffset}s`);
-                                    }
+                                // Apply trim settings for this specific instance
+                                const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote;
+                                const bpm = Tone.getTransport().bpm.value;
+                                const trimStartSec = (trimStartTicks / ppq) * (60 / bpm);
+                                const trimEndSec = (trimEndTicks / ppq) * (60 / bpm);
+                                
+                                if (trimStartTicks > 0 || trimEndTicks < track.duration_ticks) {
+                                    // Set trim on the player
+                                    (audioTrack.player as any)._trimSettings = {
+                                        trimEnabled: true,
+                                        trimStartSeconds: trimStartSec,
+                                        trimEndSeconds: trimEndSec
+                                    };
+                                }
+                                
+                                // Schedule playback for this instance
+                                if (trackPositionOffset <= transportPosition) {
+                                    const startOffset = Math.max(0, transportPosition - trackPositionOffset);
+                                    audioTrack.player.stop();
+                                    audioTrack.player.unsync();
+                                    audioTrack.player.start(0, trimStartSec + startOffset);
+                                    audioTrack.player.sync();
+                                    console.log(`Audio instance ${instance.id} (parent: ${track.id}) synced, starting at offset ${startOffset}s`);
                                 }
                             }
                         } catch (error) {

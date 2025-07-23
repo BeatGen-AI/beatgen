@@ -17,6 +17,7 @@ import SampleManager from '../../core/samples/sampleManager';
 import { db } from '../../core/db/dexie-client';
 import { processAudioFile } from '../../utils/audioProcessing';
 import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
+import AudioFilePlayer from '../../core/audio-engine/audioFilePlayer/audioEngine';
 
 // Define the state properties and actions for this slice
 export interface TracksSlice {
@@ -160,7 +161,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
 
   // Update all tracks and recalculate indices
-  const updateTracks = (newTracks: CombinedTrack[]) => {
+  const updateTracks = async (newTracks: CombinedTrack[]) => {
       set(produce((draft: RootState) => {
           // Create a fresh array with cloned tracks to avoid frozen object issues
           draft.tracks = newTracks.map((track, index) => ({
@@ -204,6 +205,95 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   }
               }
           });
+      }
+      
+      // After updating tracks, register instances with AudioEngine for AUDIO tracks
+      const audioEngine = AudioFilePlayer.getInstance();
+      console.log('[updateTracks] AudioEngine available:', !!audioEngine, 'DB available:', !!db);
+      
+      // First, clean up any old audio engine tracks that might exist with track IDs
+      const existingAudioTracks = audioEngine.getAllTracks();
+      console.log('[updateTracks] Existing audio engine tracks before cleanup:', existingAudioTracks.map(t => ({ id: t.id, hasPlayer: !!t.player })));
+      
+      rootGet().tracks.forEach(track => {
+          if (track.track_type === 'AUDIO') {
+              // Remove any old track that might exist with the track ID
+              audioEngine.removeTrack(track.id);
+              console.log(`[updateTracks] Cleaned up old audio engine track ${track.id}`);
+          }
+      });
+      
+      if (audioEngine && db) {
+          const sampleManager = SampleManager.getInstance(db);
+          
+          // Process all AUDIO tracks
+          const audioTracks = rootGet().tracks.filter(track => track.track_type === 'AUDIO');
+          
+          for (const track of audioTracks) {
+              console.log(`[updateTracks] Processing AUDIO track ${track.id} with ${track.instances?.length || 0} instances`);
+              
+              if (track.instances && track.instances.length > 0) {
+                      const audioTrack = track.track as AudioTrackRead;
+                      
+                      // Get the audio file from SampleManager
+                      let audioFile: File | undefined;
+                      try {
+                          const audioFileData = await sampleManager.getSampleBlob(
+                              track.id,
+                              audioTrack.audio_file_storage_key,
+                              'audio_track',
+                              audioTrack.name
+                          );
+                          
+                          if (audioFileData?.data) {
+                              audioFile = audioFileData.data;
+                              console.log(`[updateTracks] Retrieved audio file for ${track.id}`);
+                          }
+                      } catch (error) {
+                          console.error(`[updateTracks] Failed to get audio file for ${track.id}:`, error);
+                      }
+                      
+                      // Create instance tracks for each instance
+                      for (const instance of track.instances) {
+                          try {
+                              await audioEngine.createInstanceTrack(
+                                  track.id,
+                                  instance.id,
+                                  track.name,
+                                  audioFile,
+                                  track.volume,
+                                  track.pan,
+                                  track.mute
+                              );
+                              
+                              // Set position and trim
+                              audioEngine.setTrackPosition(
+                                  instance.id,
+                                  instance.x_position,
+                                  instance.y_position
+                              );
+                              
+                              audioEngine.setTrackTrim(
+                                  instance.id,
+                                  instance.trim_start_ticks,
+                                  instance.trim_end_ticks
+                              );
+                              
+                              console.log(`[updateTracks] Created audio engine track for instance ${instance.id}`);
+                          } catch (error) {
+                              console.error(`[updateTracks] Failed to create audio engine track for instance ${instance.id}:`, error);
+                          }
+                  }
+              }
+          }
+          
+          // Debug: Show final state of audio engine tracks
+          const finalAudioTracks = audioEngine.getAllTracks();
+          console.log('[updateTracks] Final audio engine tracks after setup:', finalAudioTracks.map(t => ({ 
+              id: t.id, 
+              hasPlayer: !!t.player,
+              parentTrackId: t.parentTrackId 
+          })));
       }
   };
 
@@ -383,7 +473,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         }
       }
 
-      await passedStore.getAudioEngine().createTrack(trackId, name); 
+      // Only create track in old audio engine for non-AUDIO tracks
+      // AUDIO tracks are handled by our new instance-based system
+      if (type !== 'AUDIO') {
+        await passedStore.getAudioEngine().createTrack(trackId, name);
+      } 
       
       // Calculate defaults
       const beatsPerBar = timeSignature[0]; 
@@ -515,6 +609,42 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               }
               // Register the instance
               midiManager.registerInstance(trackId, initialInstance.id);
+          }
+      }
+      
+      // Create instance track for AUDIO tracks
+      if (type === 'AUDIO') {
+          const audioEngine = AudioFilePlayer.getInstance();
+          const audioFile = (options as AudioTrackOptions).audioFile;
+          if (audioFile) {
+              try {
+                  await audioEngine.createInstanceTrack(
+                      trackId, 
+                      initialInstance.id, 
+                      name, 
+                      audioFile,
+                      trackProps.volume,
+                      trackProps.pan,
+                      trackProps.muted
+                  );
+                  
+                  // Set the initial position and trim values
+                  audioEngine.setTrackPosition(
+                      initialInstance.id,
+                      initialInstance.x_position,
+                      initialInstance.y_position
+                  );
+                  
+                  audioEngine.setTrackTrim(
+                      initialInstance.id,
+                      initialInstance.trim_start_ticks,
+                      initialInstance.trim_end_ticks
+                  );
+                  
+                  console.log(`[AUDIO ENGINE] Created instance track ${initialInstance.id} for parent ${trackId} with position (${initialInstance.x_position}, ${initialInstance.y_position}) and trim (${initialInstance.trim_start_ticks}, ${initialInstance.trim_end_ticks})`);
+              } catch (error) {
+                  console.error(`[AUDIO ENGINE] Failed to create instance track ${initialInstance.id}:`, error);
+              }
           }
       }
 
@@ -832,10 +962,24 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       // Update Audio Engine 
       if (engineUpdateNeeded) {
         const audioEngine = passedStore.getAudioEngine();
-        switch (paramName) {
-          case 'volume': audioEngine.setTrackVolume(trackId, newValue as number); break;
-          case 'pan': audioEngine.setTrackPan(trackId, newValue as number); break;
-          // Mute/Solo handled by specific handlers
+        const track = findTrackById(trackId);
+        
+        // For AUDIO tracks, update all instances
+        if (track && track.track_type === 'AUDIO' && track.instances) {
+          track.instances.forEach(instance => {
+            switch (paramName) {
+              case 'volume': audioEngine.setTrackVolume(instance.id, newValue as number); break;
+              case 'pan': audioEngine.setTrackPan(instance.id, newValue as number); break;
+              // Mute/Solo handled by specific handlers
+            }
+          });
+        } else {
+          // For other track types, use the old approach
+          switch (paramName) {
+            case 'volume': audioEngine.setTrackVolume(trackId, newValue as number); break;
+            case 'pan': audioEngine.setTrackPan(trackId, newValue as number); break;
+            // Mute/Solo handled by specific handlers
+          }
         }
       }
       
@@ -985,7 +1129,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             
             if (oldMuteState !== shouldBeMuted) {
                 updateTrackState(track.id, { mute: shouldBeMuted }); // Use local helper
-                audioEngine.setTrackMute(track.id, shouldBeMuted);
+                // For AUDIO tracks, update all instances
+                if (track.track_type === 'AUDIO' && track.instances) {
+                  track.instances.forEach(instance => {
+                    audioEngine.setTrackMute(instance.id, shouldBeMuted);
+                  });
+                } else {
+                  audioEngine.setTrackMute(track.id, shouldBeMuted);
+                }
                 
                 const action = new Actions.ParameterChange( get, track.id, 'muted', oldMuteState ? 1 : 0, shouldBeMuted ? 1 : 0 );
                 historyActions.push(action);
@@ -1770,6 +1921,62 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
     }
     
+    // Register instance with AudioEngine for AUDIO tracks
+    if (track.track_type === 'AUDIO') {
+      const audioEngine = AudioFilePlayer.getInstance();
+      const audioTrack = track.track as AudioTrackRead;
+      
+      try {
+        // Get the audio file from SampleManager
+        let audioFile: File | undefined;
+        
+        if (db && audioTrack.audio_file_storage_key) {
+          const sampleManager = SampleManager.getInstance(db);
+          const audioFileData = await sampleManager.getSampleBlob(
+            trackId, // Use track ID as the cache key
+            audioTrack.audio_file_storage_key,
+            'audio_track',
+            audioTrack.name
+          );
+          
+          if (audioFileData?.data) {
+            audioFile = audioFileData.data;
+            console.log(`[AUDIO ENGINE] Retrieved audio file for ${trackId} from SampleManager`);
+          } else {
+            console.warn(`[AUDIO ENGINE] Could not retrieve audio file for ${trackId} from SampleManager`);
+          }
+        }
+        
+        // Create the instance track
+        await audioEngine.createInstanceTrack(
+          trackId,
+          instanceId,
+          track.name,
+          audioFile,
+          track.volume,
+          track.pan,
+          track.mute
+        );
+        
+        // Set the position and trim for the new instance
+        audioEngine.setTrackPosition(
+          instanceId,
+          newInstance.x_position,
+          newInstance.y_position
+        );
+        
+        audioEngine.setTrackTrim(
+          instanceId,
+          newInstance.trim_start_ticks,
+          newInstance.trim_end_ticks
+        );
+        
+        console.log(`[AUDIO ENGINE] Created instance track ${instanceId} for parent ${trackId} with position (${newInstance.x_position}, ${newInstance.y_position})`);
+      } catch (error) {
+        console.error(`[AUDIO ENGINE] Failed to create instance track ${instanceId}:`, error);
+      }
+    }
+    
     // Create history action for adding instance
     const action = new Actions.InstanceAdd(get, trackId, newInstance);
     await executeHistoryAction(action);
@@ -1778,8 +1985,23 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
   
   const updateTrackInstance = (trackId: string, instanceId: string, updates: Partial<TrackInstance>): void => {
+    console.log(`[UPDATE TRACK INSTANCE] Called with:`, { trackId, instanceId, updates });
+    
     const track = findTrackById(trackId);
-    if (!track || !track.instances) return;
+    if (!track) {
+      console.error(`[UPDATE TRACK INSTANCE] Track ${trackId} not found`);
+      return;
+    }
+    if (!track.instances) {
+      console.error(`[UPDATE TRACK INSTANCE] Track ${trackId} has no instances`);
+      return;
+    }
+    
+    console.log(`[UPDATE TRACK INSTANCE] Track found:`, { 
+      trackId: track.id, 
+      trackType: track.track_type, 
+      instanceCount: track.instances.length 
+    });
     
     const updatedInstances = track.instances.map(instance => 
       instance.id === instanceId 
@@ -1788,6 +2010,49 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     );
     
     updateTrackState(trackId, { instances: updatedInstances });
+    
+    // NEW: Sync trim and position changes to audio engine for AUDIO tracks
+    if (track.track_type === 'AUDIO') {
+      console.log(`[AUDIO ENGINE SYNC] Processing AUDIO track ${trackId}, instance ${instanceId}`, updates);
+      
+      const audioEngine = AudioFilePlayer.getInstance();
+      const updatedInstance = updatedInstances.find(i => i.id === instanceId);
+      
+      if (updatedInstance) {
+        // Update trim if changed
+        if (updates.trim_start_ticks !== undefined || updates.trim_end_ticks !== undefined) {
+          console.log(`[AUDIO ENGINE SYNC] Calling setTrackTrim for track ${trackId}:`, {
+            trackId,
+            trim_start_ticks: updatedInstance.trim_start_ticks,
+            trim_end_ticks: updatedInstance.trim_end_ticks,
+            hasAudioEngineTrack: audioEngine.getAllTracks().some(t => t.id === instanceId)
+          });
+          
+          audioEngine.setTrackTrim(
+            instanceId, // Use INSTANCE ID as audio engine track ID
+            updatedInstance.trim_start_ticks,
+            updatedInstance.trim_end_ticks
+          );
+        }
+        
+        // Update position if changed
+        if (updates.x_position !== undefined) {
+          console.log(`[AUDIO ENGINE SYNC] Calling setTrackPosition for track ${trackId}:`, {
+            trackId,
+            x_position: updatedInstance.x_position,
+            y_position: updatedInstance.y_position
+          });
+          
+          audioEngine.setTrackPosition(
+            instanceId, // Use INSTANCE ID as audio engine track ID
+            updatedInstance.x_position,
+            updatedInstance.y_position
+          );
+        }
+      } else {
+        console.warn(`[AUDIO ENGINE SYNC] Could not find updated instance ${instanceId} in track ${trackId}`);
+      }
+    }
   };
   
   const deleteTrackInstance = (trackId: string, instanceId: string): void => {
@@ -1814,6 +2079,13 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       if (midiManager) {
         midiManager.unregisterInstance(trackId, instanceId);
       }
+    }
+    
+    // Unregister instance with AudioEngine for AUDIO tracks
+    if (track.track_type === 'AUDIO') {
+      const audioEngine = AudioFilePlayer.getInstance();
+      audioEngine.unregisterInstance(trackId, instanceId);
+      console.log(`[AUDIO ENGINE] Unregistered instance ${instanceId} for track ${trackId}`);
     }
     
     // Create and execute the delete action

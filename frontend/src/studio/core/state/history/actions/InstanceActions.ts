@@ -89,6 +89,17 @@ export class InstanceResize extends BaseAction {
     }
 
     async execute(): Promise<void> {
+        console.log(`[INSTANCE RESIZE ACTION] Execute called:`, {
+            trackId: this.trackId,
+            instanceId: this.instanceId,
+            oldTrimStart: this.oldTrimStart,
+            oldTrimEnd: this.oldTrimEnd,
+            newTrimStart: this.newTrimStart,
+            newTrimEnd: this.newTrimEnd,
+            oldX: this.oldX,
+            newX: this.newX
+        });
+        
         const { updateTrackInstance } = this.get();
         updateTrackInstance(this.trackId, this.instanceId, {
             trim_start_ticks: this.newTrimStart,
