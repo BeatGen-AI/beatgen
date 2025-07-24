@@ -7,6 +7,7 @@ import { SamplerController } from '../audio-engine/samplerController';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { CombinedTrack } from 'src/platform/types/project';
 import { MidiManager } from '../midi/MidiManagerNew';
+import { audioContextManager } from '../audio/audioContextManager';
 
 export interface Transport {
     position: number;        // Current playback position
@@ -122,7 +123,8 @@ export class TransportController implements Transport {
         console.log(`[TransportController.play] Entry. Current Tone.Transport.seconds: ${Tone.getTransport().seconds.toFixed(4)}s`);
 
         try {
-            await Tone.start();
+            // Ensure both Tone.js and js-synthesizer contexts are resumed
+            await audioContextManager.ensureContextsResumed();
             
             // Clear any previously scheduled events
             this.clearScheduledEvents();

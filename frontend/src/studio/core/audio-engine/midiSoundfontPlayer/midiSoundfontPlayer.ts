@@ -59,11 +59,22 @@ export class MidiSoundfontPlayer {
       const initialize = async () => {
         try {
           console.log('Initializing MidiSoundfontPlayer...');
+          console.log('AudioContext details:', {
+            constructor: audioContext.constructor.name,
+            hasDestination: !!audioContext.destination,
+            hasCreateAudioWorkletNode: !!audioContext.createAudioWorkletNode,
+            state: audioContext.state,
+            sampleRate: audioContext.sampleRate,
+            isBaseAudioContext: audioContext instanceof BaseAudioContext,
+            isAudioContext: audioContext instanceof AudioContext
+          });
+          
           // Register worklet processor - load libfluidsynth first, then the worklet
           await audioContext.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
           await audioContext.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
           
           // Create node and connect
+          console.log('Creating AudioWorkletNode with js-synthesizer...');
           this.audioNode = this.synth.createAudioNode(audioContext, {
             polyphony: 256 // High polyphony for multiple tracks
           });
