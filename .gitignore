@@ -60,3 +60,6 @@ dns-records-app.beatgen.com.txt
 
 # Test drum samples folder
 drum_samples_public/
+
+# Phase documentation files
+backend/PHASE_3_SEARCH_INTEGRATION.md
