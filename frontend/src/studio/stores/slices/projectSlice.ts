@@ -367,6 +367,13 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
       if (!_withStore || !_withErrorHandling) { return; }
 
       const connectLogic = async (store: Store, tracks: CombinedTrack[]) => {
+        // Double-check that store is initialized before connecting tracks
+        if (!get().isInitialized) {
+          console.warn('Store not initialized when connecting tracks to engines, initializing now...');
+          await get().initializeAudio();
+          console.log('Store initialized during track connection');
+        }
+        
         const samplerController = store.getTransport().getSamplerController();
         const midiManager = store.getMidiManager();
 
@@ -534,7 +541,11 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     if (!_withErrorHandling) return null;
 
     const loadLogic = async (): Promise<ProjectWithTracks | null> => {
-        if (!get().isInitialized) { await get().initializeAudio(); }
+        // Ensure Store is fully initialized before proceeding
+        if (!get().isInitialized) { 
+            await get().initializeAudio(); 
+            console.log('Store initialized successfully for project loading');
+        }
         
         // 1. Fetch project data (includes track list with storage keys)
         const projectDataWithTracks = await fetchProjectData(projectId);

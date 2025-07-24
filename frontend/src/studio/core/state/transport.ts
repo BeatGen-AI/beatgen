@@ -7,6 +7,7 @@ import { SamplerController } from '../audio-engine/samplerController';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { CombinedTrack } from 'src/platform/types/project';
 import { MidiManager } from '../midi/MidiManagerNew';
+import { audioContextManager } from '../audio/audioContextManager';
 
 export interface Transport {
     position: number;        // Current playback position
@@ -122,7 +123,24 @@ export class TransportController implements Transport {
         console.log(`[TransportController.play] Entry. Current Tone.Transport.seconds: ${Tone.getTransport().seconds.toFixed(4)}s`);
 
         try {
-            await Tone.start();
+            // Ensure both Tone.js and js-synthesizer contexts are resumed
+            // This is critical - if context resumption fails, we should not continue playback
+            try {
+                await audioContextManager.ensureContextsResumed();
+                
+                // Verify both contexts are actually running before proceeding
+                if (!audioContextManager.areContextsRunning()) {
+                    console.error('TransportController: Audio contexts not in running state after resumption');
+                    this.isStarting = false;
+                    throw new Error('Cannot start playback: Audio contexts failed to reach running state');
+                }
+                
+                console.log('TransportController: Audio contexts successfully resumed and verified');
+            } catch (contextError) {
+                console.error('TransportController: Failed to resume audio contexts - aborting playback:', contextError);
+                this.isStarting = false;
+                throw new Error(`Cannot start playback: Audio context resumption failed - ${contextError.message}`);
+            }
             
             // Clear any previously scheduled events
             this.clearScheduledEvents();
