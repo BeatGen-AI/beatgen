@@ -4,10 +4,8 @@ import PianoIcon from '@mui/icons-material/Piano';
 import AudioFileIcon from '@mui/icons-material/AudioFile';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
-import { VirtualInstrumentsModal } from '../modals/VirtualInstrumentsModal';
 import { VirtualInstrumentsBottomSheet } from '../modals/VirtualInstrumentBottomSheet';
 import { DrumMachineBottomSheet } from '../modals/drum-machine/DrumModelBottomSheet';
-import { DrumMachineModal } from '../modals/drum-machine/DrumMachineModal';
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
 // Import types from store types file
 import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload } from '../../stores/types';
@@ -32,15 +30,15 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
   isAIAssistantOpen = false 
 }) => {
   const theme = useTheme();
-  const [isVirtualInstrumentModalOpen, setIsVirtualInstrumentModalOpen] = useState(false);
   const [isVirtualInstrumentBottomSheetOpen, setIsVirtualInstrumentBottomSheetOpen] = useState(false);
   const [isDrumMachineBottomSheetOpen, setIsDrumMachineBottomSheetOpen] = useState(false);
-  const [isDrumMachineModalOpen, setIsDrumMachineModalOpen] = useState(false);
   
-  // Track which bottom sheet is currently expanded (only one can be expanded at a time)
+  // Track which bottom sheet is currently expanded
   const [expandedBottomSheet, setExpandedBottomSheet] = useState<'virtual' | 'drum' | null>(null);
-  // Track the opening order to maintain consistent visual stacking
-  const [bottomSheetOrder, setBottomSheetOrder] = useState<('virtual' | 'drum')[]>([]);
+  
+  // Track bottom sheet heights
+  const [virtualInstrumentHeight, setVirtualInstrumentHeight] = useState(400); // Default height in px
+  const [drumMachineHeight, setDrumMachineHeight] = useState(400);
   
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, isSampler: boolean = false) => {
     const files = event.target.files;
@@ -75,27 +73,10 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
         }}
       >
         <MenuItem onClick={() => {
-          setIsVirtualInstrumentModalOpen(true);
-          onClose();
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <ListItemIcon><PianoIcon sx={{ color: '#2196f3' }} /></ListItemIcon>
-          <ListItemText primary="Virtual Instrument (MUI)" />
-        </MenuItem>
-        
-        <MenuItem onClick={() => {
           // Close drum modal if open
           setIsDrumMachineBottomSheetOpen(false);
           setIsVirtualInstrumentBottomSheetOpen(true);
           setExpandedBottomSheet('virtual');
-          setBottomSheetOrder(['virtual']); // Only one sheet at a time
           onClose();
         }}
           sx={{ 
@@ -107,23 +88,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           }}
         >
           <ListItemIcon><PianoIcon sx={{ color: '#e91e63' }} /></ListItemIcon>
-          <ListItemText primary="Virtual Instrument (Bottom Sheet)" />
-        </MenuItem>
-        
-        <MenuItem onClick={() => { 
-          setIsDrumMachineModalOpen(true);
-          onClose(); 
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <ListItemIcon><GraphicEqIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-          <ListItemText primary="Drum Machine (MUI)" />
+          <ListItemText primary="Virtual Instrument" />
         </MenuItem>
         
         <MenuItem onClick={() => { 
@@ -131,7 +96,6 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           setIsVirtualInstrumentBottomSheetOpen(false);
           setIsDrumMachineBottomSheetOpen(true);
           setExpandedBottomSheet('drum');
-          setBottomSheetOrder(['drum']); // Only one sheet at a time
           onClose(); 
         }}
           sx={{ 
@@ -143,7 +107,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           }}
         >
           <ListItemIcon><GraphicEqIcon sx={{ color: '#ff5722' }} /></ListItemIcon>
-          <ListItemText primary="Drum Machine (Bottom Sheet)" />
+          <ListItemText primary="Drum Machine" />
         </MenuItem>
         
         <MenuItem
@@ -188,23 +152,13 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
         </MenuItem>
       </Menu>
 
-      <VirtualInstrumentsModal
-        open={isVirtualInstrumentModalOpen}
-        onClose={() => setIsVirtualInstrumentModalOpen(false)}
-        onSelect={(instrumentId: string, instrumentName: string, instrumentStorageKey?: string) => {
-          const payload: MidiTrackPayload = { instrumentId, instrumentName, instrumentStorageKey };
-          onAddTrack('MIDI', payload);
-          setIsVirtualInstrumentModalOpen(false);
-        }}
-      />
-      
       {/* Bottom Sheet Container - anchored to bottom of viewport */}
       {/* Virtual Instruments Bottom Sheet */}
       {isVirtualInstrumentBottomSheetOpen && (
         <div 
           className="fixed bottom-0 left-0 right-0 z-50"
           style={{ 
-            height: '40vh',
+            height: expandedBottomSheet === 'virtual' ? `${virtualInstrumentHeight}px` : '60px',
             marginRight: isAIAssistantOpen ? '350px' : '0'
           }}
         >
@@ -213,7 +167,6 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
             onClose={() => {
               setIsVirtualInstrumentBottomSheetOpen(false);
               setExpandedBottomSheet(null);
-              setBottomSheetOrder([]);
             }}
             onSelect={(instrumentId: string, instrumentName: string, instrumentStorageKey?: string) => {
               const payload: MidiTrackPayload = { instrumentId, instrumentName, instrumentStorageKey };
@@ -221,10 +174,13 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
             }}
             isAIAssistantOpen={isAIAssistantOpen}
             isOtherBottomSheetOpen={false}
-            isMinimized={false}
+            isMinimized={expandedBottomSheet !== 'virtual' && isVirtualInstrumentBottomSheetOpen}
             onToggleMinimize={() => {
-              // No minimize functionality needed when only one sheet is open
+              const newExpanded = expandedBottomSheet === 'virtual' ? null : 'virtual';
+              setExpandedBottomSheet(newExpanded);
             }}
+            height={virtualInstrumentHeight}
+            onHeightChange={setVirtualInstrumentHeight}
           />
         </div>
       )}
@@ -234,7 +190,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
         <div 
           className="fixed bottom-0 left-0 right-0 z-50"
           style={{ 
-            height: '40vh',
+            height: expandedBottomSheet === 'drum' ? `${drumMachineHeight}px` : '60px',
             marginRight: isAIAssistantOpen ? '350px' : '0'
           }}
         >
@@ -243,34 +199,26 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
             onClose={() => {
               setIsDrumMachineBottomSheetOpen(false);
               setExpandedBottomSheet(null);
-              setBottomSheetOrder([]);
             }}
             onConfirmSelection={(selectedSamples: DrumSamplePublicRead[]) => {
               const payload: DrumTrackPayload = { samples: selectedSamples };
               onAddTrack('DRUM', payload);
               setIsDrumMachineBottomSheetOpen(false);
               setExpandedBottomSheet(null);
-              setBottomSheetOrder([]);
             }}
             isAIAssistantOpen={isAIAssistantOpen}
             isOtherBottomSheetOpen={false}
-            isMinimized={false}
+            isMinimized={expandedBottomSheet !== 'drum' && isDrumMachineBottomSheetOpen}
             onToggleMinimize={() => {
-              // No minimize functionality needed when only one sheet is open
+              const newExpanded = expandedBottomSheet === 'drum' ? null : 'drum';
+              setExpandedBottomSheet(newExpanded);
             }}
+            height={drumMachineHeight}
+            onHeightChange={setDrumMachineHeight}
           />
         </div>
       )}
       
-      <DrumMachineModal
-        open={isDrumMachineModalOpen}
-        onClose={() => setIsDrumMachineModalOpen(false)}
-        onConfirmSelection={(selectedSamples: DrumSamplePublicRead[]) => {
-          const payload: DrumTrackPayload = { samples: selectedSamples };
-          onAddTrack('DRUM', payload);
-          setIsDrumMachineModalOpen(false);
-        }}
-      />
     </>
   );
 };

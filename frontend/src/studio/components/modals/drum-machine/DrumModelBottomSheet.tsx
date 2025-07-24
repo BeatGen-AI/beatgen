@@ -528,9 +528,11 @@ export interface DrumMachineBottomSheetProps {
   isOtherBottomSheetOpen?: boolean;
   isMinimized?: boolean;
   onToggleMinimize?: () => void;
+  height?: number;
+  onHeightChange?: (height: number) => void;
 }
 
-export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, isAIAssistantOpen = false, isOtherBottomSheetOpen = false, isMinimized = false, onToggleMinimize }: DrumMachineBottomSheetProps) => {
+export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, isAIAssistantOpen = false, isOtherBottomSheetOpen = false, isMinimized = false, onToggleMinimize, height = 400, onHeightChange }: DrumMachineBottomSheetProps) => {
   const [selectedCategory, setSelectedCategory] = useState('drums');
   const [selectedSubCategory, setSelectedSubCategory] = useState('kicks');
   
@@ -542,6 +544,40 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
   const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  
+  // Handle resize functionality
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    
+    const startY = e.clientY;
+    const startHeight = height;
+    let currentHeight = startHeight;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaY = startY - e.clientY; // Negative because we're dragging up
+      const newHeight = Math.max(60, Math.min(window.innerHeight * 0.9, startHeight + deltaY));
+      currentHeight = newHeight;
+      onHeightChange?.(newHeight);
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      
+      // Auto-collapse if dragged down to minimum height
+      if (currentHeight <= 60) {
+        onToggleMinimize?.();
+        // Reset to default height for next expand
+        onHeightChange?.(window.innerHeight * 0.4); // 40vh
+      }
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Handle search state
   useEffect(() => {
@@ -769,15 +805,24 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
   return (
     <div 
       className={cn(
-        "bg-gray-900 border-t border-gray-700 transition-all duration-300 ease-in-out",
+        "bg-gray-900 border-t border-gray-700",
         "flex flex-col",
         isMinimized ? "flex-shrink-0" : "flex-1"
       )}
       style={{ 
-        height: isMinimized ? '60px' : (isOtherBottomSheetOpen ? '50%' : '100%'),
+        height: isMinimized ? '60px' : '100%',
         minHeight: '60px'
       }}
     >
+        {/* Resize Handle */}
+        {!isMinimized && (
+          <div 
+            className={`h-1 bg-gray-600 hover:bg-gray-400 cursor-ns-resize transition-colors ${isResizing ? 'bg-blue-500' : ''}`}
+            onMouseDown={handleMouseDown}
+            title="Drag to resize"
+          />
+        )}
+        
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-900">
           <div className="flex items-center space-x-3 flex-1">
