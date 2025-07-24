@@ -18,16 +18,39 @@ class AudioContextManager {
                     await Tone.start();
                     console.log("AudioContextManager: Tone.start() successful.");
 
-                    const rawCtx = Tone.getContext().rawContext;
+                    const toneContext = Tone.getContext();
+                    const rawCtx = toneContext.rawContext;
 
-                    // Validate the context using property checks (more robust across realms than instanceof)
-                    if (!rawCtx || typeof rawCtx.destination === 'undefined' || typeof rawCtx.state === 'undefined') {
-                        console.error("AudioContextManager: Context from Tone.js does not appear to be a valid online AudioContext", rawCtx);
-                        throw new Error("Failed to get valid online AudioContext from Tone.js");
+                    console.log("AudioContextManager: Tone.js context details", {
+                        toneContextType: typeof toneContext,
+                        rawContextType: typeof rawCtx,
+                        rawContextConstructor: rawCtx.constructor.name,
+                        sampleRate: rawCtx.sampleRate,
+                        state: rawCtx.state
+                    });
+
+                    // Create a fresh AudioContext that matches Tone.js settings
+                    // This ensures js-synthesizer gets a proper AudioContext instance
+                    this._context = new AudioContext({
+                        latencyHint: 'interactive',
+                        sampleRate: rawCtx.sampleRate
+                    });
+
+                    console.log("AudioContextManager: Created fresh AudioContext", {
+                        constructor: this._context.constructor.name,
+                        hasDestination: !!this._context.destination,
+                        hasCreateAudioWorkletNode: !!this._context.createAudioWorkletNode,
+                        state: this._context.state,
+                        sampleRate: this._context.sampleRate,
+                        isBaseAudioContext: this._context instanceof BaseAudioContext,
+                        isAudioContext: this._context instanceof AudioContext
+                    });
+
+                    // Resume the new context to ensure it's active
+                    if (this._context.state === 'suspended') {
+                        await this._context.resume();
+                        console.log("AudioContextManager: Fresh context resumed");
                     }
-
-                    // If checks pass, assert the type for TypeScript
-                    this._context = rawCtx as AudioContext;
 
                     // Add necessary worklets ONCE
                     console.log("AudioContextManager: Adding required AudioWorklet modules...");
@@ -50,6 +73,41 @@ class AudioContextManager {
     }
 
     /**
+     * Ensures both Tone.js and js-synthesizer audio contexts are resumed and ready for playback.
+     * This should be called before any audio playback operations.
+     * 
+     * @returns Promise that resolves when both contexts are running
+     */
+    public async ensureContextsResumed(): Promise<void> {
+        if (!this._context) {
+            throw new Error("AudioContextManager: Context not initialized. Call initialize() first.");
+        }
+
+        console.log("AudioContextManager: Ensuring both contexts are resumed...");
+        
+        try {
+            // First ensure Tone.js context is started/resumed
+            await Tone.start();
+            console.log("AudioContextManager: Tone.js context resumed");
+
+            // Then ensure the js-synthesizer context is also resumed
+            // Since we now use separate contexts, we need to resume both
+            if (this._context.state === 'suspended') {
+                await this._context.resume();
+                console.log("AudioContextManager: js-synthesizer context resumed");
+            }
+
+            console.log("AudioContextManager: Both contexts are now running", {
+                toneState: Tone.getContext().state,
+                synthState: this._context.state
+            });
+        } catch (error) {
+            console.error("AudioContextManager: Failed to resume contexts:", error);
+            throw error;
+        }
+    }
+
+    /**
      * Gets the initialized AudioContext. Throws an error if initialize() hasn't been called successfully.
      */
     public getContext(): AudioContext {
@@ -64,6 +122,24 @@ class AudioContextManager {
      */
     public isInitialized(): boolean {
         return !!this._context;
+    }
+
+    /**
+     * Checks if both contexts are in a running state (not suspended)
+     */
+    public areContextsRunning(): boolean {
+        if (!this._context) return false;
+        
+        const toneContext = Tone.getContext();
+        const bothRunning = toneContext.state === 'running' && this._context.state === 'running';
+        
+        console.log("AudioContextManager: Context states", {
+            tone: toneContext.state,
+            synth: this._context.state,
+            bothRunning
+        });
+        
+        return bothRunning;
     }
 }
 

@@ -14,6 +14,7 @@ import { DEFAULT_MEASURE_WIDTH, useGridStore } from './gridStore';
 import { CombinedTrack } from 'src/platform/types/project';
 import { BeatGenDB, db } from '../db/dexie-client'; // Import BeatGenDB and db instance
 import SampleManager from '../samples/sampleManager'; // Import SampleManager
+import { audioContextManager } from '../audio/audioContextManager'; // Import AudioContextManager
 /**
  * Interface for a drum pad in the drum machine grid
  */
@@ -66,27 +67,12 @@ export class Store implements StoreInterface {
       // Initialize audio engine
       await this.getAudioEngine().initialize();
       
-      // Get Tone.js context and extract raw audio context
-      // This is a workaround since AudioEngine doesn't expose the context directly
-      const toneContext = Tone.getContext();
-      const rawContext = toneContext.rawContext;
-      
-      // Log the context type to help debug
-      console.log('Audio context type:', {
-        toneContextType: typeof toneContext,
-        rawContextType: typeof rawContext,
-        rawContextConstructorName: rawContext.constructor.name,
-        isAudioContext: rawContext instanceof AudioContext,
-        isBaseAudioContext: rawContext instanceof BaseAudioContext
-      });
-      
-      // Some browsers may need to create a new AudioContext from an existing one
-      const audioContext = new AudioContext({
-        latencyHint: 'interactive',
-        sampleRate: rawContext.sampleRate
-      });
+      // Initialize the centralized AudioContextManager
+      const audioContext = await audioContextManager.initialize();
+      console.log('Store: AudioContextManager initialized successfully');
 
-      this.getSoundfontController().initialize(audioContext);
+      // Initialize the soundfont controller with the managed context
+      await this.getSoundfontController().initialize(audioContext);
 
       this.initialized = true;
       // Removed syncTracksFromProjectManager call
@@ -268,7 +254,9 @@ export class Store implements StoreInterface {
     instrumentId: string
   ): Promise<void> {
     if (!this.initialized) {
-      throw new Error('Store must be initialized before connecting tracks to soundfonts');
+      console.error(`Store not initialized when connecting track ${trackId} to soundfont ${instrumentId}`);
+      console.error('Store state:', { initialized: this.initialized });
+      throw new Error(`Store must be initialized before connecting tracks to soundfonts. TrackId: ${trackId}, InstrumentId: ${instrumentId}`);
     }
     
     try {
