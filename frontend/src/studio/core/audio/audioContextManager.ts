@@ -39,7 +39,7 @@ class AudioContextManager {
                     console.log("AudioContextManager: Created fresh AudioContext", {
                         constructor: this._context.constructor.name,
                         hasDestination: !!this._context.destination,
-                        hasCreateAudioWorkletNode: !!this._context.createAudioWorkletNode,
+                        hasAudioWorklet: !!this._context.audioWorklet,
                         state: this._context.state,
                         sampleRate: this._context.sampleRate,
                         isBaseAudioContext: this._context instanceof BaseAudioContext,

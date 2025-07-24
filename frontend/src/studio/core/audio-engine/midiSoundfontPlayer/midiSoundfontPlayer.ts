@@ -62,7 +62,7 @@ export class MidiSoundfontPlayer {
           console.log('AudioContext details:', {
             constructor: audioContext.constructor.name,
             hasDestination: !!audioContext.destination,
-            hasCreateAudioWorkletNode: !!audioContext.createAudioWorkletNode,
+            hasAudioWorklet: !!audioContext.audioWorklet,
             state: audioContext.state,
             sampleRate: audioContext.sampleRate,
             isBaseAudioContext: audioContext instanceof BaseAudioContext,
