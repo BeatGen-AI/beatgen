@@ -151,6 +151,9 @@ const StepEventRenderer: React.FC<StepEventRendererProps> = ({ event, onActionCl
 
   switch (event.type) {
     case 'explanation':
+      // Show streaming content if streaming, regular content if not
+      const displayContent = event.isStreaming ? event.streamingContent : event.content;
+      
       return (
         <div className="mb-2">
           {event.title && (
@@ -158,9 +161,12 @@ const StepEventRenderer: React.FC<StepEventRendererProps> = ({ event, onActionCl
               {event.title}
             </h4>
           )}
-          {event.content && (
+          {displayContent && (
             <div className={`text-xs ${getMutedTextClass()} leading-relaxed prose prose-xs max-w-none`}>
-              <ReactMarkdown>{event.content}</ReactMarkdown>
+              <ReactMarkdown>{displayContent}</ReactMarkdown>
+              {event.isStreaming && (
+                <span className="animate-pulse ml-1 text-blue-400">|</span>
+              )}
             </div>
           )}
         </div>

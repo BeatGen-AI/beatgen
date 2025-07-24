@@ -345,10 +345,25 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         else if (eventType === 'response_chunk') {
           console.log('🟡 STREAMING CHUNK - Received chunk:', { 
             chunk: data.chunk, 
-            messageId: data.message_id
+            messageId: data.message_id,
+            isStepMode: isStepMode
           });
           
-          // Add the new chunk directly to the last streaming message, with more debugging
+          // If we're in step mode, route streaming to the step system
+          if (isStepMode) {
+            console.log('🎵 Routing chunk to step system');
+            
+            // If this is the first chunk, start streaming
+            if (!stepManager.hasActiveStream) {
+              stepManager.startStreaming();
+            }
+            
+            // Append the chunk to the active step
+            stepManager.appendChunk(data.chunk);
+            return;
+          }
+          
+          // Legacy message-based streaming for non-step modes
           setMessages(prev => {
             // Copy the messages array to avoid mutation
             const updatedMessages = [...prev];
@@ -403,23 +418,29 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         }
         else if (eventType === 'response_end') {
           if (data.message_id === currentMessageId) {
-            // Finalize the message
+            // Finalize streaming
             setIsStreaming(false);
             
-            // Update the message to remove the streaming flag
-            setMessages(prev => {
-              const updatedMessages = [...prev];
-              const lastMessageIndex = updatedMessages.length - 1;
-              
-              if (lastMessageIndex >= 0 && updatedMessages[lastMessageIndex].isStreaming) {
-                updatedMessages[lastMessageIndex] = {
-                  ...updatedMessages[lastMessageIndex],
-                  isStreaming: false
-                };
-              }
-              
-              return updatedMessages;
-            });
+            // If we're in step mode, finalize the step streaming
+            if (isStepMode) {
+              console.log('🎵 Finalizing step streaming');
+              stepManager.finalizeStreaming();
+            } else {
+              // Legacy message-based streaming finalization
+              setMessages(prev => {
+                const updatedMessages = [...prev];
+                const lastMessageIndex = updatedMessages.length - 1;
+                
+                if (lastMessageIndex >= 0 && updatedMessages[lastMessageIndex].isStreaming) {
+                  updatedMessages[lastMessageIndex] = {
+                    ...updatedMessages[lastMessageIndex],
+                    isStreaming: false
+                  };
+                }
+                
+                return updatedMessages;
+              });
+            }
             
             setCurrentMessageId(null);
           }
