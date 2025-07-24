@@ -54,46 +54,63 @@ export class MidiSoundfontPlayer {
       return this.initPromise;
     }
     
-    // Create a new initialization promise
-    this.initPromise = new Promise<void>((resolve, reject) => {
-      const initialize = async () => {
-        try {
-          console.log('Initializing MidiSoundfontPlayer...');
-          console.log('AudioContext details:', {
-            constructor: audioContext.constructor.name,
-            hasDestination: !!audioContext.destination,
-            hasAudioWorklet: !!audioContext.audioWorklet,
-            state: audioContext.state,
-            sampleRate: audioContext.sampleRate,
-            isBaseAudioContext: audioContext instanceof BaseAudioContext,
-            isAudioContext: audioContext instanceof AudioContext
-          });
-          
-          // Register worklet processor - load libfluidsynth first, then the worklet
-          await audioContext.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
-          await audioContext.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
-          
-          // Create node and connect
-          console.log('Creating AudioWorkletNode with js-synthesizer...');
-          this.audioNode = this.synth.createAudioNode(audioContext, {
-            polyphony: 256 // High polyphony for multiple tracks
-          });
-          
-          this.audioNode.connect(audioContext.destination);
-          
-          console.log('MidiSoundfontPlayer initialized successfully');
-          resolve();
-        } catch (error) {
-          console.error('Failed to initialize MidiSoundfontPlayer:', error);
-          this.initPromise = null; // Reset promise so we can try again
-          reject(error);
-        }
-      };
-      
-      initialize();
-    });
-    
+    // Create promise immediately to prevent race condition
+    this.initPromise = this.performInitialization(audioContext);
     return this.initPromise;
+  }
+
+  /**
+   * Performs the actual initialization logic
+   * @param audioContext The audio context to use for creating the synthesizer node
+   * @throws {Error} If initialization fails (worklet loading, node creation, etc.)
+   * @private
+   */
+  private async performInitialization(audioContext: AudioContext): Promise<void> {
+    try {
+      console.log('Initializing MidiSoundfontPlayer...');
+      console.log('AudioContext details:', {
+        constructor: audioContext.constructor.name,
+        hasDestination: !!audioContext.destination,
+        hasAudioWorklet: !!audioContext.audioWorklet,
+        state: audioContext.state,
+        sampleRate: audioContext.sampleRate,
+        isBaseAudioContext: audioContext instanceof BaseAudioContext,
+        isAudioContext: audioContext instanceof AudioContext
+      });
+      
+      // Load AudioWorklet modules
+      await this.loadWorkletModules(audioContext);
+      
+      // Create node and connect
+      console.log('Creating AudioWorkletNode with js-synthesizer...');
+      this.audioNode = this.synth.createAudioNode(audioContext, {
+        polyphony: 256 // High polyphony for multiple tracks
+      });
+      
+      this.audioNode.connect(audioContext.destination);
+      
+      console.log('MidiSoundfontPlayer initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize MidiSoundfontPlayer:', error);
+      this.initPromise = null; // Reset promise so we can try again
+      throw error;
+    }
+  }
+
+  /**
+   * Loads the required AudioWorklet modules for js-synthesizer
+   * @param audioContext The audio context to load modules into
+   * @throws {Error} If AudioWorklet modules fail to load
+   * @private
+   */
+  private async loadWorkletModules(audioContext: AudioContext): Promise<void> {
+    console.log('Loading AudioWorklet modules...');
+    
+    // Register worklet processor - load libfluidsynth first, then the worklet
+    await audioContext.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
+    await audioContext.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
+    
+    console.log('AudioWorklet modules loaded successfully');
   }
   
   /**

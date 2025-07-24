@@ -52,12 +52,8 @@ class AudioContextManager {
                         console.log("AudioContextManager: Fresh context resumed");
                     }
 
-                    // Add necessary worklets ONCE
-                    console.log("AudioContextManager: Adding required AudioWorklet modules...");
-                    await this._context.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
-                    await this._context.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
-                    // Add other worklets if needed here
-                    console.log("AudioContextManager: AudioWorklet modules added.");
+                    // Load required AudioWorklet modules
+                    await this.loadWorkletModules();
 
                     console.log("AudioContextManager: Initialization complete.");
                     return this._context;
@@ -70,6 +66,28 @@ class AudioContextManager {
             })();
         }
         return this._initializationPromise;
+    }
+
+    /**
+     * Loads the required AudioWorklet modules for js-synthesizer
+     * @throws {Error} If context is not initialized or module loading fails
+     * @private
+     */
+    private async loadWorkletModules(): Promise<void> {
+        if (!this._context) {
+            throw new Error("AudioContextManager: Context not initialized");
+        }
+
+        console.log("AudioContextManager: Adding required AudioWorklet modules...");
+        try {
+            await this._context.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
+            await this._context.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
+            // Add other worklets if needed here
+            console.log("AudioContextManager: AudioWorklet modules added.");
+        } catch (error) {
+            console.error("AudioContextManager: Failed to load AudioWorklet modules:", error);
+            throw error;
+        }
     }
 
     /**
@@ -131,15 +149,7 @@ class AudioContextManager {
         if (!this._context) return false;
         
         const toneContext = Tone.getContext();
-        const bothRunning = toneContext.state === 'running' && this._context.state === 'running';
-        
-        console.log("AudioContextManager: Context states", {
-            tone: toneContext.state,
-            synth: this._context.state,
-            bothRunning
-        });
-        
-        return bothRunning;
+        return toneContext.state === 'running' && this._context.state === 'running';
     }
 }
 

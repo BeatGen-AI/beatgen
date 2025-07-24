@@ -124,7 +124,23 @@ export class TransportController implements Transport {
 
         try {
             // Ensure both Tone.js and js-synthesizer contexts are resumed
-            await audioContextManager.ensureContextsResumed();
+            // This is critical - if context resumption fails, we should not continue playback
+            try {
+                await audioContextManager.ensureContextsResumed();
+                
+                // Verify both contexts are actually running before proceeding
+                if (!audioContextManager.areContextsRunning()) {
+                    console.error('TransportController: Audio contexts not in running state after resumption');
+                    this.isStarting = false;
+                    throw new Error('Cannot start playback: Audio contexts failed to reach running state');
+                }
+                
+                console.log('TransportController: Audio contexts successfully resumed and verified');
+            } catch (contextError) {
+                console.error('TransportController: Failed to resume audio contexts - aborting playback:', contextError);
+                this.isStarting = false;
+                throw new Error(`Cannot start playback: Audio context resumption failed - ${contextError.message}`);
+            }
             
             // Clear any previously scheduled events
             this.clearScheduledEvents();
