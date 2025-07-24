@@ -1803,6 +1803,20 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
                 4, "Drum Beat Generation", self._generate_drum_beat_patterns_and_send_sse, params, selected_drum_sounds, drum_research_result
             )
             
+            # Create background task to handle drum completion immediately
+            drum_result = None
+            drum_exception = None
+            
+            async def handle_drum_completion():
+                nonlocal drum_result, drum_exception
+                try:
+                    drum_result = await drum_beat_task
+                except Exception as e:
+                    drum_exception = e
+            
+            # Start background completion handler
+            drum_completion_task = asyncio.create_task(handle_drum_completion())
+            
             # Steps 5-6: Chord Generation and Melody Explanation (parallel)
             chord_task = self._emit_step_events(
                 5, "Chord Generation", self._generate_chords_and_send_sse, params, selected_instruments
@@ -1835,11 +1849,15 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
                     7, "Melody Generation", self._generate_melody_notes_and_send_sse, params, selected_instruments
                 )
             
-            # Wait for both melody generation and drum beat generation to complete
-            melody_data, drum_data = await asyncio.gather(
-                melody_task, drum_beat_task,
-                return_exceptions=True
-            )
+            # Wait for melody generation and drum completion task
+            melody_data = await melody_task
+            await drum_completion_task
+            
+            # Retrieve drum results
+            if drum_exception:
+                drum_data = drum_exception
+            else:
+                drum_data = drum_result
             
             # Handle exceptions from final generation phase
             if isinstance(melody_data, Exception):
