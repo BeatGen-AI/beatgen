@@ -14,6 +14,8 @@ export interface StepEvent {
   title?: string;
   actionType?: string;
   actionData?: any;
+  isStreaming?: boolean;
+  streamingContent?: string;
 }
 
 export interface Step {
@@ -29,6 +31,7 @@ export class StepManager {
   private steps = new Map<number, Step>();
   private events: StepEvent[] = [];
   private listeners: ((steps: Step[]) => void)[] = [];
+  private streamingEvent: StepEvent | null = null;
 
   constructor() {
     this.initializeMusicGeneration();
@@ -190,9 +193,98 @@ export class StepManager {
   }
 
   /**
+   * Start streaming content for the currently active step
+   */
+  startStreaming(title?: string): string | null {
+    // Find the step that's currently in progress
+    const activeStep = Array.from(this.steps.values()).find(step => step.status === 'in_progress');
+    
+    if (!activeStep) {
+      console.warn('StepManager: No active step found for streaming');
+      return null;
+    }
+
+    // Create a streaming event
+    const streamingEvent: StepEvent = {
+      id: `${activeStep.id}-streaming-${Date.now()}`,
+      stepId: activeStep.id,
+      stepName: activeStep.name,
+      type: 'explanation',
+      timestamp: Date.now(),
+      title: title,
+      content: '',
+      isStreaming: true,
+      streamingContent: ''
+    };
+
+    // Add to step events and track as current streaming event
+    activeStep.events.push(streamingEvent);
+    this.events.push(streamingEvent);
+    this.streamingEvent = streamingEvent;
+
+    console.log(`StepManager: Started streaming for step ${activeStep.id} (${activeStep.name})`);
+    
+    // Notify listeners
+    this.notifyListeners();
+    
+    return streamingEvent.id;
+  }
+
+  /**
+   * Append a chunk to the current streaming event
+   */
+  appendChunk(chunk: string): void {
+    if (!this.streamingEvent) {
+      console.warn('StepManager: No active streaming event to append chunk to');
+      return;
+    }
+
+    this.streamingEvent.streamingContent = (this.streamingEvent.streamingContent || '') + chunk;
+    
+    // Notify listeners for real-time updates
+    this.notifyListeners();
+  }
+
+  /**
+   * Finalize the current streaming event
+   */
+  finalizeStreaming(): void {
+    if (!this.streamingEvent) {
+      return;
+    }
+
+    // Move streaming content to regular content and mark as not streaming
+    this.streamingEvent.content = this.streamingEvent.streamingContent || '';
+    this.streamingEvent.isStreaming = false;
+    this.streamingEvent.streamingContent = undefined;
+
+    console.log(`StepManager: Finalized streaming event ${this.streamingEvent.id}`);
+    
+    this.streamingEvent = null;
+    
+    // Notify listeners
+    this.notifyListeners();
+  }
+
+  /**
+   * Get the currently active (in_progress) step
+   */
+  getActiveStep(): Step | null {
+    return Array.from(this.steps.values()).find(step => step.status === 'in_progress') || null;
+  }
+
+  /**
+   * Check if there's currently an active streaming event
+   */
+  get hasActiveStream(): boolean {
+    return this.streamingEvent !== null;
+  }
+
+  /**
    * Reset for new generation
    */
   reset() {
+    this.streamingEvent = null;
     this.initializeMusicGeneration();
     this.notifyListeners();
   }
