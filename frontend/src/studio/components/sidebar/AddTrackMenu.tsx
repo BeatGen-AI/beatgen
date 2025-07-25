@@ -236,6 +236,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
             onHeightChange={setVirtualInstrumentHeight}
             soundfonts={soundfonts}
             soundfontsLoading={soundfontsLoading}
+            isAIAssistantOpen={isAIAssistantOpen}
           />
         </div>
       )}
@@ -270,6 +271,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
             onHeightChange={setDrumMachineHeight}
             drumSamples={drumSamples}
             drumSamplesLoading={drumSamplesLoading}
+            isAIAssistantOpen={isAIAssistantOpen}
           />
         </div>
       )}
