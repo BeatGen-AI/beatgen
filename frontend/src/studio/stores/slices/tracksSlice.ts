@@ -979,9 +979,29 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         const audioEngine = passedStore.getAudioEngine();
         const historyActions = [];
 
+        // Helper function to check if a track should be unmuted based on solo relationships
+        const shouldTrackBeUnmuted = (track: CombinedTrack): boolean => {
+            if (!isAnyTrackSoloed) return true; // If nothing is soloed, unmute all
+            if ((track as any).soloed) return true; // If this track itself is soloed
+            
+            // Special handling for drum tracks and their samplers
+            if (track.track_type === 'SAMPLER' && track.track) {
+                const samplerData = track.track as SamplerTrackRead;
+                if (samplerData.drum_track_id) {
+                    // Check if the parent drum track is soloed
+                    const parentDrumTrack = currentTracks.find(t => t.id === samplerData.drum_track_id);
+                    if (parentDrumTrack && (parentDrumTrack as any).soloed) {
+                        return true; // Keep sampler tracks unmuted if their drum track is soloed
+                    }
+                }
+            }
+            
+            return false; // Mute everything else
+        };
+
         for (const track of currentTracks) {
             const oldMuteState = track.mute;
-            const shouldBeMuted = isAnyTrackSoloed ? !(track as any).soloed : false; // If nothing soloed, unmute all? Or restore previous? Let's unmute for now.
+            const shouldBeMuted = !shouldTrackBeUnmuted(track);
             
             if (oldMuteState !== shouldBeMuted) {
                 updateTrackState(track.id, { mute: shouldBeMuted }); // Use local helper
