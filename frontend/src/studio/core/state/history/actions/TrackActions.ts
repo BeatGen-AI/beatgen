@@ -313,6 +313,21 @@ export class ParameterChangeAction extends TrackAction {
                 this.store.getAudioEngine().setTrackVolume(this.trackId, value);
                 this.store.getSoundfontController()?.setTrackVolume?.(this.trackId, value);
                 this.store.getSamplerController()?.setTrackVolume?.(this.trackId, value);
+                
+                // If this is a drum track, also update all its sampler tracks
+                const track = this.get().findTrackById(this.trackId);
+                if (track?.track_type === 'DRUM') {
+                    const samplerTracks = this.get().tracks.filter(t => 
+                        t.track_type === 'SAMPLER' && 
+                        t.track && 
+                        (t.track as SamplerTrackRead).drum_track_id === this.trackId
+                    );
+                    samplerTracks.forEach(samplerTrack => {
+                        this.store.getAudioEngine().setTrackVolume(samplerTrack.id, value);
+                        this.store.getSamplerController()?.setTrackVolume?.(samplerTrack.id, value);
+                        this.get().updateTrackState(samplerTrack.id, { volume: value });
+                    });
+                }
                 break;
             case 'pan':
                 this.store.getAudioEngine().setTrackPan(this.trackId, value);
