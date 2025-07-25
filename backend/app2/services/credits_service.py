@@ -11,7 +11,11 @@ from app2.models.user import User
 from app2.models.credits import UserCredits, CreditTransaction, CreditTransactionType
 from app2.models.subscription import Subscription
 from app2.infrastructure.database.sqlmodel_client import get_async_session
-from app2.constants.credits import CREDIT_ALLOCATIONS, PRO_UPGRADE_BONUS, PRO_UNLIMITED_BALANCE
+from app2.constants.credits import (
+    CREDIT_ALLOCATIONS, PRO_UPGRADE_BONUS, PRO_UNLIMITED_BALANCE,
+    get_monthly_allocation, has_rollover, is_unlimited_tier, get_tier_level,
+    is_tier_upgrade, calculate_upgrade_bonus, get_tier_info
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,28 +37,28 @@ class CreditsService:
                 return existing_credits
             
             # Get credit allocation for tier
-            allocation = CREDIT_ALLOCATIONS.get(tier, CREDIT_ALLOCATIONS["free"])
+            monthly_allocation = get_monthly_allocation(tier)
             
             # Create new credits record
             user_credits = UserCredits(
                 user_id=user.id,
-                balance=allocation["monthly"] if allocation["monthly"] != -1 else 0,
-                monthly_allocation=allocation["monthly"],
+                balance=monthly_allocation if monthly_allocation != -1 else 0,
+                monthly_allocation=monthly_allocation,
                 subscription_tier=tier,
-                has_rollover=allocation["rollover"],
+                has_rollover=has_rollover(tier),
                 last_allocation_date=datetime.now(timezone.utc)
             )
             
             session.add(user_credits)
             
             # Create initial transaction
-            if allocation["monthly"] > 0:
+            if monthly_allocation > 0:
                 transaction = CreditTransaction(
                     user_id=user.id,
                     user_credits_id=user_credits.id,
                     transaction_type=CreditTransactionType.MONTHLY_ALLOCATION,
-                    amount=allocation["monthly"],
-                    balance_after=allocation["monthly"],
+                    amount=monthly_allocation,
+                    balance_after=monthly_allocation,
                     description=f"Initial {tier} plan allocation"
                 )
                 session.add(transaction)
@@ -80,27 +84,18 @@ class CreditsService:
                     raise ValueError(f"User {user_id} not found")
                 return await self.initialize_user_credits(user, new_tier)
             
-            # Get new allocation
-            allocation = CREDIT_ALLOCATIONS.get(new_tier, CREDIT_ALLOCATIONS["free"])
+            # Get new allocation info
             old_tier = user_credits.subscription_tier
             
             # Update credits record
             user_credits.subscription_tier = new_tier
-            user_credits.monthly_allocation = allocation["monthly"]
-            user_credits.has_rollover = allocation["rollover"]
+            user_credits.monthly_allocation = get_monthly_allocation(new_tier)
+            user_credits.has_rollover = has_rollover(new_tier)
             user_credits.updated_at = datetime.now(timezone.utc)
             
             # If upgrading, give immediate bonus credits
-            if old_tier and self._get_tier_level(new_tier) > self._get_tier_level(old_tier):
-                old_allocation = CREDIT_ALLOCATIONS.get(old_tier, {}).get("monthly", 0)
-                new_allocation = allocation["monthly"]
-                
-                # Calculate bonus as difference between plans
-                # For pro plan (unlimited = -1), give a large bonus
-                if new_tier == "pro":
-                    bonus = PRO_UPGRADE_BONUS
-                else:
-                    bonus = new_allocation - old_allocation
+            if old_tier and is_tier_upgrade(old_tier, new_tier):
+                bonus = calculate_upgrade_bonus(old_tier, new_tier)
                 
                 if bonus > 0:
                     user_credits.balance += bonus
@@ -116,7 +111,7 @@ class CreditsService:
                     session.add(transaction)
             
             # If pro plan, set unlimited credits
-            if new_tier == "pro":
+            if is_unlimited_tier(new_tier):
                 user_credits.balance = PRO_UNLIMITED_BALANCE
             
             session.add(user_credits)
@@ -142,8 +137,8 @@ class CreditsService:
             old_balance = user_credits.balance
             user_credits.balance = 0  # Remove all credits
             user_credits.subscription_tier = "free"
-            user_credits.monthly_allocation = CREDIT_ALLOCATIONS["free"]["monthly"]
-            user_credits.has_rollover = CREDIT_ALLOCATIONS["free"]["rollover"]
+            user_credits.monthly_allocation = get_monthly_allocation("free")
+            user_credits.has_rollover = has_rollover("free")
             user_credits.updated_at = datetime.now(timezone.utc)
             
             # Record the removal
@@ -175,14 +170,14 @@ class CreditsService:
                 logger.warning(f"No credits found for user {user_id}")
                 return None
             
-            # Check if pro plan (unlimited)
-            if user_credits.subscription_tier == "pro":
-                logger.info(f"User {user_id} has pro plan, skipping allocation")
+            # Check if unlimited plan
+            if is_unlimited_tier(user_credits.subscription_tier):
+                logger.info(f"User {user_id} has unlimited plan, skipping allocation")
                 return user_credits
             
-            # Handle rollover for non-free plans
+            # Handle rollover for plans that support it
             rollover_amount = 0
-            if user_credits.has_rollover and user_credits.subscription_tier != "free":
+            if user_credits.has_rollover:
                 rollover_amount = user_credits.balance
             
             # Calculate new balance
@@ -242,9 +237,9 @@ class CreditsService:
                 logger.error(f"No credits found for user {user_id}")
                 return False
             
-            # Check if pro plan (unlimited)
-            if user_credits.subscription_tier == "pro":
-                # Pro users have unlimited credits, just record the usage
+            # Check if unlimited plan
+            if is_unlimited_tier(user_credits.subscription_tier):
+                # Unlimited users have unlimited credits, just record the usage
                 total_tokens = (request_tokens or 0) + (response_tokens or 0) if request_tokens or response_tokens else None
                 transaction = CreditTransaction(
                     user_id=user_id,
@@ -320,18 +315,18 @@ class CreditsService:
             
             # Calculate next allocation date based on last allocation
             next_allocation_date = None
-            if user_credits.last_allocation_date and user_credits.subscription_tier != "pro":
+            if user_credits.last_allocation_date and not is_unlimited_tier(user_credits.subscription_tier):
                 next_allocation_date = (user_credits.last_allocation_date + relativedelta(months=1)).isoformat()
             
             return {
-                "balance": user_credits.balance if user_credits.subscription_tier != "pro" else "unlimited",
+                "balance": user_credits.balance if not is_unlimited_tier(user_credits.subscription_tier) else "unlimited",
                 "monthly_allocation": user_credits.monthly_allocation,
                 "subscription_tier": user_credits.subscription_tier,
                 "has_rollover": user_credits.has_rollover,
                 "total_used": user_credits.total_used,
                 "last_allocation_date": user_credits.last_allocation_date.isoformat(),
                 "next_allocation_date": next_allocation_date,
-                "is_unlimited": user_credits.subscription_tier == "pro"
+                "is_unlimited": is_unlimited_tier(user_credits.subscription_tier)
             }
     
     async def get_credit_history(self, user_id: str, limit: int = 50) -> list[Dict[str, Any]]:
@@ -368,10 +363,6 @@ class CreditsService:
                 for t in transactions
             ]
     
-    def _get_tier_level(self, tier: str) -> int:
-        """Get numeric level for tier comparison"""
-        levels = {"free": 0, "starter": 1, "creator": 2, "pro": 3}
-        return levels.get(tier, 0)
 
 
 # Create singleton instance
