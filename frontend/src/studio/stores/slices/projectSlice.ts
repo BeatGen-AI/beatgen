@@ -474,6 +474,43 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           } catch (error) {
                console.error(`Error connecting track ${track.id} (type: ${track.track_type}):`, error);
           }
+          
+          // Apply track parameters (volume, pan, mute) after connection
+          try {
+              const audioEngine = store.getAudioEngine();
+              const soundfontController = store.getSoundfontController();
+              const samplerController = store.getSamplerController();
+              
+              // Set volume
+              const volume = track.volume ?? 80;
+              audioEngine.setTrackVolume(track.id, volume);
+              soundfontController?.setTrackVolume?.(track.id, volume);
+              samplerController?.setTrackVolume?.(track.id, volume);
+              
+              // Set pan
+              const pan = track.pan ?? 0;
+              audioEngine.setTrackPan(track.id, pan);
+              
+              // Set mute state
+              const muted = track.mute ?? false;
+              audioEngine.setTrackMute(track.id, muted);
+              soundfontController?.muteTrack?.(track.id, muted);
+              samplerController?.muteTrack?.(track.id, muted);
+              
+              // Set position based on first instance if available
+              const firstInstance = track.instances?.[0];
+              if (firstInstance) {
+                  audioEngine.setTrackPosition(
+                      track.id,
+                      firstInstance.x_position ?? 0,
+                      firstInstance.y_position ?? 0
+                  );
+              }
+              
+              console.log(`Applied parameters to track ${track.id}: volume=${volume}, pan=${pan}, muted=${muted}`);
+          } catch (paramError) {
+              console.error(`Error applying parameters to track ${track.id}:`, paramError);
+          }
         }
       }
       await _withErrorHandling(async () => _withStore(connectLogic)(loadedTracks), 'connectTracksToEngines')();
