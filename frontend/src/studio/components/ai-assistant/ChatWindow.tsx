@@ -113,7 +113,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   
   // State for AI model selection
   const [selectedModel, setSelectedModel] = useState<string>(AVAILABLE_MODELS[0]); // Default to the first model
-  const [modelAnchorEl, setModelAnchorEl] = useState<null | HTMLElement>(null);
   
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
@@ -1038,18 +1037,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   };
 
 
-  // Handlers for AI Model Chip
-  const handleModelChipClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    setModelAnchorEl(event.currentTarget);
-  };
-
-  const handleModelMenuClose = () => {
-    setModelAnchorEl(null);
-  };
-
+  // Handler for AI Model selection
   const handleModelSelect = (newModel: string) => {
     setSelectedModel(newModel);
-    setModelAnchorEl(null); // Close menu on selection
   };
 
   return (
@@ -1280,19 +1270,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
             >
               {/* Model Selector Chip - Bottom Left (hidden for Generate Audio mode) */}
               {mode !== 'Generate Audio' ? (
-                <>
-                  <MenuChip
-                    label={selectedModel}
-                    onClick={handleModelChipClick}
-                  />
-                  <ChatModelMenu
-                    anchorEl={modelAnchorEl}
-                    open={Boolean(modelAnchorEl)}
-                    onClose={handleModelMenuClose}
-                    onSelect={handleModelSelect}
-                    models={AVAILABLE_MODELS}
-                  />
-                </>
+                <ChatModelMenu
+                  triggerLabel={selectedModel}
+                  onSelect={handleModelSelect}
+                  models={AVAILABLE_MODELS}
+                  selectedModel={selectedModel}
+                />
               ) : (
                 <Box sx={{ flex: 1 }} />
               )}
