@@ -14,6 +14,7 @@ import { ActionType } from '.';
 // Fix: Import TRACK_CONFIG
 import { TRACK_CONFIG } from '../../../../stores/config'; 
 import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
+import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 
 /**
