@@ -169,7 +169,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   
   // Handler for solo toggling
   const handleSoloToggle = () => {
-    console.warn('Solo toggle state location unclear on CombinedTrack');
+    onSoloToggle(track.id, !(track.solo ?? track.soloed ?? false));
   };
   
   // Handler for track deletion
@@ -465,12 +465,12 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         
         {/* Solo Button */}
         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Tooltip title={track.solo ? "Unsolo" : "Solo"}>
+          <Tooltip title={(track.solo ?? track.soloed) ? "Unsolo" : "Solo"}>
             <Box 
               onClick={handleSoloToggle}
               sx={{ 
-                bgcolor: track.solo ? '#ffc107' : 'rgba(255, 255, 255, 0.1)',
-                color: track.solo ? '#000' : trackColor,
+                bgcolor: (track.solo ?? track.soloed) ? '#ffc107' : 'rgba(255, 255, 255, 0.1)',
+                color: (track.solo ?? track.soloed) ? '#000' : trackColor,
                 borderRadius: '3px',
                 px: 1.2,
                 py: 0.4,
@@ -478,7 +478,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 '&:hover': {
-                  bgcolor: track.solo ? '#e6ac00' : 'rgba(255, 255, 255, 0.15)'
+                  bgcolor: (track.solo ?? track.soloed) ? '#e6ac00' : 'rgba(255, 255, 255, 0.15)'
                 }
               }}
             >

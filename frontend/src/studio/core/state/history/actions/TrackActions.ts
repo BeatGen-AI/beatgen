@@ -338,6 +338,21 @@ export class ParameterChangeAction extends TrackAction {
                     this.store.getAudioEngine().setTrackMute(this.trackId, isMuted);
                     this.store.getSoundfontController()?.muteTrack?.(this.trackId, isMuted);
                     this.store.getSamplerController()?.muteTrack?.(this.trackId, isMuted);
+                    
+                    // If this is a drum track, also update all its sampler tracks
+                    const track = this.get().findTrackById(this.trackId);
+                    if (track?.track_type === 'DRUM') {
+                        const samplerTracks = this.get().tracks.filter(t => 
+                            t.track_type === 'SAMPLER' && 
+                            t.track && 
+                            (t.track as SamplerTrackRead).drum_track_id === this.trackId
+                        );
+                        samplerTracks.forEach(samplerTrack => {
+                            this.store.getAudioEngine().setTrackMute(samplerTrack.id, isMuted);
+                            this.store.getSamplerController()?.muteTrack?.(samplerTrack.id, isMuted);
+                            this.get().updateTrackState(samplerTrack.id, { mute: isMuted });
+                        });
+                    }
                 }
                 break;
         }
