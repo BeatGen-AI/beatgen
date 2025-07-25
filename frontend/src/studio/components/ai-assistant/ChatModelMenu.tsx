@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Coins } from 'lucide-react';
+import { useAppTheme } from '../../../platform/theme/ThemeContext';
 
 // Model credit costs (matching backend MODEL_COSTS)
 const MODEL_CREDIT_COSTS: Record<string, number> = {
@@ -34,6 +35,8 @@ interface ChatModelMenuProps {
 }
 
 const ChatModelMenu: React.FC<ChatModelMenuProps> = ({ triggerLabel, onSelect, models, selectedModel, disabled }) => {
+  const { studioMode } = useAppTheme();
+  
   const handleSelect = (model: string) => {
     onSelect(model);
   };
@@ -42,20 +45,60 @@ const ChatModelMenu: React.FC<ChatModelMenuProps> = ({ triggerLabel, onSelect, m
     return MODEL_CREDIT_COSTS[model] || 10; // Fallback to 10 credits
   };
 
+  const getTextColor = () => {
+    return studioMode === 'dark' ? 'text-gray-400' : 'text-gray-600';
+  };
+
+  const getDropdownClassName = () => {
+    if (studioMode === 'dark') {
+      // Match Material-UI menu styling for dark mode
+      return "w-52 z-[9999] p-1 bg-[rgb(48,48,48)] border-0 shadow-lg rounded-lg focus:outline-none";
+    }
+    // Light mode styling
+    return "w-52 z-[9999] p-1 bg-white border border-gray-200 shadow-lg rounded-lg focus:outline-none";
+  };
+
+  const getItemClassName = (isSelected: boolean) => {
+    const baseClasses = "flex items-center justify-between cursor-pointer min-h-0 transition-colors text-xs rounded";
+    const paddingClasses = "px-2 py-1";
+    
+    if (studioMode === 'dark') {
+      // Dark mode: Match Material-UI MenuItem styling
+      const textColor = 'text-white';
+      const selectedClass = isSelected ? 'bg-[rgba(255,255,255,0.1)]' : '';
+      const hoverClass = 'hover:bg-[rgba(255,255,255,0.08)]';
+      return `${baseClasses} ${paddingClasses} ${textColor} ${selectedClass} ${hoverClass}`;
+    } else {
+      // Light mode styling
+      const textColor = 'text-gray-900';
+      const selectedClass = isSelected ? 'bg-gray-100' : '';
+      const hoverClass = 'hover:bg-gray-50';
+      return `${baseClasses} ${paddingClasses} ${textColor} ${selectedClass} ${hoverClass}`;
+    }
+  };
+
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Badge 
           variant="secondary"
-          className="cursor-pointer hover:bg-secondary/80 h-5 text-xs"
+          className={`cursor-pointer h-5 text-xs border-0 ${
+            studioMode === 'dark' 
+              ? 'bg-[rgba(60,60,60,0.8)] text-white hover:bg-[rgba(60,60,60,0.9)]'
+              : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+          }`}
+          style={{
+            borderRadius: '5px',
+            fontSize: '0.7rem'
+          }}
         >
           {triggerLabel}
         </Badge>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="w-52 z-[9999] p-1"
+        className={getDropdownClassName()}
         sideOffset={4}
       >
         {models
@@ -68,14 +111,10 @@ const ChatModelMenu: React.FC<ChatModelMenuProps> = ({ triggerLabel, onSelect, m
             <DropdownMenuItem
               key={model}
               onClick={() => handleSelect(model)}
-              className={`
-                flex items-center justify-between px-2 py-1 cursor-pointer min-h-0
-                ${isSelected ? 'bg-accent' : ''}
-                hover:bg-accent/50 transition-colors
-              `}
+              className={getItemClassName(isSelected)}
             >
               <span className="text-xs font-medium truncate">{model}</span>
-              <div className="text-[10px] font-medium ml-2 shrink-0 flex items-center gap-0.5 text-gray-600 dark:text-gray-400">
+              <div className={`text-[10px] font-medium ml-2 shrink-0 flex items-center gap-0.5 ${getTextColor()}`}>
                 {cost}
                 <Coins/>
               </div>
