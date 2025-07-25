@@ -106,14 +106,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   const [animatedDots, setAnimatedDots] = useState(''); // New state for animated dots
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState('Generate');
-  const [modeAnchorEl, setModeAnchorEl] = useState<null | HTMLElement>(null);
-  const [contextAnchorEl, setContextAnchorEl] = useState<null | HTMLElement>(null);
   const [cursorPosition, setCursorPosition] = useState<number>(0);
   const [selectedTrack, setSelectedTrack] = useState<CombinedTrack | null>(null);
   
   // State for AI model selection
   const [selectedModel, setSelectedModel] = useState<string>(AVAILABLE_MODELS[0]); // Default to the first model
-  const [modelAnchorEl, setModelAnchorEl] = useState<null | HTMLElement>(null);
   
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
@@ -132,6 +129,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   const [pendingPrompt, setPendingPrompt] = useState('');
   const [pendingUserMessage, setPendingUserMessage] = useState<Message | null>(null);
   const [selectedGenerationType, setSelectedGenerationType] = useState<'midi' | 'audio' | null>(null);
+  
   
   // Access the store for executing actions and project context
   const { 
@@ -960,21 +958,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   
   // Handle pressing Enter key in the input field
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    // Don't send message if context menu is open
-    if (contextAnchorEl) return;
-    
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const handleModeClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    setModeAnchorEl(event.currentTarget);
-  };
-
-  const handleModeClose = () => {
-    setModeAnchorEl(null);
   };
 
   const handleModeSelect = (newMode: string) => {
@@ -986,13 +973,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleContextClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    setContextAnchorEl(event.currentTarget);
-  };
-
-  const handleContextClose = () => {
-    setContextAnchorEl(null);
-  };
 
   const handleContextSelect = (trackId: string) => {
     const track = tracks.find(t => t.id === trackId);
@@ -1010,18 +990,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         setPrompt(newText);
       }
     }
-    setContextAnchorEl(null);
   };
 
   const handleRemoveContext = () => {
     setSelectedTrack(null);
   };
 
-  const shouldShowContextMenu = (text: string, position: number): boolean => {
-    if (position === 0 || mode !== 'Edit') return false;
-    return text[position - 1] === '@' && 
-           (position === 1 || text[position - 2] === ' ');
-  };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
@@ -1029,27 +1003,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     
     setPrompt(newValue);
     setCursorPosition(newPosition);
-
-    if (shouldShowContextMenu(newValue, newPosition)) {
-      setContextAnchorEl(e.target);
-    } else {
-      setContextAnchorEl(null);
-    }
   };
 
 
-  // Handlers for AI Model Chip
-  const handleModelChipClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    setModelAnchorEl(event.currentTarget);
-  };
-
-  const handleModelMenuClose = () => {
-    setModelAnchorEl(null);
-  };
-
+  // Handler for AI Model selection
   const handleModelSelect = (newModel: string) => {
     setSelectedModel(newModel);
-    setModelAnchorEl(null); // Close menu on selection
   };
 
   return (
@@ -1194,14 +1153,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
               display: 'flex',
               mt: 0.5,
             }}>
-              <MenuChip 
-                label={mode}
-                onClick={handleModeClick}
+              <ChatModeMenu
+                triggerLabel={mode}
+                onSelect={handleModeSelect}
+                selectedMode={mode.toLowerCase().replace(' ', '-')}
               />
               {mode === 'Edit' && !selectedTrack && (
-                <MenuChip 
-                  label="@"
-                  onClick={handleContextClick}
+                <AddContextMenu
+                  triggerLabel="@"
+                  onSelect={handleContextSelect}
+                  tracks={tracks.map(track => ({ id: track.id, name: track.name }))}
                 />
               )}
               {selectedTrack && (
@@ -1210,19 +1171,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                   onDelete={handleRemoveContext}
                 />
               )}
-              <ChatModeMenu
-                anchorEl={modeAnchorEl}
-                open={Boolean(modeAnchorEl)}
-                onClose={handleModeClose}
-                onSelect={handleModeSelect}
-              />
-              <AddContextMenu
-                anchorEl={contextAnchorEl}
-                open={Boolean(contextAnchorEl)}
-                onClose={handleContextClose}
-                onSelect={handleContextSelect}
-                tracks={tracks}
-              />
             </Box>
 
             {/* TextField */}
@@ -1280,19 +1228,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
             >
               {/* Model Selector Chip - Bottom Left (hidden for Generate Audio mode) */}
               {mode !== 'Generate Audio' ? (
-                <>
-                  <MenuChip
-                    label={selectedModel}
-                    onClick={handleModelChipClick}
-                  />
-                  <ChatModelMenu
-                    anchorEl={modelAnchorEl}
-                    open={Boolean(modelAnchorEl)}
-                    onClose={handleModelMenuClose}
-                    onSelect={handleModelSelect}
-                    models={AVAILABLE_MODELS}
-                  />
-                </>
+                <ChatModelMenu
+                  triggerLabel={selectedModel}
+                  onSelect={handleModelSelect}
+                  models={AVAILABLE_MODELS}
+                  selectedModel={selectedModel}
+                />
               ) : (
                 <Box sx={{ flex: 1 }} />
               )}

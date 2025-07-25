@@ -3530,8 +3530,8 @@ packages:
   space-separated-tokens@2.0.2:
     resolution: {integrity: sha512-PEGlAwrG8yXGXRjW32fGbg66JAlOAwbObuqVoJpv/mRgoWDQfgH1wDPvtzWyUSNAXBGSk8h755YDbbcEy3SH2Q==}
 
-  spessasynth_core@3.27.6:
-    resolution: {integrity: sha512-2er68yHVaDAxwhCkad44lveSHqtRE8DOSTChviBY5E1bFyLtlyHYUBPRzziQSxF2Py3S+LWyDr3ldAMT0uUujA==}
+  spessasynth_core@3.27.7:
+    resolution: {integrity: sha512-WekBRoPS6KFBT92P68nGceD7yDUtwKYhX8OcPrcRri0KR+g7lmZh+7WpKW4rYGe+5rJ6JmAkydYcf2qhmx4xww==}
 
   spessasynth_lib@3.26.10:
     resolution: {integrity: sha512-zQQN019au6zccTLh6EHsbcq/OH1tJyDYUv7WnTIZz/D1bh6JoCo8n5GKfwcWWV+P7p2vTIkpPeXjez2hQCJnrg==}
@@ -7406,11 +7406,11 @@ snapshots:
 
   space-separated-tokens@2.0.2: {}
 
-  spessasynth_core@3.27.6: {}
+  spessasynth_core@3.27.7: {}
 
   spessasynth_lib@3.26.10:
     dependencies:
-      spessasynth_core: 3.27.6
+      spessasynth_core: 3.27.7
 
   stackback@0.0.2: {}
 

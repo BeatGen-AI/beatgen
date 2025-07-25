@@ -1,55 +1,129 @@
 import React from 'react';
-import { Menu, MenuItem } from '@mui/material';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+import { Coins } from 'lucide-react';
+import { useAppTheme } from '../../../platform/theme/ThemeContext';
+
+// Model credit costs (matching backend MODEL_COSTS)
+const MODEL_CREDIT_COSTS: Record<string, number> = {
+  "Deepseek R1": 22,
+  "Deepseek V3": 16,
+  "Claude 4 Sonnet": 120,
+  "Claude 4 Opus": 600,
+  "Claude 3.7 Sonnet": 120,
+  "GPT-4.1": 80,
+  "GPT-4o": 100,
+  "o3": 400,
+  "o3-mini": 44,
+  "Gemini Pro 2.5": 50,
+  "Gemini Flash 2.5": 12,
+  "Llama 4 Maverick": 6,
+  "Llama 4 Scout": 4,
+};
 
 interface ChatModelMenuProps {
-  anchorEl: HTMLElement | null;
-  open: boolean;
-  onClose: () => void;
+  triggerLabel: string; // Label for the trigger
   onSelect: (model: string) => void;
-  models: string[]; // Add a prop for the list of models
+  models: string[];
+  selectedModel?: string;
+  disabled?: boolean;
 }
 
-const ChatModelMenu: React.FC<ChatModelMenuProps> = ({ anchorEl, open, onClose, onSelect, models }) => {
+const ChatModelMenu: React.FC<ChatModelMenuProps> = ({ triggerLabel, onSelect, models, selectedModel, disabled }) => {
+  const { studioMode } = useAppTheme();
+  
   const handleSelect = (model: string) => {
     onSelect(model);
-    onClose();
   };
 
+  const getCreditCost = (model: string): number => {
+    return MODEL_CREDIT_COSTS[model] || 10; // Fallback to 10 credits
+  };
+
+  const getTextColor = () => {
+    return studioMode === 'dark' ? 'text-gray-400' : 'text-gray-600';
+  };
+
+  const getDropdownClassName = () => {
+    if (studioMode === 'dark') {
+      // Match Material-UI menu styling for dark mode
+      return "w-52 z-[9999] p-1 bg-[rgb(48,48,48)] border-0 shadow-lg rounded-lg focus:outline-none";
+    }
+    // Light mode styling
+    return "w-52 z-[9999] p-1 bg-white border border-gray-200 shadow-lg rounded-lg focus:outline-none";
+  };
+
+  const getItemClassName = (isSelected: boolean) => {
+    const baseClasses = "flex items-center justify-between cursor-pointer min-h-0 transition-colors text-xs rounded";
+    const paddingClasses = "px-2 py-1";
+    
+    if (studioMode === 'dark') {
+      // Dark mode: Match Material-UI MenuItem styling
+      const textColor = 'text-white';
+      const selectedClass = isSelected ? 'bg-[rgba(255,255,255,0.1)]' : '';
+      const hoverClass = 'hover:bg-[rgba(255,255,255,0.08)]';
+      return `${baseClasses} ${paddingClasses} ${textColor} ${selectedClass} ${hoverClass}`;
+    } else {
+      // Light mode styling
+      const textColor = 'text-gray-900';
+      const selectedClass = isSelected ? 'bg-gray-100' : '';
+      const hoverClass = 'hover:bg-gray-50';
+      return `${baseClasses} ${paddingClasses} ${textColor} ${selectedClass} ${hoverClass}`;
+    }
+  };
+
+
   return (
-    <Menu
-      anchorEl={anchorEl}
-      open={open}
-      onClose={onClose}
-      anchorOrigin={{
-        vertical: 'top', // Position menu above the chip
-        horizontal: 'left',
-      }}
-      transformOrigin={{
-        vertical: 'bottom',
-        horizontal: 'left',
-      }}
-      PaperProps={{
-        sx: {
-          borderRadius: 2,
-          mb: 1, // Margin bottom to space it from the chip
-        },
-      }}
-    >
-      {models.map((model) => (
-        <MenuItem 
-          key={model} 
-          onClick={() => handleSelect(model)}
-          sx={{ 
-            paddingTop: '2px', // Further reduced padding
-            paddingBottom: '2px', // Further reduced padding
-            fontSize: '0.75rem' // Smaller font size
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Badge 
+          variant="secondary"
+          className={`cursor-pointer h-5 text-xs border-0 ${
+            studioMode === 'dark' 
+              ? 'bg-[rgba(60,60,60,0.8)] text-white hover:bg-[rgba(60,60,60,0.9)]'
+              : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+          }`}
+          style={{
+            borderRadius: '5px',
+            fontSize: '0.7rem'
           }}
         >
-          {model}
-        </MenuItem>
-      ))}
-    </Menu>
+          {triggerLabel}
+        </Badge>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className={getDropdownClassName()}
+        sideOffset={4}
+      >
+        {models
+          .sort((a, b) => getCreditCost(b) - getCreditCost(a)) // Sort by cost descending
+          .map((model) => {
+          const cost = getCreditCost(model);
+          const isSelected = selectedModel === model;
+          
+          return (
+            <DropdownMenuItem
+              key={model}
+              onClick={() => handleSelect(model)}
+              className={getItemClassName(isSelected)}
+            >
+              <span className="text-xs font-medium truncate">{model}</span>
+              <div className={`text-[10px] font-medium ml-2 shrink-0 flex items-center gap-0.5 ${getTextColor()}`}>
+                {cost}
+                <Coins/>
+              </div>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };
 
-export default ChatModelMenu; 
+export default ChatModelMenu;
