@@ -99,7 +99,7 @@ export const StackingBottomSheetContainer: React.FC<StackingBottomSheetContainer
           onToggleMinimize: () => handleToggleMinimize(sheet.id),
           onClose: () => handleSheetClose(sheet.id, sheet.onClose),
           // Preserve any existing props from the original component
-            {...(sheet?.component?.props || {})}
+            ...sheet.component.props
         });
 
         return (
