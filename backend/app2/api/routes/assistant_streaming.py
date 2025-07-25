@@ -45,6 +45,7 @@ from pydantic import BaseModel
 from app2.infrastructure.database.sqlmodel_client import get_async_session
 from sqlmodel import Session
 from app2.services.credits_service import credits_service
+from app2.constants.credits import CREDIT_COSTS
 
 # Set up logger
 logger = get_api_logger("assistant_streaming")
@@ -472,7 +473,7 @@ async def process_generate_request(
             
             credit_deducted = await credits_service.use_credits(
                 user_id=user_id,
-                amount=1,
+                amount=CREDIT_COSTS["ai_music_generation"],
                 description="AI music generation",
                 metadata={
                     "request_id": request_id,
@@ -805,7 +806,7 @@ async def process_generate_audio_request(
         if user_credits_info and not user_credits_info.get("is_unlimited", False):
             await credits_service.use_credits(
                 user_id=user_id,
-                amount=1,
+                amount=CREDIT_COSTS["audio_generation_fal"],
                 description="Audio generation with FAL-AI",
                 metadata={
                     "request_id": request_id,

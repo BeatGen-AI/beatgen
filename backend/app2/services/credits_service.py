@@ -11,16 +11,10 @@ from app2.models.user import User
 from app2.models.credits import UserCredits, CreditTransaction, CreditTransactionType
 from app2.models.subscription import Subscription
 from app2.infrastructure.database.sqlmodel_client import get_async_session
+from app2.constants.credits import CREDIT_ALLOCATIONS, PRO_UPGRADE_BONUS, PRO_UNLIMITED_BALANCE
 
 logger = logging.getLogger(__name__)
 
-# Credit allocations per plan
-CREDIT_ALLOCATIONS = {
-    "free": {"monthly": 10, "rollover": False},
-    "starter": {"monthly": 50, "rollover": True},
-    "creator": {"monthly": 150, "rollover": True},
-    "pro": {"monthly": -1, "rollover": False},  # -1 means unlimited
-}
 
 
 class CreditsService:
@@ -104,7 +98,7 @@ class CreditsService:
                 # Calculate bonus as difference between plans
                 # For pro plan (unlimited = -1), give a large bonus
                 if new_tier == "pro":
-                    bonus = 1000  # Large bonus for upgrading to pro
+                    bonus = PRO_UPGRADE_BONUS
                 else:
                     bonus = new_allocation - old_allocation
                 
@@ -123,7 +117,7 @@ class CreditsService:
             
             # If pro plan, set unlimited credits
             if new_tier == "pro":
-                user_credits.balance = 999999  # Effectively unlimited
+                user_credits.balance = PRO_UNLIMITED_BALANCE
             
             session.add(user_credits)
             await session.commit()
