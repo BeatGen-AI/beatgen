@@ -63,3 +63,11 @@ drum_samples_public/
 
 # Phase documentation files
 backend/PHASE_3_SEARCH_INTEGRATION.md
+
+# Python virtual environments
+venv/
+.venv/
+env/
+.env/
+.venv_*/
+backend/.venv_*

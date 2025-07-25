@@ -30,11 +30,11 @@ logger = get_logger(__name__)
 @dataclass
 class InstrumentSearchResult(SearchResult):
     """Extended search result with instrument metadata"""
-    name: str
-    category: str
-    description: str
-    file_format: str
-    storage_key: str
+    name: str = ""
+    category: str = ""
+    description: str = ""
+    file_format: str = ""
+    storage_key: str = ""
     tags: Optional[List[str]] = None
     
     def to_dict(self) -> Dict[str, Any]:
