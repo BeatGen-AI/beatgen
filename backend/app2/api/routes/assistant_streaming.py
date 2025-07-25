@@ -45,7 +45,7 @@ from pydantic import BaseModel
 from app2.infrastructure.database.sqlmodel_client import get_async_session
 from sqlmodel import Session
 from app2.services.credits_service import credits_service
-from app2.constants.credits import CREDIT_COSTS
+from app2.constants.credits import get_operation_cost, get_model_credit_cost
 
 # Set up logger
 logger = get_api_logger("assistant_streaming")
@@ -372,6 +372,10 @@ async def process_generate_request(
             )
         
         # Check credits before processing
+        # Get model info first to calculate model-specific costs
+        selected_model_info = available_models.get_model_by_name(context.model)
+        model_cost = get_model_credit_cost(context.model)
+        
         user_credits_info = await credits_service.get_user_credits(user_id)
         if not user_credits_info:
             # Initialize credits if not found
@@ -387,24 +391,23 @@ async def process_generate_request(
             if isinstance(current_balance, str):  # Handle "unlimited" string
                 current_balance = 999999
             
-            if current_balance < 1:
+            if current_balance < model_cost:
                 await sse_queue.error(
                     message="Insufficient credits",
                     error_data={
                         "error": "insufficient_credits",
-                        "required": 1,
+                        "required": model_cost,
                         "current_balance": current_balance,
-                        "message": "You need at least 1 credit to generate music. Please upgrade your plan or wait for your monthly allocation."
+                        "message": f"You need at least {model_cost} credits to generate music with {context.model}. Please upgrade your plan or wait for your monthly allocation."
                     }
                 )
                 return
         
         await sse_queue.status(
-            message="Credits verified, generating music...",
-            details=f"Current balance: {user_credits_info.get('balance', 0)}"
+            message=f"Credits verified, generating music with {context.model}...",
+            details=f"Current balance: {user_credits_info.get('balance', 0)}, Cost: {model_cost} credits"
         )
         
-        selected_model_info = available_models.get_model_by_name(context.model)
         selected_model_info.api_key = selected_model_info.get_api_key()
         logger.info(f"Selected model: {selected_model_info}")
         
@@ -473,8 +476,8 @@ async def process_generate_request(
             
             credit_deducted = await credits_service.use_credits(
                 user_id=user_id,
-                amount=CREDIT_COSTS["ai_music_generation"],
-                description="AI music generation",
+                amount=get_model_credit_cost(context.model),
+                description=f"AI music generation ({context.model})",
                 metadata={
                     "request_id": request_id,
                     "prompt": context.prompt[:100],  # Store first 100 chars of prompt
@@ -806,7 +809,7 @@ async def process_generate_audio_request(
         if user_credits_info and not user_credits_info.get("is_unlimited", False):
             await credits_service.use_credits(
                 user_id=user_id,
-                amount=CREDIT_COSTS["audio_generation_fal"],
+                amount=get_operation_cost("audio_generation_fal"),
                 description="Audio generation with FAL-AI",
                 metadata={
                     "request_id": request_id,
