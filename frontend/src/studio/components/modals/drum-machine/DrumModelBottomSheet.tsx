@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
   X, Play, ChevronUp, ChevronDown, ChevronRight, Heart, Search,
-  Zap, Waves, Music2, Home, Cog, Mic, Guitar, Globe
+  Zap, Waves, Music2, Home, Cog, Mic, Guitar, Globe, VolumeX, Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DrumSamplePublicRead } from '../../../../platform/types/dto/public_models/drum_samples';
@@ -381,15 +381,15 @@ export interface DrumMachineBottomSheetProps {
   onHeightChange?: (height: number) => void;
   drumSamples?: DrumSamplePublicRead[];
   drumSamplesLoading?: boolean;
+  isAIAssistantOpen?: boolean;
 }
 
-export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, isMinimized = false, onToggleMinimize, height = 400, onHeightChange, drumSamples = [], drumSamplesLoading = false }: DrumMachineBottomSheetProps) => {
+export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, isMinimized = false, onToggleMinimize, height = 400, onHeightChange, drumSamples = [], drumSamplesLoading = false, isAIAssistantOpen = false }: DrumMachineBottomSheetProps) => {
   const [selectedGenre, setSelectedGenre] = useState('trap-hiphop');
   const [selectedType, setSelectedType] = useState('trap-hiphop-oneshots'); // kits or oneshots
   const [selectedDrumType, setSelectedDrumType] = useState('kicks'); // for oneshots only
   const [expandedGenres, setExpandedGenres] = useState<Set<string>>(new Set(['trap-hiphop']));
   
-  console.log('🥁 DrumMachineBottomSheet rendered - isOpen:', isOpen, 'samples:', drumSamples.length);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -450,7 +450,6 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
   // Debug drum samples when they change
   useEffect(() => {
     if (drumSamples.length > 0) {
-      console.log('🥁 DrumMachineBottomSheet received samples:', drumSamples.length);
       
       // Debug: Show what categories the API actually returns
       const apiCategories = new Set<string>();
@@ -459,7 +458,6 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
           apiCategories.add(sample.category);
         }
       });
-      console.log('🏷️ API Categories found:', Array.from(apiCategories));
       
       // Analyze categorization with new structure
       const genreCounts = new Map<string, number>();
@@ -473,12 +471,6 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
         drumTypeCounts.set(categorization.drumType, (drumTypeCounts.get(categorization.drumType) || 0) + 1);
       });
       
-      console.log('\n📊 Sample Distribution by Genre:');
-      Array.from(genreCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .forEach(([genre, count]) => {
-          console.log(`  ${genre}: ${count} samples`);
-        });
     }
   }, [drumSamples]);
 
@@ -511,7 +503,6 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
     const selectedRealSamples = drumSamples.filter(sample => selectedSampleIds.has(sample.id));
     
     if (selectedRealSamples.length > 0) {
-      console.log('Confirming selection:', selectedRealSamples);
       onConfirmSelection(selectedRealSamples);
       onClose();
     }
@@ -523,10 +514,8 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
       const newFavorites = new Set(prev);
       if (newFavorites.has(sampleId)) {
         newFavorites.delete(sampleId);
-        console.log('Removed from favorites:', sampleId);
       } else {
         newFavorites.add(sampleId);
-        console.log('Added to favorites:', sampleId);
       }
       return newFavorites;
     });
@@ -534,14 +523,6 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
 
 
   const getCurrentSamples = useMemo(() => {
-    console.log('🎵 getCurrentSamples called:', {
-      selectedGenre,
-      selectedType,
-      selectedDrumType,
-      totalDrumSamples: drumSamples.length,
-      isSearching,
-      searchQuery
-    });
 
     // If we're in search mode, return all matching samples
     if (selectedGenre === 'search-results' && searchQuery) {
@@ -559,7 +540,6 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
         return searchableText.includes(query);
       });
       
-      console.log('Search results:', matchingRealSamples.length);
       return matchingRealSamples;
     }
 
@@ -570,10 +550,6 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
     }
 
     // Filter samples based on the current selection
-    console.log(`\n🔍 Filtering ${drumSamples.length} samples for selection:`);
-    console.log(`  Genre: ${selectedGenre}`);
-    console.log(`  Type: ${selectedType}`);
-    console.log(`  Drum Type: ${selectedDrumType || 'all'}`);
     
     let filteredSamples = drumSamples.filter(sample => {
       const categorization = categorizeSample(sample);
@@ -601,58 +577,42 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
       return true;
     });
 
-    console.log(`🎯 Filtered result: ${filteredSamples.length} samples`);
-    
-    // Show detailed filtering breakdown
-    if (filteredSamples.length === 0 && drumSamples.length > 0) {
-      console.log('\n🚨 No samples found! Debugging filter process:');
-      
-      // Count samples by genre
-      const genreCounts = new Map<string, number>();
-      drumSamples.forEach(sample => {
-        const categorization = categorizeSample(sample);
-        genreCounts.set(categorization.genre, (genreCounts.get(categorization.genre) || 0) + 1);
-      });
-      console.log('Available genres:');
-      genreCounts.forEach((count, genre) => {
-        console.log(`  ${genre}: ${count} samples`);
-      });
-      
-      // For selected genre, show kit vs oneshot breakdown
-      if (genreCounts.has(selectedGenre)) {
-        const genreSamples = drumSamples.filter(sample => categorizeSample(sample).genre === selectedGenre);
-        const kits = genreSamples.filter(sample => categorizeSample(sample).isKit);
-        const oneshots = genreSamples.filter(sample => !categorizeSample(sample).isKit);
-        
-        console.log(`\nFor genre "${selectedGenre}":`);
-        console.log(`  Kits: ${kits.length} samples`);
-        console.log(`  One-shots: ${oneshots.length} samples`);
-        
-        // Show drum type breakdown for oneshots
-        if (selectedType?.endsWith('-oneshots')) {
-          const drumTypeCounts = new Map<string, number>();
-          oneshots.forEach(sample => {
-            const categorization = categorizeSample(sample);
-            drumTypeCounts.set(categorization.drumType, (drumTypeCounts.get(categorization.drumType) || 0) + 1);
-          });
-          
-          console.log(`  One-shot drum types:`);
-          drumTypeCounts.forEach((count, drumType) => {
-            console.log(`    ${drumType}: ${count} samples ${drumType === selectedDrumType ? '← SELECTED' : ''}`);
-          });
-        }
-      }
-    } else if (filteredSamples.length > 0) {
-      // Show some examples of what was found
-      console.log('Found samples:');
-      filteredSamples.slice(0, 5).forEach(sample => {
-        const categorization = categorizeSample(sample);
-        console.log(`  "${sample.display_name}" → ${categorization.genre} | ${categorization.isKit ? 'Kit' : 'One Shot'} | ${categorization.drumType}`);
-      });
-    }
     
     return filteredSamples;
   }, [drumSamples, selectedGenre, selectedType, selectedDrumType, favorites, searchQuery, isSearching]);
+
+  // Responsive grid columns based on AI Assistant state and item count
+  const gridColumns = useMemo(() => {
+    const itemCount = getCurrentSamples.length;
+    
+    if (isAIAssistantOpen) {
+      // When AI Assistant is open (350px less width), adjust based on item count
+      if (itemCount === 1) {
+        return "grid-cols-1";
+      } else if (itemCount === 2) {
+        return "grid-cols-2";
+      } else if (itemCount === 3) {
+        return "grid-cols-3";
+      }
+      // For more items, use responsive breakpoints with fewer columns
+      return "grid-cols-2 sm:grid-cols-2 md:grid-cols-3";
+    }
+    
+    // When AI Assistant is closed, use full responsive grid
+    if (itemCount === 1) {
+      return "grid-cols-1";
+    } else if (itemCount === 2) {
+      return "grid-cols-2";
+    } else if (itemCount === 3) {
+      return "grid-cols-3";
+    } else if (itemCount <= 4) {
+      return "grid-cols-2 sm:grid-cols-3 md:grid-cols-4";
+    } else if (itemCount <= 5) {
+      return "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5";
+    }
+    // For many items, use full responsive grid
+    return "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
+  }, [isAIAssistantOpen, getCurrentSamples]);
 
   const selectedGenreData = genreCategories.find(genre => genre.id === selectedGenre);
   const selectedTypeData = selectedGenreData?.subCategories?.find(sub => sub.id === selectedType);
@@ -663,12 +623,12 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
   return (
     <div 
       className={cn(
-        "border-t flex flex-col",
+        "flex flex-col rounded-2xl overflow-hidden",
         isMinimized ? "flex-shrink-0" : "flex-1"
       )}
       style={{ 
-        backgroundColor: '#2b2b2b',
-        borderTopColor: '#3a3a3a',
+        backgroundColor: '#1f1f1f',
+        border: '1px solid #9cc8f5',
         height: isMinimized ? '60px' : '100%',
         minHeight: '60px'
       }}
@@ -678,11 +638,11 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
           <div 
             className="h-1 cursor-ns-resize transition-colors"
             style={{
-              backgroundColor: isResizing ? '#5b9bd5' : '#3a3a3a',
+              backgroundColor: isResizing ? '#9cc8f5' : '#3a3a3a',
             }}
             onMouseDown={handleMouseDown}
             onMouseEnter={(e) => {
-              if (!isResizing) e.currentTarget.style.backgroundColor = '#6b6b6b';
+              if (!isResizing) e.currentTarget.style.backgroundColor = '#9cc8f5';
             }}
             onMouseLeave={(e) => {
               if (!isResizing) e.currentTarget.style.backgroundColor = '#3a3a3a';
@@ -692,42 +652,42 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
         )}
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b" style={{ borderBottomColor: '#3a3a3a', backgroundColor: '#3a3a3a' }}>
-          <div className="flex items-center space-x-3 flex-1">
-            <h2 className="text-lg font-semibold whitespace-nowrap" style={{ color: '#ffffff' }}>Choose Drum Samples</h2>
-            <div className="flex items-center space-x-2 text-sm">
-              <span style={{ color: '#6b6b6b' }}>•</span>
+        <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderBottomColor: '#1f1f1f', backgroundColor: '#1f1f1f' }}>
+          <div className="flex items-center space-x-2 flex-1 min-w-0">
+            <h2 className="text-lg font-semibold whitespace-nowrap" style={{ color: '#ffffff' }}>Drum Samples</h2>
+            <div className="flex items-center space-x-1 text-xs min-w-0">
+              <span style={{ color: '#ffffff' }}>•</span>
               {selectedGenre === 'search-results' ? (
-                <span className="font-medium" style={{ color: '#8b8b8b' }}>Search Results</span>
+                <span className="font-medium truncate" style={{ color: '#ffffff' }}>Search</span>
               ) : selectedGenre === 'favorites' ? (
-                <span className="font-medium" style={{ color: '#8b8b8b' }}>Favorites</span>
+                <span className="font-medium truncate" style={{ color: '#ffffff' }}>Favorites</span>
               ) : (
-                <>
-                  <span className="font-medium" style={{ color: '#8b8b8b' }}>
+                <div className="flex items-center space-x-1 min-w-0">
+                  <span className="font-medium truncate" style={{ color: '#ffffff' }}>
                     {selectedGenreData?.name || 'Samples'}
                   </span>
                   {selectedTypeData && (
                     <>
-                      <span style={{ color: '#6b6b6b' }}>{'>'}</span>
-                      <span style={{ color: '#8b8b8b' }}>{selectedTypeData.name}</span>
+                      <span style={{ color: '#ffffff' }}>{'>'}</span>
+                      <span className="truncate" style={{ color: '#ffffff' }}>{selectedTypeData.name}</span>
                     </>
                   )}
                   {selectedDrumTypeData && selectedType?.endsWith('-oneshots') && (
                     <>
-                      <span style={{ color: '#6b6b6b' }}>{'>'}</span>
-                      <span style={{ color: '#8b8b8b' }}>{selectedDrumTypeData.name}</span>
+                      <span style={{ color: '#ffffff' }}>{'>'}</span>
+                      <span className="truncate" style={{ color: '#ffffff' }}>{selectedDrumTypeData.name}</span>
                     </>
                   )}
-                </>
+                </div>
               )}
             </div>
           </div>
-          <div className="flex items-center space-x-3 flex-shrink-0">
+          <div className="flex items-center space-x-2 flex-shrink-0">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 z-10" style={{ color: '#8b8b8b' }} />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 z-10" style={{ color: '#ffffff' }} />
               <Input
                 type="text"
-                placeholder="Search samples..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => {
                   const newQuery = e.target.value;
@@ -738,30 +698,30 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
                     onToggleMinimize?.();
                   }
                 }}
-                className="pl-10 pr-8 py-2 w-64 text-sm rounded-lg shadow-sm transition-all duration-200"
+                className="pl-10 pr-8 py-2 w-48 text-sm rounded-lg shadow-sm transition-all duration-200"
                 style={{
-                  backgroundColor: '#2a2a2a',
-                  borderColor: '#3a3a3a',
+                  backgroundColor: '#262626',
+                  borderColor: '#262626',
                   color: '#ffffff',
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#5b9bd5';
-                  e.currentTarget.style.boxShadow = '0 0 0 1px rgba(91, 155, 213, 0.2)';
+                  e.currentTarget.style.borderColor = '#9cc8f5';
+                  e.currentTarget.style.boxShadow = '0 0 0 1px rgba(156, 200, 245, 0.2)';
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#3a3a3a';
+                  e.currentTarget.style.borderColor = '#1f1f1f';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
                 onMouseEnter={(e) => {
                   if (e.currentTarget !== document.activeElement) {
-                    e.currentTarget.style.borderColor = '#6b6b6b';
-                    e.currentTarget.style.backgroundColor = '#1e1e1e';
+                    e.currentTarget.style.borderColor = '#9cc8f580';
+                    e.currentTarget.style.backgroundColor = '#060606';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (e.currentTarget !== document.activeElement) {
-                    e.currentTarget.style.borderColor = '#3a3a3a';
-                    e.currentTarget.style.backgroundColor = '#2a2a2a';
+                    e.currentTarget.style.borderColor = '#262626';
+                    e.currentTarget.style.backgroundColor = '#262626';
                   }
                 }}
               />
@@ -771,13 +731,13 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
                   size="sm"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 rounded-md"
-                  style={{ color: '#8b8b8b' }}
+                  style={{ color: '#ffffff' }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#ffffff';
-                    e.currentTarget.style.backgroundColor = '#3a3a3a';
+                    e.currentTarget.style.color = '#9cc8f5';
+                    e.currentTarget.style.backgroundColor = '#2a2a2a';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#8b8b8b';
+                    e.currentTarget.style.color = '#ffffff';
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }}
                   title="Clear search"
@@ -791,62 +751,63 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
                 variant="default"
                 size="sm"
                 onClick={handleConfirmSelection}
-                className="text-white text-xs px-3 py-1"
+                className="text-white text-xs px-2 py-1 whitespace-nowrap"
                 style={{
-                  backgroundColor: '#5b9bd5',
-                  borderColor: '#5b9bd5'
+                  backgroundColor: '#9cc8f5',
+                  borderColor: '#9cc8f5'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#4a8bc2';
+                  e.currentTarget.style.backgroundColor = '#060606';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#5b9bd5';
+                  e.currentTarget.style.backgroundColor = '#9cc8f5';
                 }}
               >
                 Confirm ({selectedSampleIds.size})
               </Button>
             )}
+            
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onToggleMinimize?.()}
-              className="px-2 py-1"
-              style={{ color: '#8b8b8b' }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#3a3a3a';
-                e.currentTarget.style.color = '#ffffff';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#8b8b8b';
-              }}
-              title={isMinimized ? "Expand panel" : "Collapse panel"}
-            >
-              {isMinimized ? (
-                <div className="flex items-center space-x-1">
-                  <ChevronUp className="h-4 w-4" />
-                  <span className="text-xs">Expand</span>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-1">
-                  <ChevronDown className="h-4 w-4" />
-                  <span className="text-xs">Collapse</span>
-                </div>
-              )}
-            </Button>
-            <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onToggleMinimize?.()}
+                className="px-2 py-1"
+                style={{ color: '#ffffff' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = '#9cc8f5';
+                  e.currentTarget.style.backgroundColor = '#060606';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+                title={isMinimized ? "Expand panel" : "Collapse panel"}
+              >
+                {isMinimized ? (
+                  <div className="flex items-center space-x-1">
+                    <ChevronUp className="h-4 w-4" />
+                    <span className="text-xs">Expand</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-1">
+                    <ChevronDown className="h-4 w-4" />
+                    <span className="text-xs">Collapse</span>
+                  </div>
+                )}
+              </Button>
+              <Button
               variant="ghost"
               size="sm"
               onClick={onClose}
-              className="px-2 py-1"
-              style={{ color: '#8b8b8b' }}
+              className="px-1 py-1"
+              style={{ color: '#ffffff' }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = '#ef4444';
                 e.currentTarget.style.color = '#ffffff';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#8b8b8b';
+                e.currentTarget.style.color = '#ffffff';
               }}
               title="Close panel"
             >
@@ -857,16 +818,17 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
 
         {/* Content - Hidden when minimized */}
         {!isMinimized && (
-          <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 min-h-0 px-2 pb-3 pt-1 gap-2">
             {/* Left Panel - Genres */}
-            <div className="w-52 border-r flex-shrink-0 flex flex-col" style={{ borderRightColor: '#3a3a3a', backgroundColor: '#1e1e1e' }}>
-              <div className="text-xs font-medium mb-3 uppercase tracking-wider p-3 pb-0" style={{ color: '#6b6b6b' }}>
+            <div className="w-52 flex-shrink-0 flex flex-col rounded-lg overflow-hidden" style={{ border: '1px solid #9cc8f5', backgroundColor: '#262626' }}>
+              <div className="text-xs font-medium mb-3 uppercase tracking-wider p-3 pb-0" style={{ color: '#ffffff', backgroundColor: '#262626' }}>
                 Genres
               </div>
               
               <div 
                 className="flex-1 overflow-y-auto px-3"
                 style={{ 
+                  backgroundColor: '#262626',
                   scrollbarWidth: 'thin', 
                   scrollbarColor: '#6B7280 #374151' 
                 }}
@@ -882,26 +844,22 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
                         <Button
                           variant="ghost"
                           style={{
-                            backgroundColor: isGenreSelected ? '#3a3a3a' : 'transparent',
-                            color: isGenreSelected ? '#ffffff' : '#8b8b8b',
+                            backgroundColor: isGenreSelected ? '#9cc8f5' : 'transparent',
+                            color: isGenreSelected ? '#060606' : '#ffffff',
                             justifyContent: 'space-between',
                             display: 'flex'
                           }}
                           className="w-full text-left px-3 py-2 h-auto font-normal"
                           onMouseEnter={(e) => {
                             if (!isGenreSelected) {
-                              e.currentTarget.style.color = '#ffffff';
-                              e.currentTarget.style.backgroundColor = '#2b2b2b';
-                            } else {
-                              e.currentTarget.style.backgroundColor = '#6b6b6b';
+                              e.currentTarget.style.color = '#9cc8f5';
+                              e.currentTarget.style.backgroundColor = '#262626';
                             }
                           }}
                           onMouseLeave={(e) => {
                             if (!isGenreSelected) {
-                              e.currentTarget.style.color = '#8b8b8b';
+                              e.currentTarget.style.color = '#ffffff';
                               e.currentTarget.style.backgroundColor = 'transparent';
-                            } else {
-                              e.currentTarget.style.backgroundColor = '#3a3a3a';
                             }
                           }}
                           onClick={() => {
@@ -960,12 +918,23 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
                                 <Button
                                   key={subItem.id}
                                   variant="ghost"
-                                  className={cn(
-                                    "w-full justify-start text-left p-2 h-auto font-normal text-sm",
-                                    isSubSelected
-                                      ? "bg-blue-500 text-white hover:bg-blue-600"
-                                      : "text-gray-400 hover:text-white hover:bg-gray-700"
-                                  )}
+                                  style={{
+                                    backgroundColor: isSubSelected ? '#9cc8f5' : 'transparent',
+                                    color: isSubSelected ? '#060606' : '#ffffff'
+                                  }}
+                                  className="w-full justify-start text-left p-2 h-auto font-normal text-sm"
+                                  onMouseEnter={(e) => {
+                                    if (!isSubSelected) {
+                                      e.currentTarget.style.backgroundColor = '#262626';
+                                      e.currentTarget.style.color = '#9cc8f5';
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (!isSubSelected) {
+                                      e.currentTarget.style.backgroundColor = 'transparent';
+                                      e.currentTarget.style.color = '#ffffff';
+                                    }
+                                  }}
                                   onClick={() => {
                                     setSelectedType(subItem.id);
                                     if (subItem.id.endsWith('-oneshots')) {
@@ -990,15 +959,13 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
             
             {/* Middle Panel - Drum Types (for One Shots only) */}
             {selectedType?.endsWith('-oneshots') && selectedGenre !== 'favorites' && selectedGenre !== 'search-results' && (
-              <div className="w-52 border-r border-gray-700 p-3 flex-shrink-0 bg-gray-850 flex flex-col">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Drum Types
-                  </div>
+              <div className="w-52 flex-shrink-0 flex flex-col rounded-lg overflow-hidden" style={{ border: '1px solid #9cc8f5', backgroundColor: '#262626' }}>
+                <div className="text-xs font-medium mb-3 uppercase tracking-wider p-3 pb-0" style={{ color: '#ffffff', backgroundColor: '#262626' }}>
+                  Drum Types
                 </div>
                 
                 <div 
-                  className="flex-1 overflow-y-auto pr-2"
+                  className="flex-1 overflow-y-auto px-3"
                   style={{ 
                     scrollbarWidth: 'thin', 
                     scrollbarColor: '#6B7280 #374151' 
@@ -1012,12 +979,23 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
                         <Button
                           key={drumType.id}
                           variant="ghost"
-                          className={cn(
-                            "w-full justify-start text-left p-2 h-auto font-normal text-sm",
-                            isDrumTypeSelected
-                              ? "bg-blue-500 text-white hover:bg-blue-600"
-                              : "text-gray-400 hover:text-white hover:bg-gray-700"
-                          )}
+                          style={{
+                            backgroundColor: isDrumTypeSelected ? '#9cc8f5' : 'transparent',
+                            color: isDrumTypeSelected ? '#060606' : '#ffffff'
+                          }}
+                          className="w-full justify-start text-left p-2 h-auto font-normal text-sm"
+                          onMouseEnter={(e) => {
+                            if (!isDrumTypeSelected) {
+                              e.currentTarget.style.backgroundColor = '#262626';
+                              e.currentTarget.style.color = '#9cc8f5';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isDrumTypeSelected) {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                              e.currentTarget.style.color = '#ffffff';
+                            }
+                          }}
                           onClick={() => setSelectedDrumType(drumType.id)}
                         >
                           {drumType.name}
@@ -1030,23 +1008,23 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
             )}
             
             {/* Right Panel - Samples */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 flex flex-col min-w-0 rounded-lg overflow-hidden" style={{ border: '1px solid #9cc8f5', backgroundColor: '#262626' }}>
               
               <div 
                 className="flex-1 overflow-y-auto min-h-0 pl-4 pr-0 pt-4"
                 style={{ 
-                  backgroundColor: '#2b2b2b',
+                  backgroundColor: '#262626',
                   scrollbarWidth: 'thin', 
-                  scrollbarColor: '#6B7280 #1e1e1e'
+                  scrollbarColor: '#9cc8f5 #262626'
                 }}
               >
                 <div className="pr-4 pb-3">
                   {drumSamplesLoading ? (
                     <div className="flex items-center justify-center h-32">
-                      <div style={{ color: '#8b8b8b' }}>Loading samples...</div>
+                      <div style={{ color: '#ffffff' }}>Loading samples...</div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                    <div className={`grid ${gridColumns} gap-2`}>
                       {getCurrentSamples.map((sample: DrumSamplePublicRead) => {
                         const isSelected = selectedSampleIds.has(sample.id);
                         const isFavorite = favorites.has(sample.id);
@@ -1056,122 +1034,123 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
                             key={sample.id}
                             className="group relative border rounded-lg transition-all duration-200 cursor-pointer"
                             style={{
-                              backgroundColor: isSelected ? 'rgba(91, 155, 213, 0.2)' : '#3a3a3a',
-                              borderColor: isSelected ? '#5b9bd5' : '#3a3a3a'
+                              backgroundColor: isSelected ? 'rgba(156, 200, 245, 0.2)' : '#1f1f1f',
+                              borderColor: isSelected ? '#9cc8f5' : '#262626'
                             }}
                             onMouseEnter={(e) => {
                               if (!isSelected) {
-                                e.currentTarget.style.backgroundColor = '#6b6b6b';
-                                e.currentTarget.style.borderColor = '#8b8b8b';
+                                e.currentTarget.style.backgroundColor = '#060606';
+                                e.currentTarget.style.borderColor = '#9cc8f5';
                               }
                             }}
                             onMouseLeave={(e) => {
                               if (!isSelected) {
-                                e.currentTarget.style.backgroundColor = '#3a3a3a';
-                                e.currentTarget.style.borderColor = '#3a3a3a';
+                                e.currentTarget.style.backgroundColor = '#1f1f1f';
+                                e.currentTarget.style.borderColor = '#262626';
                               }
                             }}
                             title={sample.display_name}
                           >
                             <div className="p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex-1 mr-2 min-w-0">
-                                  <h4 className="font-medium text-sm truncate w-full" style={{ color: '#ffffff' }}>
-                                    {sample.display_name}
-                                  </h4>
-                                  {selectedGenre === 'search-results' && (
-                                    <div className="text-xs truncate w-full" style={{ color: '#8b8b8b' }}>
-                                      {(() => {
-                                        const categorization = categorizeSample(sample);
-                                        return `${categorization.genre} | ${categorization.isKit ? 'Kit' : 'One Shot'} | ${categorization.drumType}`;
-                                      })()}
-                                    </div>
-                                  )}
-                                </div>
-                                
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-xs px-1 py-1 h-6 w-6 flex-shrink-0"
-                                    style={{ color: isFavorite ? '#ef4444' : '#8b8b8b' }}
-                                    onMouseEnter={(e) => {
-                                      if (!isFavorite) {
-                                        e.currentTarget.style.color = '#ef4444';
-                                      }
-                                      e.currentTarget.style.backgroundColor = '#2a2a2a';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.color = isFavorite ? '#ef4444' : '#8b8b8b';
-                                      e.currentTarget.style.backgroundColor = 'transparent';
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleFavorite(sample.id);
-                                    }}
-                                  >
-                                    <Heart 
-                                      className="h-3 w-3 transition-colors"
-                                      style={{
-                                        fill: isFavorite ? '#ef4444' : 'none'
-                                      }}
-                                    />
-                                  </Button>
-                                  
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-xs px-2 py-1 h-6 border flex-shrink-0 min-w-[40px]"
-                                    style={{
-                                      backgroundColor: isSelected ? '#5b9bd5' : '#2a2a2a',
-                                      borderColor: isSelected ? '#5b9bd5' : '#3a3a3a',
-                                      color: isSelected ? '#ffffff' : '#8b8b8b'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      if (isSelected) {
-                                        e.currentTarget.style.backgroundColor = '#4a8bc2';
-                                      } else {
-                                        e.currentTarget.style.backgroundColor = '#1e1e1e';
-                                        e.currentTarget.style.borderColor = '#8b8b8b';
-                                        e.currentTarget.style.color = '#ffffff';
-                                      }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.backgroundColor = isSelected ? '#5b9bd5' : '#2a2a2a';
-                                      e.currentTarget.style.borderColor = isSelected ? '#5b9bd5' : '#3a3a3a';
-                                      e.currentTarget.style.color = isSelected ? '#ffffff' : '#8b8b8b';
-                                    }}
-                                    onClick={() => handleToggleSelect(sample)}
-                                  >
-                                    {isSelected ? '✓' : '+'}
-                                  </Button>
-                                </div>
+                              {/* Top Row: Sample Name */}
+                              <div className="mb-3">
+                                <h4 className="font-medium text-sm truncate w-full text-center leading-tight" style={{ color: '#ffffff' }}>
+                                  {sample.display_name}
+                                </h4>
+                                {selectedGenre === 'search-results' && (
+                                  <div className="text-xs truncate w-full mt-1" style={{ color: '#ffffff', opacity: 0.7 }}>
+                                    {(() => {
+                                      const categorization = categorizeSample(sample);
+                                      return `${categorization.genre} | ${categorization.isKit ? 'Kit' : 'One Shot'} | ${categorization.drumType}`;
+                                    })()}
+                                  </div>
+                                )}
                               </div>
                               
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="w-full h-8 transition-colors"
-                                style={{
-                                  backgroundColor: '#2a2a2a',
-                                  color: '#8b8b8b'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = '#1e1e1e';
-                                  e.currentTarget.style.color = '#ffffff';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = '#2a2a2a';
-                                  e.currentTarget.style.color = '#8b8b8b';
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  console.log('Preview:', sample.display_name);
-                                }}
-                              >
-                                <Play className="h-3 w-3 mr-2" />
-                                Preview
-                              </Button>
+                              {/* Second Row: Three Icon Buttons */}
+                              <div className="flex items-center justify-center gap-2">
+                                {/* Heart Button - Favorite */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 border flex-shrink-0 rounded-md"
+                                  style={{
+                                    backgroundColor: '#060606',
+                                    borderColor: '#1f1f1f',
+                                    color: isFavorite ? '#ef4444' : '#ffffff'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (!isFavorite) {
+                                      e.currentTarget.style.color = '#ef4444';
+                                    }
+                                    e.currentTarget.style.backgroundColor = '#262626';
+                                    e.currentTarget.style.borderColor = '#9cc8f5';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.color = isFavorite ? '#ef4444' : '#ffffff';
+                                    e.currentTarget.style.backgroundColor = '#060606';
+                                    e.currentTarget.style.borderColor = '#1f1f1f';
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleFavorite(sample.id);
+                                  }}
+                                  title="Add to favorites"
+                                >
+                                  <Heart 
+                                    className="h-4 w-4"
+                                    style={{
+                                      fill: isFavorite ? '#ef4444' : 'none'
+                                    }}
+                                  />
+                                </Button>
+                                
+                                {/* Mute Button - Preview (Coming Soon) */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled
+                                  className="h-8 w-8 p-0 border flex-shrink-0 rounded-md cursor-not-allowed"
+                                  style={{
+                                    backgroundColor: '#060606',
+                                    borderColor: '#1f1f1f',
+                                    color: '#ffffff',
+                                    opacity: 0.5
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                  }}
+                                  title="Preview coming soon"
+                                >
+                                  <VolumeX className="h-4 w-4" />
+                                </Button>
+                                
+                                {/* Plus Button - Add to Track */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 border flex-shrink-0 rounded-md"
+                                  style={{
+                                    backgroundColor: '#060606',
+                                    borderColor: '#1f1f1f',
+                                    color: '#ffffff'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#262626';
+                                    e.currentTarget.style.borderColor = '#9cc8f5';
+                                    e.currentTarget.style.color = '#9cc8f5';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#2a2a2a';
+                                    e.currentTarget.style.borderColor = '#3a3a3a';
+                                    e.currentTarget.style.color = '#ffffff';
+                                  }}
+                                  onClick={() => handleToggleSelect(sample)}
+                                  title="Add to track"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                             
                             {/* Hover Tooltip */}
@@ -1179,20 +1158,20 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
                               className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 whitespace-nowrap border"
                               style={{
                                 backgroundColor: '#3a3a3a',
-                                borderColor: '#6b6b6b',
+                                borderColor: '#2a2a2a',
                                 color: '#ffffff'
                               }}
                             >
                               {sample.display_name}
                               {sample.kit_name && (
-                                <div className="mt-1" style={{ color: '#8b8b8b' }}>
+                                <div className="mt-1" style={{ color: '#ffffff', opacity: 0.7 }}>
                                   Kit: {prettyPrint(sample.kit_name)}
                                 </div>
                               )}
                               <div 
                                 className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent"
                                 style={{
-                                  borderTopColor: '#3a3a3a'
+                                  borderTopColor: '#262626'
                                 }}
                               ></div>
                             </div>
@@ -1201,7 +1180,7 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
                       })}
                       
                       {getCurrentSamples.length === 0 && !drumSamplesLoading && (
-                        <div className="col-span-full text-center py-8 text-gray-400">
+                        <div className="col-span-full text-center py-8" style={{ color: '#ffffff', opacity: 0.7 }}>
                           No samples found
                         </div>
                       )}
