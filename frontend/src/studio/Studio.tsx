@@ -658,6 +658,7 @@ function Studio({ projectId }: StudioProps) {
                     onClose={() => setAddMenuAnchor(null)}
                     onAddTrack={handleAddTrack}
                     onFileUpload={uploadAudioFile}
+                    isAIAssistantOpen={isChatOpen}
                   />
                 )}
               </Box>
