@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { X, Play, Piano, Music, Guitar, ChevronUp, ChevronDown, ChevronRight, Heart, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getPublicSoundfonts } from '../../../platform/api/soundfonts';
 import SoundfontManager from '../../core/soundfont/soundfontManager';
 import { db } from '../../core/db/dexie-client';
 import { InstrumentFileRead } from 'src/platform/types/project';
@@ -485,21 +484,19 @@ export interface VirtualInstrumentsBottomSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (instrumentId: string, displayName: string, storageKey?: string) => void;
-  isAIAssistantOpen?: boolean;
-  isOtherBottomSheetOpen?: boolean;
   isMinimized?: boolean;
   onToggleMinimize?: () => void;
   height?: number;
   onHeightChange?: (height: number) => void;
+  soundfonts?: InstrumentFileRead[];
+  soundfontsLoading?: boolean;
 }
 
-export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOtherBottomSheetOpen = false, isMinimized = false, onToggleMinimize, height = 400, onHeightChange }: VirtualInstrumentsBottomSheetProps) => {
+export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isMinimized = false, onToggleMinimize, height = 400, onHeightChange, soundfonts = [], soundfontsLoading = false }: VirtualInstrumentsBottomSheetProps) => {
   // Initialize with keyboards category as it's more likely to have instruments
   const [selectedCategory, setSelectedCategory] = useState('keyboards');
   const [selectedSubCategory, setSelectedSubCategory] = useState('grand-pianos');
   const [isSubCategoriesExpanded, setIsSubCategoriesExpanded] = useState(true);
-  const [soundfonts, setSoundfonts] = useState<InstrumentFileRead[]>([]);
-  const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -557,55 +554,27 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
     }
   }, [searchQuery, selectedCategory]);
 
-  // Fetch available soundfonts when the modal opens
+  // Debug soundfonts when they change
   useEffect(() => {
-    if (isOpen) {
-      fetchSoundfonts();
-    }
-  }, [isOpen]);
-
-  const fetchSoundfonts = async () => {
-    try {
-      setLoading(true);
-      
-      console.log('Fetching soundfonts...');
-      const data = await getPublicSoundfonts();
-      setSoundfonts(data);
-      console.log('Fetched soundfonts:', data);
-      console.log(`Total soundfonts loaded: ${data.length}`);
+    if (soundfonts.length > 0) {
+      console.log('🎹 VirtualInstrumentBottomSheet received soundfonts:', soundfonts.length);
       
       // Log category breakdown
-      const categoryBreakdown = data.reduce((acc: Record<string, number>, sf) => {
+      const categoryBreakdown = soundfonts.reduce((acc: Record<string, number>, sf) => {
         acc[sf.category] = (acc[sf.category] || 0) + 1;
         return acc;
       }, {});
       console.log('Soundfonts by category:', categoryBreakdown);
       
       // Debug: Show how instruments are being categorized
-      const displayCategoryBreakdown = data.reduce((acc: Record<string, number>, sf) => {
+      const displayCategoryBreakdown = soundfonts.reduce((acc: Record<string, number>, sf) => {
         const displayCat = getDisplayCategory(sf);
         acc[displayCat] = (acc[displayCat] || 0) + 1;
         return acc;
       }, {});
       console.log('Soundfonts by display category:', displayCategoryBreakdown);
-      
-      // Show samples that end up in misc
-      const miscInstruments = data.filter(sf => getDisplayCategory(sf) === 'misc');
-      if (miscInstruments.length > 0) {
-        console.log('Instruments in misc category:', miscInstruments.slice(0, 10).map(sf => ({
-          name: sf.display_name,
-          category: sf.category,
-          fileName: sf.file_name
-        })));
-      }
-    } catch (err: unknown) {
-      console.error('Error fetching soundfonts:', err);
-      // Still set an empty array so the UI can show mock data
-      setSoundfonts([]);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [soundfonts]);
 
   const handleInstrumentSelect = async (instrument: InstrumentFileRead) => {
     try {
@@ -985,11 +954,12 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
   return (
     <div 
       className={cn(
-        "bg-gray-900 border-t border-gray-700",
-        "flex flex-col",
+        "border-t flex flex-col",
         isMinimized ? "flex-shrink-0" : "flex-1"
       )}
       style={{ 
+        backgroundColor: '#2b2b2b',
+        borderTopColor: '#3a3a3a',
         height: isMinimized ? '60px' : '100%',
         minHeight: '60px'
       }}
@@ -997,29 +967,38 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
         {/* Resize Handle */}
         {!isMinimized && (
           <div 
-            className={`h-1 bg-gray-600 hover:bg-gray-400 cursor-ns-resize transition-colors ${isResizing ? 'bg-blue-500' : ''}`}
+            className="h-1 cursor-ns-resize transition-colors"
+            style={{
+              backgroundColor: isResizing ? '#5b9bd5' : '#3a3a3a',
+            }}
             onMouseDown={handleMouseDown}
+            onMouseEnter={(e) => {
+              if (!isResizing) e.currentTarget.style.backgroundColor = '#6b6b6b';
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizing) e.currentTarget.style.backgroundColor = '#3a3a3a';
+            }}
             title="Drag to resize"
           />
         )}
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-900">
+        <div className="flex items-center justify-between p-4 border-b" style={{ borderBottomColor: '#3a3a3a', backgroundColor: '#3a3a3a' }}>
           <div className="flex items-center space-x-3 flex-1">
-            <h2 className="text-lg font-semibold text-white whitespace-nowrap">Choose Virtual Instrument</h2>
+            <h2 className="text-lg font-semibold whitespace-nowrap" style={{ color: '#ffffff' }}>Choose Virtual Instrument</h2>
             {selectedCategory === 'search-results' ? (
               <div className="flex items-center space-x-2 text-sm">
-                <span className="text-gray-500">•</span>
-                <span className="text-gray-300 font-medium">Search Results</span>
+                <span style={{ color: '#6b6b6b' }}>•</span>
+                <span className="font-medium" style={{ color: '#8b8b8b' }}>Search Results</span>
               </div>
             ) : selectedCategoryData && (
               <div className="flex items-center space-x-2 text-sm">
-                <span className="text-gray-500">•</span>
-                <span className="text-gray-300 font-medium">{selectedCategoryData.name}</span>
+                <span style={{ color: '#6b6b6b' }}>•</span>
+                <span className="font-medium" style={{ color: '#8b8b8b' }}>{selectedCategoryData.name}</span>
                 {selectedSubCategoryData && (
                   <>
-                    <span className="text-gray-500 mx-1">-</span>
-                    <span className="text-gray-300">{selectedSubCategoryData.name}</span>
+                    <span className="mx-1" style={{ color: '#6b6b6b' }}>-</span>
+                    <span style={{ color: '#8b8b8b' }}>{selectedSubCategoryData.name}</span>
                   </>
                 )}
               </div>
@@ -1027,7 +1006,7 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
           </div>
           <div className="flex items-center space-x-3 flex-shrink-0">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 z-10" style={{ color: '#8b8b8b' }} />
               <Input
                 type="text"
                 placeholder="Search instruments..."
@@ -1041,14 +1020,48 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
                     onToggleMinimize?.();
                   }
                 }}
-                className="pl-10 pr-8 py-2 w-64 bg-gray-800 border border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 text-sm rounded-lg shadow-sm transition-all duration-200 hover:border-gray-500 hover:bg-gray-750"
+                className="pl-10 pr-8 py-2 w-64 text-sm rounded-lg shadow-sm transition-all duration-200"
+                style={{
+                  backgroundColor: '#2a2a2a',
+                  borderColor: '#3a3a3a',
+                  color: '#ffffff',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#5b9bd5';
+                  e.currentTarget.style.boxShadow = '0 0 0 1px rgba(91, 155, 213, 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#3a3a3a';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+                onMouseEnter={(e) => {
+                  if (e.currentTarget !== document.activeElement) {
+                    e.currentTarget.style.borderColor = '#6b6b6b';
+                    e.currentTarget.style.backgroundColor = '#1e1e1e';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (e.currentTarget !== document.activeElement) {
+                    e.currentTarget.style.borderColor = '#3a3a3a';
+                    e.currentTarget.style.backgroundColor = '#2a2a2a';
+                  }
+                }}
               />
               {searchQuery && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 text-gray-400 hover:text-white hover:bg-gray-600 rounded-md"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 rounded-md"
+                  style={{ color: '#8b8b8b' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = '#ffffff';
+                    e.currentTarget.style.backgroundColor = '#3a3a3a';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = '#8b8b8b';
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
                   title="Clear search"
                 >
                   <X className="h-3 w-3" />
@@ -1059,7 +1072,16 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
               variant="ghost"
               size="sm"
               onClick={() => onToggleMinimize?.()}
-              className="text-gray-400 hover:text-white hover:bg-gray-700 px-2 py-1"
+              className="px-2 py-1"
+              style={{ color: '#8b8b8b' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#ffffff';
+                e.currentTarget.style.backgroundColor = '#3a3a3a';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#8b8b8b';
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
               title={isMinimized ? "Expand panel" : "Collapse panel"}
             >
               {isMinimized ? (
@@ -1078,7 +1100,16 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
               variant="ghost"
               size="sm"
               onClick={onClose}
-              className="text-gray-400 hover:text-white hover:bg-gray-700"
+              className="px-2 py-1"
+              style={{ color: '#8b8b8b' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#ef4444';
+                e.currentTarget.style.color = '#ffffff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#8b8b8b';
+              }}
               title="Close panel"
             >
               <X className="h-4 w-4" />
@@ -1090,8 +1121,8 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
         {!isMinimized && (
           <div className="flex flex-1 min-h-0">
             {/* Left Panel - Main Categories */}
-            <div className="w-48 border-r border-gray-700 flex-shrink-0 bg-gray-900 flex flex-col">
-              <div className="text-xs font-medium text-gray-400 mb-3 uppercase tracking-wider p-3 pb-0">
+            <div className="w-48 border-r flex-shrink-0 flex flex-col" style={{ borderRightColor: '#3a3a3a', backgroundColor: '#1e1e1e' }}>
+              <div className="text-xs font-medium mb-3 uppercase tracking-wider p-3 pb-0" style={{ color: '#6b6b6b' }}>
                 Categories
               </div>
               
@@ -1111,12 +1142,29 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
                       <Button
                         key={category.id}
                         variant="ghost"
-                        className={cn(
-                          "w-full text-left p-3 h-auto font-normal",
-                          isCategorySelected 
-                            ? "bg-blue-600 text-white hover:bg-blue-700 justify-between" 
-                            : "text-gray-300 hover:text-white hover:bg-gray-800 justify-start"
-                        )}
+                        className="w-full text-left p-3 h-auto font-normal"
+                        style={{
+                          backgroundColor: isCategorySelected ? '#3a3a3a' : 'transparent',
+                          color: isCategorySelected ? '#ffffff' : '#8b8b8b',
+                          justifyContent: isCategorySelected ? 'space-between' : 'flex-start',
+                          display: 'flex'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isCategorySelected) {
+                            e.currentTarget.style.color = '#ffffff';
+                            e.currentTarget.style.backgroundColor = '#2b2b2b';
+                          } else {
+                            e.currentTarget.style.backgroundColor = '#6b6b6b';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isCategorySelected) {
+                            e.currentTarget.style.color = '#8b8b8b';
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          } else {
+                            e.currentTarget.style.backgroundColor = '#3a3a3a';
+                          }
+                        }}
                         onClick={() => {
                           if (isCategorySelected) {
                             // If clicking the already selected category, toggle sub-categories
@@ -1219,16 +1267,17 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
             <div className="flex-1 flex flex-col min-w-0">
               
               <div 
-                className="flex-1 overflow-y-auto bg-gray-900 min-h-0 pl-4 pr-0 pt-4"
+                className="flex-1 overflow-y-auto min-h-0 pl-4 pr-0 pt-4"
                 style={{ 
+                  backgroundColor: '#2b2b2b',
                   scrollbarWidth: 'thin', 
-                  scrollbarColor: '#6B7280 #374151'
+                  scrollbarColor: '#6B7280 #1e1e1e'
                 }}
               >
                 <div className="pr-4 pb-3">
-                  {loading ? (
+                  {soundfontsLoading ? (
                     <div className="flex items-center justify-center h-32">
-                      <div className="text-gray-400">Loading instruments...</div>
+                      <div style={{ color: '#8b8b8b' }}>Loading instruments...</div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
@@ -1238,18 +1287,30 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
                         return (
                           <div
                             key={instrument.id}
-                            className="group relative bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-750 transition-all duration-200 hover:border-gray-500"
+                            className="group relative border rounded-lg transition-all duration-200 cursor-pointer"
+                            style={{
+                              backgroundColor: '#3a3a3a',
+                              borderColor: '#3a3a3a'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#6b6b6b';
+                              e.currentTarget.style.borderColor = '#8b8b8b';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = '#3a3a3a';
+                              e.currentTarget.style.borderColor = '#3a3a3a';
+                            }}
                             title={instrument.description || `${instrument.category} instrument`}
                           >
                             <div className="p-3">
                               <div className="flex items-center justify-between mb-2">
                                 {/* Instrument Name */}
                                 <div className="flex-1 mr-2 min-w-0">
-                                  <h4 className="font-medium text-white text-sm truncate w-full">
+                                  <h4 className="font-medium text-sm truncate w-full" style={{ color: '#ffffff' }}>
                                     {getInstrumentDisplayName(instrument)}
                                   </h4>
                                   {selectedCategory === 'search-results' && (
-                                    <div className="text-xs text-gray-500 truncate w-full">
+                                    <div className="text-xs truncate w-full" style={{ color: '#8b8b8b' }}>
                                       {getDisplayCategory(instrument)}
                                     </div>
                                   )}
@@ -1260,19 +1321,28 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="text-xs px-1 py-1 h-6 w-6 hover:bg-gray-600 flex-shrink-0"
+                                    className="text-xs px-1 py-1 h-6 w-6 flex-shrink-0"
+                                    style={{ color: favorites.has(instrument.id) ? '#ef4444' : '#8b8b8b' }}
+                                    onMouseEnter={(e) => {
+                                      if (!favorites.has(instrument.id)) {
+                                        e.currentTarget.style.color = '#ef4444';
+                                      }
+                                      e.currentTarget.style.backgroundColor = '#2a2a2a';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.color = favorites.has(instrument.id) ? '#ef4444' : '#8b8b8b';
+                                      e.currentTarget.style.backgroundColor = 'transparent';
+                                    }}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       toggleFavorite(instrument.id);
                                     }}
                                   >
                                     <Heart 
-                                      className={cn(
-                                        "h-3 w-3 transition-colors",
-                                        favorites.has(instrument.id) 
-                                          ? "fill-red-500 text-red-500" 
-                                          : "text-gray-400 hover:text-red-400"
-                                      )} 
+                                      className="h-3 w-3 transition-colors"
+                                      style={{
+                                        fill: favorites.has(instrument.id) ? '#ef4444' : 'none'
+                                      }}
                                     />
                                   </Button>
                                   
@@ -1280,12 +1350,31 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="text-xs px-2 py-1 h-6 bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white flex-shrink-0 min-w-[40px]"
+                                    className="text-xs px-2 py-1 h-6 border flex-shrink-0 min-w-[40px]"
+                                    style={{
+                                      backgroundColor: '#2a2a2a',
+                                      borderColor: '#3a3a3a',
+                                      color: '#8b8b8b'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isDownloading) {
+                                        e.currentTarget.style.backgroundColor = '#1e1e1e';
+                                        e.currentTarget.style.borderColor = '#8b8b8b';
+                                        e.currentTarget.style.color = '#ffffff';
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (!isDownloading) {
+                                        e.currentTarget.style.backgroundColor = '#2a2a2a';
+                                        e.currentTarget.style.borderColor = '#3a3a3a';
+                                        e.currentTarget.style.color = '#8b8b8b';
+                                      }
+                                    }}
                                     onClick={() => !isDownloading && handleInstrumentSelect(instrument)}
                                     disabled={isDownloading}
                                   >
                                     {isDownloading ? (
-                                      <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                                      <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#5b9bd5', borderTopColor: 'transparent' }}></div>
                                     ) : (
                                       '+'
                                     )}
@@ -1297,7 +1386,19 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="w-full h-8 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+                                className="w-full h-8 transition-colors"
+                                style={{
+                                  backgroundColor: '#2a2a2a',
+                                  color: '#8b8b8b'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#1e1e1e';
+                                  e.currentTarget.style.color = '#ffffff';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#2a2a2a';
+                                  e.currentTarget.style.color = '#8b8b8b';
+                                }}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   console.log('Preview:', instrument.name);
@@ -1309,15 +1410,27 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isOth
                             </div>
                             
                             {/* Hover Tooltip */}
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 whitespace-nowrap border border-gray-600">
+                            <div 
+                              className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 whitespace-nowrap border"
+                              style={{
+                                backgroundColor: '#3a3a3a',
+                                borderColor: '#6b6b6b',
+                                color: '#ffffff'
+                              }}
+                            >
                               {instrument.description || `${instrument.category} instrument`}
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                              <div 
+                                className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent"
+                                style={{
+                                  borderTopColor: '#3a3a3a'
+                                }}
+                              ></div>
                             </div>
                           </div>
                         );
                       })}
                       
-                      {getCurrentInstruments().length === 0 && !loading && (
+                      {getCurrentInstruments().length === 0 && !soundfontsLoading && (
                         <div className="col-span-full text-center py-8 text-gray-400">
                           No instruments found in this category
                         </div>

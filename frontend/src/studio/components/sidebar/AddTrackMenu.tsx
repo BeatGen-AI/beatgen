@@ -7,6 +7,9 @@ import ContentCutIcon from '@mui/icons-material/ContentCut';
 import { VirtualInstrumentsBottomSheet } from '../modals/VirtualInstrumentBottomSheet';
 import { DrumMachineBottomSheet } from '../modals/drum-machine/DrumModelBottomSheet';
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
+import { getPublicDrumSamples } from '../../../platform/api/drum_samples';
+import { getPublicSoundfonts } from '../../../platform/api/soundfonts';
+import { InstrumentFileRead } from 'src/platform/types/project';
 // Import types from store types file
 import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload } from '../../stores/types';
 
@@ -39,6 +42,50 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
   // Track bottom sheet heights
   const [virtualInstrumentHeight, setVirtualInstrumentHeight] = useState(400); // Default height in px
   const [drumMachineHeight, setDrumMachineHeight] = useState(400);
+  
+  // Persistent drum samples state to prevent data loss when switching modals
+  const [drumSamples, setDrumSamples] = useState<DrumSamplePublicRead[]>([]);
+  const [drumSamplesLoading, setDrumSamplesLoading] = useState(false);
+  
+  // Persistent soundfonts state to prevent data loss when switching modals
+  const [soundfonts, setSoundfonts] = useState<InstrumentFileRead[]>([]);
+  const [soundfontsLoading, setSoundfontsLoading] = useState(false);
+  
+  // Fetch drum samples once and persist across modal changes
+  const fetchDrumSamples = async () => {
+    if (drumSamples.length > 0) return; // Already loaded
+    
+    try {
+      setDrumSamplesLoading(true);
+      console.log('🥁 AddTrackMenu: Fetching drum samples...');
+      const data = await getPublicDrumSamples();
+      setDrumSamples(data);
+      console.log(`AddTrackMenu: Loaded ${data.length} drum samples`);
+    } catch (err: any) {
+      console.error('AddTrackMenu: Error fetching drum samples:', err);
+      setDrumSamples([]);
+    } finally {
+      setDrumSamplesLoading(false);
+    }
+  };
+  
+  // Fetch soundfonts once and persist across modal changes
+  const fetchSoundfonts = async () => {
+    if (soundfonts.length > 0) return; // Already loaded
+    
+    try {
+      setSoundfontsLoading(true);
+      console.log('🎹 AddTrackMenu: Fetching soundfonts...');
+      const data = await getPublicSoundfonts();
+      setSoundfonts(data);
+      console.log(`AddTrackMenu: Loaded ${data.length} soundfonts`);
+    } catch (err: any) {
+      console.error('AddTrackMenu: Error fetching soundfonts:', err);
+      setSoundfonts([]);
+    } finally {
+      setSoundfontsLoading(false);
+    }
+  };
   
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, isSampler: boolean = false) => {
     const files = event.target.files;
@@ -75,6 +122,10 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
         <MenuItem onClick={() => {
           // Close drum modal if open
           setIsDrumMachineBottomSheetOpen(false);
+          // Reset virtual instrument height to default when opening
+          setVirtualInstrumentHeight(400);
+          // Fetch soundfonts if not already loaded
+          fetchSoundfonts();
           setIsVirtualInstrumentBottomSheetOpen(true);
           setExpandedBottomSheet('virtual');
           onClose();
@@ -94,6 +145,10 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
         <MenuItem onClick={() => { 
           // Close VI modal if open
           setIsVirtualInstrumentBottomSheetOpen(false);
+          // Reset drum machine height to default when opening
+          setDrumMachineHeight(400);
+          // Fetch drum samples if not already loaded
+          fetchDrumSamples();
           setIsDrumMachineBottomSheetOpen(true);
           setExpandedBottomSheet('drum');
           onClose(); 
@@ -172,8 +227,6 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
               const payload: MidiTrackPayload = { instrumentId, instrumentName, instrumentStorageKey };
               onAddTrack('MIDI', payload);
             }}
-            isAIAssistantOpen={isAIAssistantOpen}
-            isOtherBottomSheetOpen={false}
             isMinimized={expandedBottomSheet !== 'virtual' && isVirtualInstrumentBottomSheetOpen}
             onToggleMinimize={() => {
               const newExpanded = expandedBottomSheet === 'virtual' ? null : 'virtual';
@@ -181,6 +234,8 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
             }}
             height={virtualInstrumentHeight}
             onHeightChange={setVirtualInstrumentHeight}
+            soundfonts={soundfonts}
+            soundfontsLoading={soundfontsLoading}
           />
         </div>
       )}
@@ -206,8 +261,6 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
               setIsDrumMachineBottomSheetOpen(false);
               setExpandedBottomSheet(null);
             }}
-            isAIAssistantOpen={isAIAssistantOpen}
-            isOtherBottomSheetOpen={false}
             isMinimized={expandedBottomSheet !== 'drum' && isDrumMachineBottomSheetOpen}
             onToggleMinimize={() => {
               const newExpanded = expandedBottomSheet === 'drum' ? null : 'drum';
@@ -215,6 +268,8 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
             }}
             height={drumMachineHeight}
             onHeightChange={setDrumMachineHeight}
+            drumSamples={drumSamples}
+            drumSamplesLoading={drumSamplesLoading}
           />
         </div>
       )}
