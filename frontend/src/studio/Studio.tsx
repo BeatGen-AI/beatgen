@@ -288,7 +288,7 @@ function Studio({ projectId }: StudioProps) {
       // Cleanup on unmount
       delete (window as any).storeInstance;
     };
-  }, [initializeAudio, loadProject]); // Removed projectId and existingProjectId to prevent reload on URL change
+  }, [initializeAudio, loadProject]);
   
   // Handlers
   const handleBpmChange = (event: React.ChangeEvent<HTMLInputElement>) => {
