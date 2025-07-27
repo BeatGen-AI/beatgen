@@ -161,14 +161,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
   // Update all tracks and recalculate indices
   const updateTracks = (newTracks: CombinedTrack[]) => {
-      // Debug logging for track positions
-      console.log('[updateTracks Debug] Tracks being added:', newTracks.map(track => ({
-          id: track.id,
-          name: track.name,
-          track_type: track.track_type,
-          instances: track.instances?.map(inst => ({ id: inst.id, x: inst.x_position, y: inst.y_position }))
-      })));
-
       set(produce((draft: RootState) => {
           // Create a fresh array with cloned tracks to avoid frozen object issues
           draft.tracks = newTracks.map((track, index) => ({
@@ -359,18 +351,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const createLogic = async (passedStore: Store): Promise<CombinedTrack | null> => {
       const trackId = (options.id || options.trackId) ?? crypto.randomUUID(); 
       const tracksLength = rootGet().tracks.length;
-      
-      // Debug logging to see what position is being passed
-      console.log('[Track Position Debug]', {
-        trackId,
-        tracksLength,
-        'options.position': options.position,
-        'calculated sequential position': { x: 0, y: tracksLength * GRID_CONSTANTS.trackHeight }
-      });
-      
       const position = options.position as Position || { x: 0, y: tracksLength * GRID_CONSTANTS.trackHeight };
-      
-      console.log('[Track Position Debug] Final position used:', position);
       
       const trackProps = {
         id: trackId,
