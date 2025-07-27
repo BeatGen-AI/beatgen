@@ -17,6 +17,7 @@ import { convertJsonToNotes, Note } from '../../../types/note';
 import { db } from '../../core/db/dexie-client'; // Import db instance
 import SampleManager from '../../core/samples/sampleManager';
 import { produce } from 'immer'; // Import produce
+import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
 
 // Define the state properties for this slice
 export interface ProjectSlice {
@@ -29,11 +30,55 @@ export interface ProjectSlice {
   loadDrumTrack: (track: CombinedTrack) => Promise<void>;
   handleProjectParamChange: (param: ProjectParam, value: any) => Promise<void>;
   handleKeySignatureChange: (keySignature: string) => Promise<void>;
+  updateBPMState: (bpm: number) => Promise<void>;
 }
 
 // Create the slice function
 export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) => {
   const rootGet = get as GetFn; // Define rootGet once for convenience
+
+  // Pure BPM update function - no history actions
+  const updateBPMState = async (bpm: number): Promise<void> => {
+    const { store, updateTrackState } = rootGet();
+    
+    if (!store) { 
+      console.warn("Store not available in updateBPMState"); 
+      return; 
+    }
+
+    // Update Zustand state
+    set(produce((draft: RootState) => {
+      draft.bpm = bpm;
+    }));
+
+    // Update audio track instances for BPM change
+    const tracks = rootGet().tracks;
+    tracks.forEach(track => {
+      if (track.track_type === 'AUDIO' && track.instances) {
+        const audioDuration = getAudioDuration(track);
+        if (audioDuration > 0) {
+          const newDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
+          
+          // Create new instances array with updated trim_end_ticks
+          const updatedInstances = track.instances.map(instance => ({
+            ...instance,
+            trim_end_ticks: newDurationTicks
+          }));
+          
+          // Update the track state with new instances and duration_ticks
+          updateTrackState(track.id, {
+            instances: updatedInstances,
+            duration_ticks: newDurationTicks
+          });
+        }
+      }
+    });
+
+    // Update all audio systems
+    store.projectManager.setTempo(bpm);
+    Tone.getTransport().bpm.value = bpm;
+    await store.getTransport().setTempo(bpm);
+  };
 
   // Refactored helper using Immer
   const handleProjectParamChange = async (param: ProjectParam, value: any) => {
@@ -53,9 +98,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         store.projectManager.setProjectName(value as string);
         break;
       case 'bpm':
-        store.projectManager.setTempo(value as number);
-        Tone.getTransport().bpm.value = value as number;
-        await store.getTransport().setTempo(value as number);
+        await updateBPMState(value as number);
         if (executeHistoryAction) {
             const bpmAction = new Actions.BPMChange(get, oldValue as number, value as number, rootGet().timeSignature);
             executeHistoryAction(bpmAction);
@@ -656,5 +699,6 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     loadDrumTrack,
     handleProjectParamChange,
     handleKeySignatureChange,
+    updateBPMState,
   };
 };
