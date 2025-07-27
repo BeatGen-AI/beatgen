@@ -67,6 +67,7 @@ export interface TracksSlice {
   // --- Selectors --- 
   selectDrumTrackById: (trackId: string) => DrumTrackRead | undefined;
   selectSamplerTracksForDrumTrack: (drumTrackId: string) => SamplerTrackRead[];
+  getVisibleTrackCount: () => number;
 
   // New actions
   removeSamplerTrack: (samplerTrackId: string) => Promise<void>;
@@ -350,8 +351,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const createLogic = async (passedStore: Store): Promise<CombinedTrack | null> => {
       const trackId = (options.id || options.trackId) ?? crypto.randomUUID(); 
-      const tracksLength = rootGet().tracks.length;
-      const position = options.position as Position || { x: 0, y: tracksLength * GRID_CONSTANTS.trackHeight };
+      const visibleTrackCount = rootGet().getVisibleTrackCount();
+      const position = options.position as Position || { x: 0, y: visibleTrackCount * GRID_CONSTANTS.trackHeight };
       
       const trackProps = {
         id: trackId,
@@ -406,7 +407,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         id: trackId,
         name: name, 
         track_type: type,
-        track_number: tracksLength + 1, // Add track number
+        track_number: visibleTrackCount + 1, // Add track number
         volume: trackProps.volume,
         pan: trackProps.pan,
         mute: trackProps.muted, 
@@ -545,8 +546,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const createLogic = async (passedStore: Store): Promise<{ trackData: CombinedTrack, file?: File } | null> => {
       const trackId = (options.id || options.trackId) ?? crypto.randomUUID(); 
-      const tracksLength = rootGet().tracks.length;
-      const position = options.position as Position || { x: 0, y: tracksLength * GRID_CONSTANTS.trackHeight };
+      const visibleTrackCount = rootGet().getVisibleTrackCount();
+      const position = options.position as Position || { x: 0, y: visibleTrackCount * GRID_CONSTANTS.trackHeight };
       
       const trackProps = {
         id: trackId,
@@ -580,7 +581,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         id: trackId,
         name: name, 
         track_type: type,
-        track_number: tracksLength + 1, // Add track number
+        track_number: visibleTrackCount + 1, // Add track number
         volume: trackProps.volume,
         pan: trackProps.pan,
         mute: trackProps.muted, 
@@ -2205,6 +2206,18 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     return _withErrorHandling(deleteLogic, 'deleteMultipleInstances')();
   };
 
+  // Get count of visible tracks (excludes sampler tracks that are part of drum tracks)
+  const getVisibleTrackCount = (): number => {
+    const state = rootGet();
+    const count = state.tracks.filter(track => 
+      !(track.track_type === 'SAMPLER' && 
+        track.track && 
+        (track.track as SamplerTrackRead).drum_track_id)
+    ).length;
+    console.log('>>> getVisibleTrackCount <<<', count);
+    return count;
+  };
+
   // --- Initial State & Return --- 
   return {
     tracks: [],
@@ -2248,6 +2261,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     // --- Selectors --- 
     selectDrumTrackById,
     selectSamplerTracksForDrumTrack,
+    getVisibleTrackCount,
 
     // New actions
     removeSamplerTrack,

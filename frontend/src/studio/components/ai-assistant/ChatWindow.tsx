@@ -651,7 +651,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     isDirty: boolean = true  // AI-generated tracks should be marked as dirty by default
   ): CombinedTrack => {
     const defaultName = `New ${trackType.charAt(0) + trackType.slice(1).toLowerCase()} Track`;
-    const trackCount = useStudioStore.getState().tracks.length;
+    const trackCount = useStudioStore.getState().getVisibleTrackCount();
     
     return {
       id: trackData.id,

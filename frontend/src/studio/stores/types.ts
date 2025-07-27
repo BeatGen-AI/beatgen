@@ -230,6 +230,7 @@ export interface RootState {
   setDrumPattern: (trackId: string, pattern: boolean[][]) => void;
   selectDrumTrackById: (trackId: string) => DrumTrackRead | undefined;
   selectSamplerTracksForDrumTrack: (drumTrackId: string) => SamplerTrackRead[];
+  getVisibleTrackCount: () => number;
 
   // New actions
   removeSamplerTrack: (samplerTrackId: string) => Promise<void>;
