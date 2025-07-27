@@ -651,6 +651,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
     isDirty: boolean = true  // AI-generated tracks should be marked as dirty by default
   ): CombinedTrack => {
     const defaultName = `New ${trackType.charAt(0) + trackType.slice(1).toLowerCase()} Track`;
+    const trackCount = useStudioStore.getState().tracks.length;
     
     return {
       id: trackData.id,
@@ -664,12 +665,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
       track_number: 0,
       instance_metadata: [createDefaultInstance(
         trackData.id, 
-        { x: 0, y: 0 }, 
+        { x: 0, y: trackCount * GRID_CONSTANTS.trackHeight}, 
         MUSIC_CONSTANTS.pulsesPerQuarterNote * 16
       )],
       instances: [createDefaultInstance(
         trackData.id, 
-        { x: 0, y: 0 }, 
+        { x: 0, y: trackCount * GRID_CONSTANTS.trackHeight}, 
         MUSIC_CONSTANTS.pulsesPerQuarterNote * 16
       )],
       track: trackData
