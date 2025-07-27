@@ -256,39 +256,6 @@ function Studio({ projectId }: StudioProps) {
       document.removeEventListener('wheel', handleWheel);
     };
   }, [zoomLevel, setZoomLevel]);
-
-  // Initialize audio engine
-  useEffect(() => {
-    console.log('>>> Studio useEffect <<<');
-    // Always favor prop projectId over existingProjectId state
-    const projectToLoad = projectId || existingProjectId;
-    
-    // If we have a project ID, load the project instead of just initializing
-    if (projectToLoad) {
-      console.log(`Studio initialized with existing project ID: ${projectToLoad}`);
-      loadProject(projectToLoad)
-        .then(() => {
-          console.log(`Successfully loaded project: ${projectToLoad}`);
-          // Update existingProjectId state if it was from props
-          if (projectId && projectId !== existingProjectId) {
-            setExistingProjectId(projectId);
-          }
-        })
-        .catch(error => {
-          console.error('Failed to load project:', error);
-          // Fall back to initializing an empty project
-          initializeAudio();
-        });
-    } else {
-      console.log('Studio initialized with new project');
-      initializeAudio();
-    }
-    
-    return () => {
-      // Cleanup on unmount
-      delete (window as any).storeInstance;
-    };
-  }, [initializeAudio, loadProject]);
   
   // Handlers
   const handleBpmChange = (event: React.ChangeEvent<HTMLInputElement>) => {
