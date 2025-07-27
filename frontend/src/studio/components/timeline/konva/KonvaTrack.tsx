@@ -65,6 +65,14 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   trackColor,
   data
 }) => {
+  // Return null if track has a drum_track_id
+  if (track.track_type === 'SAMPLER' && 
+      track.track && 
+      'drum_track_id' in track.track && 
+      track.track.drum_track_id != null) {
+    return null;
+  }
+
   // Validate required numeric props
   if (isNaN(x) || isNaN(y) || isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
     console.error('KonvaTrack received invalid props:', { 

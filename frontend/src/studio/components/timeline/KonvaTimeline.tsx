@@ -26,6 +26,7 @@ import { useAppTheme } from '../../../platform/theme/ThemeContext';
 import { useTheme } from '@mui/material/styles';
 import Konva from 'konva';
 import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
+import { useStudioStore } from '../../stores/studioStore';
 
 export interface KonvaTimelineProps {
   tracks: CombinedTrack[];
@@ -227,7 +228,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
   }, [tracks, measureCount, internalZoom, pixelsPerTick]);
   
   const totalTimelineWidth = calculateContentWidth;
-  const totalTimelineHeight = Math.max(600, tracks.length * GRID_CONSTANTS.trackHeight + 200);
+  const totalTimelineHeight = Math.max(600, useStudioStore.getState().getVisibleTrackCount() * GRID_CONSTANTS.trackHeight + 200);
   
   // Calculate actual grid snap size
   const effectiveGridSize = GRID_CONSTANTS.measureWidth / (timeSignature[0] * 4);

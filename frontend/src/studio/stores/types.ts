@@ -230,6 +230,7 @@ export interface RootState {
   setDrumPattern: (trackId: string, pattern: boolean[][]) => void;
   selectDrumTrackById: (trackId: string) => DrumTrackRead | undefined;
   selectSamplerTracksForDrumTrack: (drumTrackId: string) => SamplerTrackRead[];
+  getVisibleTrackCount: () => number;
 
   // New actions
   removeSamplerTrack: (samplerTrackId: string) => Promise<void>;
@@ -237,6 +238,8 @@ export interface RootState {
     drumTrackId: string,
     sampleData: { id: string; display_name: string; storage_key: string; /* other needed fields? */ }
   ) => Promise<CombinedTrack | null>;
+  detachSamplerFromDrumTrack: (samplerTrackId: string) => Promise<void>;
+  attachSamplerToDrumTrack: (samplerTrackId: string, drumTrackId: string) => Promise<void>;
   removeSamplerNote: (trackId: string, tickPosition: number, midiRow: number) => Promise<void>;
   addEmptySamplerToDrumTrack: (drumTrackId: string, newSamplerName?: string) => Promise<string | null>;
   downloadSamplerTrack: (trackId: string) => Promise<{audioBlob?: Blob, trackName: string} | null>;

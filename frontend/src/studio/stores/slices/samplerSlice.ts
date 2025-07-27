@@ -16,6 +16,8 @@ export interface SamplerSlice {
   // Actions linking samplers to drum tracks
   addSamplerToDrumTrack: (drumTrackId: string, file: File) => Promise<CombinedTrack | null>; 
   removeSamplerFromDrumTrack: (drumTrackId: string, samplerTrackIdToDelete: string) => Promise<void>;
+  detachSamplerFromDrumTrack: (samplerTrackId: string) => Promise<void>;
+  attachSamplerToDrumTrack: (samplerTrackId: string, drumTrackId: string) => Promise<void>;
   addEmptySamplerToDrumTrack: (drumTrackId: string, newSamplerName?: string) => Promise<string | null>;
   
   // Standalone sampler actions
@@ -150,6 +152,81 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
     await _withErrorHandling(removeLogic, 'removeSamplerFromDrumTrack')();
   };
 
+  // Action to detach a sampler from its drum track (keep sampler as standalone)
+  const detachSamplerFromDrumTrack = async (samplerTrackId: string): Promise<void> => {
+    const { tracks, executeHistoryAction, _withErrorHandling } = rootGet();
+
+    if (!executeHistoryAction || !_withErrorHandling) {
+       console.error("Required actions (executeHistoryAction, _withErrorHandling) not available for detachSamplerFromDrumTrack");
+       return;
+    }
+
+    const detachLogic = async (): Promise<void> => {
+      // Find the sampler track
+      const samplerTrack = tracks.find(t => t.id === samplerTrackId && t.track_type === 'SAMPLER');
+      if (!samplerTrack) {
+        throw new Error(`Sampler track ${samplerTrackId} not found`);
+      }
+
+      // Get the drum track ID from the sampler
+      const samplerData = samplerTrack.track as SamplerTrackRead;
+      const drumTrackId = samplerData.drum_track_id;
+      
+      if (!drumTrackId) {
+        console.warn(`Sampler ${samplerTrackId} is not attached to any drum track`);
+        return;
+      }
+
+      // Import the action class
+      const { TrackActions } = await import('../../core/state/history/actions');
+      const action = new TrackActions.DetachSamplerFromDrum(rootGet, samplerTrackId, drumTrackId);
+      
+      await executeHistoryAction(action);
+      console.log(`Detached sampler ${samplerTrackId} from drum track ${drumTrackId}`);
+    };
+    
+    await _withErrorHandling(detachLogic, 'detachSamplerFromDrumTrack')();
+  };
+
+  // Action to attach an existing sampler to a drum track
+  const attachSamplerToDrumTrack = async (samplerTrackId: string, drumTrackId: string): Promise<void> => {
+    const { tracks, executeHistoryAction, _withErrorHandling } = rootGet();
+
+    if (!executeHistoryAction || !_withErrorHandling) {
+       console.error("Required actions (executeHistoryAction, _withErrorHandling) not available for attachSamplerToDrumTrack");
+       return;
+    }
+
+    const attachLogic = async (): Promise<void> => {
+      // Find the sampler track
+      const samplerTrack = tracks.find(t => t.id === samplerTrackId && t.track_type === 'SAMPLER');
+      if (!samplerTrack) {
+        throw new Error(`Sampler track ${samplerTrackId} not found`);
+      }
+
+      // Find the drum track
+      const drumTrack = tracks.find(t => t.id === drumTrackId && t.track_type === 'DRUM');
+      if (!drumTrack) {
+        throw new Error(`Drum track ${drumTrackId} not found`);
+      }
+
+      // Check if sampler is already attached to a drum track
+      const samplerData = samplerTrack.track as SamplerTrackRead;
+      if (samplerData.drum_track_id) {
+        throw new Error(`Sampler ${samplerTrackId} is already attached to drum track ${samplerData.drum_track_id}`);
+      }
+
+      // Import the action class
+      const { TrackActions } = await import('../../core/state/history/actions');
+      const action = new TrackActions.AttachSamplerToDrum(rootGet, samplerTrackId, drumTrackId);
+      
+      await executeHistoryAction(action);
+      console.log(`Attached sampler ${samplerTrackId} to drum track ${drumTrackId}`);
+    };
+    
+    await _withErrorHandling(attachLogic, 'attachSamplerToDrumTrack')();
+  };
+
   // Action to add an empty sampler to a drum track
   const addEmptySamplerToDrumTrack = async (drumTrackId: string, newSamplerName?: string): Promise<string | null> => {
     const { tracks, createTrackAndRegisterWithHistory, handleTrackDelete, _withErrorHandling } = rootGet();
@@ -264,6 +341,8 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
     // Actions
     addSamplerToDrumTrack,
     removeSamplerFromDrumTrack,
+    detachSamplerFromDrumTrack,
+    attachSamplerToDrumTrack,
     addEmptySamplerToDrumTrack,
     downloadSamplerTrack,
   };

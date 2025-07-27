@@ -541,6 +541,132 @@ export class UpdateDrumTrackSamplers extends BaseAction {
 }
 
 /**
+ * Action for attaching a sampler track to a drum track
+ */
+export class AttachSamplerToDrumAction extends BaseAction {
+    readonly type = 'SAMPLER_ATTACH_TO_DRUM';
+    private samplerTrackId: string;
+    private drumTrackId: string;
+    
+    constructor(get: GetFn, samplerTrackId: string, drumTrackId: string) {
+        super(get);
+        this.samplerTrackId = samplerTrackId;
+        this.drumTrackId = drumTrackId;
+    }
+    
+    async execute(): Promise<void> {
+        // Update drum track's sampler list
+        const drumTrack = this.get().findTrackById(this.drumTrackId);
+        if (drumTrack?.track_type === 'DRUM') {
+            const drumData = drumTrack.track as DrumTrackRead;
+            const currentSamplerIds = drumData.sampler_track_ids || [];
+            const newSamplerIds = [...currentSamplerIds, this.samplerTrackId];
+            
+            this.get()._updateNestedTrackData(this.drumTrackId, { 
+                sampler_track_ids: newSamplerIds 
+            } as Partial<DrumTrackRead>);
+        }
+        
+        // Update sampler track's drum reference
+        this.get()._updateNestedTrackData(this.samplerTrackId, { 
+            drum_track_id: this.drumTrackId 
+        } as Partial<SamplerTrackRead>);
+        
+        this.log('Execute', { 
+            samplerTrackId: this.samplerTrackId, 
+            drumTrackId: this.drumTrackId 
+        });
+    }
+    
+    async undo(): Promise<void> {
+        // Remove from drum track's sampler list
+        const drumTrack = this.get().findTrackById(this.drumTrackId);
+        if (drumTrack?.track_type === 'DRUM') {
+            const drumData = drumTrack.track as DrumTrackRead;
+            const currentSamplerIds = drumData.sampler_track_ids || [];
+            const newSamplerIds = currentSamplerIds.filter(id => id !== this.samplerTrackId);
+            
+            this.get()._updateNestedTrackData(this.drumTrackId, { 
+                sampler_track_ids: newSamplerIds 
+            } as Partial<DrumTrackRead>);
+        }
+        
+        // Clear sampler track's drum reference
+        this.get()._updateNestedTrackData(this.samplerTrackId, { 
+            drum_track_id: undefined 
+        } as Partial<SamplerTrackRead>);
+        
+        this.log('Undo', { 
+            samplerTrackId: this.samplerTrackId, 
+            drumTrackId: this.drumTrackId 
+        });
+    }
+}
+
+/**
+ * Action for detaching a sampler track from a drum track
+ */
+export class DetachSamplerFromDrumAction extends BaseAction {
+    readonly type = 'SAMPLER_DETACH_FROM_DRUM';
+    private samplerTrackId: string;
+    private drumTrackId: string;
+    
+    constructor(get: GetFn, samplerTrackId: string, drumTrackId: string) {
+        super(get);
+        this.samplerTrackId = samplerTrackId;
+        this.drumTrackId = drumTrackId;
+    }
+    
+    async execute(): Promise<void> {
+        // Remove from drum track's sampler list
+        const drumTrack = this.get().findTrackById(this.drumTrackId);
+        if (drumTrack?.track_type === 'DRUM') {
+            const drumData = drumTrack.track as DrumTrackRead;
+            const currentSamplerIds = drumData.sampler_track_ids || [];
+            const newSamplerIds = currentSamplerIds.filter(id => id !== this.samplerTrackId);
+            
+            this.get()._updateNestedTrackData(this.drumTrackId, { 
+                sampler_track_ids: newSamplerIds 
+            } as Partial<DrumTrackRead>);
+        }
+        
+        // Clear sampler track's drum reference
+        this.get()._updateNestedTrackData(this.samplerTrackId, { 
+            drum_track_id: undefined 
+        } as Partial<SamplerTrackRead>);
+        
+        this.log('Execute', { 
+            samplerTrackId: this.samplerTrackId, 
+            drumTrackId: this.drumTrackId 
+        });
+    }
+    
+    async undo(): Promise<void> {
+        // Re-add to drum track's sampler list
+        const drumTrack = this.get().findTrackById(this.drumTrackId);
+        if (drumTrack?.track_type === 'DRUM') {
+            const drumData = drumTrack.track as DrumTrackRead;
+            const currentSamplerIds = drumData.sampler_track_ids || [];
+            const newSamplerIds = [...currentSamplerIds, this.samplerTrackId];
+            
+            this.get()._updateNestedTrackData(this.drumTrackId, { 
+                sampler_track_ids: newSamplerIds 
+            } as Partial<DrumTrackRead>);
+        }
+        
+        // Restore sampler track's drum reference
+        this.get()._updateNestedTrackData(this.samplerTrackId, { 
+            drum_track_id: this.drumTrackId 
+        } as Partial<SamplerTrackRead>);
+        
+        this.log('Undo', { 
+            samplerTrackId: this.samplerTrackId, 
+            drumTrackId: this.drumTrackId 
+        });
+    }
+}
+
+/**
  * Export all track actions
  */
 export const TrackActions = {
@@ -549,5 +675,7 @@ export const TrackActions = {
     DeleteTrack: DeleteTrackAction,
     ParameterChange: ParameterChangeAction,
     TrackResize: TrackResizeAction,
-    UpdateDrumTrackSamplers: UpdateDrumTrackSamplers
+    UpdateDrumTrackSamplers: UpdateDrumTrackSamplers,
+    AttachSamplerToDrum: AttachSamplerToDrumAction,
+    DetachSamplerFromDrum: DetachSamplerFromDrumAction
 };

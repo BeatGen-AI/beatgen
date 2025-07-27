@@ -121,6 +121,14 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   onInstrumentChange,
   onLoadAudioFile
 }) => {
+  // Return null if track has a drum_track_id
+  if (track.track_type === 'SAMPLER' && 
+      track.track && 
+      'drum_track_id' in track.track && 
+      track.track.drum_track_id != null) {
+    return null;
+  }
+
   const theme = useTheme();
   const trackColor = getTrackColor(index);
   const [isEditingName, setIsEditingName] = useState(false);
