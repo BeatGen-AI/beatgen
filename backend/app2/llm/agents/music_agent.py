@@ -38,8 +38,9 @@ from app2.api.dependencies import (
     get_file_repository,
     get_file_service,
 )
+from app2.services.search_service import SearchService
 from app2.models.track_models.midi_track import MidiTrackRead
-from app2.types.assistant_actions import AssistantAction
+from app2.types.assistant_actions import AssistantAction, KeySignature
 
 from app2.llm.music_gen_service.midi import (
     convert_interval_melody_to_absolute_melody,
@@ -193,6 +194,9 @@ class MusicGenerationAgent:
         self._soundfont_map = {sf.display_name: sf for sf in self._available_soundfonts}
         self._drum_sample_map = {ds.display_name: ds for ds in self._available_drum_samples}
         self._drum_sample_id_map = {str(ds.id): ds for ds in self._available_drum_samples}
+        
+        # Initialize search service for AI-guided instrument selection
+        self._search_service = SearchService()
 
     def _create_fresh_chat_session(self, system_prompt: str) -> ChatSession:
         """Creates a new ChatSession with current model configuration."""
@@ -261,10 +265,8 @@ Current composition:
 Your task: Select appropriate drum sounds for the rhythm section.
 Choose sounds that fit the tempo and style of the composition."""
 
-    def _convert_key_to_enum(self, key: str, mode: str) -> 'KeySignature':
+    def _convert_key_to_enum(self, key: str, mode: str) -> KeySignature:
         """Convert LLM key+mode format to KeySignature enum value."""
-        from app2.types.assistant_actions import KeySignature
-        
         # Normalize inputs
         key = key.strip()
         mode = mode.strip().lower()
@@ -551,21 +553,85 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
         system_prompt = self._get_instrument_selection_prompt()
         chat_session = self._create_fresh_chat_session(system_prompt)
         
-        soundfont_names_list = [sf.display_name for sf in self._available_soundfonts]
+        # 1. Generate search queries for instruments
+        query_generation_prompt = f"""Based on the musical context, generate search queries to find appropriate instruments.
+Musical Context: Title: '{determined_params.song_title}', Key: {determined_params.key} {determined_params.mode}, Tempo: {determined_params.tempo} BPM.
+User prompt: '{determined_params.original_user_prompt}'. Duration: {determined_params.duration_bars} bars.
+My initial thoughts were: Melody: '{determined_params.melody_instrument_suggestion}', Chords: '{determined_params.chords_instrument_suggestion}'.
 
-        # 1. Stream Explanation
+Generate two descriptive search queries:
+1. For the melody instrument based on '{determined_params.melody_instrument_suggestion}' and the musical style
+2. For the chords instrument based on '{determined_params.chords_instrument_suggestion}' and the musical style
+
+Consider the genre, mood, and style when creating these queries.
+Respond with only two search queries, one per line."""
+
+        logger.info("Generating search queries for instruments...")
+        
+        # Get search queries from LLM
+        search_queries_response = await chat_session.send_message_async(
+            user_prompt_content=query_generation_prompt,
+            stream=False
+        )
+        
+        search_queries = search_queries_response.strip().split('\n')
+        melody_query = search_queries[0] if len(search_queries) > 0 else f"{determined_params.melody_instrument_suggestion} melody"
+        chords_query = search_queries[1] if len(search_queries) > 1 else f"{determined_params.chords_instrument_suggestion} chords"
+        
+        logger.info(f"Generated search queries - Melody: '{melody_query}', Chords: '{chords_query}'")
+        
+        # 2. Search for instruments using the search service
+        try:
+            melody_search_results = await self._search_service.search_instruments(
+                query=melody_query,
+                top_k=10
+            )
+            chords_search_results = await self._search_service.search_instruments(
+                query=chords_query,
+                top_k=10
+            )
+            
+            logger.info(f"Found {len(melody_search_results)} melody instruments and {len(chords_search_results)} chords instruments")
+        except Exception as e:
+            logger.error(f"Error searching for instruments: {e}")
+            # Fallback to original available soundfonts
+            melody_search_results = []
+            chords_search_results = []
+        
+        # 3. Stream Explanation with search results
+        # Create candidate lists from search results
+        melody_candidates = []
+        chords_candidates = []
+        
+        if melody_search_results:
+            for result in melody_search_results[:10]:  # Top 10
+                if result.name in self._soundfont_map:
+                    melody_candidates.append(result.name)
+        
+        if chords_search_results:
+            for result in chords_search_results[:10]:  # Top 10
+                if result.name in self._soundfont_map:
+                    chords_candidates.append(result.name)
+        
+        # Fallback to all available if search didn't return valid results
+        if not melody_candidates:
+            melody_candidates = [sf.display_name for sf in self._available_soundfonts[:10]]
+        if not chords_candidates:
+            chords_candidates = [sf.display_name for sf in self._available_soundfonts[:10]]
+        
         explanation_prompt_instruments = f"""Now I need to select specific instruments (soundfonts) for the composition.
 Musical Context: Title: '{determined_params.song_title}', Key: {determined_params.key} {determined_params.mode}, Tempo: {determined_params.tempo} BPM.
 User prompt: '{determined_params.original_user_prompt}'. Duration: {determined_params.duration_bars} bars.
 My initial thoughts were: Melody: '{determined_params.melody_instrument_suggestion}', Chords: '{determined_params.chords_instrument_suggestion}'.
 
-Available Soundfonts are: {json.dumps(soundfont_names_list)}
+Based on semantic search for '{melody_query}', the top melody instrument candidates are: {json.dumps(melody_candidates)}
+Based on semantic search for '{chords_query}', the top chords instrument candidates are: {json.dumps(chords_candidates)}
 
-Please explain your choices for the melody and chords instruments from the available soundfonts. Consider how they fit the style and complement each other. 
+Please explain your choices for the melody and chords instruments from these search results. Consider how they fit the style and complement each other. 
 Do NOT output JSON in this step, just your conversational reasoning."""
 
         logger.info("Streaming explanation for instrument selection...")
-        logger.info(f"length of available soundfonts: {len(self._available_soundfonts)}")
+        logger.info(f"Using {len(melody_candidates)} melody candidates and {len(chords_candidates)} chords candidates")
         
         # Capture the full explanation for step event emission
         explanation_text = ""
@@ -594,18 +660,25 @@ Do NOT output JSON in this step, just your conversational reasoning."""
         await self.context.queue.add_chunk("\n\n")
         await self.context.queue.add_chunk("---")
         await self.context.queue.add_chunk("\n\n")
-        # 2. Get JSON Data (Focused Call)
+        # 4. Get JSON Data (Focused Call)
         logger.info("Requesting JSON for instrument selection...")
+        
+        # Combine candidates for the focused prompt
+        all_candidates = list(set(melody_candidates + chords_candidates))
+        
         focused_prompt = f"""
 Musical Context: Title: '{determined_params.song_title}', Key: {determined_params.key} {determined_params.mode}, Tempo: {determined_params.tempo} BPM.
 User prompt: '{determined_params.original_user_prompt}'. Duration: {determined_params.duration_bars} bars.
 Suggested Melody Instrument Type: {determined_params.melody_instrument_suggestion}
 Suggested Chords Instrument Type: {determined_params.chords_instrument_suggestion}
-Available Soundfonts (choose from this list only): {json.dumps(soundfont_names_list)}
 
-Based on our prior discussion and reasoning, select specific soundfonts for 'melody' and 'chords' roles. You can also suggest for 'bass' if appropriate.
+Search Results:
+- Top melody instruments for '{melody_query}': {json.dumps(melody_candidates)}
+- Top chords instruments for '{chords_query}': {json.dumps(chords_candidates)}
+
+Based on our prior discussion and the search results, select specific soundfonts for 'melody' and 'chords' roles from these candidates.
 Provide your response *only* in the 'SelectInstruments' JSON structure (an object with an 'instrument_selections' list of items, where each item has 'instrument_name', 'role', and 'explanation' fields).
-Ensure instrument_name in each selection exactly matches a name from the Available Soundfonts list.
+Ensure instrument_name in each selection exactly matches a name from the search results lists above.
 Example of desired JSON structure: {json.dumps(SelectInstruments.model_json_schema(), indent=2)}
 Output only the JSON object."""
         
@@ -1114,18 +1187,87 @@ Create interval-based melodies that follow the harmonic structure."""
         system_prompt = self._get_drum_selection_prompt()
         chat_session = self._create_fresh_chat_session(system_prompt)
         
-        drum_sample_names = [ds.display_name for ds in self._available_drum_samples]
+        # 1. Generate search queries for drum sounds
+        query_generation_prompt = f"""Based on the musical context, generate search queries to find appropriate drum sounds.
+Musical Context: Title: '{determined_params.song_title}', Key: {determined_params.key} {determined_params.mode}, Tempo: {determined_params.tempo} BPM.
+User prompt: '{determined_params.original_user_prompt}'.
+{f"Drum research: {drum_research_result}" if drum_research_result else ""}
 
-        # 1. Stream Explanation for Drum Sound Selection
+Generate 4-5 descriptive search queries for different drum elements needed for this style:
+- One for kick/bass drum
+- One for snare drum  
+- One for hi-hat
+- One or two for other percussion elements (cymbals, claps, etc.)
+
+Consider the genre, tempo, and style when creating these queries.
+Respond with only the search queries, one per line."""
+
+        logger.info("Generating search queries for drum sounds...")
+        
+        # Get search queries from LLM
+        search_queries_response = await chat_session.send_message_async(
+            user_prompt_content=query_generation_prompt,
+            stream=False
+        )
+        
+        drum_queries = [q.strip() for q in search_queries_response.strip().split('\n') if q.strip()]
+        logger.info(f"Generated {len(drum_queries)} drum search queries")
+        
+        # 2. Search for drum sounds using the search service
+        all_drum_candidates = []
+        drum_search_results_by_query = {}
+        
+        try:
+            for query in drum_queries:
+                if query:
+                    drum_results = await self._search_service.search_drum_samples(
+                        query=query,
+                        top_k=5  # Get top 5 for each drum type
+                    )
+                    drum_search_results_by_query[query] = drum_results
+                    
+                    # Add valid results to candidates
+                    for result in drum_results:
+                        if result.name in self._drum_sample_map:
+                            all_drum_candidates.append({
+                                'name': result.name,
+                                'query': query,
+                                'score': result.similarity_score
+                            })
+            
+            logger.info(f"Found {len(all_drum_candidates)} total drum candidates from search")
+        except Exception as e:
+            logger.error(f"Error searching for drum sounds: {e}")
+            # Fallback to original approach
+            all_drum_candidates = []
+        
+        # 3. Prepare explanation context with search results
+        # Group candidates by query for better presentation
+        candidates_by_query = {}
+        for candidate in all_drum_candidates:
+            query = candidate['query']
+            if query not in candidates_by_query:
+                candidates_by_query[query] = []
+            candidates_by_query[query].append(candidate['name'])
+        
+        # If no search results, fallback to all available
+        if not all_drum_candidates:
+            drum_sample_names = [ds.display_name for ds in self._available_drum_samples[:20]]
+            search_context = f"Available Drum Samples: {json.dumps(drum_sample_names)}"
+        else:
+            search_context = "Search Results for Drum Sounds:\n"
+            for query, names in candidates_by_query.items():
+                search_context += f"- For '{query}': {json.dumps(names[:5])}\n"
+        
         explanation_context = f"For a song in {determined_params.key} {determined_params.mode} at {determined_params.tempo} BPM, with style hints from title '{determined_params.song_title}' and user prompt '{determined_params.original_user_prompt}'."
         if drum_research_result:
             explanation_context += f"\nConsider this research on drum sounds: {drum_research_result}"
-        explanation_context += f"\nAvailable Drum Samples are: {json.dumps(drum_sample_names)}"
-
+        explanation_context += f"\n{search_context}"
+        
         explanation_prompt_drums = f"""Now I need to select specific drum sounds (e.g., kick, snare, hi-hat, cymbals).
 {explanation_context}
 
-Please explain your choices for 4-5 drum sounds from the available list that would fit the style. Describe the role each sound will play.
+Please explain your choices for 4-5 drum sounds from the search results that would fit the style. Describe the role each sound will play.
 Do NOT output JSON in this step, just your conversational reasoning."""
 
         logger.info("Streaming explanation for drum sound selection...")
@@ -1157,21 +1299,29 @@ Do NOT output JSON in this step, just your conversational reasoning."""
         await self.context.queue.add_chunk("\n\n")
         await self.context.queue.add_chunk("---")
         await self.context.queue.add_chunk("\n\n")
-        # 2. Get JSON Data (Focused Call)
+        # 4. Get JSON Data (Focused Call)
         logger.info("Requesting JSON for drum sound selection...")
         focused_prompt_context = f"For a song in {determined_params.key} {determined_params.mode} at {determined_params.tempo} BPM, with style hints from the title '{determined_params.song_title}', user prompt '{determined_params.original_user_prompt}', and chord progression '{determined_params.chord_progression}'."
         if drum_research_result:
             focused_prompt_context += f"\nRelevant drum sound research to consider: {drum_research_result}"
         
+        # Get all unique candidate names for the focused prompt
+        all_candidate_names = list(set(candidate['name'] for candidate in all_drum_candidates))
+        
+        # If no candidates from search, use available samples
+        if not all_candidate_names:
+            all_candidate_names = [ds.display_name for ds in self._available_drum_samples[:20]]
+        
         focused_prompt = f"""
 {focused_prompt_context}
-Available Drum Samples (choose from this list only): {json.dumps(drum_sample_names)}
 
-Based on our prior discussion and reasoning, select 4-5 appropriate drum sounds (e.g., kick, snare, hi-hat).
-Provide your response *only* in the 'SelectDrumSounds' JSON structure (an object with a 'drum_sounds' list of strings, where each string is an exact name from the Available Drum Samples list).
-<CRITICAL_INSTRUCTION>The sounds you choose MUST be in the list of available drum samples.</CRITICAL_INSTRUCTION>
-<CRITICAL_INSTRUCTION>Any sounds not appearing in the available drum samples list will be rejected.</CRITICAL_INSTRUCTION>
-<CRITICAL_INSTRUCTION>Remember, you MUST choose from THESE SAMPLES ONLY: {json.dumps(drum_sample_names)}</CRITICAL_INSTRUCTION>
+Search Results Summary:
+{search_context}
+
+Based on our prior discussion and the search results, select 4-5 appropriate drum sounds (e.g., kick, snare, hi-hat).
+Provide your response *only* in the 'SelectDrumSounds' JSON structure (an object with a 'drum_sounds' list of strings, where each string is an exact name from the search results).
+<CRITICAL_INSTRUCTION>The sounds you choose MUST be from the search results listed above.</CRITICAL_INSTRUCTION>
+<CRITICAL_INSTRUCTION>Valid choices are: {json.dumps(all_candidate_names)}</CRITICAL_INSTRUCTION>
 Example of desired JSON structure: {json.dumps(SelectDrumSounds.model_json_schema())}
 Output only the JSON object."""
         

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from "../../../components/ui/button";
+import { Badge } from "../../../components/ui/badge";
 import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
 import { AudioWaveform } from 'lucide-react';
 import { AudioTrackRead as Sound } from '../../../platform/types/dto/track_models/audio_track'; 
