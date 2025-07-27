@@ -154,10 +154,10 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
 
   // Action to detach a sampler from its drum track (keep sampler as standalone)
   const detachSamplerFromDrumTrack = async (samplerTrackId: string): Promise<void> => {
-    const { tracks, _withErrorHandling } = rootGet();
+    const { tracks, executeHistoryAction, _withErrorHandling } = rootGet();
 
-    if (!_withErrorHandling) {
-       console.error("Required action (_withErrorHandling) not available for detachSamplerFromDrumTrack");
+    if (!executeHistoryAction || !_withErrorHandling) {
+       console.error("Required actions (executeHistoryAction, _withErrorHandling) not available for detachSamplerFromDrumTrack");
        return;
     }
 
@@ -177,17 +177,11 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
         return;
       }
 
-      // Remove reference from the drum track
-      updateDrumTrackSamplers(drumTrackId, 'remove', [samplerTrackId]);
+      // Import the action class
+      const { TrackActions } = await import('../../core/state/history/actions');
+      const action = new TrackActions.DetachSamplerFromDrum(rootGet, samplerTrackId, drumTrackId);
       
-      // Clear the drum_track_id from the sampler track
-      set(produce((draft: RootState) => {
-        const samplerIndex = draft.tracks.findIndex(t => t.id === samplerTrackId);
-        if (samplerIndex !== -1 && draft.tracks[samplerIndex].track) {
-          (draft.tracks[samplerIndex].track as SamplerTrackRead).drum_track_id = undefined;
-        }
-      }));
-      
+      await executeHistoryAction(action);
       console.log(`Detached sampler ${samplerTrackId} from drum track ${drumTrackId}`);
     };
     
@@ -196,10 +190,10 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
 
   // Action to attach an existing sampler to a drum track
   const attachSamplerToDrumTrack = async (samplerTrackId: string, drumTrackId: string): Promise<void> => {
-    const { tracks, _withErrorHandling } = rootGet();
+    const { tracks, executeHistoryAction, _withErrorHandling } = rootGet();
 
-    if (!_withErrorHandling) {
-       console.error("Required action (_withErrorHandling) not available for attachSamplerToDrumTrack");
+    if (!executeHistoryAction || !_withErrorHandling) {
+       console.error("Required actions (executeHistoryAction, _withErrorHandling) not available for attachSamplerToDrumTrack");
        return;
     }
 
@@ -222,17 +216,11 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
         throw new Error(`Sampler ${samplerTrackId} is already attached to drum track ${samplerData.drum_track_id}`);
       }
 
-      // Add reference to the drum track
-      updateDrumTrackSamplers(drumTrackId, 'add', [samplerTrackId]);
+      // Import the action class
+      const { TrackActions } = await import('../../core/state/history/actions');
+      const action = new TrackActions.AttachSamplerToDrum(rootGet, samplerTrackId, drumTrackId);
       
-      // Set the drum_track_id on the sampler track
-      set(produce((draft: RootState) => {
-        const samplerIndex = draft.tracks.findIndex(t => t.id === samplerTrackId);
-        if (samplerIndex !== -1 && draft.tracks[samplerIndex].track) {
-          (draft.tracks[samplerIndex].track as SamplerTrackRead).drum_track_id = drumTrackId;
-        }
-      }));
-      
+      await executeHistoryAction(action);
       console.log(`Attached sampler ${samplerTrackId} to drum track ${drumTrackId}`);
     };
     
