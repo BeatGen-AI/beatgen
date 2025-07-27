@@ -44,6 +44,7 @@ interface DrumLabelProps {
   cellSize: number;
   onClick: () => void;
   onDelete: () => void;
+  onDetach: () => void;
   onOpenPianoRoll: () => void;
 }
 
@@ -53,6 +54,7 @@ const DrumLabel: React.FC<DrumLabelProps> = ({
   cellSize, 
   onClick,
   onDelete,
+  onDetach,
   onOpenPianoRoll
 }) => {
   const labelStyle: React.CSSProperties = {
@@ -106,9 +108,30 @@ const DrumLabel: React.FC<DrumLabelProps> = ({
     marginRight: '8px'
   };
 
+  const detachButtonStyle: React.CSSProperties = {
+    color: DARK_THEME.accentYellow,
+    fontSize: '12px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    height: '16px',
+    borderRadius: '3px',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    transition: 'all 0.2s ease',
+    marginRight: '8px'
+  };
+
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete();
+  };
+
+  const handleDetachClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDetach();
   };
 
   const handlePianoRollClick = (e: React.MouseEvent) => {
@@ -125,8 +148,16 @@ const DrumLabel: React.FC<DrumLabelProps> = ({
         <div 
           style={deleteButtonStyle}
           onClick={handleDeleteClick}
+          title="Delete sampler track"
         >
           ×
+        </div>
+        <div 
+          style={detachButtonStyle}
+          onClick={handleDetachClick}
+          title="Detach from drum track"
+        >
+          ⚡
         </div>
         <div 
           style={pianoIconStyle}
@@ -229,6 +260,7 @@ interface RowProps {
   onSelectDrum: () => void;
   onToggleCell: (colIndex: number) => void;
   onDeleteRow: () => void;
+  onDetachRow: () => void;
   onOpenPianoRoll: () => void;
 }
 
@@ -243,6 +275,7 @@ const Row: React.FC<RowProps> = ({
   onSelectDrum,
   onToggleCell,
   onDeleteRow,
+  onDetachRow,
   onOpenPianoRoll
 }) => {
   const rowStyle: React.CSSProperties = {
@@ -274,6 +307,7 @@ const Row: React.FC<RowProps> = ({
           cellSize={cellSize}
           onClick={onSelectDrum}
           onDelete={onDeleteRow}
+          onDetach={onDetachRow}
           onOpenPianoRoll={onOpenPianoRoll}
         />
       </div>
@@ -311,6 +345,7 @@ interface DrumMachineProps {
   // Actions passed down from parent
   addSamplerTrackToDrumTrack: (drumTrackId: string, sampleData: DrumSamplePublicRead) => Promise<CombinedTrack | null>;
   removeSamplerTrack: (samplerTrackId: string) => Promise<void>;
+  detachSamplerFromDrumTrack: (samplerTrackId: string) => Promise<void>;
   addNote: (trackId: string, note: NoteState) => void;
   removeSamplerNote: (trackId: string, tickPosition: number, midiRow: number) => Promise<void>;
 }
@@ -336,6 +371,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   // Actions passed down from parent
   addSamplerTrackToDrumTrack,
   removeSamplerTrack,
+  detachSamplerFromDrumTrack,
   addNote,
   removeSamplerNote,
 }) => {
@@ -641,6 +677,28 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
     }
     finally { setIsLoading(false); }
   };
+
+  // New Detach Row: Calls store action to remove sampler from drum track
+  const detachRow = async (index: number): Promise<void> => {
+    if (index < 0 || index >= samplerTracks.length) return;
+    const samplerTrackIdToDetach = samplerTracks[index].id;
+    console.log(`DrumMachine (${trackId}): Detaching sampler row index ${index}, ID: ${samplerTrackIdToDetach}`);
+    
+    setIsLoading(true);
+    try {
+      if (!detachSamplerFromDrumTrack) {
+          console.error("detachSamplerFromDrumTrack action is not available!");
+          return;
+      }
+      // Call store action to remove drum track id from sampler
+      await detachSamplerFromDrumTrack(samplerTrackIdToDetach);
+      console.log(`DrumMachine (${trackId}): detachSamplerFromDrumTrack store action finished.`);
+      
+    } catch (error) { 
+        console.error(`DrumMachine (${trackId}): Error detaching sampler track ${samplerTrackIdToDetach}:`, error); 
+    }
+    finally { setIsLoading(false); }
+  };
   
   // Update container size when resized
   const handleResize = (e: MouseEvent | TouchEvent, direction: string, ref: HTMLElement, delta: { width: number; height: number }, position: { x: number; y: number }) => {
@@ -892,10 +950,10 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
           <div style={contentStyle}>
             <div style={scrollContainerStyle}>
               <div ref={containerRef} style={drumGridStyle}>
-                {samplerTracks.length > 0 && drumNames.map((name, rowIdx) => (
+                {samplerTracks.length > 0 && samplerTracks.map((track, rowIdx) => (
                   <Row
-                    key={`row-${rowIdx}-${samplerTracks[rowIdx].id || rowIdx}`}
-                    name={name}
+                    key={`row-${rowIdx}-${track.id}`}
+                    name={track.name || `Sampler ${rowIdx + 1}`}
                     rowIndex={rowIdx}
                     cellSize={CELL_SIZE}
                     gapSize={GAP_SIZE}
@@ -903,8 +961,9 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
                     isSelected={selectedSound === rowIdx}
                     rowData={grid[rowIdx] || []}
                     onSelectDrum={() => setSelectedSound(rowIdx)}
-                    onToggleCell={(colIdx) => toggleCell(samplerTracks[rowIdx].id, colIdx)}
+                    onToggleCell={(colIdx) => toggleCell(track.id, colIdx)}
                     onDeleteRow={() => deleteRow(rowIdx)}
+                    onDetachRow={() => detachRow(rowIdx)}
                     onOpenPianoRoll={() => handleOpenSamplerPianoRoll(rowIdx)}
                   />
                 ))}
