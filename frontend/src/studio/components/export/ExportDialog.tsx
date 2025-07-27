@@ -3,7 +3,7 @@ import { X, Download } from 'lucide-react';
 import { useStudioStore } from '../../stores/studioStore';
 import { ExportService } from '../../core/export/ExportService';
 import { ExportOptions, ExportProgress } from '../../core/export/types';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useAppTheme } from '../../../lib/theme-provider';
 import {
   Dialog,
   DialogContent,

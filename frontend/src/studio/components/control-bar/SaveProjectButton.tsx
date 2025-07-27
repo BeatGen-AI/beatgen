@@ -9,7 +9,7 @@ import {
 import { useAuth } from '../../../platform/auth/auth-context';
 import { useStudioStore } from '../../stores/studioStore';
 import { CombinedTrack, Project } from 'src/platform/types/project';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface SaveProjectButtonProps {
   projectTitle: string;

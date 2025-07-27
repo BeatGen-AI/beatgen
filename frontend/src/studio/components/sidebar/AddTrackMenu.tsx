@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Menu, MenuItem, ListItemIcon, ListItemText, Divider, useTheme } from '@mui/material';
-import PianoIcon from '@mui/icons-material/Piano';
-import AudioFileIcon from '@mui/icons-material/AudioFile';
-import GraphicEqIcon from '@mui/icons-material/GraphicEq';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import { Piano, AudioWaveform, Music, Scissors } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../../components/ui/dropdown-menu';
 import { VirtualInstrumentsModal } from '../modals/VirtualInstrumentsModal';
 import { DrumMachineModal } from '../modals/drum-machine/DrumMachineModal';
 import { AudioTracksModal } from '../modals/AudioTracksModal';
@@ -14,8 +16,8 @@ import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload, AudioTr
 
 interface AddTrackMenuProps {
   isOpen: boolean;
-  anchorEl: HTMLElement | null;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
   // Use imported types
   onAddTrack: (type: TrackType, payload?: AddTrackPayload) => void;
   // Keep onFileUpload for direct audio/sampler uploads for now
@@ -24,12 +26,11 @@ interface AddTrackMenuProps {
 
 export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({ 
   isOpen, 
-  anchorEl, 
-  onClose, 
+  onOpenChange, 
+  children,
   onAddTrack, 
   onFileUpload 
 }) => {
-  const theme = useTheme();
   const [isVirtualInstrumentModalOpen, setIsVirtualInstrumentModalOpen] = useState(false);
   const [isDrumMachineModalOpen, setIsDrumMachineModalOpen] = useState(false);
   const [isAudioTracksModalOpen, setIsAudioTracksModalOpen] = useState(false);
@@ -46,94 +47,65 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           // Or potentially call onAddTrack here if we refactor later
           // onAddTrack(isSampler ? 'sampler' : 'audio', { file });
       }
-      onClose();
+      onOpenChange(false);
       console.log('File uploaded');
     }
   };
   
   return (
     <>
-      <Menu
-        open={isOpen}
-        anchorEl={anchorEl}
-        onClose={onClose}
-        PaperProps={{
-          sx: { 
-            bgcolor: 'background.paper', 
-            color: 'text.primary', 
-            minWidth: 180, 
-            boxShadow: theme.shadows[3]
-          } 
-        }}
-      >
-        <MenuItem onClick={() => {
-          setIsVirtualInstrumentModalOpen(true);
-          onClose();
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <ListItemIcon><PianoIcon sx={{ color: '#2196f3' }} /></ListItemIcon>
-          <ListItemText primary="Virtual Instrument" />
-        </MenuItem>
-        
-        <MenuItem onClick={() => { 
-          setIsDrumMachineModalOpen(true);
-          onClose(); 
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <ListItemIcon><GraphicEqIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-          <ListItemText primary="Drum Machine" />
-        </MenuItem>
-        
-        <MenuItem onClick={() => {
-          setIsAudioTracksModalOpen(true);
-          onClose();
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover
-            }
-          }}
-        >
-          <ListItemIcon><AudioFileIcon sx={{ color: '#4caf50' }} /></ListItemIcon>
-          <ListItemText primary="Audio Tracks" />
-        </MenuItem>
-        <MenuItem
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <label style={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
-            <ListItemIcon><ContentCutIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-            <ListItemText primary="Sampler" />
-            <input 
-              type="file" 
-              accept="audio/*" 
-              style={{ display: 'none' }} 
-              onChange={(e) => handleFileUpload(e, true)}
-            />
-          </label>
-        </MenuItem>
-      </Menu>
+      <DropdownMenu open={isOpen} onOpenChange={onOpenChange}>
+        <DropdownMenuTrigger asChild>
+          {children}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-48 bg-card border-border">
+          <DropdownMenuItem 
+            onClick={() => {
+              setIsVirtualInstrumentModalOpen(true);
+              onOpenChange(false);
+            }}
+            className="text-sm py-2 cursor-pointer"
+          >
+            <Piano className="w-4 h-4 mr-3 text-blue-500" />
+            Virtual Instrument
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem 
+            onClick={() => { 
+              setIsDrumMachineModalOpen(true);
+              onOpenChange(false); 
+            }}
+            className="text-sm py-2 cursor-pointer"
+          >
+            <Music className="w-4 h-4 mr-3 text-orange-500" />
+            Drum Machine
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem 
+            onClick={() => {
+              setIsAudioTracksModalOpen(true);
+              onOpenChange(false);
+            }}
+            className="text-sm py-2 cursor-pointer"
+          >
+            <AudioWaveform className="w-4 h-4 mr-3 text-green-500" />
+            Audio Tracks
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem className="text-sm py-2 cursor-pointer">
+            <label className="flex items-center w-full cursor-pointer">
+              <Scissors className="w-4 h-4 mr-3 text-purple-500" />
+              Sampler
+              <input 
+                type="file" 
+                accept="audio/*" 
+                className="hidden" 
+                onChange={(e) => handleFileUpload(e, true)}
+              />
+            </label>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <VirtualInstrumentsModal
         open={isVirtualInstrumentModalOpen}

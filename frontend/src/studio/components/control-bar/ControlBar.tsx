@@ -1,5 +1,6 @@
 import React, { forwardRef, memo, useRef, useState } from 'react';
-import { Box, IconButton, Typography, TextField, Tooltip, useTheme, Menu, MenuItem } from '@mui/material';
+import { Box, IconButton, Typography, TextField, Tooltip, Menu, MenuItem } from '@mui/material';
+import { useAppTheme } from '../../../lib/theme-provider';
 // Import components
 import BPMControl from './BPMControl';
 import TimeSignatureDisplay from './TimeSignatureDisplay';
@@ -95,7 +96,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     onGridSnapSizeChange,
     onExportClick,
 }, ref) => {
-    const theme = useTheme();
+    const { studioMode } = useAppTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
     const [gridMenuAnchor, setGridMenuAnchor] = useState<null | HTMLElement>(null);
     const gridMenuOpen = Boolean(gridMenuAnchor);
@@ -135,8 +136,8 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                 left: 0,
                 right: 0,
                 zIndex: 1300,
-                bgcolor: theme.palette.mode === 'dark' ? 'rgba(18, 18, 18, 0.8)' : 'rgba(240, 240, 240, 0.1)',
-                borderBottom: `1px solid ${theme.palette.divider}`,
+                bgcolor: studioMode === 'dark' ? 'rgba(18, 18, 18, 0.8)' : 'rgba(240, 240, 240, 0.1)',
+                borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
                 overflowX: 'auto',
                 overflowY: 'hidden'
             }}
@@ -171,7 +172,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             sx={{
                                 borderRadius: '8px',
                                 '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
+                                    backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                                 },
                             }}
                             disableRipple
@@ -188,7 +189,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
+                                backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                             },
                         }}
                         disableRipple
@@ -204,7 +205,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
+                                backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                             },
                         }}
                         disableRipple
@@ -217,7 +218,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                 <Box sx={{
                     display: 'flex',
                     alignItems: 'center',
-                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                     borderRadius: 1,
                     px: 2,
                     py: 0.5,
@@ -246,7 +247,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
+                                backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                             },
                         }}
                         disableRipple
@@ -260,7 +261,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
+                                backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                             },
                         }}
                         disableRipple
@@ -286,7 +287,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         width: '100%',
                         maxWidth: 300,
                         '& .MuiInputBase-input': { 
-                           color: theme.palette.text.primary
+                           color: studioMode === 'dark' ? '#ffffff' : '#000000'
                         }
                     }}
                 />
@@ -308,9 +309,9 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             onClick={handleGridClick}
                             sx={{
                                 borderRadius: '8px',
-                                backgroundColor: snapToGrid ? theme.palette.action.selected : 'transparent',
+                                backgroundColor: snapToGrid ? (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)') : 'transparent',
                                 '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
+                                    backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                                 },
                             }}
                             disableRipple
@@ -325,7 +326,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
+                                backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                             },
                         }}
                         disableRipple
@@ -335,10 +336,10 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     <Box sx={{ 
                         color: "text.primary",
                         fontWeight: "bold", 
-                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
+                        bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
                         minWidth: 40, 
                         textAlign: "center", 
-                        border: `1px solid ${theme.palette.divider}`,
+                        border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
                         padding: "4px 4px", 
                         borderRadius: "6px" 
                     }}>
@@ -351,7 +352,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
+                                backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                             },
                         }}
                         disableRipple
@@ -386,7 +387,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             sx={{
                                 borderRadius: '8px',
                                 '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
+                                    backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                                 },
                             }}
                             disableRipple
@@ -401,7 +402,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
+                                backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                             },
                         }}
                         disableRipple
@@ -415,7 +416,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         sx={{
                             borderRadius: '8px',
                             '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
+                                backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                             },
                         }}
                         disableRipple

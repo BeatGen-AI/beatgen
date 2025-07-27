@@ -1,8 +1,5 @@
 import React, { createContext, useState, useMemo, useContext, ReactNode, useEffect } from 'react';
-import { ThemeProvider as MuiThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 
-// Define the shape of the context
 interface ThemeContextType {
   mode: 'light' | 'dark';
   studioMode: 'light' | 'dark';
@@ -10,99 +7,126 @@ interface ThemeContextType {
   toggleStudioTheme: () => void;
 }
 
-// Create the context with a default value (or null and check)
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
-// Define light and dark themes (could be imported from main.tsx or defined here)
-const lightTheme = createTheme({
-  palette: {
-    mode: 'light',
-  },
-  typography: {
-    fontFamily: '"Sen", sans-serif',
-  },
-});
-
-const darkTheme = createTheme({
-  palette: {
-    mode: 'dark',
-    background: {
-      default: '#000000'
-    },
-  },
-  typography: {
-    fontFamily: '"Sen", sans-serif',
-  },
-});
-
-// Studio-specific themes (can be customized independently later)
-// For now, they mirror the global themes
-export const studioLightTheme = createTheme({
-  palette: {
-    mode: 'light',
-  },
-  typography: {
-    fontFamily: '"Sen", sans-serif',
-  },
-});
-
-export const studioDarkTheme = createTheme({
-  palette: {
-    mode: 'dark',
-    background: {
-      default: '#000000'
-    },
-  },
-  typography: {
-    fontFamily: '"Sen", sans-serif',
-  },
-});
-
-// Create the provider component
 export const AppThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Default to dark mode, or read from localStorage/preference
   const [uiMode, setUIMode] = useState<'light' | 'dark'>('light'); 
-  const [studioMode, setStudioMode] = useState<'light' | 'dark'>('dark'); 
+  const [studioMode, setStudioMode] = useState<'light' | 'dark'>('light'); 
 
+  // Initial theme setup on mount
   useEffect(() => {
     const root = window.document.documentElement;
-    if (uiMode === 'dark') {
+    const isStudioPage = window.location.pathname === '/studio' || 
+                         window.location.pathname.startsWith('/studio/');
+    
+    const initialMode = isStudioPage ? studioMode : uiMode;
+    
+    if (initialMode === 'dark') {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
+  }, []); // Only run on mount
+
+  // Effect for studio mode changes - only runs when studioMode changes
+  useEffect(() => {
+    const root = window.document.documentElement;
+    const isStudioPage = window.location.pathname === '/studio' || 
+                         window.location.pathname.startsWith('/studio/');
+    
+    console.log('studioMode effect running:', { studioMode, isStudioPage, pathname: window.location.pathname });
+    
+    // Only apply studioMode changes if we're on a studio page
+    if (isStudioPage) {
+      if (studioMode === 'dark') {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    } else {
+      console.log('Skipping studioMode change because we are not on a studio page');
+    }
+  }, [studioMode]);
+
+  // Effect for UI mode changes - only runs when uiMode changes
+  useEffect(() => {
+    const root = window.document.documentElement;
+    const isStudioPage = window.location.pathname === '/studio' || 
+                         window.location.pathname.startsWith('/studio/');
+    
+    console.log('uiMode effect running:', { uiMode, isStudioPage, pathname: window.location.pathname });
+    
+    // Only apply uiMode changes if we're NOT on a studio page
+    if (!isStudioPage) {
+      if (uiMode === 'dark') {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    } else {
+      console.log('Skipping uiMode change because we are on a studio page');
+    }
   }, [uiMode]);
+
+  // Listen for route changes to update theme accordingly
+  useEffect(() => {
+    const handleRouteChange = () => {
+      const root = window.document.documentElement;
+      const isStudioPage = window.location.pathname === '/studio' || 
+                           window.location.pathname.startsWith('/studio/');
+      
+      // Apply the correct theme for the new route
+      if (isStudioPage) {
+        // Switching TO studio page - apply studioMode
+        if (studioMode === 'dark') {
+          root.classList.add('dark');
+        } else {
+          root.classList.remove('dark');
+        }
+      } else {
+        // Switching TO non-studio page - apply uiMode
+        if (uiMode === 'dark') {
+          root.classList.add('dark');
+        } else {
+          root.classList.remove('dark');
+        }
+      }
+    };
+
+    // Listen for popstate events (back/forward navigation)
+    window.addEventListener('popstate', handleRouteChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+    };
+  }, [uiMode, studioMode]);
 
   const toggleUITheme = () => {
     setUIMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
   };
+  
   const toggleStudioTheme = () => {
     setStudioMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
   };
 
-  // Select the theme object based on the current mode
-  const theme = useMemo(() => (uiMode === 'light' ? lightTheme : darkTheme), [uiMode]);
-
-  // Provide the context value
-  const contextValue = useMemo(() => ({ mode: uiMode, studioMode: studioMode, toggleUITheme, toggleStudioTheme }), [uiMode, studioMode]);
+  const contextValue = useMemo(() => ({ 
+    mode: uiMode, 
+    studioMode: studioMode, 
+    toggleUITheme, 
+    toggleStudioTheme 
+  }), [uiMode, studioMode]);
 
   return (
     <ThemeContext.Provider value={contextValue}>
-      {/* Apply the selected MUI theme */}
-      <MuiThemeProvider theme={theme}>
-        {/* CssBaseline kickstarts an elegant, consistent baseline to build upon. */}
-        <CssBaseline /> 
-        {children}
-      </MuiThemeProvider>
+      {children}
     </ThemeContext.Provider>
   );
 };
 
-// Custom hook to use the theme context
 export const useAppTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
     throw new Error('useAppTheme must be used within an AppThemeProvider');
   }
   return context;
-}; 
+};

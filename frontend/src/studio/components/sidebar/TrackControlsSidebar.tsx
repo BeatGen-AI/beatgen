@@ -1,27 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Slider, 
-  IconButton, 
-  Tooltip, 
-  TextField,
-  Select, 
-  MenuItem,
-  ButtonBase,
-  useTheme
-} from '@mui/material';
-import VolumeUpIcon from '@mui/icons-material/VolumeUp';
-import VolumeOffIcon from '@mui/icons-material/VolumeOff';
-import GraphicEqIcon from '@mui/icons-material/GraphicEq';
-import { IconTrash } from '@tabler/icons-react';
-import { IconBackspace } from '@tabler/icons-react';
-import { IconBackspaceFilled } from '@tabler/icons-react';
-import PanToolIcon from '@mui/icons-material/PanTool';
+import { Volume2, VolumeX, Music, Trash2, Hand } from 'lucide-react';
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../components/ui/tooltip';
 import { CombinedTrack, AudioTrackRead, SamplerTrackRead } from '../../../platform/types/project';
 import { getTrackColor, GRID_CONSTANTS } from '../../constants/gridConstants';
 import ControlKnob from './track-sidebar-controls/ControlKnob';
-import { alpha } from '@mui/material/styles';
 
 // Interface for the component props
 interface TrackControlsSidebarProps {
@@ -47,36 +32,21 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
   onInstrumentChange,
   onLoadAudioFile
 }) => {
-  const theme = useTheme();
-
   if (tracks.length === 0) {
     return (
-      <Box sx={{ 
-        p: 2, 
-        textAlign: 'center', 
-        color: 'text.disabled',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%'
-      }}>
-        <Typography variant="body2" color="inherit">
+      <div className="p-4 text-center text-muted-foreground flex flex-col items-center justify-center h-full">
+        <p className="text-sm">
           No tracks yet
-        </Typography>
-        <Typography variant="caption" sx={{ mt: 1 }} color="inherit">
+        </p>
+        <p className="text-xs mt-1">
           Add tracks using the button above
-        </Typography>
-      </Box>
+        </p>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      height: '100%',
-      overflow: 'auto'
-    }}>
+    <div className="w-full h-full overflow-auto">
       {tracks.map((track, index) => (
         <TrackControls 
           key={track.id}
@@ -92,7 +62,7 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
           onLoadAudioFile={onLoadAudioFile}
         />
       ))}
-    </Box>
+    </div>
   );
 };
 
@@ -129,7 +99,6 @@ const TrackControls: React.FC<TrackControlsProps> = ({
     return null;
   }
 
-  const theme = useTheme();
   const trackColor = getTrackColor(index);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(track.name);
@@ -210,61 +179,39 @@ const TrackControls: React.FC<TrackControlsProps> = ({
     switch(track.track_type) {
       case 'MIDI':
         return (
-          <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-            <Typography variant="caption" sx={{ 
-              color: trackColor,
-              fontSize: '9px',
-              mr: 0.5,
-              whiteSpace: 'nowrap',
-              marginTop: '-20px',
-            }}>
+          <div className="mb-1 flex items-center">
+            <span 
+              className="text-xs mr-1 whitespace-nowrap -mt-5"
+              style={{ color: trackColor, fontSize: '9px' }}
+            >
               Inst:
-            </Typography>
-            <Box sx={{ 
-              fontSize: '10px',
-              color: 'text.secondary',
-              bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
-              p: 0.5,
-              borderRadius: 1,
-              flexGrow: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}>
+            </span>
+            <div className="text-xs text-muted-foreground bg-muted p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap">
               {track.name}
-            </Box>
-          </Box>
+            </div>
+          </div>
         );
       
       case 'DRUM':
         return (
-          <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-            <Typography variant="caption" sx={{ 
-              color: trackColor,
-              fontSize: '9px',
-              mr: 0.5,
-              whiteSpace: 'nowrap',
-              marginTop: '-20px',
-            }}>
-              Kit:
-            </Typography>
-            <Select
-              size="small"
-              value="808"
-              fullWidth
-              sx={{ 
-                fontSize: '10px',
-                height: '22px',
-                '.MuiSelect-select': { py: 0 },
-                bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
-                color: 'text.primary'
-              }}
+          <div className="mb-1 flex items-center">
+            <span 
+              className="text-xs mr-1 whitespace-nowrap -mt-5"
+              style={{ color: trackColor, fontSize: '9px' }}
             >
-              <MenuItem value="808" sx={{ fontSize: '10px' }}>808 Kit</MenuItem>
-              <MenuItem value="acoustic" sx={{ fontSize: '10px' }}>Acoustic Kit</MenuItem>
-              <MenuItem value="electronic" sx={{ fontSize: '10px' }}>Electronic Kit</MenuItem>
+              Kit:
+            </span>
+            <Select value="808">
+              <SelectTrigger className="h-6 text-xs bg-muted flex-grow">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="808" className="text-xs">808 Kit</SelectItem>
+                <SelectItem value="acoustic" className="text-xs">Acoustic Kit</SelectItem>
+                <SelectItem value="electronic" className="text-xs">Electronic Kit</SelectItem>
+              </SelectContent>
             </Select>
-          </Box>
+          </div>
         );
         
       case 'AUDIO':
@@ -272,43 +219,30 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         const audioTrackData = track.track as AudioTrackRead;
         const audioFileName = audioTrackData.name;
         return (
-          <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-            <Typography variant="caption" sx={{ 
-              color: trackColor,
-              fontSize: '9px',
-              mr: 0.5,
-              whiteSpace: 'nowrap',
-              marginTop: '-20px',
-            }}>
+          <div className="mb-1 flex items-center">
+            <span 
+              className="text-xs mr-1 whitespace-nowrap -mt-5"
+              style={{ color: trackColor, fontSize: '9px' }}
+            >
               File:
-            </Typography>
-            <Tooltip title="Click to load audio file">
-              <ButtonBase
-                onClick={handleLoadFileClick}
-                sx={{
-                  fontSize: '10px',
-                  color: 'text.secondary',
-                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
-                  p: 0.5,
-                  borderRadius: 1,
-                  flexGrow: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  textAlign: 'left',
-                  justifyContent: 'flex-start',
-                  width: '100%',
-                  cursor: 'pointer',
-                  '&:hover': {
-                    bgcolor: theme.palette.action.hover,
-                  }
-                }}
-                disabled={!onLoadAudioFile}
-              >
-                  {audioFileName || track.name}
-              </ButtonBase>
-            </Tooltip>
-          </Box>
+            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleLoadFileClick}
+                    className="text-xs text-muted-foreground bg-muted p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left hover:bg-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!onLoadAudioFile}
+                  >
+                    {audioFileName || track.name}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Click to load audio file</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         );
         
       case 'SAMPLER':
@@ -316,43 +250,30 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         const samplerTrackData = track.track as SamplerTrackRead;
         const samplerFileName = samplerTrackData.audio_file_name;
         return (
-          <Box sx={{ mb: 0.5, display: 'flex', alignItems: 'center' }}>
-            <Typography variant="caption" sx={{ 
-              color: trackColor,
-              fontSize: '9px',
-              mr: 0.5,
-              whiteSpace: 'nowrap',
-              marginTop: '-20px',
-            }}>
+          <div className="mb-1 flex items-center">
+            <span 
+              className="text-xs mr-1 whitespace-nowrap -mt-5"
+              style={{ color: trackColor, fontSize: '9px' }}
+            >
               File:
-            </Typography>
-            <Tooltip title="Click to load audio file">
-              <ButtonBase
-                onClick={handleLoadFileClick}
-                sx={{
-                  fontSize: '10px',
-                  color: 'text.secondary',
-                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
-                  p: 0.5,
-                  borderRadius: 1,
-                  flexGrow: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  textAlign: 'left',
-                  justifyContent: 'flex-start',
-                  width: '100%',
-                  cursor: 'pointer',
-                  '&:hover': {
-                    bgcolor: theme.palette.action.hover,
-                  }
-                }}
-                disabled={!onLoadAudioFile}
-              >
-                  {samplerFileName || track.name}
-              </ButtonBase>
-            </Tooltip>
-          </Box>
+            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleLoadFileClick}
+                    className="text-xs text-muted-foreground bg-muted p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left hover:bg-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!onLoadAudioFile}
+                  >
+                    {samplerFileName || track.name}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Click to load audio file</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         );
         
       default:
@@ -361,68 +282,50 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   };
   
   return (
-    <Box sx={{
-      p: 0.7,
-      mb: 0.3,
-      height: `${GRID_CONSTANTS.trackHeight - 2}px`,
-      boxSizing: 'border-box',
-      borderBottom: `1px solid ${theme.palette.divider}`,
-      borderLeft: `3px solid ${trackColor}`,
-      bgcolor: theme.palette.background.paper,
-      '&:hover': {
-        bgcolor: theme.palette.action.hover,
-      }
-    }}>
+    <div 
+      className="p-2 mb-1 border-b border-border bg-card hover:bg-accent/50 box-border"
+      style={{
+        height: `${GRID_CONSTANTS.trackHeight - 2}px`,
+        borderLeft: `3px solid ${trackColor}`
+      }}
+    >
       {/* Track Name and Delete Button */}
-      <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        mb: 0.4,
-        width: '100%'
-      }}>
+      <div className="flex items-center justify-between mb-1 w-full">
         {/* Track name and type-specific controls */}
-        <Box sx={{ flexGrow: 1, mr: 1, maxWidth: 146 }}>
+        <div className="flex-grow mr-2 max-w-36">
           {renderTypeSpecificControls()}
-        </Box>
+        </div>
         
-        <Tooltip title="Delete track">
-          <IconButton 
-            size="small" 
-            onClick={handleDelete}
-            sx={{ 
-              color: trackColor, 
-              padding: '3px',
-              mt: -0.3,
-              mr: 0.9, 
-              borderRadius: '8px',
-              '&:hover': { 
-                bgcolor: theme.palette.action.hover
-              }
-            }}
-            disableRipple 
-          >
-            <IconBackspace size={18}/>
-          </IconButton>
-        </Tooltip>
-      </Box>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                size="sm"
+                variant="ghost"
+                onClick={handleDelete}
+                className="p-1 -mt-1 mr-2 rounded-lg hover:bg-accent"
+                style={{ color: trackColor }}
+              >
+                <Trash2 size={18}/>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Delete track</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
       
       {/* Controls row - Modified for even spacing */}
-      <Box sx={{ 
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        alignItems: 'center',
-        gap: '8px',
-        mb: 0.5
-      }}>
+      <div className="grid grid-cols-4 items-center gap-2 mb-2">
         {/* Volume Knob */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="flex justify-center">
           <ControlKnob
             value={localVolume}
             min={0}
             max={100}
             size={32}
-            color={track.mute ? theme.palette.action.disabled : trackColor}
+            color={track.mute ? '#9ca3af' : trackColor}
             label="Vol"
             type="volume"
             onChange={handleVolumeChange}
@@ -430,10 +333,10 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             disabled={track.mute ?? false}
             valueFormatter={(val) => `${val}%`}
           />
-        </Box>
+        </div>
         
         {/* Pan Knob */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="flex justify-center">
           <ControlKnob
             value={localPan}
             min={-100}
@@ -445,57 +348,61 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             onChange={handlePanChange}
             onChangeCommitted={handlePanChangeCommitted}
           />
-        </Box>
+        </div>
 
         {/* Mute button */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Tooltip title={track.mute ? "Unmute" : "Mute"}>
-              <Box 
-                onClick={handleMuteToggle}
-                sx={{ 
-                  bgcolor: track.mute ? theme.palette.warning.light : theme.palette.action.disabledBackground,
-                  color: track.mute ? theme.palette.warning.contrastText : trackColor,
-                  borderRadius: '3px',
-                  px: 1.2,
-                  py: 0.4,
-                  fontSize: '12px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  '&:hover': {
-                    bgcolor: track.mute ? theme.palette.warning.main : theme.palette.action.hover
-                  }
-                }}
-              >
-                M
-              </Box>
+        <div className="flex justify-center">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div 
+                  onClick={handleMuteToggle}
+                  className={`rounded px-3 py-1 text-xs font-bold cursor-pointer transition-colors ${
+                    track.mute 
+                      ? 'bg-yellow-400 text-black hover:bg-yellow-500' 
+                      : 'bg-muted hover:bg-accent'
+                  }`}
+                  style={{
+                    color: track.mute ? '#000' : trackColor
+                  }}
+                >
+                  M
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{track.mute ? "Unmute" : "Mute"}</p>
+              </TooltipContent>
             </Tooltip>
-        </Box>
+          </TooltipProvider>
+        </div>
         
         {/* Solo Button */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Tooltip title={(track.solo ?? track.soloed) ? "Unsolo" : "Solo"}>
-            <Box 
-              onClick={handleSoloToggle}
-              sx={{ 
-                bgcolor: (track.solo ?? track.soloed) ? '#ffc107' : 'rgba(255, 255, 255, 0.1)',
-                color: (track.solo ?? track.soloed) ? '#000' : trackColor,
-                borderRadius: '3px',
-                px: 1.2,
-                py: 0.4,
-                fontSize: '12px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                '&:hover': {
-                  bgcolor: (track.solo ?? track.soloed) ? '#e6ac00' : 'rgba(255, 255, 255, 0.15)'
-                }
-              }}
-            >
-              S
-            </Box>
-          </Tooltip>
-        </Box>
-      </Box>
-    </Box>
+        <div className="flex justify-center">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div 
+                  onClick={handleSoloToggle}
+                  className={`rounded px-3 py-1 text-xs font-bold cursor-pointer transition-colors ${
+                    (track.solo ?? track.soloed) 
+                      ? 'bg-yellow-400 text-black hover:bg-yellow-500' 
+                      : 'bg-muted hover:bg-accent'
+                  }`}
+                  style={{
+                    color: (track.solo ?? track.soloed) ? '#000' : trackColor
+                  }}
+                >
+                  S
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{(track.solo ?? track.soloed) ? "Unsolo" : "Solo"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+    </div>
   );
 };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Palette, Settings, Brain } from 'lucide-react';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useTheme } from '../../../lib/theme-provider';
 import {
   Dialog,
   DialogContent,
@@ -31,48 +31,20 @@ const assistantModels = [
 ];
 
 export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps) => {
-  const { mode: uiMode, studioMode, toggleUITheme, toggleStudioTheme } = useAppTheme();
+  const { themes, setTheme } = useTheme();
+  
+  const toggleUITheme = () => {
+    const newTheme = themes.homepage === 'dark' ? 'light' : 'dark';
+    setTheme('homepage', newTheme);
+  };
+  
+  const toggleStudioTheme = () => {
+    const newTheme = themes.studio === 'dark' ? 'light' : 'dark';
+    setTheme('studio', newTheme);
+  };
   const [selectedAssistantModel, setSelectedAssistantModel] = useState(assistantModels[0]?.id || '');
 
-  // Apply studio dark mode to document element when dialog is open
-  useEffect(() => {
-    if (!open) return;
-    
-    const root = window.document.documentElement;
-    const originalHasDark = root.classList.contains('dark');
-    
-    // Apply or remove dark class based on studioMode immediately
-    if (studioMode === 'dark' && !originalHasDark) {
-      root.classList.add('dark');
-    } else if (studioMode === 'light' && originalHasDark) {
-      root.classList.remove('dark');
-    }
-    
-    // Don't restore immediately on cleanup - let the dialog close first
-    return () => {
-      // We'll handle restoration when dialog fully closes
-    };
-  }, [open, studioMode]);
-  
-  // Separate effect to handle restoration after dialog closes
-  useEffect(() => {
-    if (open) return; // Only run when dialog is closed
-    
-    // Restore original dark mode after animation completes
-    const timeoutId = setTimeout(() => {
-      const root = window.document.documentElement;
-      const currentHasDark = root.classList.contains('dark');
-      const shouldHaveDark = uiMode === 'dark';
-      
-      if (shouldHaveDark && !currentHasDark) {
-        root.classList.add('dark');
-      } else if (!shouldHaveDark && currentHasDark) {
-        root.classList.remove('dark');
-      }
-    }, 200); // Wait for closing animation
-    
-    return () => clearTimeout(timeoutId);
-  }, [open, uiMode]);
+  // No need to manually manage dark class - ThemeContext handles this automatically
 
   const handleAssistantModelChange = (value: string) => {
     setSelectedAssistantModel(value);
@@ -99,7 +71,7 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
             </div>
             <Switch
               id="ui-dark-mode"
-              checked={uiMode === 'dark'}
+              checked={themes.homepage === 'dark'}
               onCheckedChange={() => toggleUITheme()}
             />
           </div>
@@ -114,7 +86,7 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
             </div>
             <Switch
               id="studio-dark-mode"
-              checked={studioMode === 'dark'}
+              checked={themes.studio === 'dark'}
               onCheckedChange={() => toggleStudioTheme()}
             />
           </div>

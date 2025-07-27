@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react'
 // import Navbar from '../platform/components/Navbar'
 import { useAuth } from '../platform/auth/auth-context'
 import { handleOAuthCallback } from '../platform/api/auth'
-import { useAppTheme } from '../platform/theme/ThemeContext'
+import { useTheme } from '../lib/theme-provider'
 import SimpleSidebar from '../platform/components/SimpleSidebar'
 import MobileTopNav from '../platform/components/MobileTopNav'
 import MobileBottomNav from '../platform/components/MobileBottomNav'
@@ -54,11 +54,20 @@ function RootLayout() {
   const { loading, user } = useAuth();
   const router = useRouter();
   const location = useLocation();
-  const { mode, studioMode } = useAppTheme();
+  const { themes, setCurrentContext } = useTheme();
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   
   // Simple studio route detection using router location
   const isStudioRoute = location.pathname === '/studio';
+  
+  // Set context based on current route
+  useEffect(() => {
+    if (isStudioRoute) {
+      setCurrentContext('studio');
+    } else {
+      setCurrentContext('homepage');
+    }
+  }, [isStudioRoute, setCurrentContext]);
   
   // Handle OAuth callbacks and password reset tokens
   useEffect(() => {
@@ -108,9 +117,12 @@ function RootLayout() {
   const lightTheme = { background: '#ffffff', text: '#000000' }; // Simplified for example
   const darkTheme = { background: '#000000', text: '#ffffff' };
   
-  // Use studioMode when on studio routes, otherwise use regular mode
-  const effectiveMode = isStudioRoute ? studioMode : mode;
-  const currentThemePalette = effectiveMode === 'light' ? lightTheme : darkTheme;
+  // Get current theme based on context
+  const currentTheme = themes[isStudioRoute ? 'studio' : 'homepage'];
+  const resolvedTheme = currentTheme === 'system' 
+    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'light')
+    : currentTheme;
+  const currentThemePalette = resolvedTheme === 'light' ? lightTheme : darkTheme;
   
   if (loading) {
     return (

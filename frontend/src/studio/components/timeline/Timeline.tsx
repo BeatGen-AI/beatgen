@@ -7,7 +7,7 @@
 // import PlaybackCursor, { PlaybackCursorRef } from './PlaybackCursor';
 // import { CombinedTrack } from 'src/platform/types/project';
 // import { Position } from '../track/types';
-// import { useAppTheme } from '../../../platform/theme/ThemeContext';
+// import { useAppTheme } from '../../../lib/theme-provider';
 // import { cn } from '@/lib/utils';
 // import { SelectionOverlay, InteractionToolbar, Tool, DragGhost, useInteractions, DraggableResizableItem } from '../../shared/interactions';
 // import { getSnapSizeInPixels, GridSnapOption } from '../piano-roll2/gridConstants';

@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { interactWithAssistant, StreamCallbacks } from '../../../platform/api/assistant';
 import GenerationPromptControl from '../shared/GenerationPromptControl';
 import AudioPlayer from '../shared/AudioPlayer';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useAppTheme } from '../../../lib/theme-provider';
 import SampleManager from '../../core/samples/sampleManager';
 
 // TrackCard component for displaying individual audio tracks

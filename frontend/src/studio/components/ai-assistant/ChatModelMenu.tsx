@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Coins } from 'lucide-react';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 // Model credit costs (matching backend MODEL_COSTS)
 const MODEL_CREDIT_COSTS: Record<string, number> = {

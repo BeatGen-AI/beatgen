@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Button, Popover, ToggleButton, ToggleButtonGroup, useTheme } from '@mui/material';
+import { Box, Button, Popover, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface KeySelectorProps {
   selectedKey: string;
@@ -10,7 +11,7 @@ const DIATONIC_KEY_LIST = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const ACCIDENTAL_KEY_LIST = ['C♯/D♭', 'D♯/E♭', 'F♯/G♭', 'G♯/A♭', 'A♯/B♭'];
 
 const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKeyChange }) => {
-  const theme = useTheme();
+  const { studioMode } = useAppTheme();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [mode, setMode] = useState<'major' | 'minor'>(
     selectedKey.toLowerCase().includes('minor') ? 'minor' : 'major'
@@ -51,7 +52,7 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
         color="inherit"
         disableElevation
         sx={{
-          bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+          bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
           color: 'text.primary',
           width: '100%',
           px: 2,
@@ -59,7 +60,7 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
           borderRadius: 1,
           textTransform: 'none',
           '&:hover': {
-            bgcolor: theme.palette.action.hover
+            bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'
           }
         }}
       >
@@ -84,7 +85,7 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
             mt: 1,
             width: 'auto',
             p: 1,
-            boxShadow: theme.shadows[3]
+            boxShadow: studioMode === 'dark' ? '0px 3px 14px rgba(0,0,0,0.5)' : '0px 3px 14px rgba(0,0,0,0.2)'
           }
         }}
       >
@@ -95,7 +96,7 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
             onChange={handleModeChange}
             size="small"
             sx={{
-              bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
+              bgcolor: studioMode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
               borderRadius: 1,
               '.MuiToggleButton-root': {
                 color: 'text.secondary',
@@ -104,13 +105,13 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
                 borderRadius: 'inherit',
                 '&.Mui-selected': {
                   color: 'text.primary',
-                  bgcolor: theme.palette.action.selected,
+                  bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
                   '&:hover': {
-                    bgcolor: theme.palette.action.selected
+                    bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'
                   }
                 },
                 '&:hover': {
-                  bgcolor: theme.palette.action.hover
+                  bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'
                 }
               }
             }}
@@ -139,10 +140,10 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
                   p: 1,
                   textTransform: 'none',
                   borderRadius: 1,
-                  bgcolor: isSelected ? theme.palette.action.selected : 'transparent',
-                  color: isSelected ? theme.palette.text.primary : theme.palette.text.secondary,
+                  bgcolor: isSelected ? studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' : 'transparent',
+                  color: isSelected ? studioMode === 'dark' ? '#ffffff' : '#000000' : studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
                   '&:hover': {
-                    bgcolor: isSelected ? theme.palette.action.selected : theme.palette.action.hover
+                    bgcolor: isSelected ? studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' : studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'
                   }
                 }}
               >
@@ -163,10 +164,10 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
                   p: 1,
                   textTransform: 'none',
                   borderRadius: 1,
-                  bgcolor: isSelected ? theme.palette.action.selected : 'transparent',
-                  color: isSelected ? theme.palette.text.primary : theme.palette.text.secondary,
+                  bgcolor: isSelected ? studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' : 'transparent',
+                  color: isSelected ? studioMode === 'dark' ? '#ffffff' : '#000000' : studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
                   '&:hover': {
-                    bgcolor: isSelected ? theme.palette.action.selected : theme.palette.action.hover
+                    bgcolor: isSelected ? studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' : studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'
                   }
                 }}
               >

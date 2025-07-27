@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
-import { Box, Typography, useTheme } from '@mui/material'; // Keep using useTheme from MUI
+import { Box, Typography } from '@mui/material';
+import { useAppTheme } from '../../../lib/theme-provider';
 import AssistantActionChip from './AssistantActionChip';
 import ReactMarkdown from 'react-markdown';
 // Remove the incorrect import
-// import { useAppTheme } from '../../../platform/theme/ThemeContext';
+// import { useAppTheme } from '../../../lib/theme-provider';
 
 // ... (keep keyframes)
 // Add keyframes for cursor blink animation
@@ -22,23 +23,23 @@ interface AssistantChatBubbleProps {
 }
 
 const AssistantChatBubble: React.FC<AssistantChatBubbleProps> = ({ text, action, onActionClick, isStreaming }) => {
-  const theme = useTheme(); // Get the MUI theme object
+  const { studioMode } = useAppTheme();
 
-  // Determine colors based on theme.palette.mode
+  // Determine colors based on studioMode
   // These are no longer bubble-specific, adjust for panel style
-  const codeBgColor = theme.palette.mode === 'light'
+  const codeBgColor = studioMode === 'light'
     ? 'rgba(0, 0, 0, 0.05)' // Lighter code background for panel
     : 'rgba(255, 255, 255, 0.08)'; // Slightly adjusted dark mode code bg
 
-  const blockquoteBorderColor = theme.palette.mode === 'light'
-    ? theme.palette.grey[300]
-    : theme.palette.grey[700];
+  const blockquoteBorderColor = studioMode === 'light'
+    ? '#e0e0e0'
+    : '#424242';
 
-  const blockquoteTextColor = theme.palette.mode === 'light'
-    ? theme.palette.grey[700]
-    : theme.palette.grey[400];
+  const blockquoteTextColor = studioMode === 'light'
+    ? '#424242'
+    : '#bdbdbd';
   
-  const textColor = theme.palette.text.primary; // General text color
+  const textColor = studioMode === 'dark' ? '#ffffff' : '#000000'; // General text color
 
   // ... (rest of the component remains the same, using the theme object correctly)
   // For action-only messages, we need a different style
@@ -83,7 +84,7 @@ const AssistantChatBubble: React.FC<AssistantChatBubbleProps> = ({ text, action,
       sx={{
         // alignSelf: 'flex-start', // Removed for panel style
         maxWidth: '100%', // Allow full width within the panel
-        p: theme.spacing(1, 0), // Padding top/bottom, no side padding
+        p: '8px 0', // Padding top/bottom, no side padding
         // borderRadius: '16px', // Removed
         // bgcolor: bubbleBgColor, // Removed
         color: textColor, // Use general text color
