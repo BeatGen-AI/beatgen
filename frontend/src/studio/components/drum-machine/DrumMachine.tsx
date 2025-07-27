@@ -1021,23 +1021,27 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
                       <DropdownMenuItem onClick={handleAddRow}>
                         Drum Sample Library
                       </DropdownMenuItem>
-                      {availableSamplerTracks.length > 0 && (
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger>
-                            Existing Sampler Tracks
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent className="w-48">
-                            {availableSamplerTracks.map((samplerTrack) => (
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          Existing Sampler Tracks
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-48">
+                          {availableSamplerTracks.length === 0 ? (
+                            <DropdownMenuItem disabled>
+                              No available sampler tracks
+                            </DropdownMenuItem>
+                          ) : (
+                            availableSamplerTracks.map((samplerTrack) => (
                               <DropdownMenuItem
                                 key={samplerTrack.id}
                                 onClick={() => handleAttachSampler(samplerTrack.id)}
                               >
                                 {samplerTrack.name || `Sampler ${samplerTrack.id}`}
                               </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                      )}
+                            ))
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
