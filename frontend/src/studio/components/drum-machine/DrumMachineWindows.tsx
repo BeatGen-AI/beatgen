@@ -13,6 +13,7 @@ const DrumMachineWindows: React.FC = () => {
         addSamplerTrackToDrumTrack, 
         removeSamplerTrack,
         detachSamplerFromDrumTrack,
+        attachSamplerToDrumTrack,
         addNote, 
         removeSamplerNote 
     } = useStudioStore(useShallow((state: RootState) => ({
@@ -22,6 +23,7 @@ const DrumMachineWindows: React.FC = () => {
             addSamplerTrackToDrumTrack: state.addSamplerTrackToDrumTrack,
             removeSamplerTrack: state.removeSamplerTrack,
             detachSamplerFromDrumTrack: state.detachSamplerFromDrumTrack,
+            attachSamplerToDrumTrack: state.attachSamplerToDrumTrack,
             addNote: state.addMidiNote, 
             removeSamplerNote: state.removeSamplerNote,
         }))
@@ -63,7 +65,7 @@ const DrumMachineWindows: React.FC = () => {
                     .map(t => t.track as SamplerTrackRead); 
 
                 // Add null checks for actions before passing down
-                if (!addSamplerTrackToDrumTrack || !removeSamplerTrack || !detachSamplerFromDrumTrack || !addNote || !removeSamplerNote) {
+                if (!addSamplerTrackToDrumTrack || !removeSamplerTrack || !detachSamplerFromDrumTrack || !attachSamplerToDrumTrack || !addNote || !removeSamplerNote) {
                     return null; 
                 }
 
@@ -76,6 +78,7 @@ const DrumMachineWindows: React.FC = () => {
                         addSamplerTrackToDrumTrack={addSamplerTrackToDrumTrack}
                         removeSamplerTrack={removeSamplerTrack}
                         detachSamplerFromDrumTrack={detachSamplerFromDrumTrack}
+                        attachSamplerToDrumTrack={attachSamplerToDrumTrack}
                         addNote={addNote}
                         removeSamplerNote={removeSamplerNote}
                         onClose={closeDrumMachine ? () => closeDrumMachine(trackId) : undefined}

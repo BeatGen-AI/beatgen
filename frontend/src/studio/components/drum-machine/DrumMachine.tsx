@@ -9,6 +9,15 @@ import { DrumMachineModal, DrumMachineModalProps } from '../modals/drum-machine/
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
 import { useStudioStore } from '../../stores/studioStore';
 import { Note } from '../../../types/note';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '../../../components/ui/dropdown-menu';
 
 export interface DrumTrackState extends CombinedTrack {
   type: 'DRUM';
@@ -346,6 +355,7 @@ interface DrumMachineProps {
   addSamplerTrackToDrumTrack: (drumTrackId: string, sampleData: DrumSamplePublicRead) => Promise<CombinedTrack | null>;
   removeSamplerTrack: (samplerTrackId: string) => Promise<void>;
   detachSamplerFromDrumTrack: (samplerTrackId: string) => Promise<void>;
+  attachSamplerToDrumTrack: (samplerTrackId: string, drumTrackId: string) => Promise<void>;
   addNote: (trackId: string, note: NoteState) => void;
   removeSamplerNote: (trackId: string, tickPosition: number, midiRow: number) => Promise<void>;
 }
@@ -372,6 +382,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   addSamplerTrackToDrumTrack,
   removeSamplerTrack,
   detachSamplerFromDrumTrack,
+  attachSamplerToDrumTrack,
   addNote,
   removeSamplerNote,
 }) => {
@@ -456,6 +467,19 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   // Get live MIDI notes from MidiManager for all sampler tracks
   const { store } = useStudioStore();
   const midiManager = store?.getMidiManager();
+  
+  // Get all tracks to find available sampler tracks
+  const allTracks = useStudioStore(state => state.tracks);
+  
+  // Get available sampler tracks (not attached to any drum track)
+  const availableSamplerTracks = useMemo(() => {
+    return allTracks
+      .filter(track => 
+        track.track_type === 'SAMPLER' && 
+        !(track.track as SamplerTrackRead)?.drum_track_id
+      )
+      .map(track => track.track as SamplerTrackRead);
+  }, [allTracks]);
   
   // Subscribe to MIDI notes for all sampler tracks and compute grid from live data
   const [allTrackNotes, setAllTrackNotes] = useState<{ [trackId: string]: Note[] }>({});
@@ -626,6 +650,24 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   const handleAddRow = (): void => {
     console.log(`DrumMachine (${trackId}): Add Row button clicked. Opening modal.`);
     setIsModalOpen(true);
+  };
+
+  // Handler for attaching existing sampler to drum track
+  const handleAttachSampler = async (samplerTrackId: string): Promise<void> => {
+    if (!attachSamplerToDrumTrack) {
+      console.error("attachSamplerToDrumTrack action is not available!");
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      await attachSamplerToDrumTrack(samplerTrackId, trackId);
+      console.log(`Attached sampler ${samplerTrackId} to drum track ${trackId}`);
+    } catch (error) {
+      console.error(`Error attaching sampler ${samplerTrackId} to drum track ${trackId}:`, error);
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   // New Modal Handlers
@@ -969,9 +1011,35 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
                 ))}
                 
                 <div style={addButtonContainerStyle}>
-                  <div style={addButtonStyle} onClick={handleAddRow} title="Add Drum Sample">
-                    {isLoading ? <CircularProgress size={20} color="inherit"/> : '+'}
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <div style={addButtonStyle} title="Add to Drum Machine">
+                        {isLoading ? <CircularProgress size={20} color="inherit"/> : '+'}
+                      </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56">
+                      <DropdownMenuItem onClick={handleAddRow}>
+                        Drum Sample Library
+                      </DropdownMenuItem>
+                      {availableSamplerTracks.length > 0 && (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            Existing Sampler Tracks
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-48">
+                            {availableSamplerTracks.map((samplerTrack) => (
+                              <DropdownMenuItem
+                                key={samplerTrack.id}
+                                onClick={() => handleAttachSampler(samplerTrack.id)}
+                              >
+                                {samplerTrack.name || `Sampler ${samplerTrack.id}`}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </div>

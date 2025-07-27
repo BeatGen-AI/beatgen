@@ -238,6 +238,7 @@ export interface RootState {
     sampleData: { id: string; display_name: string; storage_key: string; /* other needed fields? */ }
   ) => Promise<CombinedTrack | null>;
   detachSamplerFromDrumTrack: (samplerTrackId: string) => Promise<void>;
+  attachSamplerToDrumTrack: (samplerTrackId: string, drumTrackId: string) => Promise<void>;
   removeSamplerNote: (trackId: string, tickPosition: number, midiRow: number) => Promise<void>;
   addEmptySamplerToDrumTrack: (drumTrackId: string, newSamplerName?: string) => Promise<string | null>;
   downloadSamplerTrack: (trackId: string) => Promise<{audioBlob?: Blob, trackName: string} | null>;
