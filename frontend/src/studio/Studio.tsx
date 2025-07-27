@@ -26,6 +26,7 @@ import DrumMachineWindows from './components/drum-machine/DrumMachineWindows';
 import { StudioSettingsModal } from './components/modals/StudioSettingsModal';
 import { ExportDialog } from './components/export/ExportDialog';
 import { useTheme } from '../lib/theme-provider';
+import { StudioThemeWrapper } from '../lib/studio-theme-wrapper';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconChevronLeftPipe, IconChevronRightPipe } from '@tabler/icons-react';
 import { GridSnapOption } from './components/piano-roll2/gridConstants';
@@ -49,13 +50,7 @@ function Studio({ projectId }: StudioProps) {
   const controlBarRef = useRef<HTMLDivElement>(null);
   const [controlBarHeight, setControlBarHeight] = useState(0);
   
-  // Get theme context and set to studio mode
-  const { themes, setCurrentContext } = useTheme();
-  
-  // Set theme context to studio when component mounts
-  useEffect(() => {
-    setCurrentContext('studio');
-  }, [setCurrentContext]);
+  // Theme is now handled by StudioThemeWrapper, no context switching needed
   
   // Get state and actions from Zustand store
   const {
@@ -484,6 +479,7 @@ function Studio({ projectId }: StudioProps) {
   }, [tracks, openPianoRoll, openDrumMachine]);
 
   return (
+    <StudioThemeWrapper>
       <div 
         className="h-screen bg-background text-foreground flex flex-col select-none"
         style={{
@@ -720,6 +716,7 @@ function Studio({ projectId }: StudioProps) {
           onClose={() => setShowExportDialog(false)} 
         />
       </div>
+    </StudioThemeWrapper>
   );
 }
 

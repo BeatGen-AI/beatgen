@@ -1,59 +1,62 @@
 import { createContext, useContext, useEffect, useState } from "react"
 
 type Theme = "dark" | "light" | "system"
-type ThemeContext = "homepage" | "studio"
 
 interface ThemeProviderState {
-  themes: Record<ThemeContext, Theme>
-  setTheme: (context: ThemeContext, theme: Theme) => void
-  currentContext: ThemeContext
-  setCurrentContext: (context: ThemeContext) => void
+  homepageTheme: Theme
+  studioTheme: Theme
+  setHomepageTheme: (theme: Theme) => void
+  setStudioTheme: (theme: Theme) => void
 }
 
 const ThemeProviderContext = createContext<ThemeProviderState | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [themes, setThemes] = useState<Record<ThemeContext, Theme>>({
-    homepage: "system",
-    studio: "system"
-  })
-  const [currentContext, setCurrentContext] = useState<ThemeContext>("homepage")
+  const [homepageTheme, setHomepageThemeState] = useState<Theme>("system")
+  const [studioTheme, setStudioThemeState] = useState<Theme>("system")
 
-  const setTheme = (context: ThemeContext, theme: Theme) => {
-    setThemes(prev => ({ ...prev, [context]: theme }))
-    localStorage.setItem(`theme-${context}`, theme)
+  const setHomepageTheme = (theme: Theme) => {
+    setHomepageThemeState(theme)
+    localStorage.setItem("theme-homepage", theme)
+  }
+
+  const setStudioTheme = (theme: Theme) => {
+    setStudioThemeState(theme)
+    localStorage.setItem("theme-studio", theme)
   }
 
   useEffect(() => {
     // Load saved themes
-    const homepageTheme = localStorage.getItem("theme-homepage") as Theme
-    const studioTheme = localStorage.getItem("theme-studio") as Theme
+    const savedHomepageTheme = localStorage.getItem("theme-homepage") as Theme
+    const savedStudioTheme = localStorage.getItem("theme-studio") as Theme
     
-    setThemes({
-      homepage: homepageTheme || "system",
-      studio: studioTheme || "system"
-    })
+    if (savedHomepageTheme) setHomepageThemeState(savedHomepageTheme)
+    if (savedStudioTheme) setStudioThemeState(savedStudioTheme)
   }, [])
 
   useEffect(() => {
-    // Apply current context theme
+    // Only apply homepage theme to root element
     const root = window.document.documentElement
-    const theme = themes[currentContext]
     
     root.classList.remove("light", "dark")
     
-    if (theme === "system") {
+    if (homepageTheme === "system") {
       const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light"
       root.classList.add(systemTheme)
     } else {
-      root.classList.add(theme)
+      root.classList.add(homepageTheme)
     }
-  }, [currentContext, themes])
+  }, [homepageTheme])
 
   return (
-    <ThemeProviderContext.Provider value={{ themes, setTheme, currentContext, setCurrentContext }}>
+    <ThemeProviderContext.Provider value={{ 
+      homepageTheme, 
+      studioTheme, 
+      setHomepageTheme, 
+      setStudioTheme 
+    }}>
       {children}
     </ThemeProviderContext.Provider>
   )
@@ -67,27 +70,24 @@ export const useTheme = () => {
 
 // Compatibility hook for components that were already converted to use studioMode
 export const useAppTheme = () => {
-  const { themes, setTheme, currentContext } = useTheme()
+  const { homepageTheme, studioTheme, setHomepageTheme, setStudioTheme } = useTheme()
   
-  const currentTheme = themes[currentContext]
-  const resolvedTheme = currentTheme === 'system' 
-    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'light')
-    : currentTheme
+  const resolveTheme = (theme: Theme) => {
+    return theme === 'system' 
+      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'light')
+      : theme
+  }
   
   return {
-    mode: themes.homepage === 'system' 
-      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'light')
-      : themes.homepage,
-    studioMode: themes.studio === 'system'
-      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'light') 
-      : themes.studio,
+    mode: resolveTheme(homepageTheme),
+    studioMode: resolveTheme(studioTheme),
     toggleUITheme: () => {
-      const newTheme = themes.homepage === 'dark' ? 'light' : 'dark'
-      setTheme('homepage', newTheme)
+      const newTheme = resolveTheme(homepageTheme) === 'dark' ? 'light' : 'dark'
+      setHomepageTheme(newTheme)
     },
     toggleStudioTheme: () => {
-      const newTheme = themes.studio === 'dark' ? 'light' : 'dark'
-      setTheme('studio', newTheme)
+      const newTheme = resolveTheme(studioTheme) === 'dark' ? 'light' : 'dark'
+      setStudioTheme(newTheme)
     }
   }
 }

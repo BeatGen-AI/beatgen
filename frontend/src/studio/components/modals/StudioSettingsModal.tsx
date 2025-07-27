@@ -31,16 +31,24 @@ const assistantModels = [
 ];
 
 export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps) => {
-  const { themes, setTheme } = useTheme();
+  const { homepageTheme, studioTheme, setHomepageTheme, setStudioTheme } = useTheme();
+  
+  const resolveTheme = (theme: 'dark' | 'light' | 'system') => {
+    return theme === 'system' 
+      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'light')
+      : theme;
+  };
   
   const toggleUITheme = () => {
-    const newTheme = themes.homepage === 'dark' ? 'light' : 'dark';
-    setTheme('homepage', newTheme);
+    const currentResolved = resolveTheme(homepageTheme);
+    const newTheme = currentResolved === 'dark' ? 'light' : 'dark';
+    setHomepageTheme(newTheme);
   };
   
   const toggleStudioTheme = () => {
-    const newTheme = themes.studio === 'dark' ? 'light' : 'dark';
-    setTheme('studio', newTheme);
+    const currentResolved = resolveTheme(studioTheme);
+    const newTheme = currentResolved === 'dark' ? 'light' : 'dark';
+    setStudioTheme(newTheme);
   };
   const [selectedAssistantModel, setSelectedAssistantModel] = useState(assistantModels[0]?.id || '');
 
@@ -71,7 +79,7 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
             </div>
             <Switch
               id="ui-dark-mode"
-              checked={themes.homepage === 'dark'}
+              checked={resolveTheme(homepageTheme) === 'dark'}
               onCheckedChange={() => toggleUITheme()}
             />
           </div>
@@ -86,7 +94,7 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
             </div>
             <Switch
               id="studio-dark-mode"
-              checked={themes.studio === 'dark'}
+              checked={resolveTheme(studioTheme) === 'dark'}
               onCheckedChange={() => toggleStudioTheme()}
             />
           </div>

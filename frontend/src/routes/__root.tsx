@@ -54,20 +54,11 @@ function RootLayout() {
   const { loading, user } = useAuth();
   const router = useRouter();
   const location = useLocation();
-  const { themes, setCurrentContext } = useTheme();
+  const { homepageTheme, studioTheme } = useTheme();
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   
   // Simple studio route detection using router location
   const isStudioRoute = location.pathname === '/studio';
-  
-  // Set context based on current route
-  useEffect(() => {
-    if (isStudioRoute) {
-      setCurrentContext('studio');
-    } else {
-      setCurrentContext('homepage');
-    }
-  }, [isStudioRoute, setCurrentContext]);
   
   // Handle OAuth callbacks and password reset tokens
   useEffect(() => {
@@ -117,11 +108,11 @@ function RootLayout() {
   const lightTheme = { background: '#ffffff', text: '#000000' }; // Simplified for example
   const darkTheme = { background: '#000000', text: '#ffffff' };
   
-  // Get current theme based on context
-  const currentTheme = themes[isStudioRoute ? 'studio' : 'homepage'];
-  const resolvedTheme = currentTheme === 'system' 
+  // Only homepage theme matters for root layout
+  // Studio routes handle their own theming via StudioThemeWrapper
+  const resolvedTheme = homepageTheme === 'system' 
     ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'light')
-    : currentTheme;
+    : homepageTheme;
   const currentThemePalette = resolvedTheme === 'light' ? lightTheme : darkTheme;
   
   if (loading) {
