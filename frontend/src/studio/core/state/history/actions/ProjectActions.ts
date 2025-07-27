@@ -27,42 +27,9 @@ export class BPMChangeAction extends BaseAction {
         this.timeSignature = timeSignature;
     }
     
-    private updateAudioTrackInstances(bpm: number): void {
-        const state = this.get();
-        const { updateTrackState } = state;
-        const tracks = state.tracks;
-        
-        tracks.forEach(track => {
-            if (track.track_type === 'AUDIO' && track.instances) {
-                const audioDuration = getAudioDuration(track);
-                if (audioDuration > 0) {
-                    const newDurationTicks = calculateAudioDurationTicks(audioDuration, bpm);
-                    
-                    // Create new instances array with updated trim_end_ticks
-                    const updatedInstances = track.instances.map(instance => ({
-                        ...instance,
-                        trim_end_ticks: newDurationTicks
-                    }));
-                    
-                    
-                    // Update the track state with new instances and duration_ticks
-                    updateTrackState(track.id, {
-                        instances: updatedInstances,
-                        duration_ticks: newDurationTicks
-                    });
-                }
-            }
-        });
-    }
 
     private async updateBPM(bpm: number): Promise<void> {
-        // Update audio track instances first
-        this.updateAudioTrackInstances(bpm);
-        
-        Tone.getTransport().bpm.value = bpm;
-        await this.store.getTransport().setTempo(bpm);
-        this.store.getProjectManager().setTempo(bpm);
-        await this.get().handleProjectParamChange('bpm', bpm);
+        await this.get().updateBPMState(bpm);
     }
     
     async execute(): Promise<void> {

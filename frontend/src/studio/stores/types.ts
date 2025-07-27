@@ -190,6 +190,7 @@ export interface RootState {
   timeSignature: [number, number];
   keySignature: string; 
   handleProjectParamChange: (param: ProjectParam, value: any) => Promise<void>;
+  updateBPMState: (bpm: number) => Promise<void>;
 
   // Fix: Use ProjectWithTracks directly
   loadProject: (projectId: string) => Promise<ProjectWithTracks | null>; 
