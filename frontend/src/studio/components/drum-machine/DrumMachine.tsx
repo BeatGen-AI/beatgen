@@ -18,6 +18,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../../../components/ui/dropdown-menu';
+import { IconDots } from '@tabler/icons-react';
 
 export interface DrumTrackState extends CombinedTrack {
   type: 'DRUM';
@@ -85,98 +86,53 @@ const DrumLabel: React.FC<DrumLabelProps> = ({
     boxSizing: 'border-box',
   };
 
-  const deleteButtonStyle: React.CSSProperties = {
-    color: '#FC8181',
-    fontSize: '14px',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    marginRight: '8px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '16px',
-    height: '16px',
-    borderRadius: '50%',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    transition: 'all 0.2s ease'
-  };
-
-  const pianoIconStyle: React.CSSProperties = {
-    color: DARK_THEME.accentBlue,
-    fontSize: '14px',
-    fontWeight: 'bold',
+  const dotsButtonStyle: React.CSSProperties = {
+    color: DARK_THEME.textGray,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '16px',
-    height: '16px',
+    width: '20px',
+    height: '20px',
     borderRadius: '3px',
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
     transition: 'all 0.2s ease',
-    marginRight: '8px'
+    marginRight: '4px'
   };
 
-  const detachButtonStyle: React.CSSProperties = {
-    color: DARK_THEME.accentYellow,
-    fontSize: '12px',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '16px',
-    height: '16px',
-    borderRadius: '3px',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    transition: 'all 0.2s ease',
-    marginRight: '8px'
-  };
-
-  const handleDeleteClick = (e: React.MouseEvent) => {
+  const handleMenuItemClick = (e: React.MouseEvent, action: () => void) => {
     e.stopPropagation();
-    onDelete();
-  };
-
-  const handleDetachClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onDetach();
-  };
-
-  const handlePianoRollClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onOpenPianoRoll();
+    action();
   };
 
   return (
-    <div
-      style={labelStyle}
-      onClick={onClick}
-    >
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <div 
-          style={deleteButtonStyle}
-          onClick={handleDeleteClick}
-          title="Delete sampler track"
-        >
-          ×
-        </div>
-        <div 
-          style={detachButtonStyle}
-          onClick={handleDetachClick}
-          title="Detach from drum track"
-        >
-          ⚡
-        </div>
-        <div 
-          style={pianoIconStyle}
-          onClick={handlePianoRollClick}
-          title="Open Piano Roll"
-        >
-          ♫
-        </div>
-      </div>
-      <span>{name}</span>
+    <div style={labelStyle}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <div 
+            style={dotsButtonStyle}
+            title="Sampler actions"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <IconDots size={14} style={{ transform: 'rotate(90deg)' }} />
+          </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-48">
+          <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, onOpenPianoRoll)}>
+            Open Piano Roll
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, onDetach)}>
+            Detach from drum track
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={(e) => handleMenuItemClick(e, onDelete)}
+            className="text-red-400 focus:text-red-400"
+          >
+            Delete sampler track
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <span onClick={onClick}>{name}</span>
     </div>
   );
 };
