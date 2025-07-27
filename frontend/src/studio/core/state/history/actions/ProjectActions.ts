@@ -1,10 +1,5 @@
-import { Store } from '../../store';
-import * as Tone from 'tone';
-import { calculateTrackWidth } from '../../../../constants/gridConstants';
 import { BaseAction } from './BaseAction';
-import { GetFn, RootState } from '../../../../stores/types';
-import { CombinedTrack } from 'src/platform/types/project';
-import { getAudioDuration, calculateAudioDurationTicks } from '../../../../utils/audioAnalysis';
+import { GetFn } from '../../../../stores/types';
 
 /**
  * Action for BPM changes without callbacks
