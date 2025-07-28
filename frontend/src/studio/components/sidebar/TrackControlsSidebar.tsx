@@ -302,7 +302,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   
   return (
     <div 
-      className="px-2 py-1 box-border"
+      className="px-2 py-1 box-border relative"
       style={{
         height: `${GRID_CONSTANTS.trackHeight}px`,
         borderLeft: `3px solid ${trackColor}`,
@@ -317,32 +317,30 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#0a0a0a' : '#f8fafc';
       }}
     >
-      {/* Track Name and Delete Button */}
-      <div className="flex items-center justify-between mb-1 w-full">
-        {/* Track name and type-specific controls */}
-        <div className="flex-grow mr-2 max-w-36">
-          {renderTypeSpecificControls()}
-        </div>
-        
-        <button 
-          onClick={handleDelete}
-          className="p-1 -mt-1 mr-2 rounded-lg transition-colors"
-          style={{ 
-            color: trackColor,
-            backgroundColor: 'transparent',
-            border: 'none',
-            cursor: 'pointer'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }}
-          title="Delete track"
-        >
-          <IconBackspace size={16}/>
-        </button>
+      {/* Delete Button - Positioned absolutely in top right */}
+      <button 
+        onClick={handleDelete}
+        className="absolute top-1 right-1 p-1 rounded-lg transition-colors z-10"
+        style={{ 
+          color: trackColor,
+          backgroundColor: 'transparent',
+          border: 'none',
+          cursor: 'pointer'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }}
+        title="Delete track"
+      >
+        <IconBackspace size={20}/>
+      </button>
+
+      {/* Track Name and Type-specific controls */}
+      <div className="mb-1 w-full pr-8">
+        {renderTypeSpecificControls()}
       </div>
       
       {/* Controls row - Modified for even spacing */}

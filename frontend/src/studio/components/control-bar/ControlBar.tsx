@@ -162,7 +162,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                             e.currentTarget.style.backgroundColor = 'transparent';
                                         }}
                                     >
-                                        <IconArrowLeft size={16} />
+                                        <IconArrowLeft size={24} />
                                     </button>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -194,7 +194,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                             e.currentTarget.style.backgroundColor = 'transparent';
                                         }}
                                     >
-                                        <IconArrowBackUp size={16} />
+                                        <IconArrowBackUp size={24} />
                                     </button>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -226,7 +226,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                             e.currentTarget.style.backgroundColor = 'transparent';
                                         }}
                                     >
-                                        <IconArrowForwardUp size={16} />
+                                        <IconArrowForwardUp size={24} />
                                     </button>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -269,7 +269,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }}
                             >
-                                {isPlaying ? <IconPlayerPauseFilled size={16} /> : <IconPlayerPlayFilled size={16} />}
+                                {isPlaying ? <IconPlayerPauseFilled size={24} /> : <IconPlayerPlayFilled size={24} />}
                             </button>
                             <button
                                 onClick={handleStop}
@@ -290,7 +290,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }}
                             >
-                                <IconPlayerSkipBackFilled size={16} />
+                                <IconPlayerSkipBackFilled size={24} />
                             </button>
                         </div>
                     </div>
@@ -318,9 +318,6 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                     <button
                                         className="h-8 w-8 p-0 rounded-lg transition-colors"
                                         style={{
-                                            backgroundColor: snapToGrid 
-                                                ? (studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9')
-                                                : 'transparent',
                                             color: studioMode === 'dark' ? '#ffffff' : '#000000',
                                             border: 'none',
                                             cursor: 'pointer',
@@ -340,7 +337,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                         }}
                                     >
                                         <Grid3X3 
-                                            size={16} 
+                                            size={24} 
                                             style={{ 
                                                 opacity: snapToGrid ? 1 : 0.5,
                                                 color: studioMode === 'dark' ? '#ffffff' : '#000000'
@@ -445,7 +442,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }}
                             >
-                                <IconZoomIn size={16} />
+                                <IconZoomIn size={24} />
                             </button>
                             
                             <div 
@@ -478,7 +475,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }}
                             >
-                                <IconZoomOut size={16} />
+                                <IconZoomOut size={24} />
                             </button>
                             
                             <TimeDisplay
@@ -513,7 +510,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                             e.currentTarget.style.backgroundColor = 'transparent';
                                         }}
                                     >
-                                        <IconFileExport size={16} />
+                                        <IconFileExport size={24} />
                                     </button>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -540,7 +537,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }}
                             >
-                                {isChatOpen ? <IconChevronsRight size={16} /> : <IconInputAi size={16} />}
+                                {isChatOpen ? <IconChevronsRight size={24} /> : <IconInputAi size={24} />}
                             </button>
                             
                             <button
@@ -562,7 +559,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }}
                             >
-                                <IconSettings size={16} />
+                                <IconSettings size={24} />
                             </button>
                         </div>
                     </div>
