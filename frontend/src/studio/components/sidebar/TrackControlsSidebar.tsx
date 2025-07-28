@@ -194,8 +194,9 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             <div 
               className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap"
               style={{
-                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
-                color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
+                color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
+                fontSize: '11px'
               }}
             >
               {track.name}
@@ -215,9 +216,10 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             <div 
               className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap"
               style={{
-                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
-                color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)',
-                border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+                backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
+                color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
+                fontSize: '11px',
+                border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`
               }}
             >
               808 Kit
@@ -241,16 +243,17 @@ const TrackControls: React.FC<TrackControlsProps> = ({
               onClick={handleLoadFileClick}
               className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               style={{
-                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
-                color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
+                color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
+                fontSize: '11px'
               }}
               onMouseEnter={(e) => {
                 if (!e.currentTarget.disabled) {
-                  e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#3a3a3a' : '#e2e8f0';
+                  e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1a1a1a' : '#d1d5db';
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9';
+                e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0';
               }}
               disabled={!onLoadAudioFile}
               title="Click to load audio file"
@@ -276,16 +279,17 @@ const TrackControls: React.FC<TrackControlsProps> = ({
               onClick={handleLoadFileClick}
               className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               style={{
-                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
-                color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
+                color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
+                fontSize: '11px'
               }}
               onMouseEnter={(e) => {
                 if (!e.currentTarget.disabled) {
-                  e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#3a3a3a' : '#e2e8f0';
+                  e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1a1a1a' : '#d1d5db';
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9';
+                e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0';
               }}
               disabled={!onLoadAudioFile}
               title="Click to load audio file"
