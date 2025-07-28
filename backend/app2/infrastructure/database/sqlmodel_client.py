@@ -89,6 +89,8 @@ engine = create_async_engine(
         "postgresql_deferrable": False,
         "isolation_level": "READ_COMMITTED",
         "statement_timeout": 30000,  # 30 second timeout for queries
+        # Disable compiled cache for transaction mode to prevent prepared statement issues
+        "compiled_cache": {} if not is_transaction_mode else None,
     }
 )
 
