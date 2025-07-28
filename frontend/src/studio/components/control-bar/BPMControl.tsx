@@ -39,7 +39,6 @@ const BPMControl: React.FC<BPMControlProps> = ({ bpm, onBpmChange }) => {
           onChange={onBpmChange}
           onKeyDown={handleKeyDown}
           type="number"
-          onFocus={handleSelect}
           onClick={handleSelect}
           ref={inputRef}
           min={1}
