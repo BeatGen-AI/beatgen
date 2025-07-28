@@ -38,6 +38,7 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
 }) => {
   const [showSlider, setShowSlider] = useState(false);
   const [sliderPosition, setSliderPosition] = useState<'above' | 'below'>('above');
+  const [horizontalOffset, setHorizontalOffset] = useState(0);
   const knobRef = useRef<HTMLDivElement>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<number | null>(null);
@@ -81,14 +82,33 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
     if (knobRef.current) {
       const knobRect = knobRef.current.getBoundingClientRect();
       const sliderHeight = 120; // Approximate height of slider popup
+      const sliderWidth = size <= 30 ? 150 : 200; // Match the slider width
       const topSpace = knobRect.top;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
       
-      // If there's not enough space above, position below
-      if (topSpace < sliderHeight) {
+      // Check vertical positioning
+      if (topSpace < sliderHeight && (viewportHeight - knobRect.bottom) > sliderHeight) {
         setSliderPosition('below');
       } else {
         setSliderPosition('above');
       }
+      
+      // Check horizontal positioning to prevent going off screen
+      const knobCenterX = knobRect.left + knobRect.width / 2;
+      const sliderHalfWidth = sliderWidth / 2;
+      let offset = 0;
+      
+      // If slider would go off the left edge
+      if (knobCenterX - sliderHalfWidth < 10) {
+        offset = (knobCenterX - sliderHalfWidth) - 10;
+      }
+      // If slider would go off the right edge  
+      else if (knobCenterX + sliderHalfWidth > viewportWidth - 10) {
+        offset = (knobCenterX + sliderHalfWidth) - (viewportWidth - 10);
+      }
+      
+      setHorizontalOffset(offset);
     }
   };
 
@@ -155,7 +175,7 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
           <div
             onMouseEnter={handleKnobMouseEnter}
             onMouseLeave={handleKnobMouseLeave}
-            className="absolute rounded-full z-[1001] cursor-pointer"
+            className="absolute rounded-full z-[10000] cursor-pointer"
             style={{
               width: size + 20, // Make hitbox 20px larger than the knob
               height: size + 20,
@@ -202,12 +222,13 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
         {showSlider && (
           <div 
             ref={sliderRef}
-            className={`absolute left-1/2 transform -translate-x-1/2 z-[9999] bg-[#2A2A2A] border rounded-lg shadow-lg p-4 ${
+            className={`absolute left-1/2 z-[99999] bg-[#2A2A2A] border rounded-lg shadow-lg p-4 ${
               sliderPosition === 'above' ? 'bottom-full mb-4' : 'top-full mt-4'
             }`}
             style={{ 
               borderColor: color,
-              width: size <= 30 ? 150 : 200
+              width: size <= 30 ? 150 : 200,
+              transform: `translateX(calc(-50% - ${horizontalOffset}px))`
             }}
             onMouseEnter={handleSliderMouseEnter}
             onMouseLeave={handleSliderMouseLeave}

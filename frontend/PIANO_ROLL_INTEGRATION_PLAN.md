@@ -349,7 +349,6 @@ export default PianoRollWindows;
 ```typescript
 // src/studio/components/track/Track.tsx
 import React from 'react';
-import { Box } from '@mui/material';
 import { usePianoRollStore } from '../../stores/usePianoRollStore';
 // Other imports...
 

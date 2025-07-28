@@ -1,5 +1,4 @@
 // import React from 'react';
-// import { Box } from '@mui/material';
 
 // export interface DragGhostProps {
 //   items: Array<{
@@ -66,9 +65,9 @@
 //   }
 
 //   return (
-//     <Box
+//     <div
 //       className="drag-ghost-container"
-//       sx={{
+//       style={{
 //         position: 'absolute',
 //         top: 0,
 //         left: 0,
@@ -80,10 +79,10 @@
 //       }}
 //     >
 //       {items.map((item) => (
-//         <Box
+//         <div
 //           key={`ghost-${item.id}`}
 //           className="drag-ghost-item"
-//           sx={{
+//           style={{
 //             position: 'absolute',
 //             left: item.x + finalOffset.x,
 //             top: item.y + finalOffset.y,
@@ -97,7 +96,7 @@
 //           }}
 //         />
 //       ))}
-//     </Box>
+//     </div>
 //   );
 // };
 
