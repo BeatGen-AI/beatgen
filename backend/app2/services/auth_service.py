@@ -289,23 +289,35 @@ class AuthService:
         Raises:
             UnauthorizedException: If the token is invalid
         """
-        # Generate secure cache key using hash to prevent collisions
-        cache_key = f"user_{hashlib.sha256(token.encode()).hexdigest()[:16]}"
+        # Generate secure cache key using full hash to prevent collisions
+        cache_key = f"user_{hashlib.sha256(token.encode()).hexdigest()}"
         
         # Check TTL cache first (automatically handles expiration)
+        logger.info(f"🔍 CACHE CHECK: Looking for cache_key: {cache_key}, cache size: {len(_token_cache)}")
         if cache_key in _token_cache:
-            logger.debug(f"Returning cached user info for token: {token[:10]}...")
+            logger.info(f"✅ CACHE HIT: Returning cached user info for token: {token[:10]}...")
             return _token_cache[cache_key]
         
-        logger.info(f"Getting current user from token: {token[:10]}...")
+        logger.info(f"❌ CACHE MISS: Getting current user from token: {token[:10]}... (cache_key: {cache_key})")
         user_info = await self.verify_token(token)
         
-        # If we have auth identity mapping, get the canonical user ID
+        # If we have auth identity mapping, get the canonical user ID (with caching)
         if self.auth_identity_repository and "id" in user_info:
             auth_provider_id = user_info["id"]
-            identity = await self.auth_identity_repository.find_by_auth_provider_id(
-                uuid.UUID(auth_provider_id)
-            )
+            
+            # Check cache for identity mapping
+            identity_cache_key = f"identity_{auth_provider_id}"
+            if identity_cache_key in _token_cache:
+                identity = _token_cache[identity_cache_key]
+                logger.debug(f"✅ IDENTITY CACHE HIT for {auth_provider_id}")
+            else:
+                identity = await self.auth_identity_repository.find_by_auth_provider_id(
+                    uuid.UUID(auth_provider_id)
+                )
+                # Cache identity mapping for 10 minutes (longer than token cache)
+                if identity:
+                    _token_cache[identity_cache_key] = identity
+                logger.debug(f"❌ IDENTITY CACHE MISS for {auth_provider_id}")
             
             if identity:
                 # Replace the auth provider ID with the canonical user profile ID
@@ -318,6 +330,7 @@ class AuthService:
         
         # Cache the result (TTL handled automatically)
         _token_cache[cache_key] = user_info
+        logger.info(f"💾 CACHED: Stored user info for cache_key: {cache_key}, cache size: {len(_token_cache)}")
         
         return user_info
 

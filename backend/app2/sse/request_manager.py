@@ -60,6 +60,10 @@ class RequestManager:
     MAX_REQUESTS_PER_USER = 5
     REQUEST_TIMEOUT_SECONDS = 300  # 5 minutes
     CLEANUP_INTERVAL_SECONDS = 60  # 1 minute
+    
+    # Global limits to prevent memory exhaustion
+    MAX_TOTAL_REQUESTS = 1000
+    FORCE_CLEANUP_THRESHOLD = 800
 
     def __new__(cls):
         """Singleton pattern to ensure only one request manager exists"""
@@ -108,14 +112,29 @@ class RequestManager:
                 pass
 
     def _cleanup_expired_requests(self):
-        """Clean up expired requests"""
+        """Clean up expired requests with forced cleanup if needed"""
         current_time = time.time()
         expired_requests = []
+        total_requests = len(self._requests)
 
         # Find expired requests
         for request_id, context in self._requests.items():
             if (current_time - context.timestamp) > self.REQUEST_TIMEOUT_SECONDS:
                 expired_requests.append(request_id)
+
+        # Force cleanup if we're approaching memory limits
+        if total_requests >= self.FORCE_CLEANUP_THRESHOLD:
+            logger.warning(f"Force cleanup triggered: {total_requests} active requests")
+            # Remove oldest 20% of requests regardless of timeout
+            oldest_requests = sorted(
+                self._requests.items(), 
+                key=lambda x: x[1].timestamp
+            )[:int(total_requests * 0.2)]
+            
+            for request_id, _ in oldest_requests:
+                if request_id not in expired_requests:
+                    expired_requests.append(request_id)
+                    logger.warning(f"Force removing request {request_id} due to memory pressure")
 
         # Remove expired requests
         for request_id in expired_requests:
@@ -170,6 +189,14 @@ class RequestManager:
             raise ValueError(
                 f"User {user_id} has reached the maximum number of active requests"
             )
+        
+        # Check global limits
+        if len(self._requests) >= self.MAX_TOTAL_REQUESTS:
+            logger.error(f"Global request limit reached: {len(self._requests)} requests")
+            # Force immediate cleanup
+            self._cleanup_expired_requests()
+            if len(self._requests) >= self.MAX_TOTAL_REQUESTS:
+                raise ValueError("System is at capacity, please try again later")
 
         # Generate request ID
         request_id = self.generate_request_id()
