@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import Konva from 'konva';
 import { Stage, Layer, Text } from 'react-konva';
-import { Box } from '@mui/material';
 
 /**
  * Viewport configuration for controlling visible area
@@ -246,9 +245,9 @@ export const KonvaBase = forwardRef<KonvaBaseRef, KonvaBaseProps>(({
   
   return (
     <ViewportContext.Provider value={{ viewport: effectiveViewport, zoom, isInViewport }}>
-      <Box
+      <div
         ref={containerRef}
-        sx={{
+        style={{
           width,
           height,
           backgroundColor,
@@ -291,7 +290,7 @@ export const KonvaBase = forwardRef<KonvaBaseRef, KonvaBaseProps>(({
             </Layer>
           )}
         </Stage>
-      </Box>
+      </div>
     </ViewportContext.Provider>
   );
 });

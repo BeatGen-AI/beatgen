@@ -2,8 +2,16 @@ import React, { useState, useRef, useEffect, ReactElement, useMemo, FC } from "r
 import { Rnd } from "react-rnd";
 import { Stage, Layer, Line, Rect } from "react-konva";
 import Konva from "konva";
-// Import Material UI components
-import { Menu, MenuItem } from "@mui/material";
+// Import shadcn components
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu";
 // Import PianoKeyboard component
 import PianoKeyboard from "./PianoKeyboard";
 // Import grid constants and types
@@ -1155,8 +1163,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
   // Grid snap settings
   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
   const [gridSnapSize, setGridSnapSize] = useState<GridSnapOption>(initialGridSnapSize); // Use the enum state
-  const [gridSnapAnchorEl, setGridSnapAnchorEl] = useState<null | HTMLElement>(null);
-  const gridSnapMenuOpen = Boolean(gridSnapAnchorEl);
+  const [gridSnapMenuOpen, setGridSnapMenuOpen] = useState(false);
   
   // Zoom control
   const [zoomLevel, setZoomLevel] = useState(1.0); // Default zoom level
@@ -1238,21 +1245,12 @@ export const PianoRoll: FC<PianoRollProps> = ({
   };
   */
   
-  // Handle grid snap menu open - modify to accept any element's mouse event
-  const handleGridIconClick = (event: React.MouseEvent<Element>) => {
-    // Explicitly cast the current target to HTMLElement
-    setGridSnapAnchorEl(event.currentTarget as HTMLElement);
-  };
 
-  // Handle grid snap menu close
-  const handleGridSnapClose = () => {
-    setGridSnapAnchorEl(null);
-  };
   
   // Handle grid snap size change
   const handleGridSnapSizeChange = (option: number) => {
     setGridSnapSize(option);
-    handleGridSnapClose();
+    setGridSnapMenuOpen(false);
   };
   
   // Toggle grid snap on/off
@@ -2748,31 +2746,144 @@ export const PianoRoll: FC<PianoRollProps> = ({
                 backgroundColor: "rgba(255,255,255,0.1)" 
               }} />
               
-              <img 
-                src="/icons/grid-on.svg"
-                alt="Grid snap"
-                onClick={handleGridIconClick}
-                onMouseDown={(e) => {
-                  // Prevent the drag handle from interfering with the grid icon click
-                  e.stopPropagation();
-                }}
-                style={{ 
-                  width: "18px",
-                  height: "18px",
-                  opacity: gridSnapEnabled ? 1 : 0.5,
-                  cursor: "pointer",
-                  filter: "brightness(0) invert(1)", // Make icon white
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  if (!gridSnapEnabled) e.currentTarget.style.opacity = "0.8";
-                  e.currentTarget.style.transform = "scale(1.1)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!gridSnapEnabled) e.currentTarget.style.opacity = "0.5";
-                  e.currentTarget.style.transform = "scale(1)";
-                }}
-              />
+                             {/* Dropdown menu for grid snap options */}
+               <DropdownMenu onOpenChange={setGridSnapMenuOpen}>
+                 <DropdownMenuTrigger asChild>
+                   <img 
+                     src="/icons/grid-on.svg"
+                     alt="Grid snap"
+                     onMouseDown={(e) => {
+                       // Prevent the drag handle from interfering with the grid icon click
+                       e.stopPropagation();
+                     }}
+                     style={{ 
+                       width: "18px",
+                       height: "18px",
+                       opacity: gridSnapEnabled ? 1 : 0.5,
+                       cursor: "pointer",
+                       filter: "brightness(0) invert(1)", // Make icon white
+                       transition: 'all 0.2s ease',
+                     }}
+                     onMouseEnter={(e) => {
+                       if (!gridSnapEnabled) e.currentTarget.style.opacity = "0.8";
+                       e.currentTarget.style.transform = "scale(1.1)";
+                     }}
+                     onMouseLeave={(e) => {
+                       if (!gridSnapEnabled) e.currentTarget.style.opacity = "0.5";
+                       e.currentTarget.style.transform = "scale(1)";
+                     }}
+                   />
+                 </DropdownMenuTrigger>
+                
+                                 <DropdownMenuContent 
+                   className="min-w-[120px] bg-[#222222] border-[#444444] text-white text-xs z-[10001]"
+                   sideOffset={5}
+                 >
+                  <DropdownMenuRadioGroup value={gridSnapSize.toString()} onValueChange={(value) => handleGridSnapSizeChange(parseInt(value))}>
+                    <DropdownMenuRadioItem 
+                      value="0" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      None
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuSeparator className="bg-[rgba(255,255,255,0.1)] my-2 mx-1 relative">
+                      <span className="absolute right-1 -top-2 text-[8px] bg-[#222222] px-1 text-[rgba(255,255,255,0.5)]">
+                        STEP
+                      </span>
+                    </DropdownMenuSeparator>
+                    
+                    <DropdownMenuRadioItem 
+                      value="1" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      1/6 step
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuRadioItem 
+                      value="2" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      1/4 step
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuRadioItem 
+                      value="3" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      1/3 step
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuRadioItem 
+                      value="4" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      1/2 step
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuRadioItem 
+                      value="5" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      Step
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuSeparator className="bg-[rgba(255,255,255,0.1)] my-2 mx-1 relative">
+                      <span className="absolute right-1 -top-2 text-[8px] bg-[#222222] px-1 text-[rgba(255,255,255,0.5)]">
+                        BEAT
+                      </span>
+                    </DropdownMenuSeparator>
+                    
+                    <DropdownMenuRadioItem 
+                      value="6" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      1/6 beat
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuRadioItem 
+                      value="7" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      1/4 beat
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuRadioItem 
+                      value="8" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      1/3 beat
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuRadioItem 
+                      value="9" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      1/2 beat
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuRadioItem 
+                      value="10" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      Beat
+                    </DropdownMenuRadioItem>
+                    
+                    <DropdownMenuSeparator className="bg-[rgba(255,255,255,0.1)] my-2 mx-1 relative">
+                      <span className="absolute right-1 -top-2 text-[8px] bg-[#222222] px-1 text-[rgba(255,255,255,0.5)]">
+                        BAR
+                      </span>
+                    </DropdownMenuSeparator>
+                    
+                    <DropdownMenuRadioItem 
+                      value="11" 
+                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
+                    >
+                      Bar
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             
             {/* Zoom Controls in fixed-width container */}
@@ -2857,318 +2968,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
           </div>
         </div>
 
-        {/* Menu for grid snap options */}
-        <Menu
-          anchorEl={gridSnapAnchorEl}
-          open={gridSnapMenuOpen}
-          onClose={handleGridSnapClose}
-          style={{ zIndex: 10001 }}
-          slotProps={{
-            paper: {
-              style: {
-                backgroundColor: DARK_THEME.headerBackground,
-                color: "white",
-                borderRadius: "4px",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-                padding: "2px 0",
-                minWidth: "100px"
-              }
-            }
-          }}
-          MenuListProps={{
-            style: {
-              padding: "2px 0"
-            }
-          }}
-        >
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(0)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 0 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>None</span>
-            {gridSnapSize === 0 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          {/* Divider for Step section */}
-          <div style={{ 
-            height: "1px", 
-            backgroundColor: "rgba(255,255,255,0.1)", 
-            margin: "2px 4px",
-            position: "relative" 
-          }}>
-            <span style={{ 
-              position: "absolute", 
-              right: "4px", 
-              top: "-5px", 
-              fontSize: "8px", 
-              backgroundColor: DARK_THEME.headerBackground,
-              padding: "0 2px", 
-              color: "rgba(255,255,255,0.5)" 
-            }}>
-              STEP
-            </span>
-          </div>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(1)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 1 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>1/6 step</span>
-            {gridSnapSize === 1 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(2)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 2 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>1/4 step</span>
-            {gridSnapSize === 2 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(3)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 3 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>1/3 step</span>
-            {gridSnapSize === 3 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(4)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 4 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>1/2 step</span>
-            {gridSnapSize === 4 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(5)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 5 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>Step</span>
-            {gridSnapSize === 5 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          {/* Divider for Beat section */}
-          <div style={{ 
-            height: "1px", 
-            backgroundColor: "rgba(255,255,255,0.1)", 
-            margin: "2px 4px",
-            position: "relative" 
-          }}>
-            <span style={{ 
-              position: "absolute", 
-              right: "4px", 
-              top: "-5px", 
-              fontSize: "8px", 
-              backgroundColor: DARK_THEME.headerBackground,
-              padding: "0 2px", 
-              color: "rgba(255,255,255,0.5)" 
-            }}>
-              BEAT
-            </span>
-          </div>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(6)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 6 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>1/6 beat</span>
-            {gridSnapSize === 6 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(7)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 7 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>1/4 beat</span>
-            {gridSnapSize === 7 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(8)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 8 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>1/3 beat</span>
-            {gridSnapSize === 8 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(9)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 9 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>1/2 beat</span>
-            {gridSnapSize === 9 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(10)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 10 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>Beat</span>
-            {gridSnapSize === 10 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-          
-          {/* Divider for Bar section */}
-          <div style={{ 
-            height: "1px", 
-            backgroundColor: "rgba(255,255,255,0.1)", 
-            margin: "2px 4px",
-            position: "relative" 
-          }}>
-            <span style={{ 
-              position: "absolute", 
-              right: "4px", 
-              top: "-5px", 
-              fontSize: "8px", 
-              backgroundColor: DARK_THEME.headerBackground,
-              padding: "0 2px", 
-              color: "rgba(255,255,255,0.5)" 
-            }}>
-              BAR
-            </span>
-          </div>
-          
-          <MenuItem 
-            onClick={() => handleGridSnapSizeChange(11)}
-            style={{
-              padding: "3px 8px",
-              fontSize: "11px",
-              display: "flex",
-              justifyContent: "space-between",
-              backgroundColor: gridSnapSize === 11 ? "#3a3a3a" : "transparent"
-            }}
-            sx={{ 
-              '&:hover': { 
-                backgroundColor: '#525252 !important'
-              }
-            }}
-          >
-            <span>Bar</span>
-            {gridSnapSize === 11 && <span className="material-symbols-outlined" style={{ fontSize: "11px", marginLeft: "4px" }}>check</span>}
-          </MenuItem>
-        </Menu>
+
 
         {/* Main content container */}
         <div
