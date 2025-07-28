@@ -1,5 +1,9 @@
 """
 Repository for auth identity operations
+
+Note: This repository manually converts enum values to strings in queries
+to avoid prepared statement issues with Supabase's transaction mode pooler.
+Enum parameters can cause type registration problems in prepared statements.
 """
 from typing import Optional, List
 from sqlmodel import select
@@ -98,9 +102,11 @@ class AuthIdentityRepository(BaseRepository[AuthIdentity]):
         """
         self.logger.info(f"Finding auth identity for {email} with provider {provider}")
         try:
+            # Convert enum to string to avoid prepared statement issues with transaction mode
+            provider_str = provider.value if hasattr(provider, 'value') else str(provider)
             statement = select(self.model_class).where(
                 self.model_class.email == email,
-                self.model_class.provider == provider
+                self.model_class.provider == provider_str
             )
             result = await self.session.execute(statement)
             auth_identity = result.scalars().first()
@@ -140,10 +146,12 @@ class AuthIdentityRepository(BaseRepository[AuthIdentity]):
             f"provider={provider}, auth_id={auth_provider_id}"
         )
         
+        # Convert enum to string to avoid prepared statement issues with transaction mode
+        provider_str = provider.value if hasattr(provider, 'value') else str(provider)
         identity_data = {
             "user_profile_id": user_profile_id,
             "auth_provider_id": auth_provider_id,
-            "provider": provider,
+            "provider": provider_str,
             "email": email
         }
         
