@@ -2,10 +2,10 @@ from typing import Dict, Any, Optional
 import traceback
 import uuid
 import httpx
-import time
-from threading import Lock
+import hashlib
 
 from fastapi import Request, Response
+from cachetools import TTLCache
 
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import UnauthorizedException, ServiceException, ValidationException, NotFoundException
@@ -18,10 +18,9 @@ from app2.core.config import settings
 
 logger = get_service_logger("auth")
 
-# Global token cache with expiration
-_token_cache = {}
-_cache_lock = Lock()
+# Global token cache with automatic expiration and size limit
 CACHE_EXPIRY_SECONDS = 300  # 5 minutes
+_token_cache = TTLCache(maxsize=1000, ttl=CACHE_EXPIRY_SECONDS)
 
 
 class AuthService:
@@ -290,19 +289,13 @@ class AuthService:
         Raises:
             UnauthorizedException: If the token is invalid
         """
-        # Check cache first
-        cache_key = f"user_{token[:20]}"  # Use first 20 chars as cache key
-        current_time = time.time()
+        # Generate secure cache key using hash to prevent collisions
+        cache_key = f"user_{hashlib.sha256(token.encode()).hexdigest()[:16]}"
         
-        with _cache_lock:
-            if cache_key in _token_cache:
-                cached_data, expiry_time = _token_cache[cache_key]
-                if current_time < expiry_time:
-                    logger.debug(f"Returning cached user info for token: {token[:10]}...")
-                    return cached_data
-                else:
-                    # Remove expired entry
-                    del _token_cache[cache_key]
+        # Check TTL cache first (automatically handles expiration)
+        if cache_key in _token_cache:
+            logger.debug(f"Returning cached user info for token: {token[:10]}...")
+            return _token_cache[cache_key]
         
         logger.info(f"Getting current user from token: {token[:10]}...")
         user_info = await self.verify_token(token)
@@ -323,9 +316,8 @@ class AuthService:
                     f"Mapped auth ID {auth_provider_id} to user profile ID {identity.user_profile_id}"
                 )
         
-        # Cache the result
-        with _cache_lock:
-            _token_cache[cache_key] = (user_info, current_time + CACHE_EXPIRY_SECONDS)
+        # Cache the result (TTL handled automatically)
+        _token_cache[cache_key] = user_info
         
         return user_info
 

@@ -1,4 +1,5 @@
 from typing import Dict, Any, Annotated
+import hashlib
 from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -174,7 +175,7 @@ async def get_current_user(
         UnauthorizedException: If the token is invalid
     """
     # Check if user info is already cached in this request
-    cache_key = f"current_user_{token[:20]}"  # Use first 20 chars as cache key
+    cache_key = f"current_user_{hashlib.sha256(token.encode()).hexdigest()[:16]}"
     if hasattr(request.state, cache_key):
         logger.debug("Returning cached user info")
         return getattr(request.state, cache_key)
