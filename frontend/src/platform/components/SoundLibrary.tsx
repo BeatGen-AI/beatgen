@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MusicNote as MusicNoteIcon } from '@mui/icons-material';
+import { Music } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 // Shared components and hooks
@@ -159,7 +159,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
 
   // Custom empty state with the correct icon
   const emptyState = {
-    icon: <MusicNoteIcon sx={{ fontSize: 60 }} />,
+    icon: <Music className="h-15 w-15" />,
     title: "No sounds in your library",
     description: "Upload some sounds to get started"
   };

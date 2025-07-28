@@ -1,5 +1,4 @@
 import React from 'react';
-import { Box } from '@mui/material';
 import { SelectionRect } from './types';
 
 interface SelectionOverlayProps {
@@ -28,9 +27,9 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
   const height = Math.abs(selectionRect.height);
 
   return (
-    <Box
+    <div
       className={`selection-overlay ${className}`}
-      sx={{
+      style={{
         position: 'absolute',
         left: `${x}px`,
         top: `${y}px`,

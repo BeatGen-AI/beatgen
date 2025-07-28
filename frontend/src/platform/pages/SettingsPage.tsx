@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { IconArrowLeft, IconSettings, IconMoon } from '@tabler/icons-react';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme } from '../../lib/theme-provider';
 import { useRouter } from '@tanstack/react-router';
 
 const SettingsPage: React.FC = () => {

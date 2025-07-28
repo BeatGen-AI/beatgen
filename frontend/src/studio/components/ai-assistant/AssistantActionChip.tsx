@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Chip } from '@mui/material';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface AssistantActionChipProps {
   action: string;
@@ -36,40 +37,22 @@ const AssistantActionChip: React.FC<AssistantActionChipProps> = ({ action, onCli
   };
 
   return (
-    <Chip 
-      label={getActionLabel(action)}
-      size='small'
-      color="primary"
-      variant="outlined"
-      clickable={!isClicked}
-      disabled={isClicked}
-      onClick={() => {
+    <Badge 
+      variant="outline"
+      className={cn(
+        "w-fit rounded-md h-6 px-3 text-xs cursor-pointer transition-colors",
+        "border border-blue-500/50 bg-slate-900/90 text-blue-400/90",
+        "hover:bg-slate-800/90 hover:border-blue-400/80",
+        isClicked && "opacity-70 bg-slate-900/60 border-blue-500/30 text-blue-400/50 cursor-not-allowed",
+        !isClicked && "hover:bg-slate-800/90"
+      )}
+      onClick={!isClicked ? () => {
         onClick();
         setIsClicked(true);
-      }}
-      sx={{
-        width: 'fit-content',
-        borderRadius: '5px',
-        height: '24px',
-        border: '1px solid rgba(144, 202, 249, 0.5)',
-        bgcolor: 'rgba(20, 20, 30, 0.9)',
-        color: 'rgba(144, 202, 249, 0.9)',
-        '& .MuiChip-label': {
-          fontSize: '0.75rem',
-          px: 1
-        },
-        '&:hover': {
-          bgcolor: 'rgba(40, 40, 60, 0.9)',
-          borderColor: 'rgba(144, 202, 249, 0.8)'
-        },
-        '&.Mui-disabled': {
-          opacity: 0.7,
-          bgcolor: 'rgba(20, 20, 30, 0.6)',
-          border: '1px solid rgba(144, 202, 249, 0.3)',
-          color: 'rgba(144, 202, 249, 0.5)'
-        }
-      }}
-    />
+      } : undefined}
+    >
+      {getActionLabel(action)}
+    </Badge>
   );
 };
 

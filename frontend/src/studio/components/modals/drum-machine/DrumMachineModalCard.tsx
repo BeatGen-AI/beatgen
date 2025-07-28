@@ -1,13 +1,9 @@
 import React from 'react';
-import {
-    Box,
-    Typography,
-    CircularProgress,
-    Checkbox
-} from '@mui/material';
+import { Loader2 } from 'lucide-react';
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
 import { prettyPrint } from '../../../../utils/pretty_print';
-import { useTheme } from '@mui/material/styles';
+import { Checkbox } from '../../../../components/ui/checkbox';
+import { cn } from '../../../../lib/utils';
 
 export interface DrumSampleCardProps {
     sample: DrumSamplePublicRead;
@@ -29,82 +25,48 @@ export const DrumSampleCard: React.FC<DrumSampleCardProps> = ({
         }
     };
 
-    const theme = useTheme();
-
     return (
-        <Box
+        <div
             onClick={() => handleToggle()}
-            sx={{
-                bgcolor: isSelected ? 'action.selected' : 'background.paper' ,
-                opacity: isSelected ? 1 : 0.8,
-                borderRadius: 3,
-                p: 2.5,
-                transition: 'all 0.25s ease-in-out',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 1.5,
-                position: 'relative',
-                minHeight: 160,
-                cursor: isLoading ? 'wait' : 'pointer',
-                border: isSelected ? `1px solid ${theme.palette.primary.main}` : '1px solid transparent',
-                boxShadow: isSelected ? '0 0 8px rgba(0, 123, 255, 0.3)' : 'none',
-                '&:hover': {
-                    bgcolor: isSelected ? 'action.selected' : 'action.hover',
-                    opacity: 1,
-                    transform: 'translateY(-2px)',
-                    boxShadow: isSelected ? '0 0 12px rgba(0, 123, 255, 0.4)' : '0 4px 8px rgba(0,0,0,0.2)'
-                }
-            }}
+            className={cn(
+                "relative bg-card border rounded-xl p-6 transition-all duration-250 flex flex-col items-center justify-between gap-6 min-h-[160px]",
+                isLoading ? "cursor-wait" : "cursor-pointer",
+                isSelected ? "border-primary shadow-[0_0_8px_rgba(59,130,246,0.3)] opacity-100" : "border-transparent opacity-80 hover:opacity-100",
+                !isLoading && "hover:-translate-y-0.5",
+                isSelected ? "hover:shadow-[0_0_12px_rgba(59,130,246,0.4)]" : "hover:shadow-[0_4px_8px_rgba(0,0,0,0.2)]"
+            )}
         >
             <Checkbox
                 checked={isSelected}
-                onChange={(e) => handleToggle(e as any)}
+                onCheckedChange={() => handleToggle()}
                 disabled={isLoading}
                 onClick={(e) => e.stopPropagation()}
-                sx={{
-                    position: 'absolute',
-                    top: 10,
-                    right: 10,
-                    zIndex: 2
-                }}
+                className="absolute top-3 right-3 z-20"
             />
+            
             {isLoading && (
-                <CircularProgress
-                    size={24}
-                    sx={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        marginTop: '-12px',
-                        marginLeft: '-12px',
-                        zIndex: 1
-                    }}
+                <Loader2 
+                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 animate-spin z-10" 
                 />
             )}
 
-            <Box sx={{ textAlign: 'center', flexGrow: 1, width: '100%', mt: 2, opacity: isLoading ? 0.5 : 1 }}>
-                <Typography
-                    variant="subtitle1"
-                    sx={{
-                        wordBreak: 'break-word',
-                        fontWeight: 'bold',
-                        mb: 0.5
-                    }}
-                >
+            <div className={cn(
+                "text-center flex-grow w-full mt-2",
+                isLoading && "opacity-50"
+            )}>
+                <h4 className="font-bold break-words mb-2">
                     {prettyPrint(sample.display_name)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
+                </h4>
+                <p className="text-sm text-muted-foreground block mb-1">
                     Kit: {prettyPrint(sample.kit_name)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
+                </p>
+                <p className="text-sm text-muted-foreground block mb-1">
                     Genre: {prettyPrint(sample.genre)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
+                </p>
+                <p className="text-sm text-muted-foreground block">
                     Type: {prettyPrint(sample.category)}
-                </Typography>
-            </Box>
-        </Box>
+                </p>
+            </div>
+        </div>
     );
 };

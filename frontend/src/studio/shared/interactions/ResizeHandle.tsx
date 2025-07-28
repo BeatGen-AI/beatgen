@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box } from '@mui/material';
+import { cn } from '../../../lib/utils';
 
 export interface ResizeHandleProps {
   direction: 'left' | 'right';
@@ -34,52 +34,29 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
     onMouseDown(e);
   };
 
-  const baseStyles: React.CSSProperties = {
-    position: 'absolute',
-    top: offset,
-    bottom: offset,
-    width: size,
-    cursor: `${direction === 'left' ? 'w' : 'e'}-resize`,
-    zIndex: 10,
-    opacity: isActive ? 1 : 0,
-    transition: 'opacity 0.2s ease-in-out',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...style
-  };
-
-  const positionStyles: React.CSSProperties = direction === 'left' 
-    ? { left: -size / 2 }
-    : { right: -size / 2 };
-
-  const handleStyles: React.CSSProperties = {
-    ...baseStyles,
-    ...positionStyles
-  };
-
   return (
-    <Box
+    <div
       onMouseDown={handleMouseDown}
-      sx={{
-        ...handleStyles,
-        '&:hover': {
-          opacity: 1
-        },
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          width: 2,
-          height: '50%',
-          backgroundColor: color,
-          borderRadius: 1,
-          opacity: 0.8
-        }
+      className={cn(
+        "absolute flex items-center justify-center z-10 transition-opacity duration-200 ease-in-out hover:opacity-100",
+        direction === 'left' ? 'cursor-w-resize' : 'cursor-e-resize',
+        isActive ? 'opacity-100' : 'opacity-0',
+        `resize-handle resize-handle-${direction}`
+      )}
+      style={{
+        top: offset,
+        bottom: offset,
+        width: size,
+        ...(direction === 'left' ? { left: -size / 2 } : { right: -size / 2 }),
+        ...style
       }}
-      className={`resize-handle resize-handle-${direction}`}
-    />
+    >
+      {/* Handle indicator */}
+      <div
+        className="absolute top-1/2 transform -translate-y-1/2 w-0.5 h-1/2 rounded opacity-80"
+        style={{ backgroundColor: color }}
+      />
+    </div>
   );
 };
 
@@ -109,15 +86,10 @@ export const ResizableContainer: React.FC<ResizableContainerProps> = ({
 }) => {
   const [isHovered, setIsHovered] = React.useState(false);
 
-  const containerStyles: React.CSSProperties = {
-    position: 'relative',
-    ...containerStyle
-  };
-
   return (
     <div
-      className={`resizable-container ${className}`}
-      style={containerStyles}
+      className={cn("relative", `resizable-container ${className}`)}
+      style={containerStyle}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

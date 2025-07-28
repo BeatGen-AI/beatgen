@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Box } from '@mui/material';
 import { useStudioStore } from '../../../stores/studioStore';
 import { RootState, CombinedTrack, SamplerTrackRead, NoteState } from '../../../stores/types';
 import { useGridStore } from '../../../core/state/gridStore';

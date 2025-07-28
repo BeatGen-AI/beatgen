@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import { CombinedTrack, AudioTrackRead, SamplerTrackRead } from '../../../platform/types/project';
 import { getTrackColor, GRID_CONSTANTS } from '../../constants/gridConstants';
 import ControlKnob from './track-sidebar-controls/ControlKnob';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 // Interface for the component props
 interface TrackControlsSidebarProps {
@@ -32,9 +33,15 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
   onInstrumentChange,
   onLoadAudioFile
 }) => {
+  const { studioMode } = useAppTheme();
   if (tracks.length === 0) {
     return (
-      <div className="p-4 text-center text-muted-foreground flex flex-col items-center justify-center h-full">
+      <div 
+        className="p-4 text-center flex flex-col items-center justify-center h-full"
+        style={{
+          color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)'
+        }}
+      >
         <p className="text-sm">
           No tracks yet
         </p>
@@ -99,6 +106,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
     return null;
   }
 
+  const { studioMode } = useAppTheme();
   const trackColor = getTrackColor(index);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(track.name);
@@ -186,7 +194,13 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             >
               Inst:
             </span>
-            <div className="text-xs text-muted-foreground bg-muted p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap">
+            <div 
+              className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap"
+              style={{
+                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
+                color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+              }}
+            >
               {track.name}
             </div>
           </div>
@@ -202,7 +216,14 @@ const TrackControls: React.FC<TrackControlsProps> = ({
               Kit:
             </span>
             <Select value="808">
-              <SelectTrigger className="h-6 text-xs bg-muted flex-grow">
+              <SelectTrigger 
+                className="h-6 text-xs flex-grow"
+                style={{
+                  backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
+                  borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+                  color: studioMode === 'dark' ? '#ffffff' : '#000000'
+                }}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -231,7 +252,19 @@ const TrackControls: React.FC<TrackControlsProps> = ({
                 <TooltipTrigger asChild>
                   <button
                     onClick={handleLoadFileClick}
-                    className="text-xs text-muted-foreground bg-muted p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left hover:bg-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                    className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                    style={{
+                      backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
+                      color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!e.currentTarget.disabled) {
+                        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#3a3a3a' : '#e2e8f0';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9';
+                    }}
                     disabled={!onLoadAudioFile}
                   >
                     {audioFileName || track.name}
@@ -262,7 +295,19 @@ const TrackControls: React.FC<TrackControlsProps> = ({
                 <TooltipTrigger asChild>
                   <button
                     onClick={handleLoadFileClick}
-                    className="text-xs text-muted-foreground bg-muted p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left hover:bg-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                    className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                    style={{
+                      backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
+                      color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!e.currentTarget.disabled) {
+                        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#3a3a3a' : '#e2e8f0';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9';
+                    }}
                     disabled={!onLoadAudioFile}
                   >
                     {samplerFileName || track.name}
@@ -283,10 +328,19 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   
   return (
     <div 
-      className="p-2 mb-1 border-b border-border bg-card hover:bg-accent/50 box-border"
+      className="p-2 mb-1 box-border"
       style={{
         height: `${GRID_CONSTANTS.trackHeight - 2}px`,
-        borderLeft: `3px solid ${trackColor}`
+        borderLeft: `3px solid ${trackColor}`,
+        borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+        backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
+        color: studioMode === 'dark' ? '#ffffff' : '#000000'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2a2a2a' : '#f5f5f5';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1a1a1a' : '#ffffff';
       }}
     >
       {/* Track Name and Delete Button */}
@@ -299,15 +353,24 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button 
-                size="sm"
-                variant="ghost"
+              <button 
                 onClick={handleDelete}
-                className="p-1 -mt-1 mr-2 rounded-lg hover:bg-accent"
-                style={{ color: trackColor }}
+                className="p-1 -mt-1 mr-2 rounded-lg transition-colors"
+                style={{ 
+                  color: trackColor,
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
               >
                 <Trash2 size={18}/>
-              </Button>
+              </button>
             </TooltipTrigger>
             <TooltipContent>
               <p>Delete track</p>
@@ -357,13 +420,26 @@ const TrackControls: React.FC<TrackControlsProps> = ({
               <TooltipTrigger asChild>
                 <div 
                   onClick={handleMuteToggle}
-                  className={`rounded px-3 py-1 text-xs font-bold cursor-pointer transition-colors ${
-                    track.mute 
-                      ? 'bg-yellow-400 text-black hover:bg-yellow-500' 
-                      : 'bg-muted hover:bg-accent'
-                  }`}
+                  className="rounded px-3 py-1 text-xs font-bold cursor-pointer transition-colors"
                   style={{
+                    backgroundColor: track.mute 
+                      ? '#fbbf24' 
+                      : (studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9'),
                     color: track.mute ? '#000' : trackColor
+                  }}
+                  onMouseEnter={(e) => {
+                    if (track.mute) {
+                      e.currentTarget.style.backgroundColor = '#f59e0b';
+                    } else {
+                      e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (track.mute) {
+                      e.currentTarget.style.backgroundColor = '#fbbf24';
+                    } else {
+                      e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9';
+                    }
                   }}
                 >
                   M
@@ -383,13 +459,26 @@ const TrackControls: React.FC<TrackControlsProps> = ({
               <TooltipTrigger asChild>
                 <div 
                   onClick={handleSoloToggle}
-                  className={`rounded px-3 py-1 text-xs font-bold cursor-pointer transition-colors ${
-                    (track.solo ?? track.soloed) 
-                      ? 'bg-yellow-400 text-black hover:bg-yellow-500' 
-                      : 'bg-muted hover:bg-accent'
-                  }`}
+                  className="rounded px-3 py-1 text-xs font-bold cursor-pointer transition-colors"
                   style={{
+                    backgroundColor: (track.solo ?? track.soloed) 
+                      ? '#fbbf24' 
+                      : (studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9'),
                     color: (track.solo ?? track.soloed) ? '#000' : trackColor
+                  }}
+                  onMouseEnter={(e) => {
+                    if (track.solo ?? track.soloed) {
+                      e.currentTarget.style.backgroundColor = '#f59e0b';
+                    } else {
+                      e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (track.solo ?? track.soloed) {
+                      e.currentTarget.style.backgroundColor = '#fbbf24';
+                    } else {
+                      e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9';
+                    }
                   }}
                 >
                   S

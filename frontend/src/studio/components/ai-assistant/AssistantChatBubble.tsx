@@ -1,10 +1,8 @@
 import React, { useEffect } from 'react';
-import { Box, Typography } from '@mui/material';
+import { cn } from '@/lib/utils';
 import { useAppTheme } from '../../../lib/theme-provider';
 import AssistantActionChip from './AssistantActionChip';
 import ReactMarkdown from 'react-markdown';
-// Remove the incorrect import
-// import { useAppTheme } from '../../../lib/theme-provider';
 
 // ... (keep keyframes)
 // Add keyframes for cursor blink animation
@@ -63,109 +61,60 @@ const AssistantChatBubble: React.FC<AssistantChatBubbleProps> = ({ text, action,
   
   if (isActionOnly) {
     return (
-      <Box
-        sx={{
-          // alignSelf: 'flex-start', // Removed for panel style
-          maxWidth: '100%', // Allow full width within the panel
-          p: 0.5, // Keep padding for action chip
-          // borderRadius: 2, // Removed
-        }}
-      >
+      <div className="max-w-full p-1">
         <AssistantActionChip 
           action={action} 
           onClick={onActionClick}
         />
-      </Box>
+      </div>
     );
   }
   
   return (
-    <Box
-      sx={{
-        // alignSelf: 'flex-start', // Removed for panel style
-        maxWidth: '100%', // Allow full width within the panel
-        p: '8px 0', // Padding top/bottom, no side padding
-        // borderRadius: '16px', // Removed
-        // bgcolor: bubbleBgColor, // Removed
-        color: textColor, // Use general text color
-        // boxShadow: theme.shadows[1], // Removed
-        wordBreak: 'break-word',
-        position: 'relative', // For positioning the cursor
-        '& code': {
-          backgroundColor: codeBgColor, // Theme-aware code background
-          padding: '2px 4px',
-          borderRadius: '4px',
-          fontFamily: 'monospace',
-          fontSize: '0.9em',
-          color: textColor, // Ensure code text matches bubble text color
-        },
-        '& pre': {
-          backgroundColor: codeBgColor, // Theme-aware pre background
-          padding: '8px',
-          borderRadius: '4px',
-          overflow: 'auto',
-          '& code': {
-            backgroundColor: 'transparent', // Code within pre has no extra bg
-            padding: 0,
-          }
-        },
-        '& p': {
-          margin: '8px 0',
-          '&:first-of-type': {
-            marginTop: 0,
-          },
-          '&:last-child': {
-            marginBottom: 0,
-          }
-        },
-        '& ul, & ol': {
-          marginTop: '8px',
-          marginBottom: '8px',
-          paddingLeft: '20px',
-        },
-        '& blockquote': {
-          borderLeft: `3px solid ${blockquoteBorderColor}`, // Theme-aware border
-          margin: '8px 0',
-          paddingLeft: '12px',
-          color: blockquoteTextColor, // Theme-aware text color
-        }
-      }}
+    <div
+      className={cn(
+        "max-w-full py-2 break-words relative"
+      )}
+      style={{
+        color: textColor,
+        '--code-bg': codeBgColor,
+        '--blockquote-border': blockquoteBorderColor,
+        '--blockquote-text': blockquoteTextColor,
+      } as React.CSSProperties}
     >
-      <Typography 
-        variant="body2" 
-        component="div"
-        sx={{
-          '& > *:first-of-type': { mt: 0 },
-          '& > *:last-of-type': { mb: 0 }
-        }}
+      <div 
+        className={cn(
+          "text-sm prose prose-sm max-w-none",
+          "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          "[&_code]:bg-[var(--code-bg)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-[0.9em]",
+          "[&_pre]:bg-[var(--code-bg)] [&_pre]:p-2 [&_pre]:rounded [&_pre]:overflow-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0",
+          "[&_p]:my-2 [&_ul]:my-2 [&_ol]:my-2 [&_ul]:pl-5 [&_ol]:pl-5",
+          "[&_blockquote]:border-l-[3px] [&_blockquote]:border-[var(--blockquote-border)] [&_blockquote]:my-2 [&_blockquote]:pl-3"
+        )}
+        style={{ color: textColor }}
       >
         <ReactMarkdown>{text}</ReactMarkdown>
         {isStreaming && (
-          <Box 
-            component="span" 
-            sx={{ 
-              display: 'inline-block',
-              marginLeft: '2px',
+          <span 
+            className="inline-block ml-0.5 font-bold animate-pulse"
+            style={{ 
               animation: 'cursor-blink 1s step-end infinite',
-              fontWeight: 'bold',
-              fontSize: '1em', // Match text size
-              lineHeight: 'inherit', // Match line height
-              color: textColor, // Match text color
+              color: textColor,
             }}
           >
             |
-          </Box>
+          </span>
         )}
-      </Typography>
+      </div>
       {action && onActionClick && (
-        <Box sx={{mt: 0.5}}>
+        <div className="mt-2">
           <AssistantActionChip 
             action={action} 
             onClick={onActionClick}
           />
-        </Box>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 

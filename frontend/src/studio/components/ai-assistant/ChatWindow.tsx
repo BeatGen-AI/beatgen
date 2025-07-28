@@ -1,17 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Box, 
-  Paper, 
-  Typography, 
-  TextField, 
-  IconButton, 
-  CircularProgress,
-  Chip,
-  useTheme
-} from '@mui/material';
 import {IconX} from '@tabler/icons-react';
-import SendIcon from '@mui/icons-material/Send';
 import { IconAi } from '@tabler/icons-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { 
   interactWithAssistant,
   cancelAssistantRequest,
@@ -35,11 +29,9 @@ import { MidiTrackRead } from 'src/platform/types/dto/track_models/midi_track';
 import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track';
 import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
-import { alpha } from '@mui/material/styles';
 import ChatModelMenu from './ChatModelMenu';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { createDefaultInstance } from '../../utils/instanceHelpers';
-import { Button } from '@/components/ui/button';
 
 interface Message {
   text: string;
@@ -76,30 +68,23 @@ interface GenerationChoiceButtonsProps {
 
 const GenerationChoiceButtons: React.FC<GenerationChoiceButtonsProps> = ({ onMidiChoice, onAudioChoice }) => {
   return (
-    <Box sx={{ 
-      p: 2, 
-      borderRadius: 1, 
-      border: '1px solid',
-      borderColor: 'divider',
-      mb: 1
-    }}>
-      <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+    <Card className="p-4 border mb-2">
+      <p className="text-sm text-muted-foreground mb-4">
         Choose your generation method:
-      </Typography>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      </p>
+      <div className="flex flex-col gap-2">
         <Button onClick={onMidiChoice}>
           Generate Midi Melody
         </Button>
         <Button onClick={onAudioChoice}>
           Generate Audio Melody
         </Button>
-      </Box>
-    </Box>
+      </div>
+    </Card>
   );
 };
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
-  const theme = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -1013,76 +998,45 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        right: 0,
-        top: '50px',
-        bottom: 0,
-        pointerEvents: isVisible ? 'auto' : 'none',
-        zIndex: 1200,
-      }}
+    <div
+      className={cn(
+        "fixed right-0 top-[50px] bottom-0 z-[1200]",
+        isVisible ? "pointer-events-auto" : "pointer-events-none"
+      )}
     >
-      <Paper
-        elevation={4}
-        sx={{
-          height: '100%',
-          width: CHAT_WINDOW_WIDTH,
-          bgcolor: alpha(theme.palette.background.paper, 0.95),
-          color: 'text.primary',
-          display: 'flex',
-          flexDirection: 'column',
-          borderLeft: `1px solid ${theme.palette.divider}`,
-          transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-          transition: `transform ${ANIMATION_DURATION}ms cubic-bezier(0, 0, 0.2, 1)`,
-          visibility: isVisible ? 'visible' : 'hidden'
-        }}
+      <div
+        className={cn(
+          "h-full bg-background/95 text-foreground flex flex-col border-l transition-transform duration-[225ms] ease-[cubic-bezier(0,0,0.2,1)] shadow-lg",
+          isOpen ? "translate-x-0" : "translate-x-full",
+          isVisible ? "visible" : "invisible"
+        )}
+        style={{ width: CHAT_WINDOW_WIDTH }}
       >
         {/* Header */}
-        <Box sx={{ 
-          height: GRID_CONSTANTS.headerHeight,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          px: 0,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : alpha(theme.palette.background.paper, 0.9),
-          flexShrink: 0
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', px: 0.5}}>
+        <div 
+          className="flex items-center justify-between px-2 border-b bg-background/90 shrink-0"
+          style={{ height: GRID_CONSTANTS.headerHeight }}
+        >
+          <div className="flex items-center px-1">
             <IconAi size={28} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+            <h3 className="text-base font-medium ml-2">
               Assistant
-            </Typography>
-          </Box>
+            </h3>
+          </div>
           
-          <IconButton 
-            size="small" 
-            onClick={onClose} 
-            sx={{ 
-              color: 'inherit',
-              borderRadius: '8px',
-              '&:hover': {
-                backgroundColor: theme.palette.action.hover
-              }
-            }}
-            disableRipple
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="h-auto p-1 rounded-md hover:bg-accent"
             aria-label="Close assistant"
           >
             <IconX size={12} />
-          </IconButton>
-        </Box>
+          </Button>
+        </div>
         
         {/* Messages */}
-        <Box sx={{ 
-          flex: 1, 
-          overflowY: 'auto',
-          p: 2,
-          px: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1.5
-        }}>
+        <div className="flex-1 overflow-y-auto p-4 px-2 flex flex-col gap-3">
           {isStepMode && steps.length > 0 ? (
             // Step-based rendering for music generation
             <>
@@ -1134,26 +1088,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           )}
           
           <div ref={messagesEndRef} />
-        </Box>
+        </div>
 
         {/* Input Area */}
-        <Box sx={{ 
-          p: 2, 
-          display: 'flex', 
-          borderTop: `1px solid ${theme.palette.divider}`,
-          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : alpha(theme.palette.background.paper, 0.9),
-        }}>
-          <Box sx={{ position: 'relative', width: '100%' }}>
+        <div className="p-4 flex border-t bg-background/90">
+          <div className="relative w-full">
             {/* Chips Box */}
-            <Box sx={{
-              position: 'absolute',
-              top: '4px',
-              left: '8px',
-              gap: 1,
-              zIndex: 1,
-              display: 'flex',
-              mt: 0.5,
-            }}>
+            <div className="absolute top-1 left-2 flex gap-2 z-10 mt-2">
               <ChatModeMenu
                 triggerLabel={mode}
                 onSelect={handleModeSelect}
@@ -1172,61 +1113,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                   onDelete={handleRemoveContext}
                 />
               )}
-            </Box>
+            </div>
 
             {/* TextField */}
-            <TextField
-              fullWidth
-              multiline
+            <Textarea
               placeholder={isLoading ? `Generating${animatedDots}` : "Ask me anything about your project..."}
               value={prompt}
               onChange={handleTextChange}
               onKeyDown={handleKeyPress}
               disabled={isLoading}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  color: theme.palette.text.primary,
-                  bgcolor: alpha(theme.palette.background.default, 0.8),
-                  '& fieldset': {
-                    borderColor: theme.palette.divider
-                  },
-                  '&:hover fieldset': {
-                    borderColor: theme.palette.text.secondary
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: 'primary.main'
-                  },
-                  '& .MuiOutlinedInput-input': {
-                    pt: '20px',
-                    pb: '16px',
-                    minHeight: '20px'
-                  }
-                },
-                '& .MuiOutlinedInput-notchedOutline': {
-                  border: 'none'
-                },
-                '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  border: '1px solid',
-                  borderColor: 'primary.main'
-                }
-              }}
+              className={cn(
+                "w-full bg-background/80 border-border pt-5 pb-4 min-h-[20px] resize-none",
+                "hover:border-muted-foreground focus-visible:border-primary",
+                "border-0 focus-visible:border focus-visible:ring-0"
+              )}
             />
 
             {/* Bottom Box with Send Button */}
-            <Box
-              sx={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                px: 1,
-                gap: 1
-              }}
-            >
+            <div className="absolute bottom-0 left-0 right-0 h-9 flex items-center justify-between px-2 gap-2">
               {/* Model Selector Chip - Bottom Left (hidden for Generate Audio mode) */}
               {mode !== 'Generate Audio' ? (
                 <ChatModelMenu
@@ -1236,7 +1140,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                   selectedModel={selectedModel}
                 />
               ) : (
-                <Box sx={{ flex: 1 }} />
+                <div className="flex-1" />
               )}
 
               {/* Send/Cancel Chip - Bottom Right */}
@@ -1246,11 +1150,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
                 disabled={!prompt.trim() && !isLoading}
                 color={isLoading ? 'secondary' : 'primary'}
               />
-            </Box>
-          </Box>
-        </Box>
-      </Paper>
-    </Box>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { Box } from '@mui/material';
 
 interface WaveformDisplayProps {
   audioFile?: File;
@@ -109,26 +108,12 @@ export const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
   }, [audioFile, waveformData, trackColor, width]);
   
   return (
-    <Box sx={{ 
-      height: '100%',
-      width: '100%',
-      display: 'flex', 
-      alignItems: 'center',
-      overflow: 'hidden',
-      position: 'relative',
-    }}>
+    <div className="h-full w-full flex items-center overflow-hidden relative">
       <canvas 
         ref={canvasRef} 
-        style={{ 
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          width: '100%', 
-          height: '100%',
-          display: 'block',
-        }} 
+        className="absolute left-0 top-0 w-full h-full block"
       />
-    </Box>
+    </div>
   );
 };
 

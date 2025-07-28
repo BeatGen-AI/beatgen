@@ -1,17 +1,7 @@
 import React from 'react';
-import { 
-  Typography, 
-  Grid, 
-  CircularProgress,
-  Box,
-  Paper,
-  Alert,
-  Snackbar
-} from '@mui/material';
-import { 
-  Add as AddIcon,
-  MusicNote as MusicNoteIcon,
-} from '@mui/icons-material';
+import { Plus, Music } from 'lucide-react';
+import { Alert, AlertDescription } from "../../components/ui/alert";
+import { Card, CardContent } from "../../components/ui/card";
 import { Project } from '../types/project';
 import { Button } from "../../components/ui/button";
 import ProjectCard from './DisplayCards/ProjectCard';
@@ -67,46 +57,49 @@ const ProjectsDisplay: React.FC<ProjectsDisplayProps> = ({
   return (
     <React.Fragment>
       {error && (
-        <Alert severity="error" sx={{ mb: 4 }}>
-          {error}
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
       {loading ? (
-        <Paper className="project-empty-state" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, mt: 2 }}>
-          <CircularProgress sx={{ mb: 2 }} />
-          <Typography variant="body1" color="text.secondary">
-            Loading your projects...
-          </Typography>
-        </Paper>
+        <Card className="project-empty-state flex flex-col items-center py-8 mt-2">
+          <CardContent className="flex flex-col items-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+            <p className="text-muted-foreground">
+              Loading your projects...
+            </p>
+          </CardContent>
+        </Card>
       ) : allFetchedProjects.length === 0 ? (
-        <Paper className="project-empty-state" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, mt: 2, textAlign: 'center' }}>
-          <MusicNoteIcon className="project-empty-icon" sx={{ fontSize: 60, mb: 2 }} />
-          <Typography 
-            variant="h6" 
-            gutterBottom
-            style={{ 
-              color: logoColors[1],
-            }}
-          >
-            No projects yet
-          </Typography>
-          <Typography variant="body1" color="text.secondary" paragraph>
-            Create your first music project to get started!
-          </Typography>
-          <Button 
-            variant="default"
-            className="flex items-center gap-2"
-            onClick={onCreateNewProject}
-          >
-            <AddIcon fontSize="small" />
-            Create Project
-          </Button>
-        </Paper>
+        <Card className="project-empty-state flex flex-col items-center py-8 mt-2 text-center">
+          <CardContent className="flex flex-col items-center">
+            <Music className="project-empty-icon w-15 h-15 mb-2" />
+            <h3 
+              className="text-lg font-semibold mb-2"
+              style={{ 
+                color: logoColors[1],
+              }}
+            >
+              No projects yet
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Create your first music project to get started!
+            </p>
+            <Button 
+              variant="default"
+              className="flex items-center gap-2"
+              onClick={onCreateNewProject}
+            >
+              <Plus className="w-4 h-4" />
+              Create Project
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <Grid container spacing={3} sx={{pt: 2}}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-2">
           {allFetchedProjects.slice(0, displayedProjectsCount).map((project) => (
-            <Grid item xs={12} sm={6} md={4} key={project.id}>
+            <div key={project.id}>
               <ProjectCard 
                 project={project}
                 onOpenProject={onOpenProject}
@@ -115,14 +108,14 @@ const ProjectsDisplay: React.FC<ProjectsDisplayProps> = ({
                 sectionColor={sectionColor}
                 getPrefetchStatus={getPrefetchStatus}
               />
-            </Grid>
+            </div>
           ))}
-        </Grid>
+        </div>
       )}
 
       {/* Show More Button */} 
       {!loading && displayedProjectsCount < totalProjectsOnServer && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+        <div className="flex justify-center mt-4 mb-2">
           <Button 
             variant="outline"
             onClick={onShowMore} 
@@ -130,24 +123,17 @@ const ProjectsDisplay: React.FC<ProjectsDisplayProps> = ({
           >
             Show More
           </Button>
-        </Box>
+        </div>
       )}
 
-      {/* Snackbar for notifications */}
-      <Snackbar 
-        open={snackbarOpen} 
-        autoHideDuration={6000} 
-        onClose={onCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert 
-          onClose={onCloseSnackbar} 
-          severity={snackbarSeverity} 
-          variant="filled"
-        >
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
+      {/* Note: Replaced Snackbar with a simpler approach - consider implementing toast system */}
+      {snackbarOpen && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
+          <Alert variant={snackbarSeverity === 'error' ? 'destructive' : 'default'} className="w-auto">
+            <AlertDescription>{snackbarMessage}</AlertDescription>
+          </Alert>
+        </div>
+      )}
     </React.Fragment>
   );
 };

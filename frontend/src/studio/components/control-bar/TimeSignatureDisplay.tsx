@@ -1,112 +1,111 @@
 import React, { useState } from 'react';
-import Box from '@mui/material/Box';
-import Menu from '@mui/material/Menu';
-import MenuItem from '@mui/material/MenuItem';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../../components/ui/dropdown-menu';
+import { useAppTheme } from '../../../lib/theme-provider';
+import { cn } from '../../../lib/utils';
 
 interface TimeSignatureMenuProps {
-  anchorEl: HTMLElement | null;
   open: boolean;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
   selectedValue: number;
   options: number[];
   onSelect: (value: number) => void;
-  showArrow?: boolean;
+  children: React.ReactNode;
 }
 
 const TimeSignatureMenu: React.FC<TimeSignatureMenuProps> = ({
-  anchorEl,
   open,
-  onClose,
+  onOpenChange,
   selectedValue,
   options,
   onSelect,
-}) => (
-  <Menu
-    anchorEl={anchorEl}
-    open={open}
-    onClose={onClose}
-    anchorOrigin={{
-      vertical: 'bottom',
-      horizontal: 'center',
-    }}
-    transformOrigin={{
-      vertical: -12,
-      horizontal: 'center',
-    }}
-    slotProps={{
-      paper: {
-        elevation: 4,
-        sx: {
-          overflow: 'visible',
-          filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
-          bgcolor: '#1A1A1A',
-          color: 'white',
-          '&::before': {
-            content: '""',
-            display: 'block',
-            position: 'absolute',
-            top: 0,
-            right: 14,
-            width: 10,
-            height: 10,
-            bgcolor: '#1A1A1A',
-            transform: 'translateY(-50%) rotate(45deg)',
-            zIndex: 0,
-          },
-        }
-      }
-    }}
-  >
-    {options.map((num) => (
-      <MenuItem
-        key={num}
-        onClick={() => onSelect(num)}
-        selected={num === selectedValue}
-        sx={{
-          borderRadius: 1,
-          mx: 0.5,
-          mb: 0.5,
+  children,
+}) => {
+  const { studioMode } = useAppTheme();
 
-          '&:hover': {
-            bgcolor: 'rgba(255, 255, 255, 0.1)',
-          },
-          '&.Mui-selected': {
-            bgcolor: 'rgba(255, 255, 255, 0.2)',
-          },
-        }}
+  return (
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
+        {children}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent 
+        align="center"
+        sideOffset={8}
+        className={cn(
+          "min-w-[60px] p-1",
+          studioMode === 'dark'
+            ? "bg-black/90 border-white/20"
+            : "bg-white border-black/20"
+        )}
       >
-        {num}
-      </MenuItem>
-    ))}
-  </Menu>
-);
+        {options.map((num) => (
+          <DropdownMenuItem
+            key={num}
+            onClick={() => onSelect(num)}
+            className={cn(
+              "justify-center text-sm py-1.5 px-2 rounded cursor-pointer",
+              num === selectedValue
+                ? studioMode === 'dark'
+                  ? "bg-white/20 text-white"
+                  : "bg-black/20 text-black"
+                : studioMode === 'dark'
+                  ? "text-white/80 hover:bg-white/10"
+                  : "text-black/80 hover:bg-black/10"
+            )}
+          >
+            {num}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
 
 interface TimeSignatureNumberProps {
   value: number;
-  onClick: (event: React.MouseEvent<HTMLElement>) => void;
+  onClick: () => void;
+  options: number[];
+  onSelect: (value: number) => void;
 }
 
 const TimeSignatureNumber: React.FC<TimeSignatureNumberProps> = ({
   value,
   onClick,
-}) => (
-  <Box
-    component="span"
-    onClick={onClick}
-    sx={{
-      cursor: 'pointer',
-      width: '16px',
-      display: 'inline-block',
-      textAlign: 'center',
-      '&:hover': {
-        color: '#888',
-      },
-      transition: 'color 0.2s',
-    }}
-  >
-    {value}
-  </Box>
-);
+  options,
+  onSelect,
+}) => {
+  const [open, setOpen] = useState(false);
+  const { studioMode } = useAppTheme();
+
+  return (
+    <TimeSignatureMenu
+      open={open}
+      onOpenChange={setOpen}
+      selectedValue={value}
+      options={options}
+      onSelect={(newValue) => {
+        onSelect(newValue);
+        setOpen(false);
+      }}
+    >
+      <span
+        className={cn(
+          "inline-block w-4 text-center cursor-pointer transition-colors duration-200",
+          studioMode === 'dark'
+            ? "hover:text-white/60"
+            : "hover:text-black/60"
+        )}
+        onClick={() => setOpen(true)}
+      >
+        {value}
+      </span>
+    </TimeSignatureMenu>
+  );
+};
 
 interface TimeSignatureDisplayProps {
   topNumber: number;
@@ -121,73 +120,43 @@ export const TimeSignatureDisplay: React.FC<TimeSignatureDisplayProps> = ({
   onTopNumberChange,
   onBottomNumberChange,
 }) => {
-  const [topAnchorEl, setTopAnchorEl] = useState<null | HTMLElement>(null);
-  const [bottomAnchorEl, setBottomAnchorEl] = useState<null | HTMLElement>(null);
-
-  const handleTopClick = (event: React.MouseEvent<HTMLElement>) => {
-    setTopAnchorEl(event.currentTarget);
-  };
-
-  const handleBottomClick = (event: React.MouseEvent<HTMLElement>) => {
-    setBottomAnchorEl(event.currentTarget);
-  };
-
-  const handleTopClose = () => {
-    setTopAnchorEl(null);
-  };
-
-  const handleBottomClose = () => {
-    setBottomAnchorEl(null);
-  };
+  const { studioMode } = useAppTheme();
 
   const handleTopSelect = (value: number) => {
     if (onTopNumberChange) {
       onTopNumberChange(value);
     }
-    handleTopClose();
   };
 
   const handleBottomSelect = (value: number) => {
     if (onBottomNumberChange) {
       onBottomNumberChange(value);
     }
-    handleBottomClose();
   };
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        bgcolor: '#1E1E1E',
-        borderRadius: 1,
-        px: 2,
-        py: 0.5,
-        height: '24px',
-      }}
+    <div
+      className={cn(
+        "flex items-center px-2 py-1 h-6 rounded font-mono text-sm",
+        studioMode === 'dark'
+          ? "bg-white/10 border border-white/12"
+          : "bg-black/10 border border-black/12"
+      )}
     >
-      <TimeSignatureNumber value={topNumber} onClick={handleTopClick} />
-      <Box component="span" sx={{ mx: 1 }}>/</Box>
-      <TimeSignatureNumber value={bottomNumber} onClick={handleBottomClick} />
-
-      <TimeSignatureMenu
-        anchorEl={topAnchorEl}
-        open={Boolean(topAnchorEl)}
-        onClose={handleTopClose}
-        selectedValue={topNumber}
+      <TimeSignatureNumber 
+        value={topNumber} 
+        onClick={() => {}} 
         options={[1, 2, 3, 4, 5, 6]}
         onSelect={handleTopSelect}
       />
-
-      <TimeSignatureMenu
-        anchorEl={bottomAnchorEl}
-        open={Boolean(bottomAnchorEl)}
-        onClose={handleBottomClose}
-        selectedValue={bottomNumber}
+      <span className="mx-1 select-none">/</span>
+      <TimeSignatureNumber 
+        value={bottomNumber} 
+        onClick={() => {}} 
         options={[1, 2, 4, 8]}
         onSelect={handleBottomSelect}
       />
-    </Box>
+    </div>
   );
 };
 

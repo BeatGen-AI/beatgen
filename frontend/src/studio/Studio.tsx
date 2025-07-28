@@ -25,8 +25,7 @@ import ChatWindow from './components/ai-assistant/ChatWindow';
 import DrumMachineWindows from './components/drum-machine/DrumMachineWindows';
 import { StudioSettingsModal } from './components/modals/StudioSettingsModal';
 import { ExportDialog } from './components/export/ExportDialog';
-import { useTheme } from '../lib/theme-provider';
-import { StudioThemeWrapper } from '../lib/studio-theme-wrapper';
+import { useAppTheme } from '../lib/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconChevronLeftPipe, IconChevronRightPipe } from '@tabler/icons-react';
 import { GridSnapOption } from './components/piano-roll2/gridConstants';
@@ -50,7 +49,8 @@ function Studio({ projectId }: StudioProps) {
   const controlBarRef = useRef<HTMLDivElement>(null);
   const [controlBarHeight, setControlBarHeight] = useState(0);
   
-  // Theme is now handled by StudioThemeWrapper, no context switching needed
+  // Use manual theme styling instead of global theme application
+  const { studioMode } = useAppTheme();
   
   // Get state and actions from Zustand store
   const {
@@ -479,15 +479,16 @@ function Studio({ projectId }: StudioProps) {
   }, [tracks, openPianoRoll, openDrumMachine]);
 
   return (
-    <StudioThemeWrapper>
-      <div 
-        className="h-screen bg-background text-foreground flex flex-col select-none"
-        style={{
-          touchAction: 'pan-x',
-          WebkitUserSelect: 'none',
-          WebkitTouchCallout: 'none',
-        }}
-      >
+    <div 
+      className="h-screen flex flex-col select-none"
+      style={{
+        touchAction: 'pan-x',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+        backgroundColor: studioMode === 'dark' ? '#000000' : '#ffffff',
+        color: studioMode === 'dark' ? '#ffffff' : '#000000'
+      }}
+    >
         <StudioControlBar
           ref={controlBarRef}
           canUndo={canUndo}
@@ -533,33 +534,46 @@ function Studio({ projectId }: StudioProps) {
         >
           {/* Left Sidebar - Fixed position */}
           <div 
-            className="bg-card flex flex-col border-r border-border transition-all duration-300 ease-in-out fixed left-0 overflow-x-hidden z-10"
+            className="flex flex-col transition-all duration-300 ease-in-out fixed left-0 overflow-x-hidden z-10"
             style={{ 
               width: isSidebarOpen ? GRID_CONSTANTS.sidebarWidth : COLLAPSED_SIDEBAR_WIDTH,
               top: `${controlBarHeight}px`,
-              height: `calc(100vh - ${controlBarHeight}px)`
+              height: `calc(100vh - ${controlBarHeight}px)`,
+              backgroundColor: studioMode === 'dark' ? '#0a0a0a' : '#f8fafc',
+              borderRight: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
             }}
           >
             {/* Header section with Add Track button */}
             <div 
-              className="flex items-center border-b border-border relative overflow-hidden px-1"
+              className="flex items-center relative overflow-hidden px-1"
               style={{
                 height: GRID_CONSTANTS.headerHeight,
-                minHeight: GRID_CONSTANTS.headerHeight
+                minHeight: GRID_CONSTANTS.headerHeight,
+                borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
               }}
             >
               <div className="relative flex items-center w-full px-1">
                 {isSidebarOpen && (
-                  <Button
-                      size="sm"
-                      variant="ghost"
+                  <button
                       onClick={() => {
                          setIsSidebarOpen(false);
                       }}
-                      className="rounded-lg min-w-7 w-7 p-1 mr-2 hover:bg-white/10"
+                      className="rounded-lg min-w-7 w-7 p-1 mr-2 transition-colors"
+                      style={{
+                        backgroundColor: 'transparent',
+                        color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
                   >
                       <IconChevronLeftPipe size={20} />
-                  </Button>
+                  </button>
                 )}
                 {isSidebarOpen && (
                   <AddTrackMenu
@@ -568,14 +582,24 @@ function Studio({ projectId }: StudioProps) {
                     onAddTrack={handleAddTrack}
                     onFileUpload={uploadAudioFile}
                   >
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="h-6 text-xs font-bold flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                    <button
+                      className="h-6 text-xs font-bold flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap rounded transition-colors px-2"
+                      style={{
+                        backgroundColor: studioMode === 'dark' ? '#2563eb' : '#3b82f6',
+                        color: '#ffffff',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1d4ed8' : '#2563eb';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2563eb' : '#3b82f6';
+                      }}
                     >
                       <Plus className="w-3 h-3 mr-1" />
                       Add Track
-                    </Button>
+                    </button>
                   </AddTrackMenu>
                 )}
                 {/* Placeholder for right side balance when sidebar is open */}
@@ -583,16 +607,26 @@ function Studio({ projectId }: StudioProps) {
                   <div className="w-7 min-w-7 ml-2" />
                 )}
                 {!isSidebarOpen && (
-                  <Button
-                      size="sm"
-                      variant="ghost"
+                  <button
                       onClick={() => {
                            setIsSidebarOpen(true);
                       }}
-                      className="rounded-lg min-w-7 w-7 p-1 m-auto hover:bg-white/10"
+                      className="rounded-lg min-w-7 w-7 p-1 m-auto transition-colors"
+                      style={{
+                        backgroundColor: 'transparent',
+                        color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
                   >
                       <IconChevronRightPipe size={20} />
-                  </Button>
+                  </button>
                 )}
               </div>
             </div>
@@ -716,7 +750,6 @@ function Studio({ projectId }: StudioProps) {
           onClose={() => setShowExportDialog(false)} 
         />
       </div>
-    </StudioThemeWrapper>
   );
 }
 

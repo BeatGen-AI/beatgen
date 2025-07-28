@@ -1,30 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-    Box, 
-    Modal, 
-    IconButton, 
-    Typography, 
-    Grid, 
-    Accordion, 
-    AccordionSummary, 
-    AccordionDetails,
-    CircularProgress,
-    Alert,
-    Button,
-    TextField,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    SelectChangeEvent,
-    useTheme
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { X as CloseIcon, ChevronDown as ExpandMoreIcon, Loader2 } from 'lucide-react';
 import { getPublicDrumSamples } from '../../../../platform/api/drum_samples';
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
 import { DrumSampleCard } from './DrumMachineModalCard';
 import { prettyPrint } from '../../../../utils/pretty_print';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../components/ui/dialog';
+import { Button } from '../../../../components/ui/button';
+import { Input } from '../../../../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../../../components/ui/accordion';
+import { Alert, AlertDescription } from '../../../../components/ui/alert';
 
 // --- DrumMachineModal Component --- //
 
@@ -35,7 +20,6 @@ export interface DrumMachineModalProps {
 }
 
 export const DrumMachineModal = ({ open, onClose, onConfirmSelection }: DrumMachineModalProps) => {
-    const theme = useTheme();
     const [loading, setLoading] = useState(false);
     const [drumSamples, setDrumSamples] = useState<DrumSamplePublicRead[]>([]);
     const [filteredDrumSamples, setFilteredDrumSamples] = useState<DrumSamplePublicRead[]>([]);
@@ -147,207 +131,107 @@ export const DrumMachineModal = ({ open, onClose, onConfirmSelection }: DrumMach
         setSearchQuery(event.target.value);
     };
 
-    const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (event: SelectChangeEvent<string>) => {
-        setter(event.target.value);
-    };
-
-
     // --- Rendering --- //
 
     return (
-        <Modal
-            open={open}
-            onClose={onClose}
-            sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-            }}
-        >
-            <Box
-                sx={{
-                    bgcolor: 'background.paper',
-                    color: 'text.primary',
-                    borderRadius: 2,
-                    p: 3,
-                    maxWidth: '900px',
-                    width: '90%',
-                    maxHeight: '90vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden'
-                }}
-            >
-                {/* Header */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexShrink: 0 }}>
-                    <Typography variant="h6">Choose Drum Sample(s)</Typography>
-                    <IconButton
-                        onClick={onClose}
-                        color="inherit"
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        <CloseIcon />
-                    </IconButton>
-                </Box>
+        <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0">
+                    <DialogTitle>Choose Drum Sample(s)</DialogTitle>
+                </DialogHeader>
                 
                 {/* Error Alert */}
                 {error && (
-                    <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }}>
-                        {error}
+                    <Alert variant="destructive" className="mb-4 flex-shrink-0">
+                        <AlertDescription>{error}</AlertDescription>
                     </Alert>
                 )}
                 
                 {/* Main Content Area (Scrollable) */}
-                <Box sx={{ overflowY: 'auto', flexGrow: 1, mb: 2 }}>
-                    <Accordion 
-                        expanded={expanded}
-                        onChange={() => setExpanded(!expanded)}
-                        sx={{ 
-                            bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
-                            color: 'inherit',
-                            boxShadow: 'none',
-                            '&:before': { display: 'none' },
-                            borderRadius: 2,
-                        }}
-                    >
-                        <AccordionSummary
-                            expandIcon={<ExpandMoreIcon sx={{ color: 'text.secondary' }} />}
-                            sx={{ 
-                                borderRadius: 2,
-                                '&:hover': {
-                                    bgcolor: theme.palette.action.hover
-                                }
-                            }}
-                        >
-                            <Typography variant="subtitle1">Explore Drum Sample Library</Typography>
-                        </AccordionSummary>
-                        <AccordionDetails sx={{ p: { xs: 1, sm: 2 } }}>
-                            {/* Filter and Search Section */}
-                            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                                <TextField
-                                    label="Search Samples"
-                                    variant="outlined"
-                                    size="small"
-                                    value={searchQuery}
-                                    onChange={handleSearchChange}
-                                    sx={{ 
-                                        flexGrow: 1, 
-                                        minWidth: '200px',
-                                        '& .MuiOutlinedInput-root': {
-                                            '& fieldset': { borderColor: theme.palette.divider },
-                                            '&:hover fieldset': { borderColor: theme.palette.text.secondary },
-                                            '&.Mui-focused fieldset': { borderColor: 'primary.main' },
-                                        },
-                                        '& .MuiInputLabel-root': { color: theme.palette.text.secondary },
-                                        '& .MuiInputBase-input': { color: theme.palette.text.primary }
-                                    }}
-                                />
-                                <FormControl size="small" sx={{ minWidth: 120 }}>
-                                    <InputLabel sx={{ color: theme.palette.text.secondary }}>Kit</InputLabel>
-                                    <Select
-                                        value={selectedKit}
-                                        label="Kit"
-                                        onChange={handleFilterChange(setSelectedKit)}
-                                        sx={{ 
-                                            color: theme.palette.text.primary,
-                                            '& .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.divider },
-                                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.text.secondary },
-                                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'primary.main' },
-                                            '& .MuiSvgIcon-root': { color: theme.palette.text.secondary }
-                                        }}
-                                        MenuProps={{ PaperProps: { sx: { bgcolor: 'background.paper', color: 'text.primary' } } }}
-                                    >
-                                        {uniqueKits.map(kit => <MenuItem key={kit} value={kit}>{kit}</MenuItem>)}
+                <div className="flex-grow overflow-y-auto mb-4">
+                    <Accordion type="single" collapsible value={expanded ? "samples" : ""} onValueChange={(value) => setExpanded(value === "samples")}>
+                        <AccordionItem value="samples" className="bg-card/50 rounded-lg border">
+                            <AccordionTrigger className="px-4 hover:bg-accent/50 rounded-t-lg">
+                                Explore Drum Sample Library
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4">
+                                {/* Filter and Search Section */}
+                                <div className="flex gap-4 mb-6 flex-wrap">
+                                    <Input
+                                        placeholder="Search Samples"
+                                        value={searchQuery}
+                                        onChange={handleSearchChange}
+                                        className="flex-grow min-w-[200px]"
+                                    />
+                                    <Select value={selectedKit} onValueChange={setSelectedKit}>
+                                        <SelectTrigger className="w-[120px]">
+                                            <SelectValue placeholder="Kit" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {uniqueKits.map(kit => (
+                                                <SelectItem key={kit} value={kit}>{kit}</SelectItem>
+                                            ))}
+                                        </SelectContent>
                                     </Select>
-                                </FormControl>
-                                <FormControl size="small" sx={{ minWidth: 120 }}>
-                                    <InputLabel sx={{ color: theme.palette.text.secondary }}>Genre</InputLabel>
-                                    <Select
-                                        value={selectedGenre}
-                                        label="Genre"
-                                        onChange={handleFilterChange(setSelectedGenre)}
-                                        sx={{ 
-                                            color: theme.palette.text.primary,
-                                            '& .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.divider },
-                                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.text.secondary },
-                                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'primary.main' },
-                                            '& .MuiSvgIcon-root': { color: theme.palette.text.secondary }
-                                        }}
-                                        MenuProps={{ PaperProps: { sx: { bgcolor: 'background.paper', color: 'text.primary' } } }}
-                                    >
-                                        {uniqueGenres.map(genre => <MenuItem key={genre} value={genre}>{genre}</MenuItem>)}
+                                    <Select value={selectedGenre} onValueChange={setSelectedGenre}>
+                                        <SelectTrigger className="w-[120px]">
+                                            <SelectValue placeholder="Genre" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {uniqueGenres.map(genre => (
+                                                <SelectItem key={genre} value={genre}>{genre}</SelectItem>
+                                            ))}
+                                        </SelectContent>
                                     </Select>
-                                </FormControl>
-                                <FormControl size="small" sx={{ minWidth: 120 }}>
-                                    <InputLabel sx={{ color: theme.palette.text.secondary }}>Type</InputLabel>
-                                    <Select
-                                        value={selectedType}
-                                        label="Type"
-                                        onChange={handleFilterChange(setSelectedType)}
-                                        sx={{ 
-                                            color: theme.palette.text.primary,
-                                            '& .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.divider },
-                                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.text.secondary },
-                                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'primary.main' },
-                                            '& .MuiSvgIcon-root': { color: theme.palette.text.secondary }
-                                        }}
-                                        MenuProps={{ PaperProps: { sx: { bgcolor: 'background.paper', color: 'text.primary' } } }}
-                                    >
-                                        {uniqueTypes.map(type => <MenuItem key={type} value={type}>{type}</MenuItem>)}
+                                    <Select value={selectedType} onValueChange={setSelectedType}>
+                                        <SelectTrigger className="w-[120px]">
+                                            <SelectValue placeholder="Type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {uniqueTypes.map(type => (
+                                                <SelectItem key={type} value={type}>{type}</SelectItem>
+                                            ))}
+                                        </SelectContent>
                                     </Select>
-                                </FormControl>
-                            </Box>
+                                </div>
 
-                            {/* Sample Grid */}
-                            {loading ? (
-                                <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                                    <CircularProgress size={40} />
-                                </Box>
-                            ) : filteredDrumSamples.length === 0 ? (
-                                <Typography variant="body2" color="text.secondary" align="center" sx={{ p: 2 }}>
-                                    {drumSamples.length === 0 ? 'No drum samples found in the library' : 'No samples match the current filters.'}
-                                </Typography>
-                            ) : (
-                                <Grid container spacing={2}>
-                                    {filteredDrumSamples.map((sample) => (
-                                        <Grid item xs={12} sm={6} md={4} key={sample.id}>
+                                {/* Sample Grid */}
+                                {loading ? (
+                                    <div className="flex justify-center p-8">
+                                        <Loader2 className="w-10 h-10 animate-spin" />
+                                    </div>
+                                ) : filteredDrumSamples.length === 0 ? (
+                                    <p className="text-muted-foreground text-center py-4">
+                                        {drumSamples.length === 0 ? 'No drum samples found in the library' : 'No samples match the current filters.'}
+                                    </p>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                        {filteredDrumSamples.map((sample) => (
                                             <DrumSampleCard 
+                                                key={sample.id}
                                                 sample={sample}
                                                 onToggleSelect={handleToggleSelect}
                                                 isSelected={selectedSampleIds.has(sample.id)}
                                                 isLoading={loading} 
                                             />
-                                        </Grid>
-                                    ))}
-                                </Grid>
-                            )}
-                        </AccordionDetails>
+                                        ))}
+                                    </div>
+                                )}
+                            </AccordionContent>
+                        </AccordionItem>
                     </Accordion>
-                </Box>
+                </div>
                 
                 {/* Footer Actions */}
-                <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'flex-end', 
-                    pt: 2, 
-                    borderTop: `1px solid ${theme.palette.divider}`,
-                    flexShrink: 0 
-                }}>
+                <div className="flex justify-end pt-4 border-t border-border flex-shrink-0">
                     <Button
-                        variant="contained"
                         onClick={handleConfirmSelection}
                         disabled={selectedSampleIds.size === 0 || loading}
                     >
                         Confirm Selection ({selectedSampleIds.size})
                     </Button>
-                </Box>
-            </Box>
-        </Modal>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }; 

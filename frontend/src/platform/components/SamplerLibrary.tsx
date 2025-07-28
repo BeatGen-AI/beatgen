@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GraphicEq as GraphicEqIcon } from '@mui/icons-material';
+import { BarChart3 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 // Shared components and hooks
@@ -145,7 +145,7 @@ export default function SamplerLibrary({ onReload, sectionColor }: SamplerLibrar
 
   // Custom empty state with the correct icon
   const emptyState = {
-    icon: <GraphicEqIcon sx={{ fontSize: 60 }} />,
+    icon: <BarChart3 className="h-15 w-15" />,
     title: "No sampler tracks in your library",
     description: "Create sampler tracks in the studio to see them here"
   };

@@ -1,11 +1,6 @@
 import React from 'react';
 import { Button } from "../../../components/ui/button";
-import { 
-  PlayArrow as PlayIcon, 
-  Pause as PauseIcon, 
-  DeleteOutline as DeleteIcon,
-  DriveFileMove as EditIcon
-} from '@mui/icons-material';
+import { Play, Pause, Trash2, Edit } from 'lucide-react';
 import { Drum } from 'lucide-react';
 import { DrumTrackRead } from '../../../platform/types/dto/track_models/drum_track';
 import { Badge } from "../../../components/ui/badge";
@@ -41,7 +36,7 @@ const DrumTrackCard: React.FC<DrumTrackCardProps> = ({
         onClick={() => handlePlayTrack(track)}
         className="text-muted-foreground hover:bg-accent hover:text-primary h-7 w-7"
       >
-        {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
+        {isPlaying ? <Pause size={16} /> : <Play size={16} />}
       </Button>
       {handleEditTrack && (
         <Button 
@@ -50,7 +45,7 @@ const DrumTrackCard: React.FC<DrumTrackCardProps> = ({
           onClick={() => handleEditTrack(track.id)}
           className="text-muted-foreground hover:bg-accent hover:text-yellow-500 dark:hover:text-yellow-400 h-7 w-7"
         >
-          <EditIcon fontSize="small" />
+          <Edit size={16} />
         </Button>
       )}
       <Button 
@@ -59,7 +54,7 @@ const DrumTrackCard: React.FC<DrumTrackCardProps> = ({
         onClick={() => handleDeleteTrack(track.id)}
         className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
       >
-        <DeleteIcon fontSize="small" />
+        <Trash2 size={16} />
       </Button>
     </>
   );

@@ -26,7 +26,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    // Load saved themes
+    // Load saved themes on mount
     const savedHomepageTheme = localStorage.getItem("theme-homepage") as Theme
     const savedStudioTheme = localStorage.getItem("theme-studio") as Theme
     
@@ -34,32 +34,56 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (savedStudioTheme) setStudioThemeState(savedStudioTheme)
   }, [])
 
-  useEffect(() => {
-    // Only apply homepage theme to root element
-    const root = window.document.documentElement
-    
-    root.classList.remove("light", "dark")
-    
-    if (homepageTheme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light"
-      root.classList.add(systemTheme)
-    } else {
-      root.classList.add(homepageTheme)
-    }
-  }, [homepageTheme])
-
   return (
     <ThemeProviderContext.Provider value={{ 
       homepageTheme, 
       studioTheme, 
       setHomepageTheme, 
-      setStudioTheme 
+      setStudioTheme
     }}>
       {children}
     </ThemeProviderContext.Provider>
   )
+}
+
+// Track the current route globally to determine which theme should take precedence
+let currentRoute: 'homepage' | 'studio' | null = null
+
+// Hook to apply theme based on current page with route-based priority
+export function usePageTheme(page: 'homepage' | 'studio') {
+  const { homepageTheme, studioTheme } = useTheme()
+  const theme = page === 'studio' ? studioTheme : homepageTheme
+
+  useEffect(() => {
+    // Determine if this is a studio route (studio always takes precedence)
+    const isStudioRoute = window.location.pathname === '/studio'
+    
+    // NEVER apply any global theme when on studio route - studio uses manual styling only
+    if (isStudioRoute) {
+      return // Don't apply any global theme when on studio route
+    }
+    
+    // If we're not on a studio route, only homepage theme calls should apply
+    if (!isStudioRoute && page === 'studio') {
+      return // Don't apply studio theme when not on studio route
+    }
+    
+    // Set the current route
+    currentRoute = page
+    
+    // Apply theme to document (only for non-studio routes)
+    const root = document.documentElement
+    root.classList.remove("light", "dark")
+    
+    const resolvedTheme = theme === "system" 
+      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : theme
+    
+    root.classList.add(resolvedTheme)
+    root.setAttribute('data-page', page)
+  }, [theme, page])
+
+  return theme
 }
 
 export const useTheme = () => {

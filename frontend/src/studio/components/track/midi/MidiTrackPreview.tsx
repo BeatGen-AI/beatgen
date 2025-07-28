@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import { Box } from '@mui/material';
 import { useGridStore } from '../../../core/state/gridStore';
 import { GRID_CONSTANTS, getTrackColor } from '../../../constants/gridConstants';
 import { calculateMidiTrackWidth } from '../../../utils/trackWidthCalculators';
@@ -80,24 +79,14 @@ export const MidiTrackPreview: React.FC<MidiTrackPreviewProps> = (props) => {
   // MIDI-specific track content rendering
   const renderTrackContent = () => (
     <>
-      <Box
-        className="piano-roll-trigger"
+      <div
+        className="piano-roll-trigger absolute top-0 left-0 w-full h-full cursor-pointer opacity-30 hover:bg-white/30 transition-colors"
         data-testid="piano-roll-trigger"
         data-track-id={track.id}
         data-track-type={track.track_type}
-        sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          cursor: 'pointer',
+        style={{
           zIndex: 100,
-          opacity: 0.3,
-          backgroundColor: 'rgba(0, 100, 255, 0.1)',
-          '&:hover': {
-            bgcolor: 'rgba(255,255,255,0.3)'
-          }
+          backgroundColor: 'rgba(0, 100, 255, 0.1)'
         }}
       />
       {/* MidiNotesPreview is always rendered at full content width, 

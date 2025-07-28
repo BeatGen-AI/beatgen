@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Palette, Settings, Brain } from 'lucide-react';
-import { useTheme } from '../../../lib/theme-provider';
+import { useAppTheme } from '../../../lib/theme-provider';
 import {
   Dialog,
   DialogContent,
@@ -31,28 +31,9 @@ const assistantModels = [
 ];
 
 export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps) => {
-  const { homepageTheme, studioTheme, setHomepageTheme, setStudioTheme } = useTheme();
+  const { mode, studioMode, toggleUITheme, toggleStudioTheme } = useAppTheme();
   
-  const resolveTheme = (theme: 'dark' | 'light' | 'system') => {
-    return theme === 'system' 
-      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'light')
-      : theme;
-  };
-  
-  const toggleUITheme = () => {
-    const currentResolved = resolveTheme(homepageTheme);
-    const newTheme = currentResolved === 'dark' ? 'light' : 'dark';
-    setHomepageTheme(newTheme);
-  };
-  
-  const toggleStudioTheme = () => {
-    const currentResolved = resolveTheme(studioTheme);
-    const newTheme = currentResolved === 'dark' ? 'light' : 'dark';
-    setStudioTheme(newTheme);
-  };
   const [selectedAssistantModel, setSelectedAssistantModel] = useState(assistantModels[0]?.id || '');
-
-  // No need to manually manage dark class - ThemeContext handles this automatically
 
   const handleAssistantModelChange = (value: string) => {
     setSelectedAssistantModel(value);
@@ -61,54 +42,104 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent 
+        className="sm:max-w-[600px]"
+        style={{
+          backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
+          color: studioMode === 'dark' ? '#ffffff' : '#000000',
+          border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>Studio Settings</DialogTitle>
+          <DialogTitle style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}>Studio Settings</DialogTitle>
         </DialogHeader>
         
-        <Separator className="my-4" />
+        <div 
+          className="my-4 h-px"
+          style={{
+            backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'
+          }}
+        />
         
-        <div className="space-y-6 text-foreground">
+        <div 
+          className="space-y-6"
+          style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+        >
           {/* UI Dark Mode Setting */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <Palette className="h-5 w-5 text-muted-foreground" />
-              <Label htmlFor="ui-dark-mode" className="text-base font-normal">
+              <Palette 
+                className="h-5 w-5"
+                style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+              />
+              <Label 
+                htmlFor="ui-dark-mode" 
+                className="text-base font-normal"
+                style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+              >
                 UI Dark Mode
               </Label>
             </div>
             <Switch
               id="ui-dark-mode"
-              checked={resolveTheme(homepageTheme) === 'dark'}
+              checked={mode === 'dark'}
               onCheckedChange={() => toggleUITheme()}
+              style={{
+                backgroundColor: mode === 'dark' ? '#22c55e' : '#e5e7eb'
+              }}
             />
           </div>
 
           {/* Studio Dark Mode Setting */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <Settings className="h-5 w-5 text-muted-foreground" />
-              <Label htmlFor="studio-dark-mode" className="text-base font-normal">
+              <Settings 
+                className="h-5 w-5"
+                style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+              />
+              <Label 
+                htmlFor="studio-dark-mode" 
+                className="text-base font-normal"
+                style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+              >
                 Studio Dark Mode
               </Label>
             </div>
             <Switch
               id="studio-dark-mode"
-              checked={resolveTheme(studioTheme) === 'dark'}
+              checked={studioMode === 'dark'}
               onCheckedChange={() => toggleStudioTheme()}
+              style={{
+                backgroundColor: studioMode === 'dark' ? '#22c55e' : '#e5e7eb'
+              }}
             />
           </div>
 
           {/* Assistant Model Setting */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <Brain className="h-5 w-5 text-muted-foreground" />
-              <Label htmlFor="assistant-model" className="text-base font-normal">
+              <Brain 
+                className="h-5 w-5"
+                style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+              />
+              <Label 
+                htmlFor="assistant-model" 
+                className="text-base font-normal"
+                style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+              >
                 Assistant Model
               </Label>
             </div>
             <Select value={selectedAssistantModel} onValueChange={handleAssistantModelChange}>
-              <SelectTrigger id="assistant-model" className="w-[200px]">
+              <SelectTrigger 
+                id="assistant-model" 
+                className="w-[200px]"
+                style={{
+                  backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f8fafc',
+                  borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+                  color: studioMode === 'dark' ? '#ffffff' : '#000000'
+                }}
+              >
                 <SelectValue placeholder="Select a model" />
               </SelectTrigger>
               <SelectContent>

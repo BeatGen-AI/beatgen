@@ -1,25 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { 
-  Container,
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions,
-  TextField,
-  CircularProgress,
-  Alert,
-  Snackbar
-} from '@mui/material';
+import { usePageTheme } from '../../lib/theme-provider';
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import './styles/Projects.css';
 import { 
-  Add as AddIcon, 
-  Delete as DeleteIcon, 
+  Plus as AddIcon, 
+  Trash2 as DeleteIcon, 
   Edit as EditIcon, 
-  MusicNote as MusicNoteIcon,
-  ArrowBack as ArrowBackIcon,
+  Music as MusicNoteIcon,
+  ArrowLeft as ArrowBackIcon,
   Menu as MenuIcon
-} from '@mui/icons-material';
+} from 'lucide-react';
 import SoundUploader from '../components/SoundUploader';
 import SoundLibrary from '../components/SoundLibrary';
 import { useAuth } from '../auth/auth-context';
@@ -75,6 +66,9 @@ const FETCH_THRESHOLD = 10; // When to fetch more from API
 // const collapsedDrawerWidth = 60; // No longer needed
 
 export default function HomePage() {
+  // Apply homepage theme
+  usePageTheme('homepage');
+  
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -340,11 +334,14 @@ export default function HomePage() {
   return (
     <div className="p-4 md:p-8">
       {/* Main Content */}
-        <Container maxWidth="lg" className="projects-container" sx={{ pt: 0, mt:0 }}>
+        <div className="max-w-4xl mx-auto projects-container pt-0 mt-0">
 
           {projectsError && (
-            <Alert severity="error" sx={{ mb: 4 }}>
-              {projectsError.message || 'Failed to load projects. Please try again later.'}
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                {projectsError.message || 'Failed to load projects. Please try again later.'}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -491,22 +488,18 @@ export default function HomePage() {
             <DrumLibrary sectionColor={logoColors[5]} />
           </FadeCard>
 
-          {/* Snackbar for notifications */}
-          <Snackbar 
-            open={snackbar.open && !loadingProjects}
-            autoHideDuration={6000} 
-            onClose={handleCloseSnackbar}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-          >
-            <Alert 
-              onClose={handleCloseSnackbar} 
-              severity={snackbar.severity} 
-              variant="filled"
-            >
-              {snackbar.message}
-            </Alert>
-          </Snackbar>
-      </Container>
+          {/* Toast-like notifications using Alert */}
+          {snackbar.open && !loadingProjects && (
+            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
+              <Alert 
+                variant={snackbar.severity === 'error' ? 'destructive' : 'default'}
+                className={`${snackbar.severity === 'success' ? 'border-green-500 text-green-700 bg-green-50' : ''}`}
+              >
+                <AlertDescription>{snackbar.message}</AlertDescription>
+              </Alert>
+            </div>
+          )}
+      </div>
 
       {/* Generate Song Modal */}
       <GenerateSongModal

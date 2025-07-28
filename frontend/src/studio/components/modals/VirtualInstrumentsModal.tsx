@@ -1,32 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Box, 
-    Modal, 
-    IconButton, 
-    Typography, 
-    Grid, 
-    Accordion, 
-    AccordionSummary, 
-    AccordionDetails,
-    CircularProgress,
-    Alert,
-    useTheme
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import PianoIcon from '@mui/icons-material/Piano';
-import MusicNoteIcon from '@mui/icons-material/MusicNote';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { SvgIconComponent } from '@mui/icons-material';
+import { X as CloseIcon, Piano as PianoIcon, Music as MusicNoteIcon, ChevronDown as ExpandMoreIcon, Loader2 } from 'lucide-react';
 import { getPublicSoundfonts, getSoundfontDownloadUrl } from '../../../platform/api/soundfonts';
 import SoundfontManager from '../../core/soundfont/soundfontManager';
 import { db } from '../../core/db/dexie-client';
 import { InstrumentFileRead } from 'src/platform/types/project';
-import { alpha } from '@mui/material/styles';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../components/ui/dialog';
+import { Button } from '../../../components/ui/button';
+import { Alert, AlertDescription } from '../../../components/ui/alert';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../../components/ui/accordion';
+import { cn } from '../../../lib/utils';
 
 interface Instrument {
     id: string;
     name: string;
-    icon: SvgIconComponent;
+    icon: React.ComponentType<{ className?: string }>;
     color: string;
 }
 
@@ -91,7 +78,7 @@ const getCategoryColor = (category: string): string => {
 };
 
 // Get icon for a category
-const getCategoryIcon = (category: string): SvgIconComponent => {
+const getCategoryIcon = (category: string): React.ComponentType<{ className?: string }> => {
     if (category === 'piano') return PianoIcon;
     return MusicNoteIcon;
 };
@@ -103,7 +90,6 @@ export interface VirtualInstrumentsModalProps {
 }
 
 export const VirtualInstrumentsModal = ({ open, onClose, onSelect }: VirtualInstrumentsModalProps) => {
-    const theme = useTheme();
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState<string | null>(null);
     const [soundfonts, setSoundfonts] = useState<InstrumentFileRead[]>([]);
@@ -179,204 +165,106 @@ export const VirtualInstrumentsModal = ({ open, onClose, onSelect }: VirtualInst
     };
 
     return (
-        <Modal
-        open={open}
-        onClose={onClose}
-        sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        }}
-        >
-        <Box
-            sx={{
-            bgcolor: 'background.paper',
-            color: 'text.primary',
-            borderRadius: 2,
-            p: 3,
-            maxWidth: '900px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflow: 'auto'
-            }}
-        >
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6">Choose Virtual Instrument</Typography>
-            <IconButton
-                onClick={onClose}
-                color="inherit"
-                sx={{
-                    borderRadius: '8px',
-                    '&:hover': {
-                        backgroundColor: theme.palette.action.hover,
-                    },
-                }}
-                disableRipple
-            >
-                <CloseIcon />
-            </IconButton>
-            </Box>
-            
-            {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-            </Alert>
-            )}
-            
-            {/* Quick access - Common instruments */}
-            <Typography variant="subtitle1" sx={{ mb: 2 }}>Common Instruments</Typography>
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-            {instruments.map((instrument) => (
-                <Grid item xs={12} sm={6} md={4} key={instrument.id}>
-                <Box
-                    onClick={() => handleSelect(instrument.id)}
-                    sx={{
-                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
-                    borderRadius: 2,
-                    p: 2,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                        bgcolor: theme.palette.action.hover,
-                        transform: 'translateY(-2px)'
-                    },
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 2
-                    }}
-                >
-                    <Box
-                    sx={{
-                        bgcolor: instrument.color,
-                        borderRadius: 2,
-                        p: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 64,
-                        height: 64
-                    }}
-                    >
-                    <instrument.icon sx={{ fontSize: 32, color: 'white' }} />
-                    </Box>
-                    <Typography variant="subtitle1" align="center" color="text.primary">
-                    {instrument.name}
-                    </Typography>
-                </Box>
-                </Grid>
-            ))}
-            </Grid>
-            
-            {/* Explore All Virtual Instruments section */}
-            <Accordion 
-            expanded={expanded}
-            onChange={() => setExpanded(!expanded)}
-            sx={{ 
-                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
-                color: 'inherit',
-                boxShadow: 'none',
-                '&:before': {
-                display: 'none',
-                },
-                borderRadius: 2,
-            }}
-            >
-            <AccordionSummary
-                expandIcon={<ExpandMoreIcon sx={{ color: 'text.secondary' }} />}
-                sx={{ 
-                borderRadius: 2,
-                '&:hover': {
-                    bgcolor: theme.palette.action.hover
-                }
-                }}
-            >
-                <Typography variant="subtitle1">Explore All Virtual Instruments</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-                {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                    <CircularProgress size={40} />
-                </Box>
-                ) : soundfonts.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" align="center" sx={{ p: 2 }}>
-                    No virtual instruments found in the library
-                </Typography>
-                ) : (
-                <Grid container spacing={2}>
-                    {soundfonts.map((soundfont) => {
-                    const isDownloading = downloading === soundfont.id;
-                    const color = getCategoryColor(soundfont.category);
-                    const Icon = getCategoryIcon(soundfont.category);
-                    
-                    return (
-                        <Grid item xs={12} sm={6} md={4} key={soundfont.id}>
-                        <Box
-                            onClick={() => !isDownloading && handleSoundfontSelect(soundfont)}
-                            sx={{
-                            bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
-                            borderRadius: 2,
-                            p: 2,
-                            cursor: isDownloading ? 'wait' : 'pointer',
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                                bgcolor: theme.palette.action.hover,
-                                transform: isDownloading ? 'none' : 'translateY(-2px)'
-                            },
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 2,
-                            position: 'relative'
-                            }}
-                        >
-                            <Box
-                            sx={{
-                                bgcolor: color,
-                                borderRadius: 2,
-                                p: 2,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                width: 64,
-                                height: 64
-                            }}
-                            >
-                            <Icon sx={{ fontSize: 32, color: 'white' }} />
-                            </Box>
-                            <Box sx={{ textAlign: 'center' }}>
-                            <Typography variant="subtitle1" color="text.primary">
-                                {soundfont.display_name}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                {soundfont.category}
-                            </Typography>
-                            </Box>
-                            
-                            {/* Loading overlay */}
-                            {isDownloading && (
-                            <Box sx={{ 
-                                bgcolor: alpha(theme.palette.background.paper, 0.85),
-                                borderRadius: 2,
-                                zIndex: 2
-                            }}>
-                                <Box sx={{ textAlign: 'center' }}>
-                                <CircularProgress size={40} sx={{ mb: 1 }} color="inherit"/>
-                                <Typography variant="caption" display="block" color="text.primary">
-                                    Downloading...
-                                </Typography>
-                                </Box>
-                            </Box>
-                            )}
-                        </Box>
-                        </Grid>
-                    );
-                    })}
-                </Grid>
+        <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+                <DialogHeader>
+                    <DialogTitle>Choose Virtual Instrument</DialogTitle>
+                </DialogHeader>
+                
+                {error && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                 )}
-            </AccordionDetails>
-            </Accordion>
-        </Box>
-        </Modal>
+                
+                {/* Quick access - Common instruments */}
+                <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Common Instruments</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                        {instruments.map((instrument) => (
+                            <div
+                                key={instrument.id}
+                                onClick={() => handleSelect(instrument.id)}
+                                className="bg-card hover:bg-accent border rounded-lg p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 flex flex-col items-center gap-4"
+                            >
+                                <div
+                                    className="rounded-lg p-4 flex items-center justify-center w-16 h-16"
+                                    style={{ backgroundColor: instrument.color }}
+                                >
+                                    <instrument.icon className="w-8 h-8 text-white" />
+                                </div>
+                                <h4 className="text-center font-medium text-foreground">
+                                    {instrument.name}
+                                </h4>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {/* Explore All Virtual Instruments section */}
+                    <Accordion type="single" collapsible value={expanded ? "instruments" : ""} onValueChange={(value) => setExpanded(value === "instruments")}>
+                        <AccordionItem value="instruments" className="bg-card/50 rounded-lg border">
+                            <AccordionTrigger className="px-4 hover:bg-accent/50 rounded-t-lg">
+                                Explore All Virtual Instruments
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4">
+                                {loading ? (
+                                    <div className="flex justify-center p-8">
+                                        <Loader2 className="w-10 h-10 animate-spin" />
+                                    </div>
+                                ) : soundfonts.length === 0 ? (
+                                    <p className="text-muted-foreground text-center py-4">
+                                        No virtual instruments found in the library
+                                    </p>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                        {soundfonts.map((soundfont) => {
+                                            const isDownloading = downloading === soundfont.id;
+                                            const color = getCategoryColor(soundfont.category);
+                                            const Icon = getCategoryIcon(soundfont.category);
+                                            
+                                            return (
+                                                <div
+                                                    key={soundfont.id}
+                                                    onClick={() => !isDownloading && handleSoundfontSelect(soundfont)}
+                                                    className={cn(
+                                                        "bg-card border rounded-lg p-4 transition-all duration-200 flex flex-col items-center gap-4 relative",
+                                                        isDownloading ? "cursor-wait" : "cursor-pointer hover:bg-accent hover:-translate-y-0.5"
+                                                    )}
+                                                >
+                                                    <div
+                                                        className="rounded-lg p-4 flex items-center justify-center w-16 h-16"
+                                                        style={{ backgroundColor: color }}
+                                                    >
+                                                        <Icon className="w-8 h-8 text-white" />
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <h4 className="font-medium text-foreground">
+                                                            {soundfont.display_name}
+                                                        </h4>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {soundfont.category}
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    {/* Loading overlay */}
+                                                    {isDownloading && (
+                                                        <div className="absolute inset-0 bg-background/85 rounded-lg flex items-center justify-center z-10">
+                                                            <div className="text-center">
+                                                                <Loader2 className="w-10 h-10 animate-spin mb-2" />
+                                                                <p className="text-sm">Downloading...</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }; 

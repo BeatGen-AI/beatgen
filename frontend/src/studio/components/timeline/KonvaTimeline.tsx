@@ -1,17 +1,11 @@
 import React, { useState, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { Stage, Layer, Rect } from 'react-konva';
 import {
-  KonvaBase,
-  GridLayer,
   SelectionRect,
-  DragGhost,
-  Ruler,
   useKonvaInteractions,
   useCursorManager,
   KonvaItem,
   Tool,
-  Position,
-  Dimensions,
   Viewport
 } from '../shared/konva';
 import { KonvaTrack } from './konva/KonvaTrack';
@@ -23,7 +17,6 @@ import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks, getTrackColor } from '../
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
 import { useAppTheme } from '../../../lib/theme-provider';
-import { useTheme } from '@mui/material/styles';
 import Konva from 'konva';
 import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
 import { useStudioStore } from '../../stores/studioStore';

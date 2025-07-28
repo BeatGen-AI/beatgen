@@ -3,6 +3,7 @@ import React, { useEffect } from 'react'
 import Projects from '../platform/pages/Projects'
 import HomePage from '../platform/pages/HomePage'
 import { requireAuth, AuthErrorComponent } from '../platform/auth/auth-utils.tsx'
+import { usePageTheme } from '../lib/theme-provider'
 
 // Home/Projects route - this will render at the path '/home'
 export const Route = createFileRoute('/home')({

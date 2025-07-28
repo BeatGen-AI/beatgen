@@ -1,13 +1,9 @@
 import React from 'react';
-import { 
-  Box, 
-  Typography, 
-  Grid, 
-  CircularProgress,
-  Alert,
-  Paper,
-} from '@mui/material';
 import { Button } from "../../../components/ui/button";
+import { Alert, AlertDescription } from "../../../components/ui/alert";
+import { Card, CardContent } from "../../../components/ui/card";
+import { Skeleton } from "../../../components/ui/skeleton";
+import { cn } from "../../../lib/utils";
 
 /**
  * Generic props for the PaginatedGrid component
@@ -37,13 +33,13 @@ interface PaginatedGridProps<T> {
     description: string;
   };
 
-  // Grid configuration
+  // Grid configuration (responsive grid columns)
   gridProps?: {
-    xs?: number;
-    sm?: number;
-    md?: number;
-    lg?: number;
-    xl?: number;
+    xs?: number; // columns on extra small screens
+    sm?: number; // columns on small screens  
+    md?: number; // columns on medium screens
+    lg?: number; // columns on large screens
+    xl?: number; // columns on extra large screens
   };
 
   // Optional styling
@@ -67,7 +63,7 @@ export function PaginatedGrid<T>({
   renderItem,
   getItemKey,
   emptyState,
-  gridProps = { xs: 12, sm: 6, md: 4 },
+  gridProps = { xs: 1, sm: 2, md: 3 },
   sectionColor,
   className,
 }: PaginatedGridProps<T>) {
@@ -75,20 +71,20 @@ export function PaginatedGrid<T>({
   // Show loading spinner on initial load
   if (loading) {
     return (
-      <Paper sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, mt: 2 }}>
-        <CircularProgress sx={{ mb: 2 }} />
-        <Typography variant="body1" color="text.secondary">
-          Loading...
-        </Typography>
-      </Paper>
+      <Card className="flex flex-col items-center py-8 mt-2">
+        <CardContent className="flex flex-col items-center space-y-4 pt-6">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </CardContent>
+      </Card>
     );
   }
   
   // Show error state
   if (error) {
     return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {error}
+      <Alert className="mt-2" variant="destructive">
+        <AlertDescription>{error}</AlertDescription>
       </Alert>
     );
   }
@@ -96,23 +92,24 @@ export function PaginatedGrid<T>({
   // Show empty state when no items and not loading more
   if (items.length === 0 && !loadingMore) {
     return (
-      <Paper sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, mt: 2, textAlign: 'center' }}>
-        <Box sx={{ fontSize: 60, mb: 2 }}>
-          {emptyState.icon}
-        </Box>
-        <Typography 
-          variant="h6" 
-          gutterBottom
-          style={{ 
-            color: sectionColor || '#666',
-          }}
-        >
-          {emptyState.title}
-        </Typography>
-        <Typography variant="body1" color="text.secondary" paragraph>
-          {emptyState.description}
-        </Typography>
-      </Paper>
+      <Card className="flex flex-col items-center py-8 mt-2 text-center">
+        <CardContent className="flex flex-col items-center space-y-4 pt-6">
+          <div className="text-6xl mb-2">
+            {emptyState.icon}
+          </div>
+          <h3 
+            className="text-lg font-semibold"
+            style={{ 
+              color: sectionColor || '#666',
+            }}
+          >
+            {emptyState.title}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {emptyState.description}
+          </p>
+        </CardContent>
+      </Card>
     );
   }
   
@@ -120,20 +117,34 @@ export function PaginatedGrid<T>({
   const displayedItems = items.slice(0, displayedCount);
   const showMoreButton = !loading && canShowMore && displayedCount < totalItems;
   
+  // Build responsive grid classes based on gridProps
+  const getGridClasses = () => {
+    const { xs = 1, sm = 2, md = 3, lg = 4, xl = 5 } = gridProps;
+    return cn(
+      "grid gap-6 pt-2",
+      `grid-cols-${xs}`,
+      `sm:grid-cols-${sm}`,
+      `md:grid-cols-${md}`,
+      `lg:grid-cols-${lg}`,
+      `xl:grid-cols-${xl}`,
+      className
+    );
+  };
+  
   return (
     <React.Fragment>
       {/* Grid of items */}
-      <Grid container spacing={3} sx={{pt: 2}}>
+      <div className={getGridClasses()}>
         {displayedItems.map((item, index) => (
-          <Grid item {...gridProps} key={getItemKey(item, index)}>
+          <div key={getItemKey(item, index)}>
             {renderItem(item, index)}
-          </Grid>
+          </div>
         ))}
-      </Grid>
+      </div>
       
       {/* Show More Button */}
       {showMoreButton && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+        <div className="flex justify-center mt-4 mb-2">
           <Button 
             variant="outline"
             onClick={onShowMore} 
@@ -141,14 +152,14 @@ export function PaginatedGrid<T>({
           >
             {loadingMore ? 'Loading...' : 'Show More'}
           </Button>
-        </Box>
+        </div>
       )}
       
       {/* Loading indicator when fetching more items */}
       {loadingMore && displayedItems.length > 0 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 2 }}>
-          <CircularProgress size={24} />
-        </Box>
+        <div className="flex justify-center mt-2 mb-2">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+        </div>
       )}
     </React.Fragment>
   );

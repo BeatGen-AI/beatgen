@@ -3,11 +3,11 @@ import React, { useEffect, useState } from 'react'
 // import Navbar from '../platform/components/Navbar'
 import { useAuth } from '../platform/auth/auth-context'
 import { handleOAuthCallback } from '../platform/api/auth'
-import { useTheme } from '../lib/theme-provider'
 import SimpleSidebar from '../platform/components/SimpleSidebar'
 import MobileTopNav from '../platform/components/MobileTopNav'
 import MobileBottomNav from '../platform/components/MobileBottomNav'
 import { cn } from '../lib/utils'
+import { useAppTheme } from '../lib/theme-provider'
 
 // Root Layout Component - this wraps all routes
 export const Route = createRootRoute({
@@ -54,11 +54,35 @@ function RootLayout() {
   const { loading, user } = useAuth();
   const router = useRouter();
   const location = useLocation();
-  const { homepageTheme, studioTheme } = useTheme();
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const { studioMode } = useAppTheme();
   
   // Simple studio route detection using router location
   const isStudioRoute = location.pathname === '/studio';
+  
+  // Force remove global theme classes when on studio route
+  useEffect(() => {
+    if (isStudioRoute) {
+      // Remove any global theme classes from document element
+      document.documentElement.classList.remove('light', 'dark');
+      document.body.classList.remove('light', 'dark');
+      // Force override background on body for studio
+      document.body.style.backgroundColor = studioMode === 'dark' ? '#000000' : '#ffffff';
+      document.body.style.color = studioMode === 'dark' ? '#ffffff' : '#000000';
+    } else {
+      // Reset body styles for non-studio routes
+      document.body.style.backgroundColor = '';
+      document.body.style.color = '';
+    }
+    
+    return () => {
+      // Cleanup when component unmounts
+      if (isStudioRoute) {
+        document.body.style.backgroundColor = '';
+        document.body.style.color = '';
+      }
+    };
+  }, [isStudioRoute, studioMode]);
   
   // Handle OAuth callbacks and password reset tokens
   useEffect(() => {
@@ -104,27 +128,16 @@ function RootLayout() {
     handleAuthCallbacks();
   }, [location.pathname]);
   
-  // Define themes inline or import them if preferred
-  const lightTheme = { background: '#ffffff', text: '#000000' }; // Simplified for example
-  const darkTheme = { background: '#000000', text: '#ffffff' };
-  
-  // Only homepage theme matters for root layout
-  // Studio routes handle their own theming via StudioThemeWrapper
-  const resolvedTheme = homepageTheme === 'system' 
-    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? 'dark' : 'light')
-    : homepageTheme;
-  const currentThemePalette = resolvedTheme === 'light' ? lightTheme : darkTheme;
-  
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        background: currentThemePalette.background,
-        color: currentThemePalette.text
-      }}>
+      <div 
+        className={cn(
+          "flex justify-center items-center h-screen",
+          isStudioRoute 
+            ? (studioMode === 'dark' ? 'studio-dark-theme' : 'studio-light-theme')
+            : "bg-background text-foreground"
+        )}
+      >
         <p>Loading...</p>
       </div>
     );
@@ -140,11 +153,12 @@ function RootLayout() {
   return (
     <div 
       id="root-layout" 
-      className="min-h-screen"
-      style={{ 
-        background: currentThemePalette.background, 
-        color: currentThemePalette.text
-      }}
+      className={cn(
+        "min-h-screen",
+        isStudioRoute 
+          ? (studioMode === 'dark' ? 'studio-dark-theme' : 'studio-light-theme')
+          : "bg-background text-foreground"
+      )}
     >
       {/* Desktop Sidebar */}
       {shouldShowSidebar && (

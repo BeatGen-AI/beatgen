@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
-import { Box, Button, Popover, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Button } from '../../../components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '../../../components/ui/dropdown-menu';
 import { useAppTheme } from '../../../lib/theme-provider';
+import { cn } from '../../../lib/utils';
 
 interface KeySelectorProps {
   selectedKey: string;
@@ -12,172 +18,150 @@ const ACCIDENTAL_KEY_LIST = ['C♯/D♭', 'D♯/E♭', 'F♯/G♭', 'G♯/A♭',
 
 const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKeyChange }) => {
   const { studioMode } = useAppTheme();
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'major' | 'minor'>(
     selectedKey.toLowerCase().includes('minor') ? 'minor' : 'major'
   );
 
-  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen);
   };
 
   const handleKeySelect = (key: string) => {
     onKeyChange(`${key} ${mode}`);
-    handleClose();
+    setOpen(false);
   };
 
-  const handleModeChange = (event: React.MouseEvent<HTMLElement>, newMode: 'major' | 'minor') => {
-    if (newMode !== null) {
-      setMode(newMode);
-      // Update current key if needed
-      if (selectedKey.includes('minor') && newMode === 'major') {
-        onKeyChange(selectedKey.replace('minor', 'major'));
-      } else if (selectedKey.includes('major') && newMode === 'minor') {
-        onKeyChange(selectedKey.replace('major', 'minor'));
-      }
+  const handleModeChange = (newMode: 'major' | 'minor') => {
+    setMode(newMode);
+    // Update current key if needed
+    if (selectedKey.includes('minor') && newMode === 'major') {
+      onKeyChange(selectedKey.replace('minor', 'major'));
+    } else if (selectedKey.includes('major') && newMode === 'minor') {
+      onKeyChange(selectedKey.replace('major', 'minor'));
     }
   };
 
-  const open = Boolean(anchorEl);
-
   return (
-    <Box sx={{ width: '132px' }}>
-      <Button
-        onClick={handleClick}
-        variant="contained"
-        color="inherit"
-        disableElevation
-        sx={{
-          bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
-          color: 'text.primary',
-          width: '100%',
-          px: 2,
-          py: 0.5,
-          borderRadius: 1,
-          textTransform: 'none',
-          '&:hover': {
-            bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'
-          }
-        }}
-      >
-        {selectedKey}
-      </Button>
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={handleClose}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'left',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'left',
-        }}
-        PaperProps={{
-          sx: {
-            bgcolor: 'background.paper',
-            color: 'text.primary',
-            mt: 1,
-            width: 'auto',
-            p: 1,
-            boxShadow: studioMode === 'dark' ? '0px 3px 14px rgba(0,0,0,0.5)' : '0px 3px 14px rgba(0,0,0,0.2)'
-          }
-        }}
-      >
-        <Box sx={{ mb: 1 }}>
-          <ToggleButtonGroup
-            value={mode}
-            exclusive
-            onChange={handleModeChange}
-            size="small"
-            sx={{
-              bgcolor: studioMode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)',
-              borderRadius: 1,
-              '.MuiToggleButton-root': {
-                color: 'text.secondary',
-                textTransform: 'none',
-                border: 0,
-                borderRadius: 'inherit',
-                '&.Mui-selected': {
-                  color: 'text.primary',
-                  bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
-                  '&:hover': {
-                    bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'
-                  }
-                },
-                '&:hover': {
-                  bgcolor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'
-                }
-              }
+    <div className="w-[132px]">
+      <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="w-full px-2 rounded text-left transition-colors"
+            style={{
+              backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+              border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+              color: studioMode === 'dark' ? '#ffffff' : '#000000',
+              height: '24px',
+              lineHeight: '22px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
             }}
           >
-            <ToggleButton value="major" sx={{ px: 2 }}>Major</ToggleButton>
-            <ToggleButton value="minor" sx={{ px: 2 }}>Minor</ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(60px, 1fr))',
-            gap: 0.5,
-          }}
-        >
-          {/* Diatonic Keys */}
-          {DIATONIC_KEY_LIST.map((key) => {
-            const isSelected = selectedKey === `${key} ${mode}`;
-            return (
+            {selectedKey}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-auto p-2">
+          <div className="mb-2">
+            <div
+              className={cn(
+                "flex rounded border",
+                studioMode === 'dark'
+                  ? "bg-black/20 border-white/12"
+                  : "bg-black/5 border-black/12"
+              )}
+            >
               <Button
-                key={key}
-                onClick={() => handleKeySelect(key)}
-                size="small"
-                sx={{
-                  minWidth: 0,
-                  p: 1,
-                  textTransform: 'none',
-                  borderRadius: 1,
-                  bgcolor: isSelected ? studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  color: isSelected ? studioMode === 'dark' ? '#ffffff' : '#000000' : studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
-                  '&:hover': {
-                    bgcolor: isSelected ? studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' : studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'
-                  }
-                }}
+                variant="ghost"
+                size="sm"
+                onClick={() => handleModeChange('major')}
+                className={cn(
+                  "flex-1 rounded-r-none border-0 px-2",
+                  mode === 'major'
+                    ? studioMode === 'dark'
+                      ? "bg-white/12 text-foreground hover:bg-white/12"
+                      : "bg-black/8 text-foreground hover:bg-black/8"
+                    : "text-muted-foreground hover:bg-accent/50"
+                )}
               >
-                {key}
+                Major
               </Button>
-            );
-          })}
-          {/* Accidental Keys */}
-          {ACCIDENTAL_KEY_LIST.map((key) => {
-             const isSelected = selectedKey === `${key} ${mode}`;
-             return (
               <Button
-                key={key}
-                onClick={() => handleKeySelect(key)}
-                size="small"
-                sx={{
-                  minWidth: 0,
-                  p: 1,
-                  textTransform: 'none',
-                  borderRadius: 1,
-                  bgcolor: isSelected ? studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  color: isSelected ? studioMode === 'dark' ? '#ffffff' : '#000000' : studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
-                  '&:hover': {
-                    bgcolor: isSelected ? studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)' : studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'
-                  }
-                }}
+                variant="ghost"
+                size="sm"
+                onClick={() => handleModeChange('minor')}
+                className={cn(
+                  "flex-1 rounded-l-none border-0 px-2",
+                  mode === 'minor'
+                    ? studioMode === 'dark'
+                      ? "bg-white/12 text-foreground hover:bg-white/12"
+                      : "bg-black/8 text-foreground hover:bg-black/8"
+                    : "text-muted-foreground hover:bg-accent/50"
+                )}
               >
-                {key}
+                Minor
               </Button>
-             );
-          })}
-        </Box>
-      </Popover>
-    </Box>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {/* Diatonic Keys */}
+            {DIATONIC_KEY_LIST.map((key) => {
+              const isSelected = selectedKey === `${key} ${mode}`;
+              return (
+                <Button
+                  key={key}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleKeySelect(key)}
+                  className={cn(
+                    "p-2 text-sm",
+                    isSelected
+                      ? studioMode === 'dark'
+                        ? "bg-white/12 text-foreground hover:bg-white/12"
+                        : "bg-black/8 text-foreground hover:bg-black/8"
+                      : studioMode === 'dark'
+                        ? "text-white/70 hover:bg-white/8"
+                        : "text-black/60 hover:bg-black/4"
+                  )}
+                >
+                  {key}
+                </Button>
+              );
+            })}
+            {/* Accidental Keys */}
+            {ACCIDENTAL_KEY_LIST.map((key) => {
+              const isSelected = selectedKey === `${key} ${mode}`;
+              return (
+                <Button
+                  key={key}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleKeySelect(key)}
+                  className={cn(
+                    "p-2 text-sm",
+                    isSelected
+                      ? studioMode === 'dark'
+                        ? "bg-white/12 text-foreground hover:bg-white/12"
+                        : "bg-black/8 text-foreground hover:bg-black/8"
+                      : studioMode === 'dark'
+                        ? "text-white/70 hover:bg-white/8"
+                        : "text-black/60 hover:bg-black/4"
+                  )}
+                >
+                  {key}
+                </Button>
+              );
+            })}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 };
 
