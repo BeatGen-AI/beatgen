@@ -1183,6 +1183,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             onPromptChange={setPrompt}
             onGenerate={handleSend}
             isGenerating={isLoading}
+            useStudioTheme={true}
             placeholder={isLoading ? `Generating${animatedDots}` : "Ask me anything about your project..."}
             maxLength={1000}
             showRandomButton={false}

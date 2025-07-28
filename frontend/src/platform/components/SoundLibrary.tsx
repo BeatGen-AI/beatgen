@@ -199,12 +199,6 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
                 sound={sound}
                 handleDeleteSound={handleDeleteSound}
                 sectionColor={sectionColor}
-                playingId={playingId}
-                currentTime={currentTime}
-                duration={duration}
-                onPlaySound={handlePlaySound}
-                onSeek={handleSeek}
-                audioBlob={audioBlobs[sound.id]}
               />
             </div>
           ))}

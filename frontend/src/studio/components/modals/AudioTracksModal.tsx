@@ -416,11 +416,12 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   useEffect(() => {
     if (open) return; // Only run when dialog is closed
     
-    // Restore original dark mode after animation completes
+    // Restore the appropriate mode after animation completes
     const timeoutId = setTimeout(() => {
       const root = window.document.documentElement;
       const currentHasDark = root.classList.contains('dark');
-      const shouldHaveDark = uiMode === 'dark';
+      // Restore to the mode we were using before the dialog opened
+      const shouldHaveDark = effectiveMode === 'dark';
       
       if (shouldHaveDark && !currentHasDark) {
         root.classList.add('dark');
@@ -430,7 +431,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
     }, 200); // Wait for closing animation
     
     return () => clearTimeout(timeoutId);
-  }, [open, uiMode]);
+  }, [open, effectiveMode]);
 
   // Initial load when modal opens (only if not in upload mode only)
   useEffect(() => {
@@ -621,6 +622,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                     onPromptChange={setGeneratePrompt}
                     onGenerate={handleGenerateAudio}
                     isGenerating={isGenerating}
+                    useStudioTheme={!useUiMode}
                     placeholder="Describe the audio you want to generate (e.g., 'acoustic guitar melody in C major', 'piano chord progression', 'violin solo')"
                     maxLength={500}
                     showRandomButton={false}

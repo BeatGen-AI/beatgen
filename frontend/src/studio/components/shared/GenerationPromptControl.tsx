@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectTrigger, SelectValue } from '@/components/
 import { SelectItem } from '@/components/ui/select';
 import { Dices, Loader2 } from "lucide-react";
 import { IconCircleArrowUpFilled } from "@tabler/icons-react";
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface SelectOption {
   id: string;
@@ -49,6 +50,7 @@ interface GenerationPromptControlProps {
   submitButtonIcon?: React.ReactNode;
   submitButtonAriaLabel?: string;
   className?: string;
+  useStudioTheme?: boolean;
 }
 
 const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
@@ -76,8 +78,11 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
   submitButtonIcon,
   submitButtonAriaLabel = "Generate",
   className = "",
+  useStudioTheme = false,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { mode, studioMode } = useAppTheme();
+  const currentTheme = useStudioTheme ? studioMode : mode;
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -121,6 +126,11 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
           className={`pr-16 min-h-[100px] resize-none ${
             textareaBottomLeftComponent || textareaBottomRightComponent ? 'pb-8' : 'pb-2'
           }`}
+          style={useStudioTheme ? {
+            backgroundColor: currentTheme === 'dark' ? '#1a1a1a' : '#ffffff',
+            color: currentTheme === 'dark' ? '#ffffff' : '#000000',
+            borderColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'
+          } : {}}
         />
         
         <div className="absolute top-2 right-2 text-xs text-muted-foreground">
@@ -147,6 +157,11 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
             size="icon"
             className="h-8 w-8"
             aria-label={submitButtonAriaLabel}
+            style={useStudioTheme ? {
+              backgroundColor: currentTheme === 'dark' ? '#374151' : '#6b7280',
+              color: '#ffffff',
+              borderColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'
+            } : {}}
           >
             {isGenerating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
