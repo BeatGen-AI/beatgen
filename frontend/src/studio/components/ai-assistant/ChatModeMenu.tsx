@@ -18,6 +18,7 @@ const ChatModeMenu: React.FC<ChatModeMenuProps> = ({ triggerLabel, onSelect, sel
   const { studioMode } = useAppTheme();
 
   const modes = [
+    { id: 'unified', label: 'Unified' },
     { id: 'generate', label: 'Generate' },
     { id: 'edit', label: 'Edit' },
     { id: 'generate-audio', label: 'Generate Audio' }

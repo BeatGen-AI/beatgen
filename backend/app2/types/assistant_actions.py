@@ -60,6 +60,7 @@ class ActionType(str, Enum):
     ADJUST_PAN = "adjust_pan"
     TOGGLE_MUTE = "toggle_mute"
     TOGGLE_SOLO = "toggle_solo"
+    SWITCH_MODE = "switch_mode"
 
 
 # Base models for action data
@@ -95,6 +96,11 @@ class TimeSignatureData(ActionData):
         if v not in valid_denominators:
             raise ValueError(f"Denominator must be a power of 2 up to 32. Got {v}")
         return v
+
+
+class SwitchModeData(ActionData):
+    mode: str = Field(..., description="The mode to switch to (e.g., 'generate', 'edit', 'chat')")
+    reason: Optional[str] = Field(None, description="Reason for the mode switch")
 
 
 class TrackData(ActionData):

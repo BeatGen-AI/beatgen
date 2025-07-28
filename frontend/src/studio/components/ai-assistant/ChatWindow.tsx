@@ -135,7 +135,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   const [isLoading, setIsLoading] = useState(false);
   const [animatedDots, setAnimatedDots] = useState(''); // New state for animated dots
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [mode, setMode] = useState('Generate');
+  const [mode, setMode] = useState('Unified');
   const [cursorPosition, setCursorPosition] = useState<number>(0);
   const [selectedTrack, setSelectedTrack] = useState<CombinedTrack | null>(null);
   
@@ -540,11 +540,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     
     try {
       // Determine the appropriate mode (lowercase for API)
-      let apiMode: 'generate' | 'edit' | 'chat' | 'generate-audio';
+      let apiMode: 'generate' | 'edit' | 'chat' | 'generate-audio' | 'unified';
       if (mode === 'Generate Audio') {
         apiMode = 'generate-audio';
       } else {
-        apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat' | 'generate-audio';
+        apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat' | 'generate-audio' | 'unified';
       }
       
       // Initialize step mode for generate requests
@@ -711,6 +711,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     const { store, updateTrackState } = useStudioStore.getState();
     
     switch (action) {
+      case 'switch_mode':
+        if (actionData?.mode) {
+          console.log('🔄 Mode switch action received:', actionData);
+          // Convert mode to match the expected format (e.g., "generate" -> "Generate")
+          const newMode = actionData.mode.charAt(0).toUpperCase() + actionData.mode.slice(1);
+          console.log('🔄 Switching to mode:', newMode);
+          setMode(newMode);
+        }
+        break;
       case 'change_bpm':
         if (typeof actionData?.value === 'number') {
           handleProjectParamChange('bpm', actionData.value);

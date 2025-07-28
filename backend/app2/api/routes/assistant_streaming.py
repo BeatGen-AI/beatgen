@@ -41,6 +41,7 @@ from app2.core.logging import get_api_logger
 from app2.llm.available_models import ModelInfo
 from app2.llm import available_models
 from app2.llm.agents.music_agent import SongRequest, music_agent
+from app2.llm.agents.conversational_agent import create_conversational_agent
 from pydantic import BaseModel
 from app2.infrastructure.database.sqlmodel_client import get_async_session
 from sqlmodel import Session
@@ -70,7 +71,7 @@ load_dotenv()
 class AssistantRequestModel(AssistantRequest):
     """Unified request model for all assistant interaction types"""
 
-    mode: Literal["generate", "edit", "chat", "generate-audio"]
+    mode: Literal["generate", "edit", "chat", "generate-audio", "unified"]
 
 
 # Response schema for request creation
@@ -305,6 +306,8 @@ async def process_assistant_request(request_id: str):
             elif context.mode == "edit":
                 # If process_edit_request needs a session, pass it here
                 await process_edit_request(request_id, context, sse_queue)
+            elif context.mode == "unified":
+                await process_unified_request(request_id, context, sse_queue, session)
             else:  # chat
                 # If process_chat_request needs a session, pass it here
                 await process_chat_request(request_id, context, sse_queue)
@@ -846,6 +849,60 @@ async def process_generate_audio_request(
         await sse_queue.error(
             message=f"Failed to generate audio: {str(e)}",
             error_data={"error": "generation_failed", "details": str(e)}
+        )
+
+
+async def process_unified_request(
+    request_id: str, context, sse_queue: SSEQueueManager, session: Session
+):
+    """
+    Process a unified mode request using the UnifiedMusicAgent.
+    
+    This mode automatically detects user intent and switches between
+    chat, generate, edit, and analyze modes as needed.
+    """
+    try:
+        logger.info(f"Processing unified request: {request_id}")
+        
+        # Get model info from available models
+        model_info = None
+        if context.model:
+            try:
+                model_info = available_models.get_model_by_name(context.model)
+            except ValueError:
+                logger.warning(f"Model {context.model} not found, will use default")
+        
+        # Default to first available model if not found
+        if not model_info:
+            model_info = available_models.ALL_MODELS[0]
+            logger.warning(f"Using default model: {model_info.display_name}")
+            
+        # Create conversational agent with tool access
+        conversational_agent = create_conversational_agent(
+            model_info=model_info,
+            user_id=context.user_id,
+            session=session
+        )
+        
+        # Extract track context if available
+        track_context = None
+        if hasattr(context, 'context') and context.context:
+            track_context = context.context.get('tracks', [])
+            
+        # Process the message using conversational agent
+        await conversational_agent.process_message(
+            user_message=context.prompt,
+            sse_queue=sse_queue,
+            track_context=track_context
+        )
+        
+        logger.info(f"Unified request completed successfully: {request_id}")
+        
+    except Exception as e:
+        logger.error(f"Error in unified request {request_id}: {str(e)}")
+        await sse_queue.error(
+            message=f"I encountered an error: {str(e)}",
+            error_data={"error": "processing_failed", "details": str(e)}
         )
 
 
