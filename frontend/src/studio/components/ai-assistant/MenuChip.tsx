@@ -1,5 +1,6 @@
 import React from 'react';
-import { Chip } from '@mui/material';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface MenuChipProps {
   label: string;
@@ -11,27 +12,20 @@ interface MenuChipProps {
 
 const MenuChip: React.FC<MenuChipProps> = ({ label, onClick, disabled, color, filled }) => {
   return (
-    <Chip 
-      label={label}
-      size='small' 
-      clickable={!disabled}
-      onClick={onClick}
-      disabled={disabled}
-      sx={{
-        width: 'fit-content',
-        borderRadius: '5px',
-        height: '20px',
-        bgcolor: filled ? 'rgba(60, 60, 60, 0.8)' : color,  // Use solid gray if filled
-        '& .MuiChip-label': {
-          fontSize: '0.7rem'
-        },
-        '&.Mui-disabled': {
-          opacity: 1,
-          bgcolor: filled ? 'rgba(60, 60, 60, 0.8)' : color || 'rgba(255, 255, 255, 0.2)'
-        }
-      }}
-      color={!color ? 'default' : 'primary'}
-    />
+    <Badge 
+      variant={filled ? "secondary" : "outline"}
+      className={cn(
+        "w-fit rounded-md h-5 px-2 text-xs cursor-pointer transition-colors",
+        !disabled && "hover:bg-accent",
+        disabled && "opacity-100 cursor-default",
+        filled && "bg-gray-600/80 text-white",
+        color === 'primary' && !filled && "bg-primary text-primary-foreground",
+        color === 'secondary' && !filled && "bg-secondary text-secondary-foreground"
+      )}
+      onClick={!disabled ? onClick : undefined}
+    >
+      {label}
+    </Badge>
   );
 };
 

@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import React from 'react'
-// import { Box, Typography, Button, Container } from '@mui/material'
 import { Button } from "../components/ui/button" // Assuming shadcn/ui button path
 import { publicRoute } from '../platform/auth/auth-utils.tsx'
+import { usePageTheme } from '../lib/theme-provider'
 
 // Landing Page component - this will render at the root path '/'
 export const Route = createFileRoute('/')({
@@ -12,6 +12,9 @@ export const Route = createFileRoute('/')({
 })
 
 function LandingPage() {
+  // Apply homepage theme
+  usePageTheme('homepage');
+  
   return (
     <>
       {/* Header section */}

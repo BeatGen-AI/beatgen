@@ -2,7 +2,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import React from 'react'
 import SamplerLibrary from '../platform/components/SamplerLibrary'
 import { requireAuth } from '../platform/auth/auth-utils'
-import { Container } from '@mui/material'
 
 const logoColors = [
   '#e539a9', // Bright Pink
@@ -24,7 +23,7 @@ function SamplerTracksPage() {
 
   return (
     <div className="p-8">
-      <Container maxWidth="lg" sx={{ pt: 0, mt: 0 }}>
+      <div className="container mx-auto max-w-5xl">
         <h1 
           className="text-3xl font-bold mb-6"
           style={{ 
@@ -41,7 +40,7 @@ function SamplerTracksPage() {
         <div className="bg-card rounded-lg p-4 shadow-md">
           <SamplerLibrary sectionColor={samplerTracksColor} />
         </div>
-      </Container>
+      </div>
     </div>
   )
 }

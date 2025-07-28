@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface AddContextMenuProps {
   triggerLabel: string;

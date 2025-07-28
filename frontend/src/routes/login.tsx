@@ -111,7 +111,7 @@ function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background py-8 px-4 sm:px-6 lg:px-8">
       <div className="w-[512px] mx-auto space-y-8 bg-card p-6 sm:p-8 rounded-xl shadow-xl">
         <div>
-          <h1 className="mt-6 text-center text-3xl font-extrabold text-foreground">
+          <h1 className="mt-6 text-center text-3xl font-semibold text-foreground">
             Log In to BeatGen
           </h1>
         </div>

@@ -1,30 +1,26 @@
 import React, { useState, useRef } from 'react';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Box,
-  Chip,
-  Typography,
-  LinearProgress,
-  Stepper,
-  Step,
-  StepLabel,
-  Alert,
-  IconButton,
-} from '@mui/material';
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
-  Close as CloseIcon,
-  MusicNote as MusicNoteIcon,
-  PlayArrow as PlayIcon,
-  Stop as StopIcon,
+  X as CloseIcon,
+  Music as MusicNoteIcon,
+  Play as PlayIcon,
+  Square as StopIcon,
   Save as SaveIcon,
-} from '@mui/icons-material';
+} from 'lucide-react';
 import { interactWithAssistant, StreamCallbacks } from '../api/assistant';
 import { isAuthenticated } from '../auth/auth-utils';
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from '@/components/ui/card';
 
 interface GenerateSongModalProps {
   open: boolean;
@@ -199,163 +195,177 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={handleClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        sx: { borderRadius: 2, maxHeight: '90vh' }
-      }}
-    >
-      <DialogTitle sx={{ m: 0, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <MusicNoteIcon />
-          <Typography variant="h6">Generate Song</Typography>
-        </Box>
-        <IconButton
-          aria-label="close"
-          onClick={handleClose}
-          disabled={isGenerating}
-          sx={{ color: (theme) => theme.palette.grey[500] }}
-        >
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MusicNoteIcon className="h-5 w-5" />
+            Generate Song
+          </DialogTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-4 top-4"
+            onClick={handleClose}
+            disabled={isGenerating}
+          >
+            <CloseIcon className="h-4 w-4" />
+          </Button>
+        </DialogHeader>
 
-      <DialogContent dividers>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
-
-        {!generatedData && (
-          <>
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              label="Describe your song"
-              placeholder="e.g., upbeat rock song about summer, chill lo-fi for studying, energetic electronic dance track..."
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              disabled={isGenerating}
-              sx={{ mb: 3 }}
-            />
-
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Quick Genre Options:
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                {GENRE_SUGGESTIONS.map((genre) => (
-                  <Chip
-                    key={genre}
-                    label={genre}
-                    onClick={() => handleChipClick(genre, 'genre')}
-                    disabled={isGenerating}
-                    variant="outlined"
-                    size="small"
-                  />
-                ))}
-              </Box>
-
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Mood Options:
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {MOOD_SUGGESTIONS.map((mood) => (
-                  <Chip
-                    key={mood}
-                    label={mood}
-                    onClick={() => handleChipClick(mood, 'mood')}
-                    disabled={isGenerating}
-                    variant="outlined"
-                    size="small"
-                  />
-                ))}
-              </Box>
-            </Box>
-          </>
-        )}
-
-        {isGenerating && (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" sx={{ mb: 2 }}>
-              Generating your song...
-            </Typography>
-            <Stepper activeStep={generationStage} alternativeLabel>
-              {GENERATION_STEPS.map((label) => (
-                <Step key={label}>
-                  <StepLabel>{label}</StepLabel>
-                </Step>
-              ))}
-            </Stepper>
-            <LinearProgress sx={{ mt: 2 }} />
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
-              {currentStageText || 'This usually takes 30-60 seconds'}
-            </Typography>
-          </Box>
-        )}
-
-        {generatedData && (
-          <Box>
-            <Alert severity="success" sx={{ mb: 2 }}>
-              Song generated successfully!
+        <div className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
-            
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>Generated Song Details:</Typography>
-              <Typography variant="body2">Tempo: {generatedData.tempo} BPM</Typography>
-              <Typography variant="body2">Key: {generatedData.key}</Typography>
-              <Typography variant="body2">Tracks: {generatedData.tracks.join(', ')}</Typography>
-              <Typography variant="body2">Duration: {generatedData.duration}</Typography>
-            </Box>
+          )}
 
-            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-              <Button
-                variant="outline"
-                onClick={handlePlayPreview}
-              >
-                {isPlaying ? <StopIcon /> : <PlayIcon />}
-                {isPlaying ? 'Stop Preview' : 'Play Preview'}
-              </Button>
-            </Box>
-          </Box>
+          {!generatedData && (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Describe your song
+                </label>
+                <Textarea
+                  placeholder="e.g., upbeat rock song about summer, chill lo-fi for studying, energetic electronic dance track..."
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  disabled={isGenerating}
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Quick Genre Options:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {GENRE_SUGGESTIONS.map((genre) => (
+                      <Badge
+                        key={genre}
+                        variant="outline"
+                        className="cursor-pointer hover:bg-accent"
+                        onClick={() => !isGenerating && handleChipClick(genre, 'genre')}
+                      >
+                        {genre}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Mood Options:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {MOOD_SUGGESTIONS.map((mood) => (
+                      <Badge
+                        key={mood}
+                        variant="outline"
+                        className="cursor-pointer hover:bg-accent"
+                        onClick={() => !isGenerating && handleChipClick(mood, 'mood')}
+                      >
+                        {mood}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
         )}
+
+          {isGenerating && (
+            <Card>
+              <CardContent className="pt-6">
+                <h3 className="text-lg font-semibold mb-4">Generating your song...</h3>
+                
+                {/* Simple step indicator */}
+                <div className="flex justify-between mb-4">
+                  {GENERATION_STEPS.map((step, index) => (
+                    <div key={step} className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                        index <= generationStage 
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {index + 1}
+                      </div>
+                      <span className="text-xs mt-1 text-center">{step}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <Progress value={(generationStage + 1) / GENERATION_STEPS.length * 100} className="mb-2" />
+                <p className="text-sm text-muted-foreground text-center">
+                  {currentStageText || 'This usually takes 30-60 seconds'}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {generatedData && (
+            <div className="space-y-4">
+              <Alert>
+                <AlertDescription>
+                  Song generated successfully!
+                </AlertDescription>
+              </Alert>
+              
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="text-lg font-semibold mb-3">Generated Song Details:</h3>
+                  <div className="space-y-1 text-sm">
+                    <p>Tempo: {generatedData.tempo} BPM</p>
+                    <p>Key: {generatedData.key}</p>
+                    <p>Tracks: {generatedData.tracks.join(', ')}</p>
+                    <p>Duration: {generatedData.duration}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handlePlayPreview}
+                >
+                  {isPlaying ? (
+                    <><StopIcon className="h-4 w-4 mr-2" />Stop Preview</>
+                  ) : (
+                    <><PlayIcon className="h-4 w-4 mr-2" />Play Preview</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button 
+            variant="ghost"
+            onClick={handleClose}
+            disabled={isGenerating}
+          >
+            {generatedData ? 'Close' : 'Cancel'}
+          </Button>
+          
+          {!generatedData && (
+            <Button
+              onClick={handleGenerate}
+              disabled={!prompt.trim() || isGenerating}
+            >
+              <MusicNoteIcon className="h-4 w-4 mr-2" />
+              {isGenerating ? 'Generating...' : 'Generate Song'}
+            </Button>
+          )}
+
+          {generatedData && (
+            <Button
+              onClick={handleSaveAsProject}
+            >
+              <SaveIcon className="h-4 w-4 mr-2" />
+              {userIsAuthenticated ? 'Save as Project' : 'Sign Up to Save'}
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
-
-      <DialogActions sx={{ p: 2, gap: 1 }}>
-        <Button 
-          variant="ghost"
-          onClick={handleClose}
-          disabled={isGenerating}
-        >
-          {generatedData ? 'Close' : 'Cancel'}
-        </Button>
-        
-        {!generatedData && (
-          <Button
-            variant="default"
-            onClick={handleGenerate}
-            disabled={!prompt.trim() || isGenerating}
-          >
-            <MusicNoteIcon />
-            {isGenerating ? 'Generating...' : 'Generate Song'}
-          </Button>
-        )}
-
-        {generatedData && (
-          <Button
-            variant="default"
-            onClick={handleSaveAsProject}
-          >
-            <SaveIcon />
-            {userIsAuthenticated ? 'Save as Project' : 'Sign Up to Save'}
-          </Button>
-        )}
-      </DialogActions>
     </Dialog>
   );
 }

@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import { Box } from '@mui/material';
 import { formatTime } from '../../../studio/utils/audioProcessing'; // Path for the global formatTime
 
 // Enhanced waveform component with progress and click handling
@@ -49,68 +48,43 @@ const Waveform = ({
   };
   
   return (
-    <Box 
+    <div 
       ref={waveformRef}
       onClick={handleClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setHoverPosition(null)}
-      sx={{ 
-        height: 40, 
-        width: '100%', 
-        display: 'flex', 
-        alignItems: 'flex-end',
-        position: 'relative',
-        marginTop: 1,
-        marginBottom: 1,
-        cursor: onSeek ? 'pointer' : 'default',
-      }}
+      className={`h-10 w-full flex items-end relative mt-1 mb-1 ${onSeek ? 'cursor-pointer' : 'cursor-default'}`}
     >
       {/* Waveform bars */}
       {data.map((value, index) => (
-        <Box 
+        <div 
           key={index}
-          sx={{
+          className="w-full flex-1 mx-px transition-colors duration-100 ease-in-out"
+          style={{
             height: `${Math.max(3, value * 40)}px`,
-            width: '100%',
-            flex: 1,
             backgroundColor: index < (data.length * progressPercent) ? '#6a3de8' : '#555',
-            mx: '1px',
-            transition: 'background-color 0.1s ease'
           }}
         />
       ))}
       
       {/* Time indicator on hover */}
       {hoverPosition !== null && (
-        <Box sx={{
-          position: 'absolute',
-          bottom: '100%',
-          left: `${hoverPosition * 100}%`,
-          transform: 'translateX(-50%)',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          color: 'white',
-          padding: '2px 6px',
-          borderRadius: '4px',
-          fontSize: '0.7rem',
-          marginBottom: '4px'
-        }}>
+        <div 
+          className="absolute bottom-full transform -translate-x-1/2 bg-black/70 text-white px-1.5 py-0.5 rounded text-xs mb-1"
+          style={{ left: `${hoverPosition * 100}%` }}
+        >
           {formatHoverTime(hoverPosition)}
-        </Box>
+        </div>
       )}
       
       {/* Playback position indicator */}
       {playing && progress > 0 && (
-        <Box sx={{
-          position: 'absolute',
-          top: 0,
-          bottom: 0,
-          left: `${progressPercent * 100}%`,
-          width: '2px',
-          backgroundColor: '#fff',
-          zIndex: 2
-        }} />
+        <div 
+          className="absolute top-0 bottom-0 w-0.5 bg-white z-[2]"
+          style={{ left: `${progressPercent * 100}%` }}
+        />
       )}
-    </Box>
+    </div>
   );
 };
 

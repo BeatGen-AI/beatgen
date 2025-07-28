@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useEffect } from 'react';
-import { Box } from '@mui/material';
 import { Position } from './types';
 import { useStudioStore } from '../../stores/studioStore';
 import { usePianoRollStore } from '../../stores/usePianoRollStore';
@@ -145,9 +144,9 @@ function Track(props: TrackProps) {
   const trackColor = getTrackColor(trackWithIndex?.index ?? 0);
 
   return (
-    <Box 
+    <div 
       onClick={handleTrackClick} 
-      sx={{ position: 'relative', cursor: 'pointer' }}
+      className="relative cursor-pointer"
       data-track-id={id}
       data-track-type={fullTrack.track_type} 
     >
@@ -179,7 +178,7 @@ function Track(props: TrackProps) {
         gridSnapSize={gridSnapSize}
         actualSnapSize={actualSnapSize}
       />
-    </Box>
+    </div>
   );
 }
 

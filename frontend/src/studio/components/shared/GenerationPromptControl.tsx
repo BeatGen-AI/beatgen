@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectTrigger, SelectValue } from '@/components/
 import { SelectItem } from '@/components/ui/select';
 import { Dices, Loader2 } from "lucide-react";
 import { IconCircleArrowUpFilled } from "@tabler/icons-react";
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface SelectOption {
   id: string;
@@ -35,12 +36,21 @@ interface GenerationPromptControlProps {
   // Custom component to render instead of select dropdown
   customSelectComponent?: React.ReactNode;
   
+  // Custom bottom components to render (more flexible than customSelectComponent)
+  bottomLeftComponent?: React.ReactNode;
+  bottomRightComponent?: React.ReactNode;
+  
+  // Components to render inside the textarea at the bottom
+  textareaBottomLeftComponent?: React.ReactNode;
+  textareaBottomRightComponent?: React.ReactNode;
+  
   // UI customization
   showRandomButton?: boolean;
   showSelect?: boolean;
   submitButtonIcon?: React.ReactNode;
   submitButtonAriaLabel?: string;
   className?: string;
+  useStudioTheme?: boolean;
 }
 
 const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
@@ -59,13 +69,20 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
   selectWidth = "130px",
   renderSelectItem,
   customSelectComponent,
+  bottomLeftComponent,
+  bottomRightComponent,
+  textareaBottomLeftComponent,
+  textareaBottomRightComponent,
   showRandomButton = true,
   showSelect = true,
   submitButtonIcon,
   submitButtonAriaLabel = "Generate",
   className = "",
+  useStudioTheme = false,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { mode, studioMode } = useAppTheme();
+  const currentTheme = useStudioTheme ? studioMode : mode;
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -93,6 +110,8 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
   // Calculate if we have bottom elements that need space
   const hasBottomElements = (showRandomButton && (randomPrompts || onRandomPrompt)) || 
                            customSelectComponent || 
+                           bottomLeftComponent ||
+                           bottomRightComponent ||
                            (showSelect && selectOptions && selectedOption && onOptionChange);
 
   return (
@@ -104,12 +123,32 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
           maxLength={maxLength}
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
-          className="pr-16 min-h-[100px] resize-none"
+          className={`pr-16 min-h-[100px] resize-none ${
+            textareaBottomLeftComponent || textareaBottomRightComponent ? 'pb-8' : 'pb-2'
+          }`}
+          style={useStudioTheme ? {
+            backgroundColor: currentTheme === 'dark' ? '#1a1a1a' : '#ffffff',
+            color: currentTheme === 'dark' ? '#ffffff' : '#000000',
+            borderColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'
+          } : {}}
         />
         
         <div className="absolute top-2 right-2 text-xs text-muted-foreground">
           {prompt.length}/{maxLength}
         </div>
+        
+        {/* Bottom components inside textarea */}
+        {textareaBottomLeftComponent && (
+          <div className="absolute bottom-2 left-2">
+            {textareaBottomLeftComponent}
+          </div>
+        )}
+        
+        {textareaBottomRightComponent && (
+          <div className="absolute bottom-2 right-12">
+            {textareaBottomRightComponent}
+          </div>
+        )}
         
         <div className="absolute bottom-2 right-2">
           <Button
@@ -118,6 +157,11 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
             size="icon"
             className="h-8 w-8"
             aria-label={submitButtonAriaLabel}
+            style={useStudioTheme ? {
+              backgroundColor: currentTheme === 'dark' ? '#374151' : '#6b7280',
+              color: '#ffffff',
+              borderColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'
+            } : {}}
           >
             {isGenerating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -132,42 +176,56 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
       {hasBottomElements && (
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            {showRandomButton && (randomPrompts || onRandomPrompt) && (
-              <Button
-                onClick={handleRandomPrompt}
-                variant="outline"
-                size="icon"
-                disabled={isGenerating}
-                aria-label="Random Prompt"
-              >
-                <Dices className="h-4 w-4" />
-              </Button>
-            )}
-            
-            {customSelectComponent ? (
-              customSelectComponent
+            {/* Left side components */}
+            {bottomLeftComponent ? (
+              bottomLeftComponent
             ) : (
-              showSelect && selectOptions && selectedOption && onOptionChange && (
-                <Select value={selectedOption} onValueChange={onOptionChange}>
-                  <SelectTrigger className={`w-[${selectWidth}] h-8 text-xs`}>
-                    <SelectValue placeholder={selectPlaceholder} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectOptions.map((option) => (
-                      <SelectItem key={option.id} value={option.id}>
-                        {renderSelectItem ? renderSelectItem(option) : (
-                          <div className="flex items-center text-xs">
-                            {option.icon && <span className="mr-2">{option.icon}</span>}
-                            <span>{option.name}</span>
-                          </div>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )
+              <>
+                {showRandomButton && (randomPrompts || onRandomPrompt) && (
+                  <Button
+                    onClick={handleRandomPrompt}
+                    variant="outline"
+                    size="icon"
+                    disabled={isGenerating}
+                    aria-label="Random Prompt"
+                  >
+                    <Dices className="h-4 w-4" />
+                  </Button>
+                )}
+                
+                {customSelectComponent ? (
+                  customSelectComponent
+                ) : (
+                  showSelect && selectOptions && selectedOption && onOptionChange && (
+                    <Select value={selectedOption} onValueChange={onOptionChange}>
+                      <SelectTrigger className={`w-[${selectWidth}] h-8 text-xs`}>
+                        <SelectValue placeholder={selectPlaceholder} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {renderSelectItem ? renderSelectItem(option) : (
+                              <div className="flex items-center text-xs">
+                                {option.icon && <span className="mr-2">{option.icon}</span>}
+                                <span>{option.name}</span>
+                              </div>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )
+                )}
+              </>
             )}
           </div>
+          
+          {/* Right side components */}
+          {bottomRightComponent && (
+            <div className="flex items-center space-x-2">
+              {bottomRightComponent}
+            </div>
+          )}
         </div>
       )}
     </div>

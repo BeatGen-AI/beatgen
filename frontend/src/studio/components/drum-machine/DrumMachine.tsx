@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, JSX, useMemo } from 'react';
 import { Rnd } from 'react-rnd';
-import CloseIcon from '@mui/icons-material/Close';
-import { IconButton, Tooltip, Box, CircularProgress } from '@mui/material';
+import { X as CloseIcon, Loader2 } from 'lucide-react';
+import { Button } from '../../../components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../components/ui/tooltip';
 import { usePianoRollStore } from '../../stores/usePianoRollStore';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { CombinedTrack, DrumTrackRead, SamplerTrackRead, RootState } from '../../stores/types';
@@ -893,7 +894,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   };
   
   return (
-    <>
+    <TooltipProvider>
       <Rnd
         ref={rndRef}
         default={{
@@ -928,19 +929,21 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
           >
             <h1 style={titleStyle}>{parentDrumTrackName}</h1>
             {onClose && (
-              <Tooltip title="Close Drum Machine" arrow>
-                <IconButton 
-                  onClick={onClose} 
-                  size="small"
-                  sx={{ 
-                    position: 'absolute', 
-                    right: 4, 
-                    color: DARK_THEME.headerText,
-                    '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.1)' }
-                  }}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    onClick={onClose} 
+                    className="absolute right-1 hover:bg-white/10"
+                    style={{ color: DARK_THEME.headerText }}
+                  >
+                    <CloseIcon className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Close Drum Machine
+                </TooltipContent>
               </Tooltip>
             )}
           </div>
@@ -970,7 +973,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <div style={addButtonStyle} title="Add to Drum Machine">
-                        {isLoading ? <CircularProgress size={20} color="inherit"/> : '+'}
+                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : '+'}
                       </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-56">
@@ -1012,7 +1015,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
         onClose={handleModalClose}
         onConfirmSelection={handleConfirmSelection} 
       />
-    </>
+    </TooltipProvider>
   );
 };
 

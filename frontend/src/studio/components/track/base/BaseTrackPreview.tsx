@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import Box from '@mui/material/Box';
 import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 import { pixelsToTicks, ticksToPixels } from '../../../constants/gridConstants';
 import { CombinedTrack } from 'src/platform/types/project';
@@ -171,30 +170,27 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   };
 
   // Create base style object for track
-  const trackStyle = {
-    display: 'flex',
+  const trackStyleInline = {
     height: GRID_CONSTANTS.trackHeight,
-    position: 'absolute',
-    boxSizing: 'border-box',
-    borderBottom: `1px solid ${GRID_CONSTANTS.borderColor}`,
-    borderRadius: '6px',
     left: `${ticksToPixels(getFirstInstance(track)?.x_position ?? 0, bpm, timeSignature)}px`,
     top: `${getFirstInstance(track)?.y_position ?? 0}px`,
     cursor: isSelected ? 'grab' : getToolCursor(),
     zIndex: isSelected ? 1001 : 1000,
     transition: (interaction?.isDragging || interaction?.isResizing || isGroupDrag || isGroupResize) ? 'none' : 'width 0.2s ease, left 0.2s ease, top 0.2s ease, transform 0.2s ease',
-    '&:hover': {
-      boxShadow: `0 0 12px ${trackColor}`,
-      zIndex: 9999
-    },
-    bgcolor: 'rgba(26, 26, 26, 0.8)',
-    margin: 0,
-    padding: 0,
     width: `${trackWidth}px`,
-    overflow: 'hidden', // This creates the clipping viewport
-    ...getSelectionStyles(),
+    backgroundColor: 'rgba(26, 26, 26, 0.8)',
+    borderBottomColor: GRID_CONSTANTS.borderColor,
     ...trackStyleOverrides
   };
+
+  // Generate hover styles dynamically
+  const hoverStyle = {
+    boxShadow: `0 0 12px ${trackColor}`,
+    zIndex: 9999
+  };
+
+  // Generate selection styles for inline use
+  const selectionStylesInline = getSelectionStyles();
 
   // Get tool-specific cursor
   function getToolCursor() {
@@ -377,17 +373,9 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   };
 
   // Define styles for resize handles
-  const resizeHandleStyle = {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: '8px', // Make handle easier to grab
-    cursor: 'ew-resize',
-    zIndex: 1002, // Ensure handles are above track content
-    backgroundColor: isGroupResize ? 'rgba(33, 150, 243, 0.3)' : 'transparent',
-    '&:hover': {
-      backgroundColor: 'rgba(33, 150, 243, 0.5)'
-    }
+  const resizeHandleStyleInline = {
+    zIndex: 1002,
+    backgroundColor: isGroupResize ? 'rgba(33, 150, 243, 0.3)' : 'transparent'
   };
 
   // Handle double click for selection integration
@@ -399,182 +387,144 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   }, [onTrackDoubleClick, track.id]);
 
   return (
-    <Box sx={{ position: 'relative' }}>
+    <div className="relative">
       {/* Selection indicators */}
       {isSelected && (
         <>
           {/* Selection background */}
-          <Box
-            sx={{
-              position: 'absolute',
-              top: -4,
-              left: -4,
-              right: -4,
-              bottom: -4,
+          <div
+            className={`absolute -top-1 -left-1 -right-1 -bottom-1 rounded-lg pointer-events-none -z-10 ${
+              isPrimaryDrag ? 'border-2 border-blue-500' : ''
+            }`}
+            style={{
               backgroundColor: isPrimaryDrag 
                 ? 'rgba(33, 150, 243, 0.25)' 
-                : 'rgba(33, 150, 243, 0.15)',
-              borderRadius: '8px',
-              pointerEvents: 'none',
-              zIndex: -1,
-              border: isPrimaryDrag ? '2px solid #2196f3' : 'none'
+                : 'rgba(33, 150, 243, 0.15)'
             }}
           />
           
           {/* Selection badge */}
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 4,
-              right: 4,
-              width: 18,
-              height: 18,
+          <div
+            className="absolute top-1 right-1 w-[18px] h-[18px] text-white rounded-full flex items-center justify-center font-bold pointer-events-none shadow-sm"
+            style={{
               backgroundColor: isPrimaryDrag ? '#ff9800' : '#2196f3',
-              color: 'white',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
               fontSize: isPrimaryDrag ? '8px' : '10px',
-              fontWeight: 'bold',
               zIndex: 1002,
-              pointerEvents: 'none',
               boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
             }}
           >
             {isPrimaryDrag ? '◉' : '✓'}
-          </Box>
+          </div>
         </>
       )}
 
-      <Box
+      <div
         ref={trackRef}
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}
-        className="track"
-        sx={trackStyle}
+        className="track flex absolute box-border border-b rounded-md m-0 p-0 overflow-hidden group"
+        style={{
+          ...trackStyleInline,
+          ...selectionStylesInline,
+          borderBottomWidth: '1px',
+          borderBottomStyle: 'solid'
+        }}
+        onMouseEnter={(e) => {
+          Object.assign(e.currentTarget.style, hoverStyle);
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.boxShadow = '';
+          e.currentTarget.style.zIndex = isSelected ? '1001' : '1000';
+        }}
         data-track-width={trackWidth} // Add data attribute for debugging
         data-track-id={track.id} // Add for selection layer integration
       >
         {/* Left Resize Handle */}
-        <Box
-          className="resize-handle resize-handle-left"
-          sx={{
-            ...resizeHandleStyle,
-            left: '-4px', // Position slightly outside/overlapping the left edge
+        <div
+          className="resize-handle resize-handle-left absolute top-0 bottom-0 w-2 cursor-ew-resize hover:bg-blue-500/50 transition-colors"
+          style={{
+            ...resizeHandleStyleInline,
+            left: '-4px'
           }}
           onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
         />
         
         {/* Right Resize Handle */}
-        <Box
-          className="resize-handle resize-handle-right"
-          sx={{
-            ...resizeHandleStyle,
-            right: '-4px', // Position slightly outside/overlapping the right edge
+        <div
+          className="resize-handle resize-handle-right absolute top-0 bottom-0 w-2 cursor-ew-resize hover:bg-blue-500/50 transition-colors"
+          style={{
+            ...resizeHandleStyleInline,
+            right: '-4px'
           }}
           onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
         />
 
         {/* Track Timeline Content (Original Inner Box) */}
-        <Box sx={{ 
-          display: 'flex',
-          flex: 1,
-          position: 'relative',
-          overflow: 'hidden',
-          height: '100%',
-          width: `${trackWidth}px`,
-          margin: 0,
-          padding: 0,
-          boxSizing: 'border-box',
-          borderLeft: 'none',
-          borderRight: 'none',
-          background: `linear-gradient(180deg, ${trackColor}80 0%, ${trackColor} 100%)`,
-          opacity: track.mute ? 0.4 : 0.85,
-          '&:hover': {
-            opacity: track.mute ? 0.5 : 1,
-            boxShadow: 'inset 0 0 10px rgba(255,255,255,0.3)'
-          },
-          transition: 'opacity 0.2s ease',
-          pointerEvents: 'none' // Ensure content doesn't interfere with handles/dragging
-        }}>
+        <div 
+          className="flex flex-1 relative overflow-hidden h-full m-0 p-0 box-border border-l-0 border-r-0 transition-opacity duration-200 pointer-events-none group-hover:shadow-inner"
+          style={{
+            width: `${trackWidth}px`,
+            background: `linear-gradient(180deg, ${trackColor}80 0%, ${trackColor} 100%)`,
+            opacity: track.mute ? 0.4 : 0.85
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = track.mute ? '0.5' : '1';
+            e.currentTarget.style.boxShadow = 'inset 0 0 10px rgba(255,255,255,0.3)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = track.mute ? '0.4' : '0.85';
+            e.currentTarget.style.boxShadow = '';
+          }}
+        >
           {/* Track Type Badge */}
-          <Box sx={{
-            position: 'absolute',
-            right: 10,
-            top: 5,
-            bgcolor: track.track_type === 'AUDIO' ? '#4caf50' : 
-                    track.track_type === 'MIDI' ? '#2196f3' : 
-                    track.track_type === 'DRUM' ? '#ff9800' : '#9c27b0',
-            color: 'white',
-            fontSize: '10px',
-            fontWeight: 'bold',
-            padding: '2px 6px',
-            borderRadius: '3px',
-            textTransform: 'uppercase',
-            opacity: 0.7,
-            pointerEvents: 'none' // Ensure content doesn't interfere
-          }}>
+          <div 
+            className="absolute right-2.5 top-1.5 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm uppercase opacity-70 pointer-events-none"
+            style={{
+              backgroundColor: track.track_type === 'AUDIO' ? '#4caf50' : 
+                              track.track_type === 'MIDI' ? '#2196f3' : 
+                              track.track_type === 'DRUM' ? '#ff9800' : '#9c27b0'
+            }}
+          >
             {track.track_type}
-          </Box>
+          </div>
           
           {/* Content Wrapper - Visible part is controlled by the container's overflow: hidden */}
-          <Box 
+          <div 
             ref={contentRef}
-            className="track-content-wrapper"
-            sx={{
-              position: 'absolute',
-              top: '0',
-              left: '0',
-              width: `${actualContentWidth}px`, // Set to full content width
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              opacity: 0.8,
-              pointerEvents: 'none', // Ensure content doesn't interfere
+            className="track-content-wrapper absolute top-0 left-0 h-full flex items-center justify-start opacity-80 pointer-events-none"
+            style={{
+              width: `${actualContentWidth}px`,
               transform: `translateX(${getContentTransform()}px)`,
-              transition: (isGroupResize || interaction?.isResizing) ? 'none' : 'transform 0.2s ease',
+              transition: (isGroupResize || interaction?.isResizing) ? 'none' : 'transform 0.2s ease'
             }}
           >
             {renderTrackContent()}
-          </Box>
+          </div>
           
           {/* Track Name */}
-          <Box sx={{ 
-            position: 'absolute', 
-            left: 10, 
-            top: 6, 
-            color: 'white',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
-            pointerEvents: 'none' // Ensure content doesn't interfere
-          }}>
+          <div 
+            className="absolute left-2.5 top-1.5 text-white text-xs font-bold pointer-events-none"
+            style={{
+              textShadow: '1px 1px 2px rgba(0,0,0,0.7)'
+            }}
+          >
             {track.name}
-          </Box>
+          </div>
           
           {/* Muted indicator */}
           {track.mute && (
-            <Box sx={{
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(0,0,0,0.4)',
-              color: 'white',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              pointerEvents: 'none' // Ensure content doesn't interfere
-            }}>
+            <div 
+              className="absolute w-full h-full flex items-center justify-center text-white text-sm font-bold pointer-events-none"
+              style={{
+                backgroundColor: 'rgba(0,0,0,0.4)'
+              }}
+            >
               MUTED
-            </Box>
+            </div>
           )}
-        </Box>
-      </Box>
-    </Box>
+        </div>
+      </div>
+    </div>
   );
 };
 

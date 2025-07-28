@@ -1,227 +1,233 @@
-// import React, { useState } from 'react';
-// import { Link as RouterLink } from '@tanstack/react-router';
-// import { useAuth } from '../auth/auth-context';
-// import {
-//   AppBar,
-//   Box,
-//   Toolbar,
-//   Typography,
-//   Button,
-//   IconButton,
-//   Avatar,
-//   Menu,
-//   MenuItem,
-//   Divider,
-//   Tooltip,
-//   ListItemIcon,
-//   useMediaQuery,
-//   useTheme
-// } from '@mui/material';
-// import {
-//   Menu as MenuIcon,
-//   Home as HomeIcon,
-//   MusicNote as MusicNoteIcon,
-//   Person as PersonIcon,
-//   ExitToApp as LogoutIcon,
-//   Settings as SettingsIcon
-// } from '@mui/icons-material';
+import React, { useState } from 'react';
+import { Link as RouterLink } from '@tanstack/react-router';
+import { useAuth } from '../auth/auth-context';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Home,
+  Music,
+  User,
+  LogOut,
+  Settings,
+  Menu,
+} from 'lucide-react';
 
-// const Navbar = () => {
-//   const { user, profile, signOut } = useAuth();
-//   const theme = useTheme();
-//   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+const Navbar = () => {
+  const { user, profile, signOut } = useAuth();
   
-//   // Menu state
-//   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-//   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  // Menu state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-//   // Handlers
-//   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-//     setUserMenuAnchor(event.currentTarget);
-//   };
-  
-//   const handleUserMenuClose = () => {
-//     setUserMenuAnchor(null);
-//   };
-  
-//   const handleLogout = async () => {
-//     handleUserMenuClose();
-//     await signOut();
-//     window.location.href = '/';
-//   };
-  
-//   // User menu component
-//   const userMenuOpen = Boolean(userMenuAnchor);
-  
-//   return (
-//     <AppBar 
-//       position="static" 
-//       color="inherit" 
-//       elevation={1}
-//     >
-//       <Toolbar>
-//         {/* Logo */}
-//         <Typography
-//           variant="h6"
-//           component={RouterLink}
-//           to="/"
-//           sx={{
-//             flexGrow: 1,
-//             fontWeight: 'bold',
-//             textDecoration: 'none',
-//             color: 'inherit',
-//             display: 'flex',
-//             alignItems: 'center'
-//           }}
-//         >
-//           <MusicNoteIcon sx={{ mr: 1 }} />
-//           BeatGen
-//         </Typography>
-        
-//         {/* Desktop Navigation */}
-//         {!isMobile && (
-//           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-//             {user ? (
-//               <>
-//                 <Button
-//                   component={RouterLink}
-//                   to="/home"
-//                   color="inherit"
-//                   startIcon={<HomeIcon />}
-//                   sx={{ ml: 2 }}
-//                 >
-//                   Projects
-//                 </Button>
-                
-//                 <Button
-//                   component={RouterLink}
-//                   to="/studio"
-//                   color="inherit"
-//                   startIcon={<MusicNoteIcon />}
-//                   sx={{ ml: 2 }}
-//                 >
-//                   Studio
-//                 </Button>
-                
-//                 {/* User Menu Button */}
-//                 <Tooltip title="Account Settings">
-//                   <IconButton
-//                     onClick={handleUserMenuOpen}
-//                     sx={{ ml: 2 }}
-//                     aria-controls={userMenuOpen ? 'user-menu' : undefined}
-//                     aria-haspopup="true"
-//                     aria-expanded={userMenuOpen ? 'true' : undefined}
-//                   >
-//                     {profile?.avatar_url ? (
-//                       <Avatar 
-//                         src={profile.avatar_url} 
-//                         alt={profile.display_name || user.email} 
-//                       />
-//                     ) : (
-//                       <Avatar>
-//                         {user.email.charAt(0).toUpperCase()}
-//                       </Avatar>
-//                     )}
-//                   </IconButton>
-//                 </Tooltip>
-//               </>
-//             ) : (
-//               <>
-//                 <Button
-//                   component={RouterLink}
-//                   to="/login"
-//                   color="inherit"
-//                   sx={{ ml: 2 }}
-//                 >
-//                   Log In
-//                 </Button>
-                
-//                 <Button
-//                   component={RouterLink}
-//                   to="/register"
-//                   variant="contained"
-//                   color="primary"
-//                   sx={{ ml: 2 }}
-//                 >
-//                   Sign Up
-//                 </Button>
-//               </>
-//             )}
-//           </Box>
-//         )}
-        
-//         {/* Mobile Menu Button */}
-//         {isMobile && (
-//           <IconButton
-//             edge="end"
-//             color="inherit"
-//             aria-label="menu"
-//             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-//           >
-//             <MenuIcon />
-//           </IconButton>
-//         )}
-//       </Toolbar>
-      
-//       {/* User Menu (Desktop) */}
-//       <Menu
-//         id="user-menu"
-//         anchorEl={userMenuAnchor}
-//         open={userMenuOpen}
-//         onClose={handleUserMenuClose}
-//         PaperProps={{
-//           sx: {
-//             width: 220,
-//             overflow: 'visible',
-//             filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.15))',
-//             mt: 1.5,
-//             '& .MuiAvatar-root': {
-//               width: 32,
-//               height: 32,
-//               ml: -0.5,
-//               mr: 1,
-//             },
-//           },
-//         }}
-//         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-//         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-//       >
-//         <Box sx={{ px: 2, py: 1 }}>
-//           <Typography variant="subtitle1" noWrap>
-//             {profile?.display_name || user?.email}
-//           </Typography>
-//           <Typography variant="body2" color="text.secondary" noWrap>
-//             {user?.email}
-//           </Typography>
-//         </Box>
-        
-//         <Divider />
-        
-//         <MenuItem component={RouterLink} to="/profile" onClick={handleUserMenuClose}>
-//           <ListItemIcon>
-//             <PersonIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-//           </ListItemIcon>
-//           Profile
-//         </MenuItem>
-        
-//         <MenuItem component={RouterLink} to="/settings" onClick={handleUserMenuClose}>
-//           <ListItemIcon>
-//             <SettingsIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-//           </ListItemIcon>
-//           Settings
-//         </MenuItem>
-        
-//         <Divider />
-        
-//         <MenuItem onClick={handleLogout}>
-//           <ListItemIcon>
-//             <LogoutIcon fontSize="small" sx={{ color: 'error.main' }} /> 
-//           </ListItemIcon>
-//           Logout
-//         </MenuItem>
-//       </Menu>
-//     </AppBar>
-//   );
-// };
+  // Handlers
+  const handleLogout = async () => {
+    await signOut();
+    window.location.href = '/';
+  };
 
-// export default Navbar;
+  return (
+    <nav className="bg-background border-b border-border">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          {/* Logo */}
+          <div className="flex items-center">
+            <RouterLink 
+              to="/" 
+              className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors font-bold text-xl"
+            >
+              <Music className="h-6 w-6" />
+              <span>BeatGen</span>
+            </RouterLink>
+          </div>
+        
+          {/* Desktop Navigation */}
+          <div className="hidden sm:flex sm:items-center sm:space-x-4">
+            {user ? (
+              <>
+                <Button variant="ghost" asChild>
+                  <RouterLink to="/home" className="flex items-center space-x-2">
+                    <Home className="h-4 w-4" />
+                    <span>Projects</span>
+                  </RouterLink>
+                </Button>
+                
+                <Button variant="ghost" asChild>
+                  <RouterLink to="/studio" className="flex items-center space-x-2">
+                    <Music className="h-4 w-4" />
+                    <span>Studio</span>
+                  </RouterLink>
+                </Button>
+                
+                {/* User Menu */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage 
+                                src={profile?.avatar_url} 
+                                alt={profile?.display_name || user.email} 
+                              />
+                              <AvatarFallback>
+                                {user.email.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                          </Button>
+                        </TooltipTrigger>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-56" align="end" forceMount>
+                        <div className="flex flex-col space-y-1 p-2">
+                          <p className="text-sm font-medium leading-none">
+                            {profile?.display_name || user?.email}
+                          </p>
+                          <p className="text-xs leading-none text-muted-foreground">
+                            {user?.email}
+                          </p>
+                        </div>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <RouterLink to="/profile" className="flex items-center space-x-2 cursor-pointer">
+                            <User className="h-4 w-4" />
+                            <span>Profile</span>
+                          </RouterLink>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <RouterLink to="/settings" className="flex items-center space-x-2 cursor-pointer">
+                            <Settings className="h-4 w-4" />
+                            <span>Settings</span>
+                          </RouterLink>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 cursor-pointer">
+                          <LogOut className="h-4 w-4 mr-2" />
+                          <span>Logout</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <TooltipContent>
+                      <p>Account Settings</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" asChild>
+                  <RouterLink to="/login">Log In</RouterLink>
+                </Button>
+                
+                <Button asChild>
+                  <RouterLink to="/register">Sign Up</RouterLink>
+                </Button>
+              </>
+            )}
+          </div>
+        
+          {/* Mobile Menu Button */}
+          <div className="sm:hidden flex items-center">
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-6 w-6" />
+                  <span className="sr-only">Open main menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[300px]">
+                <SheetHeader>
+                  <SheetTitle className="flex items-center space-x-2">
+                    <Music className="h-5 w-5" />
+                    <span>BeatGen</span>
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="flex flex-col space-y-4 mt-8">
+                  {user ? (
+                    <>
+                      <Button variant="ghost" asChild className="justify-start">
+                        <RouterLink to="/home" onClick={() => setMobileMenuOpen(false)}>
+                          <Home className="h-4 w-4 mr-2" />
+                          Projects
+                        </RouterLink>
+                      </Button>
+                      
+                      <Button variant="ghost" asChild className="justify-start">
+                        <RouterLink to="/studio" onClick={() => setMobileMenuOpen(false)}>
+                          <Music className="h-4 w-4 mr-2" />
+                          Studio
+                        </RouterLink>
+                      </Button>
+                      
+                      <div className="border-t pt-4">
+                        <div className="flex items-center space-x-3 mb-4">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage 
+                              src={profile?.avatar_url} 
+                              alt={profile?.display_name || user.email} 
+                            />
+                            <AvatarFallback>
+                              {user.email.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">
+                              {profile?.display_name || user?.email}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {user?.email}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <Button variant="ghost" asChild className="justify-start w-full">
+                          <RouterLink to="/profile" onClick={() => setMobileMenuOpen(false)}>
+                            <User className="h-4 w-4 mr-2" />
+                            Profile
+                          </RouterLink>
+                        </Button>
+                        
+                        <Button variant="ghost" asChild className="justify-start w-full">
+                          <RouterLink to="/settings" onClick={() => setMobileMenuOpen(false)}>
+                            <Settings className="h-4 w-4 mr-2" />
+                            Settings
+                          </RouterLink>
+                        </Button>
+                        
+                        <Button 
+                          variant="ghost" 
+                          onClick={handleLogout} 
+                          className="justify-start w-full text-red-600 hover:text-red-600"
+                        >
+                          <LogOut className="h-4 w-4 mr-2" />
+                          Logout
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="ghost" asChild className="justify-start">
+                        <RouterLink to="/login" onClick={() => setMobileMenuOpen(false)}>
+                          Log In
+                        </RouterLink>
+                      </Button>
+                      
+                      <Button asChild className="justify-start">
+                        <RouterLink to="/register" onClick={() => setMobileMenuOpen(false)}>
+                          Sign Up
+                        </RouterLink>
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+};
+
+export default Navbar;

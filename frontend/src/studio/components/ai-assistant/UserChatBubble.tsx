@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { cn } from '@/lib/utils';
 import MenuChip from './MenuChip';
 import AddContextChip from './AddContextChip';
 
@@ -14,28 +14,18 @@ interface UserChatBubbleProps {
 
 const UserChatBubble: React.FC<UserChatBubbleProps> = ({ text, mode, selectedTrack }) => {
   return (
-    <Box
-      sx={{
-        alignSelf: 'flex-end',
-        maxWidth: '85%',
-        p: 1,
-        borderRadius: '16px',
-        bgcolor: 'rgba(44, 151, 251, 0.8)',
-        boxShadow: 1,
-        wordBreak: 'break-word'
-      }}
+    <div
+      className={cn(
+        "self-end max-w-[85%] p-2 rounded-2xl",
+        "bg-blue-500/80 text-white shadow-sm break-words"
+      )}
     >
-        <Typography variant="body2">
+      <p className="text-sm">
         {text}
-      </Typography>
+      </p>
       {/* Chips container */}
       {(mode || selectedTrack) && (
-        <Box sx={{ 
-            mt: 0.5,
-          display: 'flex', 
-          gap: 1,
-          justifyContent: 'flex-end'  // Add this to align chips to the right
-        }}>
+        <div className="mt-2 flex gap-2 justify-end">
           {mode && (
             <MenuChip 
               label={mode}
@@ -52,9 +42,9 @@ const UserChatBubble: React.FC<UserChatBubbleProps> = ({ text, mode, selectedTra
               filled={true}
             />
           )}
-        </Box>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 

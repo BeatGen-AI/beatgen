@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from "../../../components/ui/button";
-import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon, MusicNote as MusicNoteIcon } from '@mui/icons-material';
+import { Play, Pause, Trash2, Music } from 'lucide-react';
 import { MidiTrackRead } from '../../../platform/types/dto/track_models/midi_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
@@ -38,7 +38,7 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
   // Convert MIDI notes JSON to Note array for preview
   const notes = track.midi_notes_json ? convertJsonToNotes(track.midi_notes_json, track.id) : [];
 
-  const icon = <MusicNoteIcon className="text-primary" fontSize="small" />;
+  const icon = <Music className="text-primary" size={18} />;
   
   const headerActions = (
     <>
@@ -48,7 +48,7 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
         onClick={() => handlePlayTrack(track)}
         className="text-muted-foreground hover:bg-accent hover:text-primary h-7 w-7"
       >
-        {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
+        {isPlaying ? <Pause size={16} /> : <Play size={16} />}
       </Button>
       {handleEditTrack && (
         <Button 
@@ -57,7 +57,7 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
           onClick={() => handleEditTrack(track.id)}
           className="text-muted-foreground hover:bg-accent hover:text-yellow-500 dark:hover:text-yellow-400 h-7 w-7"
         >
-          <MusicNoteIcon fontSize="small" />
+          <Music size={16} />
         </Button>
       )}
       <Button 
@@ -66,7 +66,7 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
         onClick={() => handleDeleteTrack(track.id)}
         className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
       >
-        <DeleteIcon fontSize="small" />
+        <Trash2 size={16} />
       </Button>
     </>
   );

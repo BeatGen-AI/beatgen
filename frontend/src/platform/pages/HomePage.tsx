@@ -1,25 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { 
-  Container,
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions,
-  TextField,
-  CircularProgress,
-  Alert,
-  Snackbar
-} from '@mui/material';
+import { usePageTheme } from '../../lib/theme-provider';
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import './styles/Projects.css';
 import { 
-  Add as AddIcon, 
-  Delete as DeleteIcon, 
+  Plus as AddIcon, 
+  Trash2 as DeleteIcon, 
   Edit as EditIcon, 
-  MusicNote as MusicNoteIcon,
-  ArrowBack as ArrowBackIcon,
+  Music as MusicNoteIcon,
+  ArrowLeft as ArrowBackIcon,
   Menu as MenuIcon
-} from '@mui/icons-material';
+} from 'lucide-react';
 import SoundUploader from '../components/SoundUploader';
 import SoundLibrary from '../components/SoundLibrary';
 import { useAuth } from '../auth/auth-context';
@@ -48,16 +39,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-// We'll define logoColors here since we're not importing from SimpleSidebar anymore
-const logoColors = [
-  '#e539a9', // Bright Pink
-  '#c63ba6', // Magenta
-  '#a93fbf', // Dark Violet
-  '#8247d8', // Purple
-  '#6050e0', // Indigo
-  '#4160e2', // Blue
-];
 import GenerateSongModal from '../components/GenerateSongModal';
+import { GRID_CONSTANTS } from '../../studio/constants/gridConstants';
 import { createProject } from '../api/projects';
 import { ProjectCreate } from '../types/project';
 import { isAuthenticated } from '../auth/auth-utils';
@@ -75,6 +58,9 @@ const FETCH_THRESHOLD = 10; // When to fetch more from API
 // const collapsedDrawerWidth = 60; // No longer needed
 
 export default function HomePage() {
+  // Apply homepage theme
+  usePageTheme('homepage');
+  
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -289,7 +275,7 @@ export default function HomePage() {
       <div className="flex flex-col min-h-screen">
         {/* Header for guests */}
         <header className="px-8 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h1 className="text-xl font-bold" style={{ color: logoColors[3] }}>
+          <h1 className="text-xl font-bold" style={{ color: GRID_CONSTANTS.logoColors[3] }}>
             BeatGen Studio
           </h1>
           <div className="flex gap-2">
@@ -305,7 +291,7 @@ export default function HomePage() {
         {/* Main content for guests */}
         <main className="flex-1 p-8 flex flex-col items-center justify-center">
           <FadeCard className="p-8 max-w-[600px] w-full text-center">
-            <h2 className="text-3xl font-medium mb-4" style={{ color: logoColors[1] }}>
+            <h2 className="text-3xl font-medium mb-4" style={{ color: GRID_CONSTANTS.logoColors[1] }}>
               Generate Your Song
             </h2>
             <p className="text-base mb-6 text-muted-foreground">
@@ -338,13 +324,16 @@ export default function HomePage() {
   }
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Main Content */}
-        <Container maxWidth="lg" className="projects-container" sx={{ pt: 0, mt:0 }}>
+        <div className="max-w-6xl mx-auto projects-container px-2 py-2 md:px-4 md:py-4">
 
           {projectsError && (
-            <Alert severity="error" sx={{ mb: 4 }}>
-              {projectsError.message || 'Failed to load projects. Please try again later.'}
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                {projectsError.message || 'Failed to load projects. Please try again later.'}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -355,20 +344,20 @@ export default function HomePage() {
                 <h2 
                   className="text-2xl font-medium"
                   style={{ 
-                    color: logoColors[1], // Projects
+                    color: GRID_CONSTANTS.logoColors[1], // Projects
                   }}
                 >
                   Projects
                 </h2>
                 <div className="flex gap-2">
-                  <Button
+                  {/* <Button
                     variant="outline"
                     className="flex items-center gap-2"
                     onClick={() => setShowGenerateSongModal(true)}
                   >
                     <MusicNoteIcon fontSize="small" />
                     Generate Song
-                  </Button>
+                  </Button> */}
                   <Button
                     variant="default"
                     className="flex items-center gap-2"
@@ -385,20 +374,20 @@ export default function HomePage() {
                 <h2 
                   className="text-2xl font-medium"
                   style={{ 
-                    color: logoColors[1], // Projects
+                    color: GRID_CONSTANTS.logoColors[1], // Projects
                   }}
                 >
                   Projects
                 </h2>
                 <div className="flex flex-col gap-2">
-                  <Button
+                  {/* <Button
                     variant="outline"
                     className="flex items-center gap-2 justify-center"
                     onClick={() => setShowGenerateSongModal(true)}
                   >
                     <MusicNoteIcon fontSize="small" />
                     Generate Song
-                  </Button>
+                  </Button> */}
                   <Button
                     variant="default"
                     className="flex items-center gap-2 justify-center"
@@ -426,7 +415,7 @@ export default function HomePage() {
               snackbarMessage={snackbar.message}
               snackbarSeverity={snackbar.severity}
               onCloseSnackbar={handleCloseSnackbar}
-              sectionColor={logoColors[1]}
+              sectionColor={GRID_CONSTANTS.logoColors[1]}
               getPrefetchStatus={getPrefetchStatus}
             />
           </FadeCard>
@@ -437,13 +426,13 @@ export default function HomePage() {
               <h2 
                 className="text-2xl font-medium"
                 style={{
-                  color: logoColors[2], // Audio Tracks
+                  color: GRID_CONSTANTS.logoColors[2], // Audio Tracks
                 }}
               >
                 Audio Tracks
               </h2>
             </div>
-            <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={logoColors[2]} useUiMode={true} />
+            <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={GRID_CONSTANTS.logoColors[2]} useUiMode={true} />
           </FadeCard>
 
           {/* Midi Tracks Section */}
@@ -452,13 +441,13 @@ export default function HomePage() {
               <h2 
                 className="text-2xl font-medium"
                 style={{
-                  color: logoColors[3], // MIDI Tracks
+                  color: GRID_CONSTANTS.logoColors[3], // MIDI Tracks
                 }}
               >
                 MIDI Tracks
               </h2>
             </div>
-            <MidiLibrary sectionColor={logoColors[3]} />
+            <MidiLibrary sectionColor={GRID_CONSTANTS.logoColors[3]} />
           </FadeCard>
 
           {/* Sampler Tracks Section */}
@@ -467,13 +456,13 @@ export default function HomePage() {
               <h2 
                 className="text-2xl font-medium"
                 style={{
-                  color: logoColors[4], // Sampler Tracks
+                  color: GRID_CONSTANTS.logoColors[4], // Sampler Tracks
                 }}
               >
                 Sampler Tracks
               </h2>
             </div>
-            <SamplerLibrary sectionColor={logoColors[4]} />
+            <SamplerLibrary sectionColor={GRID_CONSTANTS.logoColors[4]} />
           </FadeCard>
 
           {/* Drum Tracks Section */}
@@ -482,31 +471,27 @@ export default function HomePage() {
               <h2 
                 className="text-2xl font-medium"
                 style={{
-                  color: logoColors[5], // Drum Tracks
+                  color: GRID_CONSTANTS.logoColors[5], // Drum Tracks
                 }}
               >
                 Drum Tracks
               </h2>
             </div>
-            <DrumLibrary sectionColor={logoColors[5]} />
+            <DrumLibrary sectionColor={GRID_CONSTANTS.logoColors[5]} />
           </FadeCard>
 
-          {/* Snackbar for notifications */}
-          <Snackbar 
-            open={snackbar.open && !loadingProjects}
-            autoHideDuration={6000} 
-            onClose={handleCloseSnackbar}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-          >
-            <Alert 
-              onClose={handleCloseSnackbar} 
-              severity={snackbar.severity} 
-              variant="filled"
-            >
-              {snackbar.message}
-            </Alert>
-          </Snackbar>
-      </Container>
+          {/* Toast-like notifications using Alert */}
+          {snackbar.open && !loadingProjects && (
+            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
+              <Alert 
+                variant={snackbar.severity === 'error' ? 'destructive' : 'default'}
+                className={`${snackbar.severity === 'success' ? 'border-green-500 text-green-700 bg-green-50' : ''}`}
+              >
+                <AlertDescription>{snackbar.message}</AlertDescription>
+              </Alert>
+            </div>
+          )}
+      </div>
 
       {/* Generate Song Modal */}
       <GenerateSongModal

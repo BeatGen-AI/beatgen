@@ -3,7 +3,7 @@ import { X, Download } from 'lucide-react';
 import { useStudioStore } from '../../stores/studioStore';
 import { ExportService } from '../../core/export/ExportService';
 import { ExportOptions, ExportProgress } from '../../core/export/types';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useAppTheme } from '../../../lib/theme-provider';
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,7 @@ interface ExportDialogProps {
 
 export function ExportDialog({ open, onClose }: ExportDialogProps) {
   const { tracks, projectTitle, bpm } = useStudioStore();
-  const { studioMode, mode: uiMode } = useAppTheme();
+  const { studioMode } = useAppTheme();
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [exportService] = useState(() => new ExportService());
@@ -54,11 +54,12 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
   useEffect(() => {
     if (open) return; // Only run when dialog is closed
     
-    // Restore original dark mode after animation completes
+    // Since we're in the studio, we don't need to restore to UI mode
+    // The studio should maintain its own theme consistently
     const timeoutId = setTimeout(() => {
       const root = window.document.documentElement;
       const currentHasDark = root.classList.contains('dark');
-      const shouldHaveDark = uiMode === 'dark';
+      const shouldHaveDark = studioMode === 'dark';
       
       if (shouldHaveDark && !currentHasDark) {
         root.classList.add('dark');
@@ -68,7 +69,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
     }, 200); // Wait for closing animation
     
     return () => clearTimeout(timeoutId);
-  }, [open, uiMode]);
+  }, [open, studioMode]);
   
   // Export settings
   const [format, setFormat] = useState<'wav' | 'mp3' | 'flac'>('wav');

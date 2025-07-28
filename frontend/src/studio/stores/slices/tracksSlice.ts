@@ -2214,7 +2214,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         track.track && 
         (track.track as SamplerTrackRead).drum_track_id)
     ).length;
-    console.log('>>> getVisibleTrackCount <<<', count);
     return count;
   };
 

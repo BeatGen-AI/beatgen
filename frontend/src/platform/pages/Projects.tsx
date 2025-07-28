@@ -1,17 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { 
-  Container,
-  Typography, 
-  Box,
-  Alert,
-  Snackbar
-} from '@mui/material';
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import './styles/Projects.css';
 import { 
-  ArrowBack as ArrowBackIcon,
+  ArrowLeft as ArrowBackIcon,
   Menu as MenuIcon
-} from '@mui/icons-material';
+} from 'lucide-react';
 import { 
   getProjects, 
   deleteProject, 
@@ -166,10 +160,13 @@ export default function Projects() {
 
   return (
     <div className="p-4 md:p-8">
-        <Container maxWidth="lg" sx={{ pt: 0, mt: 0 }}>
+        <div className="max-w-4xl mx-auto pt-0 mt-0">
           {projectsError && !projectsData && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {projectsError.message || 'Failed to load projects. Please try again later.'}
+            <Alert variant="destructive" className="mb-2">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                {projectsError.message || 'Failed to load projects. Please try again later.'}
+              </AlertDescription>
             </Alert>
           )}
           <ProjectsDisplay
@@ -189,7 +186,7 @@ export default function Projects() {
             snackbarSeverity={snackbar.severity}
             onCloseSnackbar={handleCloseSnackbar} 
             sectionColor={''}          />
-      </Container>
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

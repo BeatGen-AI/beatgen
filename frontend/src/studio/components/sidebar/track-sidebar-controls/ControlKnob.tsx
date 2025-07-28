@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Slider, Popover, Typography } from '@mui/material';
 import { Knob } from 'primereact/knob';
+import { cn } from '../../../../lib/utils';
 
 interface ControlKnobProps {
   value: number;
@@ -36,10 +36,13 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
     return `${val}`;
   }
 }) => {
-  const [anchorEl, setAnchorEl] = useState<HTMLDivElement | null>(null);
-  const [showPopover, setShowPopover] = useState(false);
+  const [showSlider, setShowSlider] = useState(false);
+  const [sliderPosition, setSliderPosition] = useState<'above' | 'below'>('above');
+  const [horizontalOffset, setHorizontalOffset] = useState(0);
   const knobRef = useRef<HTMLDivElement>(null);
-  const popoverIsHoveredRef = useRef(false);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<number | null>(null);
+  const hoverTimeoutRef = useRef<number | null>(null);
   
   // Normalize value for knob (0-100)
   const normalizedValue = Math.round(((value - min) / (max - min)) * 100);
@@ -56,14 +59,59 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
     onChange(syntheticEvent, actualValue);
   };
   
-  const handleSliderChange = (event: Event, newValue: number | number[]) => {
-    // Ensure popover stays open while using the slider
-    if (!showPopover) {
-      setShowPopover(true);
-    }
-    onChange(event, newValue as number);
+  const handleSliderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = parseFloat(event.target.value);
+    onChange(event as any, newValue);
   };
   
+  const handleSliderCommitted = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = parseFloat(event.target.value);
+    if (onChangeCommitted) {
+      onChangeCommitted(event as any, newValue);
+    }
+  };
+
+  const handleSliderMouseUp = (event: React.MouseEvent<HTMLInputElement>) => {
+    const newValue = parseFloat(event.currentTarget.value);
+    if (onChangeCommitted) {
+      onChangeCommitted(event as any, newValue);
+    }
+  };
+  
+  const checkSliderPosition = () => {
+    if (knobRef.current) {
+      const knobRect = knobRef.current.getBoundingClientRect();
+      const sliderHeight = 120; // Approximate height of slider popup
+      const sliderWidth = size <= 30 ? 150 : 200; // Match the slider width
+      const topSpace = knobRect.top;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Check vertical positioning
+      if (topSpace < sliderHeight && (viewportHeight - knobRect.bottom) > sliderHeight) {
+        setSliderPosition('below');
+      } else {
+        setSliderPosition('above');
+      }
+      
+      // Check horizontal positioning to prevent going off screen
+      const knobCenterX = knobRect.left + knobRect.width / 2;
+      const sliderHalfWidth = sliderWidth / 2;
+      let offset = 0;
+      
+      // If slider would go off the left edge
+      if (knobCenterX - sliderHalfWidth < 10) {
+        offset = (knobCenterX - sliderHalfWidth) - 10;
+      }
+      // If slider would go off the right edge  
+      else if (knobCenterX + sliderHalfWidth > viewportWidth - 10) {
+        offset = (knobCenterX + sliderHalfWidth) - (viewportWidth - 10);
+      }
+      
+      setHorizontalOffset(offset);
+    }
+  };
+
   const handleKnobMouseEnter = () => {
     // Clear any existing hover timeout
     if (hoverTimeoutRef.current !== null) {
@@ -71,44 +119,37 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
       hoverTimeoutRef.current = null;
     }
     
-    // Set anchor and show popover
-    setAnchorEl(knobRef.current);
-    setShowPopover(true);
+    // Check position before showing
+    checkSliderPosition();
+    
+    // Show slider
+    setShowSlider(true);
   };
   
   const handleKnobMouseLeave = () => {
-    // Close popover only if mouse isn't over the popover
-    // with a small delay to allow cursor to move to popover
+    // Close slider with a small delay
     hoverTimeoutRef.current = window.setTimeout(() => {
-      if (!popoverIsHoveredRef.current) {
-        setShowPopover(false);
-      }
+      setShowSlider(false);
     }, 100);
   };
   
-  // Add a delay mechanism to prevent rapid open/close cycles
-  const timeoutRef = useRef<number | null>(null);
-  const hoverTimeoutRef = useRef<number | null>(null);
-  
-  const handlePopoverMouseEnter = () => {
-    popoverIsHoveredRef.current = true;
-    
+  const handleSliderMouseEnter = () => {
     // Clear any pending timeout
     if (timeoutRef.current !== null) {
       window.clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    if (hoverTimeoutRef.current !== null) {
+      window.clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
   };
   
-  const handlePopoverMouseLeave = () => {
-    popoverIsHoveredRef.current = false;
-    
+  const handleSliderMouseLeave = () => {
     // Delay closing to allow mouse to move between elements
     timeoutRef.current = window.setTimeout(() => {
-      if (!popoverIsHoveredRef.current) {
-        setShowPopover(false);
-      }
-    }, 150); // Increased timeout for more reliable transitions
+      setShowSlider(false);
+    }, 150);
   };
   
   // Clean up timeouts to prevent memory leaks
@@ -124,155 +165,129 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
   }, []);
   
   return (
-    <Box sx={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center',
-      marginBottom: -0.5 // Negative margin to bring components closer
-    }}>
-      <Box 
-        ref={knobRef}
-        sx={{ 
-          cursor: 'default', 
-          mb: -0.5,
-          position: 'relative'
-        }}
-      >
-        {/* Invisible hitbox circle */}
-        <Box
-          onMouseEnter={handleKnobMouseEnter}
-          onMouseLeave={handleKnobMouseLeave}
-          sx={{
-            position: 'absolute',
-            width: size + 20, // Make hitbox 20px larger than the knob
-            height: size + 20,
-            borderRadius: '50%',
-            top: -10, // Offset to center the larger hitbox
-            left: -10,
-            zIndex: 1001,
-            cursor: 'pointer', // Show hand cursor on hitbox area
-            // Comment this line when you're done debugging
-            // backgroundColor: 'rgba(255,0,0,0.1)',
-          }}
-        />
-      
-        <Box sx={{ position: 'relative' }}>
-          <Knob
-            value={normalizedValue}
-            readOnly={true}
-            disabled={false} // Still want it to look active
-            size={size}
-            strokeWidth={size <= 30 ? 3 : 4}
-            textColor="#888"
-            valueColor={color}
-            rangeColor="rgba(255,255,255,0.2)"
-            showValue={false}
-            min={0}
-            max={100}
-            step={1}
-          />
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              pointerEvents: 'none',
-              // Fix vertical alignment to center perfectly
-              marginTop: size <= 30 ? '-2px' : '-1px',
+    <div className="flex flex-col items-center -mb-2">
+      <div className="relative">
+        <div 
+          ref={knobRef}
+          className="cursor-default relative -mb-2"
+        >
+          {/* Invisible hitbox circle */}
+          <div
+            onMouseEnter={handleKnobMouseEnter}
+            onMouseLeave={handleKnobMouseLeave}
+            className="absolute rounded-full z-[10000] cursor-pointer"
+            style={{
+              width: size + 20, // Make hitbox 20px larger than the knob
+              height: size + 20,
+              top: -10, // Offset to center the larger hitbox
+              left: -10,
             }}
-          >
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                color: '#FFF', 
-                fontSize: size <= 30 ? '0.45rem' : size <= 40 ? '0.50rem' : '0.75rem', 
-                lineHeight: 1,
-                textShadow: '0px 1px 2px rgba(0,0,0,0.8)'
+          />
+        
+          <div className="relative">
+            <Knob
+              value={normalizedValue}
+              readOnly={true}
+              disabled={false} // Still want it to look active
+              size={size}
+              strokeWidth={size <= 30 ? 3 : 4}
+              textColor="#888"
+              valueColor={color}
+              rangeColor="rgba(255,255,255,0.2)"
+              showValue={false}
+              min={0}
+              max={100}
+              step={1}
+            />
+            <div
+              className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none"
+              style={{
+                marginTop: size <= 30 ? '-2px' : '-1px',
               }}
             >
-              {valueFormatter(value)}
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
+              <span 
+                className="text-white leading-none"
+                style={{ 
+                  fontSize: size <= 30 ? '0.45rem' : size <= 40 ? '0.50rem' : '0.75rem',
+                  textShadow: '0px 1px 2px rgba(0,0,0,0.8)'
+                }}
+              >
+                {valueFormatter(value)}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        {/* Slider overlay */}
+        {showSlider && (
+          <div 
+            ref={sliderRef}
+            className={`absolute left-1/2 z-[99999] bg-[#2A2A2A] border rounded-lg shadow-lg p-4 ${
+              sliderPosition === 'above' ? 'bottom-full mb-4' : 'top-full mt-4'
+            }`}
+            style={{ 
+              borderColor: color,
+              width: size <= 30 ? 150 : 200,
+              transform: `translateX(calc(-50% - ${horizontalOffset}px))`
+            }}
+            onMouseEnter={handleSliderMouseEnter}
+            onMouseLeave={handleSliderMouseLeave}
+          >
+            <div className="w-full">
+              <input
+                type="range"
+                value={value}
+                onChange={handleSliderChange}
+                onMouseUp={handleSliderMouseUp}
+                min={min}
+                max={max}
+                step={step}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                style={{
+                  background: `linear-gradient(to right, ${color} 0%, ${color} ${((value - min) / (max - min)) * 100}%, #374151 ${((value - min) / (max - min)) * 100}%, #374151 100%)`
+                }}
+              />
+              <style>{`
+                .slider::-webkit-slider-thumb {
+                  appearance: none;
+                  height: 20px;
+                  width: 20px;
+                  border-radius: 50%;
+                  background: ${color};
+                  cursor: pointer;
+                  box-shadow: 0 0 2px 0 #555;
+                }
+                .slider::-moz-range-thumb {
+                  height: 20px;
+                  width: 20px;
+                  border-radius: 50%;
+                  background: ${color};
+                  cursor: pointer;
+                  border: none;
+                  box-shadow: 0 0 2px 0 #555;
+                }
+              `}</style>
+              <div className="flex justify-between mt-2">
+                <span className="text-xs text-gray-400">{min}</span>
+                <span className="text-xs text-white">{valueFormatter(value)}</span>
+                <span className="text-xs text-gray-400">{max}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
       
       {label && (
-        <Typography variant="caption" sx={{mt: -0.5, color: '#888', fontSize: size <= 30 ? '0.5rem' : size <= 40 ? '0.6rem' : '0.7rem' }}>
+        <span 
+          className="text-gray-400 mt-0"
+          style={{ 
+            fontSize: size <= 30 ? '0.5rem' : size <= 40 ? '0.6rem' : '0.7rem' 
+          }}
+        >
           {label}
-        </Typography>
+        </span>
       )}
-      
-      <Popover
-        id="knob-popover"
-        open={showPopover}
-        anchorEl={anchorEl}
-        // We handle closing ourselves
-        onClose={() => {}}
-        disableRestoreFocus
-        anchorOrigin={{
-          vertical: 'center',
-          horizontal: 'left',
-        }}
-        transformOrigin={{
-          vertical: 'center',
-          horizontal: 'right',
-        }}
-        sx={{
-          pointerEvents: 'auto',
-          zIndex: 9999, // Very high z-index for the popover
-          cursor: 'pointer', // Show hand cursor on popover
-          '& .MuiPopover-paper': {
-            backgroundColor: '#2A2A2A',
-            padding: 1.5,
-            width: size <= 30 ? 150 : 200,
-            boxShadow: '0 4px 8px rgba(0,0,0,0.5)',
-            borderRadius: '8px',
-            border: `1px solid ${color}`,
-            position: 'relative',
-          },
-        }}
-        slotProps={{
-          paper: {
-            onMouseEnter: handlePopoverMouseEnter, // Fixed to use popover handlers
-            onMouseLeave: handlePopoverMouseLeave
-          }
-        }}
-      >
-        <Box sx={{ width: '100%' }}>
-          <Slider
-            size="small"
-            value={value}
-            onChange={handleSliderChange}
-            onChangeCommitted={onChangeCommitted}
-            min={min}
-            max={max}
-            step={step}
-            sx={{ 
-              '& .MuiSlider-track': {
-                backgroundColor: color
-              },
-              '& .MuiSlider-thumb': {
-                backgroundColor: color,
-              },
-              '& .MuiSlider-rail': {
-                opacity: 0.3
-              }
-            }}
-          />
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-            <Typography variant="caption" sx={{ color: '#AAA' }}>{min}</Typography>
-            <Typography variant="caption" sx={{ color: '#FFF' }}>{valueFormatter(value)}</Typography>
-            <Typography variant="caption" sx={{ color: '#AAA' }}>{max}</Typography>
-          </Box>
-        </Box>
-      </Popover>
-    </Box>
+    </div>
   );
 };
 

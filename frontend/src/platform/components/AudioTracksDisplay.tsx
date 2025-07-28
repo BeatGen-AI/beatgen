@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from "../../components/ui/button";
-import { Add as AddIcon } from '@mui/icons-material';
+import { Plus } from 'lucide-react';
 // import SoundUploader from './SoundUploader'; // Path might need adjustment if SoundUploader is in a different directory
 import SoundLibrary from './SoundLibrary'; // Assuming SoundLibrary is in the same components folder or adjust path
 import { AudioTracksModal } from '../../studio/components/modals/AudioTracksModal';
@@ -89,7 +89,7 @@ const AudioTracksDisplay: React.FC<AudioTracksDisplayProps> = ({
           className="flex items-center gap-2"
           onClick={() => setIsAudioTracksModalOpen(true)}
         >
-          <AddIcon fontSize="small" />
+          <Plus className="w-4 h-4" />
           Add Audio Track
         </Button>
       </div>

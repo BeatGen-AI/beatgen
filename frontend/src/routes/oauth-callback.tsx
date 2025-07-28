@@ -1,12 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import React, { useEffect, useState } from 'react'
-import { 
-  Box, 
-  Typography, 
-  CircularProgress,
-  Container,
-  Paper
-} from '@mui/material'
+import { Loader2 } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/card'
 
 // OAuth callback route - this will render at the path '/oauth-callback'
 export const Route = createFileRoute('/oauth-callback')({
@@ -64,40 +59,26 @@ function OAuthCallbackPage() {
   }, [])
   
   return (
-    <Container maxWidth="sm" sx={{ 
-      height: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      bgcolor: '#000',
-      color: 'white'
-    }}>
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          width: '100%', 
-          p: 4, 
-          textAlign: 'center',
-          bgcolor: '#111',
-          color: 'white'
-        }}
-      >
-        <Typography variant="h5" component="h1" gutterBottom>
-          {status === 'loading' ? 'Completing Sign-In' : 
-           status === 'success' ? 'Sign-In Successful' : 
-           'Sign-In Failed'}
-        </Typography>
-        
-        <Box sx={{ my: 4, display: 'flex', justifyContent: 'center' }}>
-          {status === 'loading' && (
-            <CircularProgress color="primary" />
-          )}
-        </Box>
-        
-        <Typography>
-          {message}
-        </Typography>
-      </Paper>
-    </Container>
+    <div className="min-h-screen flex items-center justify-center bg-black text-white p-4">
+      <Card className="w-full max-w-sm bg-gray-900 text-white border-gray-800 shadow-lg">
+        <CardContent className="p-6 text-center">
+          <h1 className="text-2xl font-semibold mb-4">
+            {status === 'loading' ? 'Completing Sign-In' : 
+             status === 'success' ? 'Sign-In Successful' : 
+             'Sign-In Failed'}
+          </h1>
+          
+          <div className="my-6 flex justify-center">
+            {status === 'loading' && (
+              <Loader2 className="animate-spin text-blue-500" size={40} />
+            )}
+          </div>
+          
+          <p className="text-gray-300">
+            {message}
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

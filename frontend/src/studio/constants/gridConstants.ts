@@ -46,6 +46,16 @@ export const GRID_CONSTANTS = {
     '#00BCD4', // Cyan
     '#FFEB3B' // Yellow
   ],
+  
+  // Logo color palette - gradient colors for brand elements
+  logoColors: [
+    '#e539a9', // Bright Pink
+    '#c63ba6', // Magenta
+    '#a93fbf', // Dark Violet
+    '#8247d8', // Purple
+    '#6050e0', // Indigo
+    '#4160e2', // Blue
+  ],
 } as const;
 
 /**

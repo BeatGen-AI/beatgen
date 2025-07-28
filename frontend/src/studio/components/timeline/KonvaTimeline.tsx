@@ -1,17 +1,11 @@
 import React, { useState, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { Stage, Layer, Rect } from 'react-konva';
 import {
-  KonvaBase,
-  GridLayer,
   SelectionRect,
-  DragGhost,
-  Ruler,
   useKonvaInteractions,
   useCursorManager,
   KonvaItem,
   Tool,
-  Position,
-  Dimensions,
   Viewport
 } from '../shared/konva';
 import { KonvaTrack } from './konva/KonvaTrack';
@@ -22,8 +16,7 @@ import { Position as TrackPosition } from '../track/types';
 import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks, getTrackColor } from '../../constants/gridConstants';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { GridSnapOption, getSnapSizeInPixels } from '../piano-roll2/gridConstants';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
-import { useTheme } from '@mui/material/styles';
+import { useAppTheme } from '../../../lib/theme-provider';
 import Konva from 'konva';
 import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
 import { useStudioStore } from '../../stores/studioStore';
@@ -873,9 +866,9 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             style={{
               position: 'sticky',
               top: 0,
-              zIndex: 2,
               height: GRID_CONSTANTS.headerHeight,
               backgroundColor: studioMode === 'dark' ? '#262626' : '#f5f5f5',
+              borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
               borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
               overflow: 'hidden'
             }}

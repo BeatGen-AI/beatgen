@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { IconButton, CircularProgress, Snackbar, Alert, useTheme } from '@mui/material';
-import { IconCloudUpload } from '@tabler/icons-react';
+import { Loader2, CloudUpload } from 'lucide-react';
+import { Button } from '../../../components/ui/button';
+import { Alert, AlertDescription } from '../../../components/ui/alert';
 import { 
   createProject, 
   updateProject, 
@@ -9,7 +10,8 @@ import {
 import { useAuth } from '../../../platform/auth/auth-context';
 import { useStudioStore } from '../../stores/studioStore';
 import { CombinedTrack, Project } from 'src/platform/types/project';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useAppTheme } from '../../../lib/theme-provider';
+import { cn } from '../../../lib/utils';
 
 interface SaveProjectButtonProps {
   projectTitle: string;
@@ -31,21 +33,20 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
   onSaved
 }) => {
   const [saving, setSaving] = useState(false);
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
+  const [notification, setNotification] = useState<{
+    show: boolean;
     message: string;
-    severity: 'success' | 'error' | 'warning';
+    type: 'success' | 'error' | 'warning';
   }>({
-    open: false,
+    show: false,
     message: '',
-    severity: 'success'
+    type: 'success'
   });
   
   // Get auth user and store
   const { user } = useAuth();
   const studioStore = useStudioStore();
-  const appTheme = useAppTheme(); // Renamed to avoid conflict
-  const muiTheme = useTheme(); // Get the MUI theme for palette
+  const { studioMode } = useAppTheme();
 
   // Function to mark tracks as clean (not dirty) after successful save
   const markTracksAsClean = (trackIds: string[]) => {
@@ -84,10 +85,10 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
 
   const handleSave = async () => {
     if (!user) {
-      setSnackbar({
-        open: true,
+      setNotification({
+        show: true,
         message: 'Please log in to save your project',
-        severity: 'error'
+        type: 'error'
       });
       return;
     }
@@ -143,10 +144,10 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
         
         // Skip save if no dirty tracks and project exists
         if (projectId && preparedTracks.length === 0) {
-          setSnackbar({
-            open: true,
+          setNotification({
+            show: true,
             message: 'No changes to save',
-            severity: 'warning'
+            type: 'warning'
           });
           return; // Exit early - no need to save
         }
@@ -167,10 +168,10 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
           // Mark saved tracks as clean in the store
           markTracksAsClean(preparedTracks.map(t => t.id));
           
-          setSnackbar({
-            open: true,
+          setNotification({
+            show: true,
             message: `Project updated successfully (${preparedTracks.length} tracks saved)`,
-            severity: 'success'
+            type: 'success'
           });
         } else {
           // Create new project
@@ -190,10 +191,10 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
           // Mark all tracks as clean since it's a new project
           markTracksAsClean(preparedTracks.map(t => t.id));
           
-          setSnackbar({
-            open: true,
+          setNotification({
+            show: true,
             message: 'Project saved successfully',
-            severity: 'success'
+            type: 'success'
           });
         }
         
@@ -224,10 +225,10 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
           const delay = Math.pow(2, retryCount - 1) * 1000; // 1s, 2s, 4s
           console.log(`Save failed, retrying in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
           
-          setSnackbar({
-            open: true,
+          setNotification({
+            show: true,
             message: `Save conflict detected, retrying... (${retryCount}/${maxRetries})`,
-            severity: 'warning'
+            type: 'warning'
           });
           
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -235,12 +236,12 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
         }
         
         // Non-retryable error or max retries exceeded
-        setSnackbar({
-          open: true,
+        setNotification({
+          show: true,
           message: retryCount >= maxRetries 
             ? `Failed to save project after ${maxRetries} attempts: ${error.message}`
             : `Failed to save project: ${error.message}`,
-          severity: 'error'
+          type: 'error'
         });
         
         throw error;
@@ -252,46 +253,61 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
     return attemptSave();
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar({
-      ...snackbar,
-      open: false
+  const handleCloseNotification = () => {
+    setNotification({
+      ...notification,
+      show: false
     });
   };
 
+  // Auto-hide notifications after 4 seconds
+  React.useEffect(() => {
+    if (notification.show) {
+      const timer = setTimeout(() => {
+        handleCloseNotification();
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification.show]);
+
   return (
     <>
-      <IconButton
-        size="small"
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={handleSave}
         disabled={saving}
-        sx={{
-          color: appTheme.studioMode === 'dark' ? 'white' : 'black',
-          borderRadius: '8px',
-          '&:hover': {
-            backgroundColor: muiTheme.palette.action.hover,
-          },
-        }}
-        disableRipple
+        className={cn(
+          "h-8 w-8 rounded-lg",
+          studioMode === 'dark'
+            ? "text-white hover:bg-white/10"
+            : "text-black hover:bg-black/10"
+        )}
       >
-        {saving ? <CircularProgress size={20} color="inherit" /> : <IconCloudUpload />}
-      </IconButton>
+        {saving ? (
+          <Loader2 className="h-5 w-5 animate-spin" />
+        ) : (
+          <CloudUpload className="h-5 w-5" />
+        )}
+      </Button>
       
-      <Snackbar 
-        open={snackbar.open} 
-        autoHideDuration={4000} 
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={snackbar.severity} 
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+      {notification.show && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 min-w-[300px] max-w-[500px]">
+          <Alert 
+            variant={notification.type === 'error' ? 'destructive' : 'default'}
+            className={cn(
+              "shadow-lg border",
+              notification.type === 'success' && "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200",
+              notification.type === 'warning' && "border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200",
+              notification.type === 'error' && "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
+            )}
+          >
+            <AlertDescription className="text-sm">
+              {notification.message}
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
     </>
   );
 };

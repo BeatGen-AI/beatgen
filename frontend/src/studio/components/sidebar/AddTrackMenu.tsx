@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Menu, MenuItem, ListItemIcon, ListItemText, Divider, useTheme } from '@mui/material';
-import PianoIcon from '@mui/icons-material/Piano';
-import AudioFileIcon from '@mui/icons-material/AudioFile';
-import GraphicEqIcon from '@mui/icons-material/GraphicEq';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import { Piano, AudioWaveform, Music, Scissors } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../../components/ui/dropdown-menu';
 import { VirtualInstrumentsModal } from '../modals/VirtualInstrumentsModal';
 import { DrumMachineModal } from '../modals/drum-machine/DrumMachineModal';
 import { AudioTracksModal } from '../modals/AudioTracksModal';
@@ -11,11 +13,12 @@ import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_
 import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
 // Import types from store types file
 import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload, AudioTrackPayload } from '../../stores/types';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface AddTrackMenuProps {
   isOpen: boolean;
-  anchorEl: HTMLElement | null;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
   // Use imported types
   onAddTrack: (type: TrackType, payload?: AddTrackPayload) => void;
   // Keep onFileUpload for direct audio/sampler uploads for now
@@ -24,12 +27,12 @@ interface AddTrackMenuProps {
 
 export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({ 
   isOpen, 
-  anchorEl, 
-  onClose, 
+  onOpenChange, 
+  children,
   onAddTrack, 
   onFileUpload 
 }) => {
-  const theme = useTheme();
+  const { studioMode } = useAppTheme();
   const [isVirtualInstrumentModalOpen, setIsVirtualInstrumentModalOpen] = useState(false);
   const [isDrumMachineModalOpen, setIsDrumMachineModalOpen] = useState(false);
   const [isAudioTracksModalOpen, setIsAudioTracksModalOpen] = useState(false);
@@ -46,94 +49,109 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           // Or potentially call onAddTrack here if we refactor later
           // onAddTrack(isSampler ? 'sampler' : 'audio', { file });
       }
-      onClose();
+      onOpenChange(false);
       console.log('File uploaded');
     }
   };
   
   return (
     <>
-      <Menu
-        open={isOpen}
-        anchorEl={anchorEl}
-        onClose={onClose}
-        PaperProps={{
-          sx: { 
-            bgcolor: 'background.paper', 
-            color: 'text.primary', 
-            minWidth: 180, 
-            boxShadow: theme.shadows[3]
-          } 
-        }}
-      >
-        <MenuItem onClick={() => {
-          setIsVirtualInstrumentModalOpen(true);
-          onClose();
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
+      <DropdownMenu open={isOpen} onOpenChange={onOpenChange}>
+        <DropdownMenuTrigger asChild>
+          {children}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent 
+          className="w-48"
+          style={{
+            backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
+            borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+            color: studioMode === 'dark' ? '#ffffff' : '#000000'
           }}
         >
-          <ListItemIcon><PianoIcon sx={{ color: '#2196f3' }} /></ListItemIcon>
-          <ListItemText primary="Virtual Instrument" />
-        </MenuItem>
-        
-        <MenuItem onClick={() => { 
-          setIsDrumMachineModalOpen(true);
-          onClose(); 
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <ListItemIcon><GraphicEqIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-          <ListItemText primary="Drum Machine" />
-        </MenuItem>
-        
-        <MenuItem onClick={() => {
-          setIsAudioTracksModalOpen(true);
-          onClose();
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover
-            }
-          }}
-        >
-          <ListItemIcon><AudioFileIcon sx={{ color: '#4caf50' }} /></ListItemIcon>
-          <ListItemText primary="Audio Tracks" />
-        </MenuItem>
-        <MenuItem
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <label style={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
-            <ListItemIcon><ContentCutIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-            <ListItemText primary="Sampler" />
-            <input 
-              type="file" 
-              accept="audio/*" 
-              style={{ display: 'none' }} 
-              onChange={(e) => handleFileUpload(e, true)}
-            />
-          </label>
-        </MenuItem>
-      </Menu>
+          <DropdownMenuItem 
+            onClick={() => {
+              setIsVirtualInstrumentModalOpen(true);
+              onOpenChange(false);
+            }}
+            className="text-sm py-2 cursor-pointer"
+            style={{
+              color: studioMode === 'dark' ? '#ffffff' : '#000000'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            <Piano className="w-4 h-4 mr-3 text-blue-500" />
+            Virtual Instrument
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem 
+            onClick={() => { 
+              setIsDrumMachineModalOpen(true);
+              onOpenChange(false); 
+            }}
+            className="text-sm py-2 cursor-pointer"
+            style={{
+              color: studioMode === 'dark' ? '#ffffff' : '#000000'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            <Music className="w-4 h-4 mr-3 text-orange-500" />
+            Drum Machine
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem 
+            onClick={() => {
+              setIsAudioTracksModalOpen(true);
+              onOpenChange(false);
+            }}
+            className="text-sm py-2 cursor-pointer"
+            style={{
+              color: studioMode === 'dark' ? '#ffffff' : '#000000'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            <AudioWaveform className="w-4 h-4 mr-3 text-green-500" />
+            Audio Tracks
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem 
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'audio/*';
+              input.onchange = (e) => handleFileUpload(e as any, true);
+              input.click();
+            }}
+            className="text-sm py-2 cursor-pointer"
+            style={{
+              color: studioMode === 'dark' ? '#ffffff' : '#000000'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            <Scissors className="w-4 h-4 mr-3 text-purple-500" />
+            Sampler
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <VirtualInstrumentsModal
         open={isVirtualInstrumentModalOpen}

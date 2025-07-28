@@ -1,17 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Box, 
-  Paper, 
-  Typography, 
-  TextField, 
-  IconButton, 
-  CircularProgress,
-  Chip,
-  useTheme
-} from '@mui/material';
 import {IconX} from '@tabler/icons-react';
-import SendIcon from '@mui/icons-material/Send';
 import { IconAi } from '@tabler/icons-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import GenerationPromptControl from '../shared/GenerationPromptControl';
+import { cn } from '@/lib/utils';
+import { useAppTheme } from '../../../lib/theme-provider';
 import { 
   interactWithAssistant,
   cancelAssistantRequest,
@@ -35,11 +31,9 @@ import { MidiTrackRead } from 'src/platform/types/dto/track_models/midi_track';
 import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track';
 import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
-import { alpha } from '@mui/material/styles';
 import ChatModelMenu from './ChatModelMenu';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { createDefaultInstance } from '../../utils/instanceHelpers';
-import { Button } from '@/components/ui/button';
 
 interface Message {
   text: string;
@@ -58,6 +52,7 @@ interface Message {
 interface ChatWindowProps {
   isOpen: boolean;
   onClose: () => void;
+  controlBarHeight?: number;
 }
 
 // Define available AI models (placeholder)
@@ -75,31 +70,66 @@ interface GenerationChoiceButtonsProps {
 }
 
 const GenerationChoiceButtons: React.FC<GenerationChoiceButtonsProps> = ({ onMidiChoice, onAudioChoice }) => {
+  const { studioMode } = useAppTheme();
+  
   return (
-    <Box sx={{ 
-      p: 2, 
-      borderRadius: 1, 
-      border: '1px solid',
-      borderColor: 'divider',
-      mb: 1
-    }}>
-      <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+    <div 
+      className="p-4 mb-2 rounded-lg"
+      style={{
+        backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#f8fafc',
+        border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+      }}
+    >
+      <p 
+        className="text-sm mb-4"
+        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+      >
         Choose your generation method:
-      </Typography>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <Button onClick={onMidiChoice}>
+      </p>
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={onMidiChoice}
+          className="px-4 py-2 rounded transition-colors"
+          style={{
+            backgroundColor: studioMode === 'dark' ? '#2563eb' : '#3b82f6',
+            color: '#ffffff',
+            border: 'none',
+            cursor: 'pointer'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1d4ed8' : '#2563eb';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2563eb' : '#3b82f6';
+          }}
+        >
           Generate Midi Melody
-        </Button>
-        <Button onClick={onAudioChoice}>
+        </button>
+        <button
+          onClick={onAudioChoice}
+          className="px-4 py-2 rounded transition-colors"
+          style={{
+            backgroundColor: studioMode === 'dark' ? '#2563eb' : '#3b82f6',
+            color: '#ffffff',
+            border: 'none',
+            cursor: 'pointer'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1d4ed8' : '#2563eb';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2563eb' : '#3b82f6';
+          }}
+        >
           Generate Audio Melody
-        </Button>
-      </Box>
-    </Box>
+        </button>
+      </div>
+    </div>
   );
 };
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
-  const theme = useTheme();
+const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeight = 50 }) => {
+  const { studioMode } = useAppTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -957,13 +987,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   };
   
   
-  // Handle pressing Enter key in the input field
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
 
   const handleModeSelect = (newMode: string) => {
     // Handle special case for "generate-audio" to display as "Generate Audio"
@@ -998,91 +1021,79 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   };
 
 
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    const newPosition = e.target.selectionStart;
-    
-    setPrompt(newValue);
-    setCursorPosition(newPosition);
-  };
-
-
   // Handler for AI Model selection
   const handleModelSelect = (newModel: string) => {
     setSelectedModel(newModel);
   };
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        right: 0,
-        top: '50px',
-        bottom: 0,
-        pointerEvents: isVisible ? 'auto' : 'none',
-        zIndex: 1200,
+    <div
+      className={cn(
+        "fixed right-0 bottom-0",
+        isVisible ? "pointer-events-auto" : "pointer-events-none"
+      )}
+      style={{
+        top: `${controlBarHeight}px`
       }}
     >
-      <Paper
-        elevation={4}
-        sx={{
-          height: '100%',
-          width: CHAT_WINDOW_WIDTH,
-          bgcolor: alpha(theme.palette.background.paper, 0.95),
-          color: 'text.primary',
-          display: 'flex',
-          flexDirection: 'column',
-          borderLeft: `1px solid ${theme.palette.divider}`,
-          transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-          transition: `transform ${ANIMATION_DURATION}ms cubic-bezier(0, 0, 0.2, 1)`,
-          visibility: isVisible ? 'visible' : 'hidden'
+      <div
+        className={cn(
+          "h-full flex flex-col transition-transform duration-[225ms] ease-[cubic-bezier(0,0,0.2,1)] shadow-lg",
+          isOpen ? "translate-x-0" : "translate-x-full",
+          isVisible ? "visible" : "invisible"
+        )}
+        style={{
+          backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          color: studioMode === 'dark' ? '#ffffff' : '#000000',
+          borderLeft: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+          width: CHAT_WINDOW_WIDTH
         }}
       >
         {/* Header */}
-        <Box sx={{ 
-          height: GRID_CONSTANTS.headerHeight,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          px: 0,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : alpha(theme.palette.background.paper, 0.9),
-          flexShrink: 0
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', px: 0.5}}>
+        <div 
+          className="flex items-center justify-between px-2 shrink-0"
+          style={{ 
+            height: GRID_CONSTANTS.headerHeight,
+            backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+            borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+          }}
+        >
+          <div className="flex items-center px-1">
             <IconAi size={28} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+            <h3 
+              className="text-base font-medium ml-2"
+              style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+            >
               Assistant
-            </Typography>
-          </Box>
+            </h3>
+          </div>
           
-          <IconButton 
-            size="small" 
-            onClick={onClose} 
-            sx={{ 
-              color: 'inherit',
-              borderRadius: '8px',
-              '&:hover': {
-                backgroundColor: theme.palette.action.hover
-              }
-            }}
-            disableRipple
+          <button
+            onClick={onClose}
+            className="h-auto p-1 rounded-md transition-colors"
             aria-label="Close assistant"
+            style={{
+              backgroundColor: 'transparent',
+              color: studioMode === 'dark' ? '#ffffff' : '#000000',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <IconX size={12} />
-          </IconButton>
-        </Box>
+          </button>
+        </div>
         
         {/* Messages */}
-        <Box sx={{ 
-          flex: 1, 
-          overflowY: 'auto',
-          p: 2,
-          px: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1.5
-        }}>
+        <div className="flex-1 overflow-y-auto p-4 px-2 flex flex-col gap-3">
           {isStepMode && steps.length > 0 ? (
             // Step-based rendering for music generation
             <>
@@ -1134,123 +1145,73 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
           )}
           
           <div ref={messagesEndRef} />
-        </Box>
+        </div>
 
         {/* Input Area */}
-        <Box sx={{ 
-          p: 2, 
-          display: 'flex', 
-          borderTop: `1px solid ${theme.palette.divider}`,
-          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : alpha(theme.palette.background.paper, 0.9),
-        }}>
-          <Box sx={{ position: 'relative', width: '100%' }}>
-            {/* Chips Box */}
-            <Box sx={{
-              position: 'absolute',
-              top: '4px',
-              left: '8px',
-              gap: 1,
-              zIndex: 1,
-              display: 'flex',
-              mt: 0.5,
-            }}>
-              <ChatModeMenu
-                triggerLabel={mode}
-                onSelect={handleModeSelect}
-                selectedMode={mode.toLowerCase().replace(' ', '-')}
-              />
-              {mode === 'Edit' && !selectedTrack && (
-                <AddContextMenu
-                  triggerLabel="@"
-                  onSelect={handleContextSelect}
-                  tracks={tracks.map(track => ({ id: track.id, name: track.name }))}
-                />
-              )}
-              {selectedTrack && (
-                <AddContextChip 
-                  trackName={selectedTrack.name}
-                  onDelete={handleRemoveContext}
-                />
-              )}
-            </Box>
-
-            {/* TextField */}
-            <TextField
-              fullWidth
-              multiline
-              placeholder={isLoading ? `Generating${animatedDots}` : "Ask me anything about your project..."}
-              value={prompt}
-              onChange={handleTextChange}
-              onKeyDown={handleKeyPress}
-              disabled={isLoading}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  color: theme.palette.text.primary,
-                  bgcolor: alpha(theme.palette.background.default, 0.8),
-                  '& fieldset': {
-                    borderColor: theme.palette.divider
-                  },
-                  '&:hover fieldset': {
-                    borderColor: theme.palette.text.secondary
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: 'primary.main'
-                  },
-                  '& .MuiOutlinedInput-input': {
-                    pt: '20px',
-                    pb: '16px',
-                    minHeight: '20px'
-                  }
-                },
-                '& .MuiOutlinedInput-notchedOutline': {
-                  border: 'none'
-                },
-                '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  border: '1px solid',
-                  borderColor: 'primary.main'
-                }
-              }}
+        <div 
+          className="p-4"
+          style={{
+            backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+            borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+          }}
+        >
+          {/* Mode and Context Chips */}
+          <div className="flex gap-2 mb-3">
+            <ChatModeMenu
+              triggerLabel={mode}
+              onSelect={handleModeSelect}
+              selectedMode={mode.toLowerCase().replace(' ', '-')}
             />
-
-            {/* Bottom Box with Send Button */}
-            <Box
-              sx={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                px: 1,
-                gap: 1
-              }}
-            >
-              {/* Model Selector Chip - Bottom Left (hidden for Generate Audio mode) */}
-              {mode !== 'Generate Audio' ? (
-                <ChatModelMenu
-                  triggerLabel={selectedModel}
-                  onSelect={handleModelSelect}
-                  models={AVAILABLE_MODELS}
-                  selectedModel={selectedModel}
-                />
-              ) : (
-                <Box sx={{ flex: 1 }} />
-              )}
-
-              {/* Send/Cancel Chip - Bottom Right */}
-              <MenuChip 
-                label={isLoading ? "Cancel" : "Send"}
-                onClick={isLoading ? handleCancel : handleSend}
-                disabled={!prompt.trim() && !isLoading}
-                color={isLoading ? 'secondary' : 'primary'}
+            {mode === 'Edit' && !selectedTrack && (
+              <AddContextMenu
+                triggerLabel="@"
+                onSelect={handleContextSelect}
+                tracks={tracks.map(track => ({ id: track.id, name: track.name }))}
               />
-            </Box>
-          </Box>
-        </Box>
-      </Paper>
-    </Box>
+            )}
+            {selectedTrack && (
+              <AddContextChip 
+                trackName={selectedTrack.name}
+                onDelete={handleRemoveContext}
+              />
+            )}
+          </div>
+
+          {/* Generation Prompt Control */}
+          <GenerationPromptControl
+            prompt={prompt}
+            onPromptChange={setPrompt}
+            onGenerate={handleSend}
+            isGenerating={isLoading}
+            useStudioTheme={true}
+            placeholder={isLoading ? `Generating${animatedDots}` : "Ask me anything about your project..."}
+            maxLength={1000}
+            showRandomButton={false}
+            showSelect={false}
+            submitButtonIcon={isLoading ? undefined : undefined}
+            submitButtonAriaLabel={isLoading ? "Cancel" : "Send"}
+            textareaBottomLeftComponent={
+              <ChatModelMenu
+                triggerLabel={selectedModel}
+                onSelect={handleModelSelect}
+                models={AVAILABLE_MODELS}
+                selectedModel={selectedModel}
+              />
+            }
+            textareaBottomRightComponent={
+              isLoading ? (
+                <MenuChip 
+                  label="Cancel"
+                  onClick={handleCancel}
+                  disabled={false}
+                  color="secondary"
+                />
+              ) : undefined
+            }
+          />
+        </div>
+      </div>
+    </div>
   );
 };
 

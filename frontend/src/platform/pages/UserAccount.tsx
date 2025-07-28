@@ -1,13 +1,8 @@
-import { 
-  Box, 
-  Typography, 
-  Button, 
-  Paper, 
-  Container, 
-  Divider,
-  CircularProgress
-} from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Separator } from '../../components/ui/separator';
+import { Loader2, ArrowLeft, Edit, LogOut } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../auth/auth-context';
 import { useState } from 'react';
 
@@ -20,75 +15,73 @@ export default function UserAccount() {
     setIsLoading(true);
     await signOut();
     setIsLoading(false);
-    navigate('/');
+    navigate({ to: '/' });
   };
 
   return (
-    <Container maxWidth="md">
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          padding: 4, 
-          marginTop: 4,
-          marginBottom: 4 
-        }}
-      >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4">My Account</Typography>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            onClick={() => navigate('/')}
-            sx={{ 
-              bgcolor: '#1a237e',
-              '&:hover': {
-                bgcolor: '#000051'
-              }
-            }}
-          >
-            Back to Home
-          </Button>
-        </Box>
+    <div className="container mx-auto max-w-2xl p-4 md:p-8">
+      <Card className="shadow-lg">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle className="text-2xl font-bold">My Account</CardTitle>
+            <Button 
+              variant="default"
+              onClick={() => navigate({ to: '/home' })}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Home
+            </Button>
+          </div>
+        </CardHeader>
         
-        <Divider sx={{ mb: 3 }} />
-        
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Profile Information</Typography>
-          <Typography><strong>Email:</strong> {user?.email}</Typography>
-          <Typography><strong>Username:</strong> {profile?.username || 'Not set'}</Typography>
-          <Typography><strong>Display Name:</strong> {profile?.display_name || 'Not set'}</Typography>
-          <Typography><strong>Account Created:</strong> {profile?.created_at ? new Date(profile.created_at).toLocaleString() : 'N/A'}</Typography>
-        </Box>
-
-        <Divider sx={{ mb: 3 }} />
-        
-        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Button 
-            variant="outlined" 
-            color="primary"
-            disabled={isLoading}
-            onClick={() => navigate('/account/edit')}
-            sx={{ 
-              color: '#1a237e',
-              borderColor: '#1a237e',
-              '&:hover': {
-                borderColor: '#000051'
-              }
-            }}
-          >
-            Edit Profile
-          </Button>
+        <CardContent className="space-y-6">
+          <Separator />
           
-          <Button 
-            variant="outlined" 
-            color="error"
-            disabled={isLoading}
-            onClick={handleSignOut}
-          >
-            {isLoading ? <CircularProgress size={24} color="inherit" /> : 'Sign Out'}
-          </Button>
-        </Box>
-      </Paper>
-    </Container>
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Profile Information</h3>
+            <div className="space-y-2 text-sm">
+              <p><span className="font-medium">Email:</span> {user?.email}</p>
+              <p><span className="font-medium">Username:</span> {profile?.username || 'Not set'}</p>
+              <p><span className="font-medium">Display Name:</span> {profile?.display_name || 'Not set'}</p>
+              <p><span className="font-medium">Account Created:</span> {profile?.created_at ? new Date(profile.created_at).toLocaleString() : 'N/A'}</p>
+            </div>
+          </div>
+
+          <Separator />
+          
+          <div className="flex flex-col sm:flex-row justify-between gap-4">
+            <Button 
+              variant="outline"
+              disabled={isLoading}
+              onClick={() => navigate({ to: '/account/edit' })}
+              className="flex items-center gap-2"
+            >
+              <Edit className="h-4 w-4" />
+              Edit Profile
+            </Button>
+            
+            <Button 
+              variant="destructive"
+              disabled={isLoading}
+              onClick={handleSignOut}
+              className="flex items-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Signing Out...
+                </>
+              ) : (
+                <>
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

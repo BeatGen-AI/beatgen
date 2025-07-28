@@ -1,7 +1,6 @@
 import React from 'react';
 import { Button } from "../../../components/ui/button";
-import { PlayArrow as PlayIcon, Pause as PauseIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
-import { AudioWaveform } from 'lucide-react';
+import { AudioWaveform, Trash2 } from 'lucide-react';
 import { AudioTrackRead as Sound } from '../../../platform/types/dto/track_models/audio_track'; 
 import { formatTime } from '../../../studio/utils/audioProcessing';
 import AudioPlayer from '../../../studio/components/shared/AudioPlayer';
@@ -52,7 +51,7 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
         onClick={() => handleDeleteSound(sound.id)}
         className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
       >
-        <DeleteIcon fontSize="small" />
+        <Trash2 size={16} />
       </Button>
     </>
   );

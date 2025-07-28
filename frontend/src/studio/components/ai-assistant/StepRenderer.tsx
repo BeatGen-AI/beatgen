@@ -8,7 +8,7 @@ import {
   AccordionItem, 
   AccordionTrigger 
 } from '@/components/ui/accordion';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface StepRendererProps {
   steps: Step[];

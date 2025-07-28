@@ -1,5 +1,4 @@
 import React from 'react';
-import { Box } from '@mui/material';
 import { MUSIC_CONSTANTS } from '../../../constants/musicConstants';
 
 // Constants for the preview grid
@@ -38,33 +37,26 @@ const DrumGridPreview: React.FC<DrumGridPreviewProps> = ({
     : Array(numRows).fill(null).map(() => Array(numCols).fill(false));
 
   return (
-    <Box 
-      sx={{
+    <div 
+      className="relative overflow-hidden grid gap-0.5 p-0.5 rounded-sm"
+      style={{
         width: `${width}px`,
         height: `${height}px`,
         backgroundColor: 'rgba(0,0,0,0.2)', 
         border: `1px solid ${trackColor}`,
-        borderRadius: '2px',
-        overflow: 'hidden',
-        position: 'relative',
-        display: 'grid', // Use grid layout for the preview
-        gridTemplateRows: `repeat(${numRows}, 1fr)`, // Use dynamic row count
-        gridTemplateColumns: `repeat(${numCols}, 1fr)`, // Use numCols (which is PREVIEW_COLS)
-        gap: '2px', // Small gap between cells
-        padding: '1px' // Padding around the grid
+        gridTemplateRows: `repeat(${numRows}, 1fr)`,
+        gridTemplateColumns: `repeat(${numCols}, 1fr)`
       }}
     >
       {/* Render the grid cells using the sliced pattern */}
       {patternToShow.map((row, rowIndex) => 
         row.map((isActive, colIndex) => (
-          <Box 
+          <div 
             key={`cell-${rowIndex}-${colIndex}`}
-            sx={{
+            className="rounded-sm transition-shadow duration-100"
+            style={{
               backgroundColor: isActive ? '#FFFFFF' : 'rgba(255, 255, 255, 0.05)',
-              borderRadius: '2px',
-              // Add a subtle white blur effect using box-shadow for active cells
-              boxShadow: isActive ? '0px 0px 3px 1px rgba(255, 255, 255, 0.6)' : 'none',
-              transition: 'box-shadow 0.1s ease-in-out' // Smooth transition for the effect
+              boxShadow: isActive ? '0px 0px 3px 1px rgba(255, 255, 255, 0.6)' : 'none'
             }}
           />
         ))
@@ -74,7 +66,7 @@ const DrumGridPreview: React.FC<DrumGridPreviewProps> = ({
         Drum Grid Preview (TODO)
       </span>
       */}
-    </Box>
+    </div>
   );
 };
 

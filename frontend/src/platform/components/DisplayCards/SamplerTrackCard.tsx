@@ -1,11 +1,6 @@
 import React from 'react';
 import { Button } from "../../../components/ui/button";
-import { 
-  PlayArrow as PlayIcon, 
-  Pause as PauseIcon, 
-  DeleteOutline as DeleteIcon,
-  SettingsSuggest as SettingsIcon
-} from '@mui/icons-material';
+import { Play, Pause, Trash2, Settings } from 'lucide-react';
 import { IconWaveSine } from '@tabler/icons-react';
 import { SamplerTrackRead } from '../../../platform/types/dto/track_models/sampler_track';
 import { formatTime, formatFileSize } from '../../../studio/utils/audioProcessing';
@@ -65,7 +60,7 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
         onClick={() => handlePlayTrack(track)}
         className="text-muted-foreground hover:bg-accent hover:text-green-600 dark:hover:text-green-400 h-7 w-7"
       >
-        {isPlaying ? <PauseIcon fontSize="small" /> : <PlayIcon fontSize="small" />}
+        {isPlaying ? <Pause size={16} /> : <Play size={16} />}
       </Button>
       {handleEditTrack && (
         <Button 
@@ -74,7 +69,7 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
           onClick={() => handleEditTrack(track.id)}
           className="text-muted-foreground hover:bg-accent hover:text-yellow-500 dark:hover:text-yellow-400 h-7 w-7"
         >
-          <SettingsIcon fontSize="small" />
+          <Settings size={16} />
         </Button>
       )}
       <Button 
@@ -83,7 +78,7 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
         onClick={() => handleDeleteTrack(track.id)}
         className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
       >
-        <DeleteIcon fontSize="small" />
+        <Trash2 size={16} />
       </Button>
     </>
   );

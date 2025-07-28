@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  Button, 
-  CircularProgress, 
-  TextField, 
-  Box, 
-  Typography, 
-  Alert,
-  IconButton
-} from '@mui/material';
-import { CloudUpload as CloudUploadIcon, Close as CloseIcon } from '@mui/icons-material';
+import { CloudUpload, X } from 'lucide-react';
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Alert, AlertDescription } from "../../components/ui/alert";
+import { Card, CardContent, CardHeader } from "../../components/ui/card";
+import { Progress } from "../../components/ui/progress";
 import { getUploadUrl, createSoundRecord } from '../api/sounds';
-import { processAudioFile as processAudioFileUtil } from '../../studio/utils/audioProcessing.ts';
+import { processAudioFile as processAudioFileUtil, uploadFileWithProgress } from '../../studio/utils/audioProcessing';
 
 interface SoundUploaderProps {
   onSoundUploaded?: (soundId: string) => void;
@@ -29,9 +25,7 @@ export default function SoundUploader({ onSoundUploaded, onCancel }: SoundUpload
     return metadata;
   };
   
-  const uploadFileWithProgress = async (file: File, url: string, onProgress: (percent: number) => void) => {
-    await uploadFileWithProgress(file, url, onProgress);
-  };
+
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
@@ -92,110 +86,93 @@ export default function SoundUploader({ onSoundUploaded, onCancel }: SoundUpload
   };
   
   return (
-    <Box sx={{ 
-      p: 3, 
-      border: '1px solid #444', 
-      borderRadius: 1,
-      bgcolor: '#1E1E1E',
-      position: 'relative'
-    }}>
-      {onCancel && (
-        <IconButton 
-          size="small" 
-          sx={{ position: 'absolute', top: 8, right: 8 }}
-          onClick={onCancel}
-        >
-          <CloseIcon />
-        </IconButton>
-      )}
-      
-      <Typography variant="h6" gutterBottom>
-        Upload Sound
-      </Typography>
-      
-      <Box sx={{ mb: 2 }}>
-        <input
-          accept="audio/*"
-          style={{ display: 'none' }}
-          id="sound-file-input"
-          type="file"
-          onChange={handleFileSelected}
-          disabled={uploading}
-        />
-        <label htmlFor="sound-file-input">
+    <Card className="p-3 border border-border bg-card relative">
+      <CardHeader className="p-0 pb-4">
+        {onCancel && (
           <Button 
-            variant="outlined" 
-            component="span"
-            disabled={uploading}
-            startIcon={<CloudUploadIcon />}
-            sx={{ mb: 2 }}
+            variant="ghost"
+            size="sm"
+            className="absolute top-2 right-2 h-8 w-8 p-0"
+            onClick={onCancel}
           >
-            Select Audio File
+            <X className="w-4 h-4" />
           </Button>
-        </label>
-        {file && (
-          <Typography variant="body2" sx={{ mt: 1, color: '#ccc' }}>
-            Selected: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} MB)
-          </Typography>
         )}
-      </Box>
+        
+        <h3 className="text-lg font-semibold">
+          Upload Sound
+        </h3>
+      </CardHeader>
       
-      {file && (
-        <TextField
-          fullWidth
-          label="Sound Name"
-          value={soundName}
-          onChange={(e) => setSoundName(e.target.value)}
-          disabled={uploading}
-          sx={{ 
-            mb: 2,
-            '& .MuiOutlinedInput-root': {
-              '& fieldset': {
-                borderColor: '#555',
-              },
-              '&:hover fieldset': {
-                borderColor: '#777',
-              },
-            },
-            '& .MuiInputLabel-root': {
-              color: '#aaa',
-            },
-            '& .MuiInputBase-input': {
-              color: 'white',
-            }
-          }}
-        />
-      )}
-      
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-      
-      {uploading && (
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <CircularProgress size={24} sx={{ mr: 1 }} />
-          <Typography sx={{ color: '#ccc' }}>
-            {progress < 100 ? `Uploading: ${progress}%` : 'Processing...'}
-          </Typography>
-        </Box>
-      )}
-      
-      <Button
-        variant="contained"
-        onClick={handleUpload}
-        disabled={!file || !soundName || uploading}
-        fullWidth
-        sx={{
-          bgcolor: '#6a3de8',
-          '&:hover': {
-            bgcolor: '#7b50f3',
-          }
-        }}
-      >
-        Upload Sound
-      </Button>
-    </Box>
+      <CardContent className="p-0 space-y-4">
+        <div>
+          <input
+            accept="audio/*"
+            style={{ display: 'none' }}
+            id="sound-file-input"
+            type="file"
+            onChange={handleFileSelected}
+            disabled={uploading}
+          />
+          <label htmlFor="sound-file-input">
+            <Button 
+              variant="outline" 
+              asChild
+              disabled={uploading}
+              className="cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <CloudUpload className="w-4 h-4" />
+                Select Audio File
+              </span>
+            </Button>
+          </label>
+          {file && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Selected: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+            </p>
+          )}
+        </div>
+        
+        {file && (
+          <div>
+            <Input
+              placeholder="Sound Name"
+              value={soundName}
+              onChange={(e) => setSoundName(e.target.value)}
+              disabled={uploading}
+            />
+          </div>
+        )}
+        
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {uploading && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              <span className="text-sm text-muted-foreground">
+                {progress < 100 ? `Uploading: ${progress}%` : 'Processing...'}
+              </span>
+            </div>
+            {progress < 100 && (
+              <Progress value={progress} className="w-full" />
+            )}
+          </div>
+        )}
+        
+        <Button
+          onClick={handleUpload}
+          disabled={!file || !soundName || uploading}
+          className="w-full bg-primary hover:bg-primary/90"
+        >
+          Upload Sound
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

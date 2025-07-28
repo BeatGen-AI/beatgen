@@ -1,8 +1,6 @@
 import React, { useRef } from 'react';
-import TextField from '@mui/material/TextField';
-import Box from '@mui/material/Box';
-import { useTheme } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { cn } from '../../../lib/utils';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface BPMControlProps {
   bpm: number;
@@ -10,8 +8,8 @@ interface BPMControlProps {
 }
 
 const BPMControl: React.FC<BPMControlProps> = ({ bpm, onBpmChange }) => {
-  const theme = useTheme();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { studioMode } = useAppTheme();
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter') {
@@ -20,77 +18,54 @@ const BPMControl: React.FC<BPMControlProps> = ({ bpm, onBpmChange }) => {
     }
   };
 
-  const handleSelect = () => {
-    inputRef.current?.select();
-  };
-
   // Calculate width based on number of digits
   const getInputWidth = (value: number) => {
     const numDigits = value.toString().length;
-    return `${numDigits * 10}px`; // Approximately 10px per digit
+    // Use dynamic width classes based on digit count
+    if (numDigits === 1) return 'w-3';
+    if (numDigits === 2) return 'w-5';
+    return 'w-7';
   };
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-      <Box sx={{ width: '28px', textAlign: 'right' }}>
-        <TextField
+    <div className="flex items-center">
+      <div className="w-7 text-right">
+        <input
           value={bpm}
           onChange={onBpmChange}
           onKeyDown={handleKeyDown}
           type="number"
-          onFocus={handleSelect}
-          onClick={handleSelect}
-          inputRef={inputRef}
-          inputProps={{
-            min: 1,
-            max: 999,
-            style: {
-              padding: '0px 0px',
-              width: getInputWidth(bpm),
-              color: theme.palette.text.primary,
-              backgroundColor: 'transparent',
-              border: 'none',
-              textAlign: 'center',
-              cursor: 'pointer',
-              caretColor: 'transparent',
-            },
+          ref={inputRef}
+          min={1}
+          max={999}
+          className={cn(
+            "p-0 border-0 bg-transparent text-center cursor-pointer outline-none",
+            "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+            "caret-transparent text-base h-6 select-none",
+            getInputWidth(bpm)
+          )}
+          style={{
+            backgroundColor: 'transparent',
+            color: studioMode === 'dark' ? '#ffffff' : '#000000',
+            border: 'none',
+            height: '24px',
+            lineHeight: '24px'
           }}
-          sx={{
-            '& input::selection': {
-              backgroundColor: theme.palette.action.selected,
-            },
-            '@keyframes gentleFlash': {
-              '0%': { backgroundColor: theme.palette.action.focus },
-              '50%': { backgroundColor: alpha(theme.palette.action.focus, 0.7) },
-              '100%': { backgroundColor: theme.palette.action.focus },
-            },
-            '& .MuiInput-root': {
-              fontSize: '1rem',
-              width: 'auto',
-            },
-            '& .MuiInput-root:before, & .MuiInput-root:after': {
-              display: 'none',
-            },
-            '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': {
-              display: 'none',
-            },
-            '& input:focus': {
-              backgroundColor: theme.palette.action.focus,
-              outline: 'none',
-              borderRadius: '2px',
-              animation: 'gentleFlash 2s ease-in-out infinite',
-            },
+          onFocus={(e) => {
+            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
           }}
-          variant="standard"
+          onBlur={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
         />
-      </Box>
-      <Box sx={{ 
-        color: 'text.secondary', 
-        ml: 1 
-      }}>
+      </div>
+      <div 
+        className="ml-1"
+        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+      >
         bpm
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 };
 

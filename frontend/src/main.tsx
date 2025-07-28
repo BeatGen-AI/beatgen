@@ -18,7 +18,7 @@ import Studio from './studio/Studio';
 // Import AuthProvider
 import { AuthProvider } from './platform/auth/auth-context';
 // Import our custom Theme Provider
-import { AppThemeProvider } from './platform/theme/ThemeContext';
+import { ThemeProvider } from './lib/theme-provider';
 // Import UserProvider
 import { UserProvider } from './platform/context/UserContext';
 
@@ -67,9 +67,9 @@ if (document.getElementById('root')) {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <UserProvider>
-              <AppThemeProvider>
+              <ThemeProvider>
                 <RouterProvider router={router} />
-              </AppThemeProvider>
+              </ThemeProvider>
             </UserProvider>
           </AuthProvider>
         </QueryClientProvider>
@@ -107,9 +107,9 @@ const mountStudio = (elementId: string) => {
         // contribute to cleanup issues
         <AuthProvider>
           <UserProvider>
-            <AppThemeProvider>
+            <ThemeProvider>
               <Studio />
-            </AppThemeProvider>
+            </ThemeProvider>
           </UserProvider>
         </AuthProvider>
       );

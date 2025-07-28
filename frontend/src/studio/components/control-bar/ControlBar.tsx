@@ -1,18 +1,22 @@
 import React, { forwardRef, memo, useRef, useState } from 'react';
-import { Box, IconButton, Typography, TextField, Tooltip, useTheme, Menu, MenuItem } from '@mui/material';
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../../../components/ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../../components/ui/dropdown-menu';
+import { useAppTheme } from '../../../lib/theme-provider';
 // Import components
 import BPMControl from './BPMControl';
 import TimeSignatureDisplay from './TimeSignatureDisplay';
 import { TimeDisplay, TimeDisplayHandle } from './TimeDisplay';
 import KeySelector from './KeySelector';
-import { SaveProjectButton } from './SaveProjectButton';
 import { SaveStatusIndicator } from '../ui/SaveStatusIndicator';
 import { useStudioStore } from '../../stores/studioStore';
 import { IconPlayerPlayFilled, IconPlayerSkipBackFilled, IconPlayerPauseFilled, IconArrowForwardUp, IconArrowBackUp, IconZoomIn, IconZoomOut, IconInputAi, IconChevronsRight, IconArrowLeft, IconFileExport } from '@tabler/icons-react';
 import { IconSettings } from '@tabler/icons-react';
-import { CropFree as SelectIcon, Edit as PenIcon, Highlight as HighlighterIcon, Delete as EraserIcon, GridOn as GridIcon, GridOff as GridOffIcon, Check as CheckIcon } from '@mui/icons-material';
+import { MousePointer2, Edit, Highlighter, Eraser, Grid3X3, Check } from 'lucide-react';
 import { Tool } from '../../shared/interactions';
 import { GridSnapOption, getGridSnapOptionName } from '../piano-roll2/gridConstants';
+import { cn } from '../../../lib/utils';
 
 interface StudioControlBarProps {
     canUndo: boolean;
@@ -95,10 +99,9 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
     onGridSnapSizeChange,
     onExportClick,
 }, ref) => {
-    const theme = useTheme();
+    const { studioMode } = useAppTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
-    const [gridMenuAnchor, setGridMenuAnchor] = useState<null | HTMLElement>(null);
-    const gridMenuOpen = Boolean(gridMenuAnchor);
+    const [gridMenuOpen, setGridMenuOpen] = useState(false);
 
     const handlePlayPause = () => {
         if (isPlaying) {
@@ -114,411 +117,455 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
         onStop();
     };
 
-    const handleGridClick = (event: React.MouseEvent<HTMLElement>) => {
-        setGridMenuAnchor(event.currentTarget);
-    };
-
-    const handleGridMenuClose = () => {
-        setGridMenuAnchor(null);
-    };
-
     const handleGridSnapSizeChange = (option: GridSnapOption) => {
         onGridSnapSizeChange?.(option);
-        handleGridMenuClose();
+        setGridMenuOpen(false);
     };
 
     return (
-        <Box 
-            sx={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                zIndex: 1300,
-                bgcolor: theme.palette.mode === 'dark' ? 'rgba(18, 18, 18, 0.8)' : 'rgba(240, 240, 240, 0.1)',
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                overflowX: 'auto',
-                overflowY: 'hidden'
-            }}
-        >
-            <Box 
-                ref={ref}
-                sx={{
-                display: 'grid',
-                gridTemplateColumns: '1fr auto 1fr',
-                alignItems: 'center',
-                width: '100%',
-                minWidth: 'fit-content',
-                gap: 2,
-                p: 1,
-                color: 'text.primary'
-            }}>
-            {/* Left section */}
-            <Box sx={{ 
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                justifySelf: 'start',
-            }}>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Tooltip title="Go back to Projects" arrow>
-                        <IconButton
-                            size="small"
-                            color="inherit"
-                            onClick={() => {
-                                window.location.href = '/home';
-                            }}
-                            sx={{
-                                borderRadius: '8px',
-                                '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
-                                },
-                            }}
-                            disableRipple
-                        >
-                            <IconArrowLeft />
-                        </IconButton>
-                    </Tooltip>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={onUndo}
-                        disabled={!canUndo}
-                        title="Undo"
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        <IconArrowBackUp />
-                    </IconButton>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={onRedo}
-                        disabled={!canRedo}
-                        title="Redo"
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        <IconArrowForwardUp />
-                    </IconButton>
-                </Box>
-
-
-                <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
-                    borderRadius: 1,
-                    px: 2,
-                    py: 0.5,
-                    gap: 1,
-                }}>
-                    <BPMControl bpm={bpm} onBpmChange={onBpmChange} />
-                </Box>
-
-                {/* <TimeSignatureDisplay
-                    topNumber={timeSignature[0]}
-                    bottomNumber={timeSignature[1]}
-                    onTopNumberChange={(value) => onTimeSignatureChange(value, undefined)}
-                    onBottomNumberChange={(value) => onTimeSignatureChange(undefined, value)}
-                /> */}
-
-                <KeySelector
-                    selectedKey={keySignature}
-                    onKeyChange={onKeySignatureChange}
-                />
-
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={handlePlayPause}
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        {isPlaying ? <IconPlayerPauseFilled /> : <IconPlayerPlayFilled />}
-                    </IconButton>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={handleStop}
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        <IconPlayerSkipBackFilled />
-                    </IconButton>
-                </Box>
-            </Box>
-
-            {/* Center section - Project Title */}
-            <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'center',
-                justifySelf: 'center',
-            }}>
-                <TextField
-                    variant="standard"
-                    value={projectTitle}
-                    onChange={onTitleChange}
-                    InputProps={{ disableUnderline: true }} 
-                    inputProps={{ style: { textAlign: 'center' } }} 
-                    sx={{
-                        width: '100%',
-                        maxWidth: 300,
-                        '& .MuiInputBase-input': { 
-                           color: theme.palette.text.primary
-                        }
-                    }}
-                />
-            </Box>
-
-            {/* Right section */}
-            <Box sx={{
-                justifySelf: 'end',
-            }}>
-                <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1
-                }}>
-                    <Tooltip title={`Grid snap: ${getGridSnapOptionName(gridSnapSize)}`}>
-                        <IconButton
-                            size="small"
-                            color="inherit"
-                            onClick={handleGridClick}
-                            sx={{
-                                borderRadius: '8px',
-                                backgroundColor: snapToGrid ? theme.palette.action.selected : 'transparent',
-                                '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
-                                },
-                            }}
-                            disableRipple
-                        >
-                            {snapToGrid ? <GridIcon /> : <GridOffIcon />}
-                        </IconButton>
-                    </Tooltip>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={onZoomIn}
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        <IconZoomIn />
-                    </IconButton>
-                    <Box sx={{ 
-                        color: "text.primary",
-                        fontWeight: "bold", 
-                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
-                        minWidth: 40, 
-                        textAlign: "center", 
-                        border: `1px solid ${theme.palette.divider}`,
-                        padding: "4px 4px", 
-                        borderRadius: "6px" 
-                    }}>
-                        {zoomLevel.toFixed(1)}x
-                    </Box>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={onZoomOut}
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        <IconZoomOut />
-                    </IconButton>
-                    <TimeDisplay
-                        ref={timeDisplayRef}
-                        initialTime={currentTime}
-                    />
-                    <SaveProjectButton
-                        projectTitle={projectTitle}
-                        bpm={bpm}
-                        timeSignature={timeSignature}
-                        tracks={tracks}
-                        projectId={existingProjectId || ""}
-                        keySignature={keySignature}
-                        onSaved={(project) => {
-                            console.log('Project saved:', project);
-                        }}
-                    />
-                    <SaveStatusIndicator
-                        status={autoSaveStatus || 'idle'}
-                        message={autoSaveMessage}
-                        onRetryClick={onAutoSaveRetry}
-                    />
-                    <Tooltip title="Export project">
-                        <IconButton
-                            size="small"
-                            color="inherit"
-                            onClick={onExportClick}
-                            sx={{
-                                borderRadius: '8px',
-                                '&:hover': {
-                                    backgroundColor: theme.palette.action.hover,
-                                },
-                            }}
-                            disableRipple
-                        >
-                            <IconFileExport />
-                        </IconButton>
-                    </Tooltip>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={onChatToggle}
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        {isChatOpen ? <IconChevronsRight /> : <IconInputAi />}
-                    </IconButton>
-                    <IconButton
-                        size="small"
-                        color="inherit"
-                        onClick={onSettingsToggle}
-                        sx={{
-                            borderRadius: '8px',
-                            '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                            },
-                        }}
-                        disableRipple
-                    >
-                        <IconSettings />
-                    </IconButton>
-                </Box>
-            </Box>
-            </Box>
-
-            {/* Grid Snap Menu */}
-            <Menu
-                anchorEl={gridMenuAnchor}
-                open={gridMenuOpen}
-                onClose={handleGridMenuClose}
-                anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'center',
-                }}
-                transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'center',
-                }}
-                PaperProps={{
-                    sx: {
-                        bgcolor: 'background.paper',
-                        minWidth: 150,
-                        maxHeight: 400,
-                        '& .MuiMenuItem-root': {
-                            fontSize: '0.875rem',
-                            py: 0.75,
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }
-                    }
+        <TooltipProvider>
+            <div 
+                className="fixed top-0 left-0 right-0 z-50 backdrop-blur-sm overflow-x-auto overflow-y-hidden"
+                style={{
+                    zIndex: 50,
+                    backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                    borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
                 }}
             >
-                {/* None option */}
-                <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.NONE)}>
-                    <span>None</span>
-                    {gridSnapSize === GridSnapOption.NONE && <CheckIcon fontSize="small" />}
-                </MenuItem>
-                
-                {/* Step section */}
-                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5, pt: 0.5 }}>
-                    <Box sx={{ fontSize: '0.75rem', color: 'text.secondary', px: 2, py: 0.5 }}>STEP</Box>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_6)}>
-                        <span>1/6 step</span>
-                        {gridSnapSize === GridSnapOption.STEP_1_6 && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_4)}>
-                        <span>1/4 step</span>
-                        {gridSnapSize === GridSnapOption.STEP_1_4 && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_3)}>
-                        <span>1/3 step</span>
-                        {gridSnapSize === GridSnapOption.STEP_1_3 && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_2)}>
-                        <span>1/2 step</span>
-                        {gridSnapSize === GridSnapOption.STEP_1_2 && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP)}>
-                        <span>Step</span>
-                        {gridSnapSize === GridSnapOption.STEP && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                </Box>
-                
-                {/* Beat section */}
-                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5, pt: 0.5 }}>
-                    <Box sx={{ fontSize: '0.75rem', color: 'text.secondary', px: 2, py: 0.5 }}>BEAT</Box>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_6)}>
-                        <span>1/6 beat</span>
-                        {gridSnapSize === GridSnapOption.BEAT_1_6 && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_4)}>
-                        <span>1/4 beat</span>
-                        {gridSnapSize === GridSnapOption.BEAT_1_4 && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_3)}>
-                        <span>1/3 beat</span>
-                        {gridSnapSize === GridSnapOption.BEAT_1_3 && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_2)}>
-                        <span>1/2 beat</span>
-                        {gridSnapSize === GridSnapOption.BEAT_1_2 && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT)}>
-                        <span>Beat</span>
-                        {gridSnapSize === GridSnapOption.BEAT && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                </Box>
-                
-                {/* Bar option */}
-                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5, pt: 0.5 }}>
-                    <MenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BAR)}>
-                        <span>Bar</span>
-                        {gridSnapSize === GridSnapOption.BAR && <CheckIcon fontSize="small" />}
-                    </MenuItem>
-                </Box>
-            </Menu>
-        </Box>
+                <div 
+                    ref={ref}
+                    className="grid grid-cols-[1fr_auto_1fr] items-center w-full min-w-fit gap-3 px-2 py-2"
+                >
+                    {/* Left section */}
+                    <div className="flex items-center gap-3 justify-self-start">
+                        <div className="flex gap-3">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => {
+                                            window.location.href = '/home';
+                                        }}
+                                        className="h-8 w-8 p-0 rounded-lg transition-colors"
+                                        style={{
+                                            backgroundColor: 'transparent',
+                                            color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                        }}
+                                    >
+                                        <IconArrowLeft size={24} />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Go back to Projects</p>
+                                </TooltipContent>
+                            </Tooltip>
+                            
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={onUndo}
+                                        disabled={!canUndo}
+                                        className="h-8 w-8 p-0 rounded-lg transition-colors disabled:opacity-50"
+                                        style={{
+                                            backgroundColor: 'transparent',
+                                            color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                            border: 'none',
+                                            cursor: canUndo ? 'pointer' : 'not-allowed',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (canUndo) {
+                                                e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                        }}
+                                    >
+                                        <IconArrowBackUp size={24} />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Undo</p>
+                                </TooltipContent>
+                            </Tooltip>
+                            
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={onRedo}
+                                        disabled={!canRedo}
+                                        className="h-8 w-8 p-0 rounded-lg transition-colors disabled:opacity-50"
+                                        style={{
+                                            backgroundColor: 'transparent',
+                                            color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                            border: 'none',
+                                            cursor: canRedo ? 'pointer' : 'not-allowed',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (canRedo) {
+                                                e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                        }}
+                                    >
+                                        <IconArrowForwardUp size={24} />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Redo</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
+
+                        <div 
+                            className="flex items-center rounded px-2 py-1 gap-3"
+                            style={{
+                                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9'
+                            }}
+                        >
+                            <BPMControl bpm={bpm} onBpmChange={onBpmChange} />
+                        </div>
+
+                        <KeySelector
+                            selectedKey={keySignature}
+                            onKeyChange={onKeySignatureChange}
+                        />
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={handlePlayPause}
+                                className="h-8 w-8 p-0 rounded-lg transition-colors"
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                            >
+                                {isPlaying ? <IconPlayerPauseFilled size={24} /> : <IconPlayerPlayFilled size={24} />}
+                            </button>
+                            <button
+                                onClick={handleStop}
+                                className="h-8 w-8 p-0 rounded-lg transition-colors"
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                            >
+                                <IconPlayerSkipBackFilled size={24} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Center section - Project Title */}
+                    <div className="flex justify-center justify-self-center">
+                        <input
+                            value={projectTitle}
+                            onChange={onTitleChange}
+                            className="w-full max-w-[300px] text-center outline-none"
+                            placeholder="Project Title"
+                            style={{
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                color: studioMode === 'dark' ? '#ffffff' : '#000000'
+                            }}
+                        />
+                    </div>
+
+                    {/* Right section */}
+                    <div className="justify-self-end">
+                        <div className="flex items-center gap-3">
+                            <DropdownMenu open={gridMenuOpen} onOpenChange={setGridMenuOpen}>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        className="h-8 w-8 p-0 rounded-lg transition-colors"
+                                        style={{
+                                            color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (!snapToGrid) {
+                                                e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (!snapToGrid) {
+                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                            }
+                                        }}
+                                    >
+                                        <Grid3X3 
+                                            size={24} 
+                                            style={{ 
+                                                opacity: snapToGrid ? 1 : 0.5,
+                                                color: studioMode === 'dark' ? '#ffffff' : '#000000'
+                                            }} 
+                                        />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent 
+                                    align="center" 
+                                    className="w-40"
+                                    style={{
+                                        backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
+                                        borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+                                        color: studioMode === 'dark' ? '#ffffff' : '#000000'
+                                    }}
+                                >
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.NONE)}>
+                                        <span>None</span>
+                                        {gridSnapSize === GridSnapOption.NONE && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    
+                                    <div className="border-t mx-2 my-1"></div>
+                                    <div 
+                                        className="px-2 py-1 text-xs font-medium"
+                                        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+                                    >STEP</div>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_6)}>
+                                        <span>1/6 step</span>
+                                        {gridSnapSize === GridSnapOption.STEP_1_6 && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_4)}>
+                                        <span>1/4 step</span>
+                                        {gridSnapSize === GridSnapOption.STEP_1_4 && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_3)}>
+                                        <span>1/3 step</span>
+                                        {gridSnapSize === GridSnapOption.STEP_1_3 && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_2)}>
+                                        <span>1/2 step</span>
+                                        {gridSnapSize === GridSnapOption.STEP_1_2 && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP)}>
+                                        <span>Step</span>
+                                        {gridSnapSize === GridSnapOption.STEP && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    
+                                    <div className="border-t mx-2 my-1"></div>
+                                    <div 
+                                        className="px-2 py-1 text-xs font-medium"
+                                        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+                                    >BEAT</div>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_6)}>
+                                        <span>1/6 beat</span>
+                                        {gridSnapSize === GridSnapOption.BEAT_1_6 && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_4)}>
+                                        <span>1/4 beat</span>
+                                        {gridSnapSize === GridSnapOption.BEAT_1_4 && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_3)}>
+                                        <span>1/3 beat</span>
+                                        {gridSnapSize === GridSnapOption.BEAT_1_3 && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_2)}>
+                                        <span>1/2 beat</span>
+                                        {gridSnapSize === GridSnapOption.BEAT_1_2 && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT)}>
+                                        <span>Beat</span>
+                                        {gridSnapSize === GridSnapOption.BEAT && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                    
+                                    <div className="border-t mx-2 my-1"></div>
+                                    <div 
+                                        className="px-2 py-1 text-xs font-medium"
+                                        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+                                    >BAR</div>
+                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BAR)}>
+                                        <span>Bar</span>
+                                        {gridSnapSize === GridSnapOption.BAR && <Check size={16} className="ml-auto" />}
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            
+                            <button
+                                onClick={onZoomIn}
+                                className="h-8 w-8 p-0 rounded-lg transition-colors"
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                            >
+                                <IconZoomIn size={24} />
+                            </button>
+                            
+                            <div 
+                                className="font-bold min-w-[40px] text-center px-2 py-1 rounded text-sm"
+                                style={{
+                                    backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
+                                    border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+                                    color: studioMode === 'dark' ? '#ffffff' : '#000000'
+                                }}
+                            >
+                                {zoomLevel.toFixed(1)}x
+                            </div>
+                            
+                            <button
+                                onClick={onZoomOut}
+                                className="h-8 w-8 p-0 rounded-lg transition-colors"
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                            >
+                                <IconZoomOut size={24} />
+                            </button>
+                            
+                            <TimeDisplay
+                                ref={timeDisplayRef}
+                                initialTime={currentTime}
+                            />
+                            
+                            <SaveStatusIndicator
+                                status={autoSaveStatus || 'idle'}
+                                message={autoSaveMessage}
+                                onRetryClick={onAutoSaveRetry}
+                            />
+                            
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={onExportClick}
+                                        className="h-8 w-8 p-0 rounded-lg transition-colors"
+                                        style={{
+                                            backgroundColor: 'transparent',
+                                            color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                        }}
+                                    >
+                                        <IconFileExport size={24} />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Export project</p>
+                                </TooltipContent>
+                            </Tooltip>
+                            
+                            <button
+                                onClick={onChatToggle}
+                                className="h-8 w-8 p-0 rounded-lg transition-colors"
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                            >
+                                {isChatOpen ? <IconChevronsRight size={24} /> : <IconInputAi size={24} />}
+                            </button>
+                            
+                            <button
+                                onClick={onSettingsToggle}
+                                className="h-8 w-8 p-0 rounded-lg transition-colors"
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                            >
+                                <IconSettings size={24} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </TooltipProvider>
     );
 }));
 

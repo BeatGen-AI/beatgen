@@ -6,7 +6,7 @@ import { MidiTrackRenderer } from './tracks/MidiTrackRenderer';
 import { DrumTrackRenderer } from './tracks/DrumTrackRenderer';
 import { GRID_CONSTANTS } from '../../../constants/gridConstants';
 import { getInstanceById } from '@/studio/utils/instanceHelpers';
-import { useTheme } from '@mui/material/styles';
+import { useAppTheme } from '../../../../lib/theme-provider';
 
 export interface KonvaTrackProps {
   track: CombinedTrack;
@@ -92,7 +92,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isResizingLeft, setIsResizingLeft] = useState(false);
   const [isResizingRight, setIsResizingRight] = useState(false);
-  const theme = useTheme();
+  const { studioMode } = useAppTheme();
   
   // Removed cursor reset - now handled by cursor manager in interaction system
   
@@ -260,7 +260,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
           y={1.5}
           width={displayWidth - 2}
           height={height - 2}
-          stroke={theme.palette.mode === 'dark' ? 'white' : '#222222'}
+          stroke={studioMode === 'dark' ? 'white' : '#222222'}
           strokeWidth={2}
           fill="transparent"
           cornerRadius={4}

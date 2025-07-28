@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Palette, Settings, Brain } from 'lucide-react';
-import { useAppTheme } from '../../../platform/theme/ThemeContext';
+import { useAppTheme, useTheme } from '../../../lib/theme-provider';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from '../../../components/ui/dialog';
 import { Label } from '../../../components/ui/label';
-import { Switch } from '../../../components/ui/switch';
+import { ThemeSwitcher } from '../../../components/ui/ThemeSwitcher';
 import {
   Select,
   SelectContent,
@@ -31,48 +31,10 @@ const assistantModels = [
 ];
 
 export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps) => {
-  const { mode: uiMode, studioMode, toggleUITheme, toggleStudioTheme } = useAppTheme();
-  const [selectedAssistantModel, setSelectedAssistantModel] = useState(assistantModels[0]?.id || '');
-
-  // Apply studio dark mode to document element when dialog is open
-  useEffect(() => {
-    if (!open) return;
-    
-    const root = window.document.documentElement;
-    const originalHasDark = root.classList.contains('dark');
-    
-    // Apply or remove dark class based on studioMode immediately
-    if (studioMode === 'dark' && !originalHasDark) {
-      root.classList.add('dark');
-    } else if (studioMode === 'light' && originalHasDark) {
-      root.classList.remove('dark');
-    }
-    
-    // Don't restore immediately on cleanup - let the dialog close first
-    return () => {
-      // We'll handle restoration when dialog fully closes
-    };
-  }, [open, studioMode]);
+  const { mode, studioMode } = useAppTheme();
+  const { homepageTheme, studioTheme, setHomepageTheme, setStudioTheme } = useTheme();
   
-  // Separate effect to handle restoration after dialog closes
-  useEffect(() => {
-    if (open) return; // Only run when dialog is closed
-    
-    // Restore original dark mode after animation completes
-    const timeoutId = setTimeout(() => {
-      const root = window.document.documentElement;
-      const currentHasDark = root.classList.contains('dark');
-      const shouldHaveDark = uiMode === 'dark';
-      
-      if (shouldHaveDark && !currentHasDark) {
-        root.classList.add('dark');
-      } else if (!shouldHaveDark && currentHasDark) {
-        root.classList.remove('dark');
-      }
-    }, 200); // Wait for closing animation
-    
-    return () => clearTimeout(timeoutId);
-  }, [open, uiMode]);
+  const [selectedAssistantModel, setSelectedAssistantModel] = useState(assistantModels[0]?.id || '');
 
   const handleAssistantModelChange = (value: string) => {
     setSelectedAssistantModel(value);
@@ -81,54 +43,96 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent 
+        className="sm:max-w-[600px]"
+        style={{
+          backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
+          color: studioMode === 'dark' ? '#ffffff' : '#000000',
+          border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>Studio Settings</DialogTitle>
+          <DialogTitle style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}>Studio Settings</DialogTitle>
         </DialogHeader>
         
-        <Separator className="my-4" />
+        <div 
+          className="my-4 h-px"
+          style={{
+            backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'
+          }}
+        />
         
-        <div className="space-y-6 text-foreground">
-          {/* UI Dark Mode Setting */}
+        <div 
+          className="space-y-6"
+          style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+        >
+          {/* UI Theme Setting */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <Palette className="h-5 w-5 text-muted-foreground" />
-              <Label htmlFor="ui-dark-mode" className="text-base font-normal">
-                UI Dark Mode
+              <Palette 
+                className="h-5 w-5"
+                style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+              />
+              <Label 
+                className="text-base font-normal"
+                style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+              >
+                UI Theme
               </Label>
             </div>
-            <Switch
-              id="ui-dark-mode"
-              checked={uiMode === 'dark'}
-              onCheckedChange={() => toggleUITheme()}
+            <ThemeSwitcher
+              value={homepageTheme}
+              onValueChange={setHomepageTheme}
+              useStudioTheme={true}
             />
           </div>
 
-          {/* Studio Dark Mode Setting */}
+          {/* Studio Theme Setting */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <Settings className="h-5 w-5 text-muted-foreground" />
-              <Label htmlFor="studio-dark-mode" className="text-base font-normal">
-                Studio Dark Mode
+              <Settings 
+                className="h-5 w-5"
+                style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+              />
+              <Label 
+                className="text-base font-normal"
+                style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+              >
+                Studio Theme
               </Label>
             </div>
-            <Switch
-              id="studio-dark-mode"
-              checked={studioMode === 'dark'}
-              onCheckedChange={() => toggleStudioTheme()}
+            <ThemeSwitcher
+              value={studioTheme}
+              onValueChange={setStudioTheme}
+              useStudioTheme={true}
             />
           </div>
 
           {/* Assistant Model Setting */}
-          <div className="flex items-center justify-between">
+          {/* <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <Brain className="h-5 w-5 text-muted-foreground" />
-              <Label htmlFor="assistant-model" className="text-base font-normal">
+              <Brain 
+                className="h-5 w-5"
+                style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+              />
+              <Label 
+                htmlFor="assistant-model" 
+                className="text-base font-normal"
+                style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+              >
                 Assistant Model
               </Label>
             </div>
             <Select value={selectedAssistantModel} onValueChange={handleAssistantModelChange}>
-              <SelectTrigger id="assistant-model" className="w-[200px]">
+              <SelectTrigger 
+                id="assistant-model" 
+                className="w-[200px]"
+                style={{
+                  backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f8fafc',
+                  borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+                  color: studioMode === 'dark' ? '#ffffff' : '#000000'
+                }}
+              >
                 <SelectValue placeholder="Select a model" />
               </SelectTrigger>
               <SelectContent>
@@ -139,7 +143,7 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </div> */}
         </div>
       </DialogContent>
     </Dialog>

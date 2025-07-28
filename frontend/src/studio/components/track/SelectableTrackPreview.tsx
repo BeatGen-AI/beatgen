@@ -1,5 +1,4 @@
 // import React, { useCallback, useMemo } from 'react';
-// import { Box } from '@mui/material';
 // import BaseTrackPreview, { BaseTrackPreviewProps } from './base/BaseTrackPreview';
 // import { Tool } from '../../shared/interactions';
 
@@ -115,15 +114,8 @@
 //   }, [onTrackDoubleClick, track.id]);
 
 //   return (
-//     <Box
-//       sx={{
-//         position: 'relative',
-//         '&:hover': isSelected ? {} : {
-//           '& .selectable-track-overlay': {
-//             opacity: selectedTool === 'select' ? 1 : 0
-//           }
-//         }
-//       }}
+//     <div
+//       className="relative"
 //       onMouseDown={handleMouseDown}
 //       onDoubleClick={handleDoubleClick}
 //     >
@@ -131,67 +123,36 @@
 //       {isSelected && (
 //         <>
 //           {/* Selection background */}
-//           <Box
-//             sx={{
-//               position: 'absolute',
-//               top: -4,
-//               left: -4,
-//               right: -4,
-//               bottom: -4,
+//           <div
+//             className={`absolute -top-1 -left-1 -right-1 -bottom-1 rounded-lg pointer-events-none -z-10 ${
+//               isPrimaryDrag ? 'border-2 border-blue-500' : ''
+//             }`}
+//             style={{
 //               backgroundColor: isPrimaryDrag 
 //                 ? 'rgba(33, 150, 243, 0.25)' 
-//                 : 'rgba(33, 150, 243, 0.15)',
-//               borderRadius: '8px',
-//               pointerEvents: 'none',
-//               zIndex: -1,
-//               border: isPrimaryDrag ? '2px solid #2196f3' : 'none'
+//                 : 'rgba(33, 150, 243, 0.15)'
 //             }}
 //           />
           
 //           {/* Selection badge */}
-//           <Box
-//             sx={{
-//               position: 'absolute',
-//               top: 4,
-//               right: 4,
-//               width: 18,
-//               height: 18,
+//           <div
+//             className="absolute top-1 right-1 w-[18px] h-[18px] text-white rounded-full flex items-center justify-center font-bold pointer-events-none shadow-sm"
+//             style={{
 //               backgroundColor: isPrimaryDrag ? '#ff9800' : '#2196f3',
-//               color: 'white',
-//               borderRadius: '50%',
-//               display: 'flex',
-//               alignItems: 'center',
-//               justifyContent: 'center',
 //               fontSize: isPrimaryDrag ? '8px' : '10px',
-//               fontWeight: 'bold',
 //               zIndex: 1002,
-//               pointerEvents: 'none',
 //               boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
 //             }}
 //           >
 //             {isPrimaryDrag ? '◉' : '✓'}
-//           </Box>
+//           </div>
 //         </>
 //       )}
 
 //       {/* Hover overlay for selection mode */}
 //       {!isSelected && selectedTool === 'select' && (
-//         <Box
-//           className="selectable-track-overlay"
-//           sx={{
-//             position: 'absolute',
-//             top: 0,
-//             left: 0,
-//             right: 0,
-//             bottom: 0,
-//             outline: '2px dashed rgba(33, 150, 243, 0.7)',
-//             borderRadius: '6px',
-//             backgroundColor: 'rgba(33, 150, 243, 0.05)',
-//             opacity: 0,
-//             transition: 'opacity 0.2s ease-in-out',
-//             pointerEvents: 'none',
-//             zIndex: 999
-//           }}
+//         <div
+//           className="selectable-track-overlay absolute top-0 left-0 right-0 bottom-0 outline-2 outline-dashed outline-blue-500/70 rounded-md bg-blue-500/5 opacity-0 transition-opacity duration-200 pointer-events-none z-[999]"
 //         />
 //       )}
 
@@ -201,7 +162,7 @@
 //         track={track}
 //         trackStyleOverrides={selectionStyles}
 //       />
-//     </Box>
+//     </div>
 //   );
 // };
 

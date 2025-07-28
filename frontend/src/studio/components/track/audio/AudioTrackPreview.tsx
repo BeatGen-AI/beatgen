@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import { Box } from '@mui/material';
 import { useGridStore } from '../../../core/state/gridStore';
 import { calculateAudioTrackWidth } from '../../../utils/trackWidthCalculators';
 import { getTrackColor } from '../../../constants/gridConstants';
@@ -84,13 +83,12 @@ export const AudioTrackPreview: React.FC<AudioTrackPreviewProps> = (props) => {
     } else {
       // Placeholder waveform for tracks without audio files
       return Array.from({length: 40}).map((_, i) => (
-        <Box 
+        <div 
           key={i} 
-          sx={{
+          className="bg-white/70 mx-0.5"
+          style={{
             height: Math.sin(i * 0.3) * 10 + 10,
-            width: 2,
-            bgcolor: 'rgba(255,255,255,0.7)',
-            mx: 0.2
+            width: 2
           }}
         />
       ));
