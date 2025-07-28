@@ -39,6 +39,10 @@ interface GenerationPromptControlProps {
   bottomLeftComponent?: React.ReactNode;
   bottomRightComponent?: React.ReactNode;
   
+  // Components to render inside the textarea at the bottom
+  textareaBottomLeftComponent?: React.ReactNode;
+  textareaBottomRightComponent?: React.ReactNode;
+  
   // UI customization
   showRandomButton?: boolean;
   showSelect?: boolean;
@@ -65,6 +69,8 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
   customSelectComponent,
   bottomLeftComponent,
   bottomRightComponent,
+  textareaBottomLeftComponent,
+  textareaBottomRightComponent,
   showRandomButton = true,
   showSelect = true,
   submitButtonIcon,
@@ -118,6 +124,19 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
         <div className="absolute top-2 right-2 text-xs text-muted-foreground">
           {prompt.length}/{maxLength}
         </div>
+        
+        {/* Bottom components inside textarea */}
+        {textareaBottomLeftComponent && (
+          <div className="absolute bottom-2 left-2">
+            {textareaBottomLeftComponent}
+          </div>
+        )}
+        
+        {textareaBottomRightComponent && (
+          <div className="absolute bottom-2 right-12">
+            {textareaBottomRightComponent}
+          </div>
+        )}
         
         <div className="absolute bottom-2 right-2">
           <Button

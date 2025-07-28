@@ -339,7 +339,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
       </button>
 
       {/* Track Name and Type-specific controls */}
-      <div className="mb-1 w-full pr-8" style={{ paddingBottom: '40px' }}>
+      <div className="mb-1 mt-1 w-full pr-8" style={{ paddingBottom: '40px' }}>
         {renderTypeSpecificControls()}
       </div>
       

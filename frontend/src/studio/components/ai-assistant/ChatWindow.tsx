@@ -1189,7 +1189,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             showSelect={false}
             submitButtonIcon={isLoading ? undefined : undefined}
             submitButtonAriaLabel={isLoading ? "Cancel" : "Send"}
-            bottomLeftComponent={
+            textareaBottomLeftComponent={
               <ChatModelMenu
                 triggerLabel={selectedModel}
                 onSelect={handleModelSelect}
@@ -1197,7 +1197,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
                 selectedModel={selectedModel}
               />
             }
-            bottomRightComponent={
+            textareaBottomRightComponent={
               isLoading ? (
                 <MenuChip 
                   label="Cancel"
