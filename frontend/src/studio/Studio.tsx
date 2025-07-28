@@ -549,7 +549,6 @@ function Studio({ projectId }: StudioProps) {
               style={{
                 height: GRID_CONSTANTS.headerHeight,
                 minHeight: GRID_CONSTANTS.headerHeight,
-                borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
               }}
             >
               <div className="relative flex items-center w-full px-1">

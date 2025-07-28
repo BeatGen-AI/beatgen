@@ -120,13 +120,29 @@ export function PaginatedGrid<T>({
   // Build responsive grid classes based on gridProps
   const getGridClasses = () => {
     const { xs = 1, sm = 2, md = 3, lg = 4, xl = 5 } = gridProps;
+    
+    // Map numbers to actual Tailwind classes
+    const getColsClass = (cols: number, breakpoint: string = '') => {
+      const prefix = breakpoint ? `${breakpoint}:` : '';
+      switch (cols) {
+        case 1: return `${prefix}grid-cols-1`;
+        case 2: return `${prefix}grid-cols-2`;
+        case 3: return `${prefix}grid-cols-3`;
+        case 4: return `${prefix}grid-cols-4`;
+        case 5: return `${prefix}grid-cols-5`;
+        case 6: return `${prefix}grid-cols-6`;
+        case 12: return `${prefix}grid-cols-12`;
+        default: return `${prefix}grid-cols-3`;
+      }
+    };
+    
     return cn(
       "grid gap-6 pt-2",
-      `grid-cols-${xs}`,
-      `sm:grid-cols-${sm}`,
-      `md:grid-cols-${md}`,
-      `lg:grid-cols-${lg}`,
-      `xl:grid-cols-${xl}`,
+      getColsClass(xs),
+      getColsClass(sm, 'sm'),
+      getColsClass(md, 'md'),
+      getColsClass(lg, 'lg'),
+      getColsClass(xl, 'xl'),
       className
     );
   };

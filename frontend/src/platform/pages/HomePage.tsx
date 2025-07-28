@@ -350,14 +350,14 @@ export default function HomePage() {
                   Projects
                 </h2>
                 <div className="flex gap-2">
-                  <Button
+                  {/* <Button
                     variant="outline"
                     className="flex items-center gap-2"
                     onClick={() => setShowGenerateSongModal(true)}
                   >
                     <MusicNoteIcon fontSize="small" />
                     Generate Song
-                  </Button>
+                  </Button> */}
                   <Button
                     variant="default"
                     className="flex items-center gap-2"
@@ -380,14 +380,14 @@ export default function HomePage() {
                   Projects
                 </h2>
                 <div className="flex flex-col gap-2">
-                  <Button
+                  {/* <Button
                     variant="outline"
                     className="flex items-center gap-2 justify-center"
                     onClick={() => setShowGenerateSongModal(true)}
                   >
                     <MusicNoteIcon fontSize="small" />
                     Generate Song
-                  </Button>
+                  </Button> */}
                   <Button
                     variant="default"
                     className="flex items-center gap-2 justify-center"

@@ -109,7 +109,7 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
           </div>
 
           {/* Assistant Model Setting */}
-          <div className="flex items-center justify-between">
+          {/* <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Brain 
                 className="h-5 w-5"
@@ -143,7 +143,7 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </div> */}
         </div>
       </DialogContent>
     </Dialog>

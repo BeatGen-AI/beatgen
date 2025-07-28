@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Music } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Alert, AlertDescription } from "../../components/ui/alert";
+import { Card, CardContent } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
 
 // Shared components and hooks
-import { PaginatedGrid } from './shared/PaginatedGrid';
 import { useAudioTracksPagination } from '../hooks/usePagination';
 import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/pagination';
 
@@ -148,15 +150,6 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
     performDeleteSound(id);
   };
 
-  // Render item function for the grid
-  const renderAudioTrackCard = (sound: AudioTrackRead) => (
-    <AudioTrackCard
-      sound={sound}
-      handleDeleteSound={handleDeleteSound}
-      sectionColor={sectionColor}
-    />
-  );
-
   // Custom empty state with the correct icon
   const emptyState = {
     icon: <Music className="h-15 w-15" />,
@@ -165,20 +158,78 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
   };
 
   return (
-    <PaginatedGrid<AudioTrackRead>
-      items={pagination.allFetchedItems}
-      displayedCount={pagination.displayedCount}
-      totalItems={pagination.totalItems}
-      loading={pagination.isLoading}
-      loadingMore={pagination.isFetching}
-      error={pagination.error}
-      onShowMore={pagination.showMore}
-      canShowMore={pagination.canShowMore}
-      renderItem={renderAudioTrackCard}
-      getItemKey={(sound) => sound.id}
-      emptyState={emptyState}
-      gridProps={{ xs: 12, sm: 6, md: 4 }}
-      sectionColor={sectionColor}
-    />
+    <React.Fragment>
+      {pagination.error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{pagination.error}</AlertDescription>
+        </Alert>
+      )}
+
+      {pagination.isLoading ? (
+        <Card className="flex flex-col items-center py-8 mt-2">
+          <CardContent className="flex flex-col items-center space-y-4 pt-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </CardContent>
+        </Card>
+      ) : pagination.allFetchedItems.length === 0 ? (
+        <Card className="flex flex-col items-center py-8 mt-2 text-center">
+          <CardContent className="flex flex-col items-center space-y-4 pt-6">
+            <div className="text-6xl mb-2">
+              {emptyState.icon}
+            </div>
+            <h3 
+              className="text-lg font-semibold"
+              style={{ 
+                color: sectionColor || '#666',
+              }}
+            >
+              {emptyState.title}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {emptyState.description}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-2">
+          {pagination.allFetchedItems.slice(0, pagination.displayedCount).map((sound) => (
+            <div key={sound.id}>
+              <AudioTrackCard
+                sound={sound}
+                handleDeleteSound={handleDeleteSound}
+                sectionColor={sectionColor}
+                playingId={playingId}
+                currentTime={currentTime}
+                duration={duration}
+                onPlaySound={handlePlaySound}
+                onSeek={handleSeek}
+                audioBlob={audioBlobs[sound.id]}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Show More Button */}
+      {!pagination.isLoading && pagination.canShowMore && pagination.displayedCount < pagination.totalItems && (
+        <div className="flex justify-center mt-4 mb-2">
+          <Button 
+            variant="outline"
+            onClick={pagination.showMore} 
+            disabled={pagination.isFetching}
+          >
+            {pagination.isFetching ? 'Loading...' : 'Show More'}
+          </Button>
+        </div>
+      )}
+
+      {/* Loading indicator when fetching more items */}
+      {pagination.isFetching && pagination.allFetchedItems.length > 0 && (
+        <div className="flex justify-center mt-2 mb-2">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+        </div>
+      )}
+    </React.Fragment>
   );
 }

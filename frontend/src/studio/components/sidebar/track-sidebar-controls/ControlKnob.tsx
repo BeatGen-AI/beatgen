@@ -37,6 +37,7 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
   }
 }) => {
   const [showSlider, setShowSlider] = useState(false);
+  const [sliderPosition, setSliderPosition] = useState<'above' | 'below'>('above');
   const knobRef = useRef<HTMLDivElement>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<number | null>(null);
@@ -76,12 +77,30 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
     }
   };
   
+  const checkSliderPosition = () => {
+    if (knobRef.current) {
+      const knobRect = knobRef.current.getBoundingClientRect();
+      const sliderHeight = 120; // Approximate height of slider popup
+      const topSpace = knobRect.top;
+      
+      // If there's not enough space above, position below
+      if (topSpace < sliderHeight) {
+        setSliderPosition('below');
+      } else {
+        setSliderPosition('above');
+      }
+    }
+  };
+
   const handleKnobMouseEnter = () => {
     // Clear any existing hover timeout
     if (hoverTimeoutRef.current !== null) {
       window.clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
     }
+    
+    // Check position before showing
+    checkSliderPosition();
     
     // Show slider
     setShowSlider(true);
@@ -183,7 +202,9 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
         {showSlider && (
           <div 
             ref={sliderRef}
-            className="absolute left-full ml-4 top-1/2 transform -translate-y-1/2 z-[9999] bg-[#2A2A2A] border-2 rounded-lg shadow-lg p-4"
+            className={`absolute left-1/2 transform -translate-x-1/2 z-[9999] bg-[#2A2A2A] border rounded-lg shadow-lg p-4 ${
+              sliderPosition === 'above' ? 'bottom-full mb-4' : 'top-full mt-4'
+            }`}
             style={{ 
               borderColor: color,
               width: size <= 30 ? 150 : 200
