@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Palette, Settings, Brain } from 'lucide-react';
-import { useAppTheme } from '../../../lib/theme-provider';
+import { Palette, Settings, Brain, Sun, Moon } from 'lucide-react';
+import { IconDeviceImac } from '@tabler/icons-react';
+import { useAppTheme, useTheme } from '../../../lib/theme-provider';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +9,7 @@ import {
   DialogTitle,
 } from '../../../components/ui/dialog';
 import { Label } from '../../../components/ui/label';
-import { Switch } from '../../../components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '../../../components/ui/toggle-group';
 import {
   Select,
   SelectContent,
@@ -31,7 +32,8 @@ const assistantModels = [
 ];
 
 export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps) => {
-  const { mode, studioMode, toggleUITheme, toggleStudioTheme } = useAppTheme();
+  const { mode, studioMode } = useAppTheme();
+  const { homepageTheme, studioTheme, setHomepageTheme, setStudioTheme } = useTheme();
   
   const [selectedAssistantModel, setSelectedAssistantModel] = useState(assistantModels[0]?.id || '');
 
@@ -65,7 +67,7 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
           className="space-y-6"
           style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
         >
-          {/* UI Dark Mode Setting */}
+          {/* UI Theme Setting */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Palette 
@@ -73,24 +75,56 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
                 style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
               />
               <Label 
-                htmlFor="ui-dark-mode" 
                 className="text-base font-normal"
                 style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
               >
-                UI Dark Mode
+                UI Theme
               </Label>
             </div>
-            <Switch
-              id="ui-dark-mode"
-              checked={mode === 'dark'}
-              onCheckedChange={() => toggleUITheme()}
+            <ToggleGroup 
+              type="single" 
+              value={homepageTheme} 
+              onValueChange={(value) => value && setHomepageTheme(value as any)}
+              className="bg-transparent"
               style={{
-                backgroundColor: mode === 'dark' ? '#22c55e' : '#e5e7eb'
+                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f8fafc',
+                borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
               }}
-            />
+            >
+              <ToggleGroupItem 
+                value="light" 
+                aria-label="Light theme"
+                style={{
+                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                  backgroundColor: 'transparent'
+                }}
+              >
+                <Sun className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem 
+                value="dark" 
+                aria-label="Dark theme"
+                style={{
+                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                  backgroundColor: 'transparent'
+                }}
+              >
+                <Moon className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem 
+                value="system" 
+                aria-label="System theme"
+                style={{
+                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                  backgroundColor: 'transparent'
+                }}
+              >
+                <IconDeviceImac className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
-          {/* Studio Dark Mode Setting */}
+          {/* Studio Theme Setting */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Settings 
@@ -98,21 +132,53 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
                 style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
               />
               <Label 
-                htmlFor="studio-dark-mode" 
                 className="text-base font-normal"
                 style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
               >
-                Studio Dark Mode
+                Studio Theme
               </Label>
             </div>
-            <Switch
-              id="studio-dark-mode"
-              checked={studioMode === 'dark'}
-              onCheckedChange={() => toggleStudioTheme()}
+            <ToggleGroup 
+              type="single" 
+              value={studioTheme} 
+              onValueChange={(value) => value && setStudioTheme(value as any)}
+              className="bg-transparent"
               style={{
-                backgroundColor: studioMode === 'dark' ? '#22c55e' : '#e5e7eb'
+                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f8fafc',
+                borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
               }}
-            />
+            >
+              <ToggleGroupItem 
+                value="light" 
+                aria-label="Light theme"
+                style={{
+                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                  backgroundColor: 'transparent'
+                }}
+              >
+                <Sun className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem 
+                value="dark" 
+                aria-label="Dark theme"
+                style={{
+                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                  backgroundColor: 'transparent'
+                }}
+              >
+                <Moon className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem 
+                value="system" 
+                aria-label="System theme"
+                style={{
+                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                  backgroundColor: 'transparent'
+                }}
+              >
+                <IconDeviceImac className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
           {/* Assistant Model Setting */}
