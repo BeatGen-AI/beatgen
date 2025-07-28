@@ -16,6 +16,7 @@ import { IconSettings } from '@tabler/icons-react';
 import { MousePointer2, Edit, Highlighter, Eraser, Grid3X3, Check } from 'lucide-react';
 import { Tool } from '../../shared/interactions';
 import { GridSnapOption, getGridSnapOptionName } from '../piano-roll2/gridConstants';
+import { GridSnapSelector } from '../ui/GridSnapSelector';
 import { cn } from '../../../lib/utils';
 
 interface StudioControlBarProps {
@@ -101,7 +102,6 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 }, ref) => {
     const { studioMode } = useAppTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
-    const [gridMenuOpen, setGridMenuOpen] = useState(false);
 
     const handlePlayPause = () => {
         if (isPlaying) {
@@ -117,10 +117,6 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
         onStop();
     };
 
-    const handleGridSnapSizeChange = (option: GridSnapOption) => {
-        onGridSnapSizeChange?.(option);
-        setGridMenuOpen(false);
-    };
 
     return (
         <TooltipProvider>
@@ -313,115 +309,13 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                     {/* Right section */}
                     <div className="justify-self-end">
                         <div className="flex items-center gap-3">
-                            <DropdownMenu open={gridMenuOpen} onOpenChange={setGridMenuOpen}>
-                                <DropdownMenuTrigger asChild>
-                                    <button
-                                        className="h-8 w-8 p-0 rounded-lg transition-colors"
-                                        style={{
-                                            color: studioMode === 'dark' ? '#ffffff' : '#000000',
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            if (!snapToGrid) {
-                                                e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-                                            }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            if (!snapToGrid) {
-                                                e.currentTarget.style.backgroundColor = 'transparent';
-                                            }
-                                        }}
-                                    >
-                                        <Grid3X3 
-                                            size={24} 
-                                            style={{ 
-                                                opacity: snapToGrid ? 1 : 0.5,
-                                                color: studioMode === 'dark' ? '#ffffff' : '#000000'
-                                            }} 
-                                        />
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent 
-                                    align="center" 
-                                    className="w-40"
-                                    style={{
-                                        backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
-                                        borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-                                        color: studioMode === 'dark' ? '#ffffff' : '#000000'
-                                    }}
-                                >
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.NONE)}>
-                                        <span>None</span>
-                                        {gridSnapSize === GridSnapOption.NONE && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    
-                                    <div className="border-t mx-2 my-1"></div>
-                                    <div 
-                                        className="px-2 py-1 text-xs font-medium"
-                                        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
-                                    >STEP</div>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_6)}>
-                                        <span>1/6 step</span>
-                                        {gridSnapSize === GridSnapOption.STEP_1_6 && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_4)}>
-                                        <span>1/4 step</span>
-                                        {gridSnapSize === GridSnapOption.STEP_1_4 && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_3)}>
-                                        <span>1/3 step</span>
-                                        {gridSnapSize === GridSnapOption.STEP_1_3 && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP_1_2)}>
-                                        <span>1/2 step</span>
-                                        {gridSnapSize === GridSnapOption.STEP_1_2 && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.STEP)}>
-                                        <span>Step</span>
-                                        {gridSnapSize === GridSnapOption.STEP && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    
-                                    <div className="border-t mx-2 my-1"></div>
-                                    <div 
-                                        className="px-2 py-1 text-xs font-medium"
-                                        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
-                                    >BEAT</div>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_6)}>
-                                        <span>1/6 beat</span>
-                                        {gridSnapSize === GridSnapOption.BEAT_1_6 && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_4)}>
-                                        <span>1/4 beat</span>
-                                        {gridSnapSize === GridSnapOption.BEAT_1_4 && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_3)}>
-                                        <span>1/3 beat</span>
-                                        {gridSnapSize === GridSnapOption.BEAT_1_3 && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT_1_2)}>
-                                        <span>1/2 beat</span>
-                                        {gridSnapSize === GridSnapOption.BEAT_1_2 && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BEAT)}>
-                                        <span>Beat</span>
-                                        {gridSnapSize === GridSnapOption.BEAT && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                    
-                                    <div className="border-t mx-2 my-1"></div>
-                                    <div 
-                                        className="px-2 py-1 text-xs font-medium"
-                                        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
-                                    >BAR</div>
-                                    <DropdownMenuItem onClick={() => handleGridSnapSizeChange(GridSnapOption.BAR)}>
-                                        <span>Bar</span>
-                                        {gridSnapSize === GridSnapOption.BAR && <Check size={16} className="ml-auto" />}
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                            <GridSnapSelector
+                                value={gridSnapSize}
+                                enabled={snapToGrid}
+                                onValueChange={onGridSnapSizeChange}
+                                variant="control-bar"
+                                theme={studioMode}
+                            />
                             
                             <button
                                 onClick={onZoomIn}

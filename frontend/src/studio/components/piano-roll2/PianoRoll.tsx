@@ -21,6 +21,8 @@ import {
   getAllGridSnapOptions, 
   getSnapSizeInPixels 
 } from './gridConstants';
+// Import GridSnapSelector component
+import { GridSnapSelector } from '../ui/GridSnapSelector';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 
 // Define a constant grid size to use throughout the component
@@ -1163,7 +1165,6 @@ export const PianoRoll: FC<PianoRollProps> = ({
   // Grid snap settings
   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
   const [gridSnapSize, setGridSnapSize] = useState<GridSnapOption>(initialGridSnapSize); // Use the enum state
-  const [gridSnapMenuOpen, setGridSnapMenuOpen] = useState(false);
   
   // Zoom control
   const [zoomLevel, setZoomLevel] = useState(1.0); // Default zoom level
@@ -2746,144 +2747,14 @@ export const PianoRoll: FC<PianoRollProps> = ({
                 backgroundColor: "rgba(255,255,255,0.1)" 
               }} />
               
-                             {/* Dropdown menu for grid snap options */}
-               <DropdownMenu onOpenChange={setGridSnapMenuOpen}>
-                 <DropdownMenuTrigger asChild>
-                   <img 
-                     src="/icons/grid-on.svg"
-                     alt="Grid snap"
-                     onMouseDown={(e) => {
-                       // Prevent the drag handle from interfering with the grid icon click
-                       e.stopPropagation();
-                     }}
-                     style={{ 
-                       width: "18px",
-                       height: "18px",
-                       opacity: gridSnapEnabled ? 1 : 0.5,
-                       cursor: "pointer",
-                       filter: "brightness(0) invert(1)", // Make icon white
-                       transition: 'all 0.2s ease',
-                     }}
-                     onMouseEnter={(e) => {
-                       if (!gridSnapEnabled) e.currentTarget.style.opacity = "0.8";
-                       e.currentTarget.style.transform = "scale(1.1)";
-                     }}
-                     onMouseLeave={(e) => {
-                       if (!gridSnapEnabled) e.currentTarget.style.opacity = "0.5";
-                       e.currentTarget.style.transform = "scale(1)";
-                     }}
-                   />
-                 </DropdownMenuTrigger>
-                
-                                 <DropdownMenuContent 
-                   className="min-w-[120px] bg-[#222222] border-[#444444] text-white text-xs z-[10001]"
-                   sideOffset={5}
-                 >
-                  <DropdownMenuRadioGroup value={gridSnapSize.toString()} onValueChange={(value) => handleGridSnapSizeChange(parseInt(value))}>
-                    <DropdownMenuRadioItem 
-                      value="0" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      None
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuSeparator className="bg-[rgba(255,255,255,0.1)] my-2 mx-1 relative">
-                      <span className="absolute right-1 -top-2 text-[8px] bg-[#222222] px-1 text-[rgba(255,255,255,0.5)]">
-                        STEP
-                      </span>
-                    </DropdownMenuSeparator>
-                    
-                    <DropdownMenuRadioItem 
-                      value="1" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      1/6 step
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuRadioItem 
-                      value="2" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      1/4 step
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuRadioItem 
-                      value="3" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      1/3 step
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuRadioItem 
-                      value="4" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      1/2 step
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuRadioItem 
-                      value="5" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      Step
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuSeparator className="bg-[rgba(255,255,255,0.1)] my-2 mx-1 relative">
-                      <span className="absolute right-1 -top-2 text-[8px] bg-[#222222] px-1 text-[rgba(255,255,255,0.5)]">
-                        BEAT
-                      </span>
-                    </DropdownMenuSeparator>
-                    
-                    <DropdownMenuRadioItem 
-                      value="6" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      1/6 beat
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuRadioItem 
-                      value="7" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      1/4 beat
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuRadioItem 
-                      value="8" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      1/3 beat
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuRadioItem 
-                      value="9" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      1/2 beat
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuRadioItem 
-                      value="10" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      Beat
-                    </DropdownMenuRadioItem>
-                    
-                    <DropdownMenuSeparator className="bg-[rgba(255,255,255,0.1)] my-2 mx-1 relative">
-                      <span className="absolute right-1 -top-2 text-[8px] bg-[#222222] px-1 text-[rgba(255,255,255,0.5)]">
-                        BAR
-                      </span>
-                    </DropdownMenuSeparator>
-                    
-                    <DropdownMenuRadioItem 
-                      value="11" 
-                      className="text-xs focus:bg-[#525252] focus:text-white cursor-pointer"
-                    >
-                      Bar
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Grid snap selector */}
+              <GridSnapSelector
+                value={gridSnapSize}
+                enabled={gridSnapEnabled}
+                onValueChange={handleGridSnapSizeChange}
+                variant="piano-roll"
+                iconSize={18}
+              />
             </div>
             
             {/* Zoom Controls in fixed-width container */}
