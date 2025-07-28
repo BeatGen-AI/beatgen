@@ -118,7 +118,9 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
           maxLength={maxLength}
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
-          className="pr-16 min-h-[100px] resize-none"
+          className={`pr-16 min-h-[100px] resize-none ${
+            textareaBottomLeftComponent || textareaBottomRightComponent ? 'pb-8' : 'pb-2'
+          }`}
         />
         
         <div className="absolute top-2 right-2 text-xs text-muted-foreground">
