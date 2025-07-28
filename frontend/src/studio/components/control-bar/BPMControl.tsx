@@ -18,10 +18,6 @@ const BPMControl: React.FC<BPMControlProps> = ({ bpm, onBpmChange }) => {
     }
   };
 
-  const handleSelect = () => {
-    inputRef.current?.select();
-  };
-
   // Calculate width based on number of digits
   const getInputWidth = (value: number) => {
     const numDigits = value.toString().length;
@@ -39,14 +35,13 @@ const BPMControl: React.FC<BPMControlProps> = ({ bpm, onBpmChange }) => {
           onChange={onBpmChange}
           onKeyDown={handleKeyDown}
           type="number"
-          onClick={handleSelect}
           ref={inputRef}
           min={1}
           max={999}
           className={cn(
             "p-0 border-0 bg-transparent text-center cursor-pointer outline-none",
             "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-            "caret-transparent text-base h-6",
+            "caret-transparent text-base h-6 select-none",
             getInputWidth(bpm)
           )}
           style={{
@@ -58,7 +53,6 @@ const BPMControl: React.FC<BPMControlProps> = ({ bpm, onBpmChange }) => {
           }}
           onFocus={(e) => {
             e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            handleSelect();
           }}
           onBlur={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
