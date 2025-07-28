@@ -2,6 +2,8 @@ from typing import Dict, Any, Optional
 import traceback
 import uuid
 import httpx
+import time
+from threading import Lock
 
 from fastapi import Request, Response
 
@@ -15,6 +17,11 @@ from app2.models.auth_identity import AuthProvider
 from app2.core.config import settings
 
 logger = get_service_logger("auth")
+
+# Global token cache with expiration
+_token_cache = {}
+_cache_lock = Lock()
+CACHE_EXPIRY_SECONDS = 300  # 5 minutes
 
 
 class AuthService:
@@ -272,7 +279,7 @@ class AuthService:
 
     async def get_current_user(self, token: str) -> Dict[str, Any]:
         """
-        Get the current user from a token
+        Get the current user from a token with caching
 
         Args:
             token: The JWT token
@@ -283,6 +290,20 @@ class AuthService:
         Raises:
             UnauthorizedException: If the token is invalid
         """
+        # Check cache first
+        cache_key = f"user_{token[:20]}"  # Use first 20 chars as cache key
+        current_time = time.time()
+        
+        with _cache_lock:
+            if cache_key in _token_cache:
+                cached_data, expiry_time = _token_cache[cache_key]
+                if current_time < expiry_time:
+                    logger.debug(f"Returning cached user info for token: {token[:10]}...")
+                    return cached_data
+                else:
+                    # Remove expired entry
+                    del _token_cache[cache_key]
+        
         logger.info(f"Getting current user from token: {token[:10]}...")
         user_info = await self.verify_token(token)
         
@@ -301,6 +322,10 @@ class AuthService:
                 logger.info(
                     f"Mapped auth ID {auth_provider_id} to user profile ID {identity.user_profile_id}"
                 )
+        
+        # Cache the result
+        with _cache_lock:
+            _token_cache[cache_key] = (user_info, current_time + CACHE_EXPIRY_SECONDS)
         
         return user_info
 

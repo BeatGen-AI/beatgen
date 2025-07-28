@@ -1,5 +1,5 @@
 from typing import Dict, Any, Annotated
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -153,15 +153,17 @@ def get_drum_sample_service(
     return DrumSampleService(drum_sample_repository)
 
 
-# Auth dependency
+# Auth dependency with request-scoped caching
 async def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> Dict[str, Any]:
     """
-    Get the current authenticated user
+    Get the current authenticated user with request-scoped caching
 
     Args:
+        request: The FastAPI request object (for caching)
         token: The JWT token from the request
         auth_service: The auth service
 
@@ -171,23 +173,33 @@ async def get_current_user(
     Raises:
         UnauthorizedException: If the token is invalid
     """
+    # Check if user info is already cached in this request
+    cache_key = f"current_user_{token[:20]}"  # Use first 20 chars as cache key
+    if hasattr(request.state, cache_key):
+        logger.debug("Returning cached user info")
+        return getattr(request.state, cache_key)
+    
     try:
-        return await auth_service.get_current_user(token)
+        logger.debug("Fetching user info from auth service")
+        user_info = await auth_service.get_current_user(token)
+        # Cache the result in request state
+        setattr(request.state, cache_key, user_info)
+        return user_info
     except Exception as e:
         logger.error(f"Authentication error: {str(e)}")
         raise UnauthorizedException("Could not validate credentials")
 
 
 async def get_current_user_with_token(
+    user_info: Dict[str, Any] = Depends(get_current_user),
     token: str = Depends(oauth2_scheme),
-    auth_service: AuthService = Depends(get_auth_service),
 ) -> Dict[str, Any]:
     """
     Get the current authenticated user with access token included
     
     Args:
+        user_info: The cached user info from get_current_user
         token: The JWT token from the request
-        auth_service: The auth service
         
     Returns:
         The user info with access_token included
@@ -195,14 +207,10 @@ async def get_current_user_with_token(
     Raises:
         UnauthorizedException: If the token is invalid
     """
-    try:
-        user_info = await auth_service.get_current_user(token)
-        # Add the access token to the user info for operations that need it
-        user_info["access_token"] = token
-        return user_info
-    except Exception as e:
-        logger.error(f"Authentication error: {str(e)}")
-        raise UnauthorizedException("Could not validate credentials")
+    # Add the access token to the user info for operations that need it
+    user_info_with_token = user_info.copy()
+    user_info_with_token["access_token"] = token
+    return user_info_with_token
 
 
 async def get_current_user_model(
