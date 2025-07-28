@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import { Box } from '@mui/material';
 import { Note } from '../../../../types/note';
 import { scaleToPreview } from '../../../utils/noteConversion';
 
@@ -73,8 +72,8 @@ const MidiNotesPreview: React.FC<MidiNotesPreviewProps> = ({
   const noteWidthScale = width / standardColumns; 
 
   return (
-    <Box
-      sx={{
+    <div
+      style={{
         width: '100%', // Extend width to fit notes
         height: '100%',
         position: 'relative',
@@ -91,15 +90,15 @@ const MidiNotesPreview: React.FC<MidiNotesPreviewProps> = ({
         const w = scaleToPreview(note.length * noteWidthScale);
         const h = noteHeightScale * 0.9; // Slight gap between notes
         return (
-          <Box
+            <div
             key={note.id === -1 ? `note-${index}-${note.column}-${note.row}` : note.id}
-            sx={{
+            style={{
               position: 'absolute',
               left: `${x}px`,
               top: `${y}px`,
               width: `${w}px`,
               height: `${h}px`,
-              bgcolor: noteColor,
+              backgroundColor: noteColor,
               opacity: 1,
               borderRadius: '2px',
               boxSizing: 'border-box',
@@ -110,7 +109,7 @@ const MidiNotesPreview: React.FC<MidiNotesPreviewProps> = ({
       })}
       
       {notes.length === 0 && (
-        <Box sx={{ 
+        <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center',
@@ -121,20 +120,20 @@ const MidiNotesPreview: React.FC<MidiNotesPreviewProps> = ({
           color: '#fff'
         }}>
           {randomHeights.map((height, i) => (
-            <Box 
+            <div 
               key={i}
-              sx={{
+              style={{
                 height: height, // Use memoized height instead of calculating new random value
                 width: 4,
-                mx: 0.5,
-                bgcolor: noteColor,
+                margin: '0.5px',
+                backgroundColor: noteColor,
                 borderRadius: '2px'
               }}
             />
           ))}
-        </Box>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 
