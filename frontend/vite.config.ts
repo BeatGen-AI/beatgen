@@ -124,7 +124,7 @@ export default defineConfig(({ command }) => {
     },
     // Log resolved paths for debugging
     optimizeDeps: {
-      include: ['react', 'react-dom', '@mui/material'],
+      include: ['react', 'react-dom'],
       exclude: []
     },
     // Special handling for audio files
