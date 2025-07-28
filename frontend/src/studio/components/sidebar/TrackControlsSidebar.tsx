@@ -320,7 +320,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
       {/* Delete Button - Positioned absolutely in top right */}
       <button 
         onClick={handleDelete}
-        className="absolute top-1 right-1 p-1 rounded-lg transition-colors z-10"
+        className="absolute top-1 right-1 py-1 px-2 rounded-lg transition-colors z-10"
         style={{ 
           color: trackColor,
           backgroundColor: 'transparent',
@@ -335,16 +335,16 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         }}
         title="Delete track"
       >
-        <IconBackspace size={20}/>
+        <IconBackspace size={18}/>
       </button>
 
       {/* Track Name and Type-specific controls */}
-      <div className="mb-1 w-full pr-8">
+      <div className="mb-1 w-full pr-8" style={{ paddingBottom: '40px' }}>
         {renderTypeSpecificControls()}
       </div>
       
-      {/* Controls row - Modified for even spacing */}
-      <div className="grid grid-cols-4 items-center gap-2 mb-2">
+      {/* Controls row - Positioned absolutely at bottom */}
+      <div className="absolute bottom-3 left-2 right-2 grid grid-cols-4 items-center gap-2">
         {/* Volume Knob */}
         <div className="flex justify-center">
           <ControlKnob

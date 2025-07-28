@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import GenerationPromptControl from '../shared/GenerationPromptControl';
 import { cn } from '@/lib/utils';
 import { useAppTheme } from '../../../lib/theme-provider';
 import { 
@@ -986,13 +987,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   };
   
   
-  // Handle pressing Enter key in the input field
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
 
   const handleModeSelect = (newMode: string) => {
     // Handle special case for "generate-audio" to display as "Generate Audio"
@@ -1024,15 +1018,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
 
   const handleRemoveContext = () => {
     setSelectedTrack(null);
-  };
-
-
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    const newPosition = e.target.selectionStart;
-    
-    setPrompt(newValue);
-    setCursorPosition(newPosition);
   };
 
 
@@ -1164,74 +1149,65 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
 
         {/* Input Area */}
         <div 
-          className="p-4 flex"
+          className="p-4"
           style={{
             backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)',
             borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
           }}
         >
-          <div className="relative w-full">
-            {/* Chips Box */}
-            <div className="absolute top-1 left-2 flex gap-2 z-10 mt-2">
-              <ChatModeMenu
-                triggerLabel={mode}
-                onSelect={handleModeSelect}
-                selectedMode={mode.toLowerCase().replace(' ', '-')}
-              />
-              {mode === 'Edit' && !selectedTrack && (
-                <AddContextMenu
-                  triggerLabel="@"
-                  onSelect={handleContextSelect}
-                  tracks={tracks.map(track => ({ id: track.id, name: track.name }))}
-                />
-              )}
-              {selectedTrack && (
-                <AddContextChip 
-                  trackName={selectedTrack.name}
-                  onDelete={handleRemoveContext}
-                />
-              )}
-            </div>
-
-            {/* TextField */}
-            <textarea
-              placeholder={isLoading ? `Generating${animatedDots}` : "Ask me anything about your project..."}
-              value={prompt}
-              onChange={handleTextChange}
-              onKeyDown={handleKeyPress}
-              disabled={isLoading}
-              className="w-full pt-5 pb-4 min-h-[20px] resize-none outline-none"
-              style={{
-                backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-                color: studioMode === 'dark' ? '#ffffff' : '#000000',
-                border: 'none',
-                borderRadius: '6px'
-              }}
+          {/* Mode and Context Chips */}
+          <div className="flex gap-2 mb-3">
+            <ChatModeMenu
+              triggerLabel={mode}
+              onSelect={handleModeSelect}
+              selectedMode={mode.toLowerCase().replace(' ', '-')}
             />
-
-            {/* Bottom Box with Send Button */}
-            <div className="absolute bottom-0 left-0 right-0 h-9 flex items-center justify-between px-2 gap-2">
-              {/* Model Selector Chip - Bottom Left (hidden for Generate Audio mode) */}
-              {mode !== 'Generate Audio' ? (
-                <ChatModelMenu
-                  triggerLabel={selectedModel}
-                  onSelect={handleModelSelect}
-                  models={AVAILABLE_MODELS}
-                  selectedModel={selectedModel}
-                />
-              ) : (
-                <div className="flex-1" />
-              )}
-
-              {/* Send/Cancel Chip - Bottom Right */}
-              <MenuChip 
-                label={isLoading ? "Cancel" : "Send"}
-                onClick={isLoading ? handleCancel : handleSend}
-                disabled={!prompt.trim() && !isLoading}
-                color={isLoading ? 'secondary' : 'primary'}
+            {mode === 'Edit' && !selectedTrack && (
+              <AddContextMenu
+                triggerLabel="@"
+                onSelect={handleContextSelect}
+                tracks={tracks.map(track => ({ id: track.id, name: track.name }))}
               />
-            </div>
+            )}
+            {selectedTrack && (
+              <AddContextChip 
+                trackName={selectedTrack.name}
+                onDelete={handleRemoveContext}
+              />
+            )}
           </div>
+
+          {/* Generation Prompt Control */}
+          <GenerationPromptControl
+            prompt={prompt}
+            onPromptChange={setPrompt}
+            onGenerate={handleSend}
+            isGenerating={isLoading}
+            placeholder={isLoading ? `Generating${animatedDots}` : "Ask me anything about your project..."}
+            maxLength={1000}
+            showRandomButton={false}
+            showSelect={false}
+            submitButtonIcon={isLoading ? undefined : undefined}
+            submitButtonAriaLabel={isLoading ? "Cancel" : "Send"}
+            bottomLeftComponent={
+              <ChatModelMenu
+                triggerLabel={selectedModel}
+                onSelect={handleModelSelect}
+                models={AVAILABLE_MODELS}
+                selectedModel={selectedModel}
+              />
+            }
+            bottomRightComponent={
+              isLoading ? (
+                <MenuChip 
+                  label="Cancel"
+                  onClick={handleCancel}
+                  disabled={false}
+                  color="secondary"
+                />
+              ) : undefined
+            }
+          />
         </div>
       </div>
     </div>

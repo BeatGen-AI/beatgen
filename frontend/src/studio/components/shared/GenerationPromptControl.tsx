@@ -35,6 +35,10 @@ interface GenerationPromptControlProps {
   // Custom component to render instead of select dropdown
   customSelectComponent?: React.ReactNode;
   
+  // Custom bottom components to render (more flexible than customSelectComponent)
+  bottomLeftComponent?: React.ReactNode;
+  bottomRightComponent?: React.ReactNode;
+  
   // UI customization
   showRandomButton?: boolean;
   showSelect?: boolean;
@@ -59,6 +63,8 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
   selectWidth = "130px",
   renderSelectItem,
   customSelectComponent,
+  bottomLeftComponent,
+  bottomRightComponent,
   showRandomButton = true,
   showSelect = true,
   submitButtonIcon,
@@ -93,6 +99,8 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
   // Calculate if we have bottom elements that need space
   const hasBottomElements = (showRandomButton && (randomPrompts || onRandomPrompt)) || 
                            customSelectComponent || 
+                           bottomLeftComponent ||
+                           bottomRightComponent ||
                            (showSelect && selectOptions && selectedOption && onOptionChange);
 
   return (
@@ -132,42 +140,56 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
       {hasBottomElements && (
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            {showRandomButton && (randomPrompts || onRandomPrompt) && (
-              <Button
-                onClick={handleRandomPrompt}
-                variant="outline"
-                size="icon"
-                disabled={isGenerating}
-                aria-label="Random Prompt"
-              >
-                <Dices className="h-4 w-4" />
-              </Button>
-            )}
-            
-            {customSelectComponent ? (
-              customSelectComponent
+            {/* Left side components */}
+            {bottomLeftComponent ? (
+              bottomLeftComponent
             ) : (
-              showSelect && selectOptions && selectedOption && onOptionChange && (
-                <Select value={selectedOption} onValueChange={onOptionChange}>
-                  <SelectTrigger className={`w-[${selectWidth}] h-8 text-xs`}>
-                    <SelectValue placeholder={selectPlaceholder} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectOptions.map((option) => (
-                      <SelectItem key={option.id} value={option.id}>
-                        {renderSelectItem ? renderSelectItem(option) : (
-                          <div className="flex items-center text-xs">
-                            {option.icon && <span className="mr-2">{option.icon}</span>}
-                            <span>{option.name}</span>
-                          </div>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )
+              <>
+                {showRandomButton && (randomPrompts || onRandomPrompt) && (
+                  <Button
+                    onClick={handleRandomPrompt}
+                    variant="outline"
+                    size="icon"
+                    disabled={isGenerating}
+                    aria-label="Random Prompt"
+                  >
+                    <Dices className="h-4 w-4" />
+                  </Button>
+                )}
+                
+                {customSelectComponent ? (
+                  customSelectComponent
+                ) : (
+                  showSelect && selectOptions && selectedOption && onOptionChange && (
+                    <Select value={selectedOption} onValueChange={onOptionChange}>
+                      <SelectTrigger className={`w-[${selectWidth}] h-8 text-xs`}>
+                        <SelectValue placeholder={selectPlaceholder} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {renderSelectItem ? renderSelectItem(option) : (
+                              <div className="flex items-center text-xs">
+                                {option.icon && <span className="mr-2">{option.icon}</span>}
+                                <span>{option.name}</span>
+                              </div>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )
+                )}
+              </>
             )}
           </div>
+          
+          {/* Right side components */}
+          {bottomRightComponent && (
+            <div className="flex items-center space-x-2">
+              {bottomRightComponent}
+            </div>
+          )}
         </div>
       )}
     </div>
