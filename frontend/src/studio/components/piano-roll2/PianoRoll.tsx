@@ -1251,7 +1251,6 @@ export const PianoRoll: FC<PianoRollProps> = ({
   // Handle grid snap size change
   const handleGridSnapSizeChange = (option: number) => {
     setGridSnapSize(option);
-    setGridSnapMenuOpen(false);
   };
   
   // Toggle grid snap on/off
