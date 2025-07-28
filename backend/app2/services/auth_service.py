@@ -3,6 +3,7 @@ import traceback
 import uuid
 import httpx
 import hashlib
+import os
 
 from fastapi import Request, Response
 from cachetools import TTLCache
@@ -10,6 +11,7 @@ from cachetools import TTLCache
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import UnauthorizedException, ServiceException, ValidationException, NotFoundException
 from app2.infrastructure.database.supabase_client import supabase
+from app2.infrastructure.jwt_verifier import jwt_verifier
 from app2.repositories.user_repository import UserRepository
 from app2.repositories.auth_identity_repository import AuthIdentityRepository
 from app2.models.user import User
@@ -253,12 +255,13 @@ class AuthService:
             logger.error(traceback.format_exc())
             raise ServiceException(f"Failed to send password reset email: {str(e)}")
 
-    async def verify_token(self, token: str) -> Dict[str, Any]:
+    async def verify_token(self, token: str, use_jwt_verification: bool = None) -> Dict[str, Any]:
         """
         Verify a JWT token and get the user info
 
         Args:
             token: The JWT token to verify
+            use_jwt_verification: Whether to use local JWT verification (faster) or Supabase API
 
         Returns:
             The user info from the token
@@ -266,11 +269,34 @@ class AuthService:
         Raises:
             UnauthorizedException: If the token is invalid
         """
-        logger.info(f"Verifying token: {token[:10]}...")
+        logger.debug(f"Verifying token: {token[:10]}...")
+        
+        # Default to JWT verification (can be overridden with env var AUTH_USE_JWT_VERIFICATION=false)
+        if use_jwt_verification is None:
+            use_jwt_verification = os.getenv("AUTH_USE_JWT_VERIFICATION", "true").lower() == "true"
+        
         try:
-            user_info = supabase.verify_token(token)
-            logger.info(f"Successfully verified token for user: {user_info['id']}")
-            return user_info
+            if use_jwt_verification:
+                try:
+                    # Try local JWT verification first (much faster)
+                    logger.info("🔐 Attempting local JWT verification")
+                    user_info = await jwt_verifier.verify_token(token)
+                    logger.info(f"⚡ JWT VERIFIED LOCALLY for user: {user_info['id']} (fast path)")
+                    return user_info
+                except Exception as jwt_error:
+                    # If JWT verification fails (e.g., JWKS not available), fall back to API
+                    logger.warning(f"🔄 JWT verification failed, FALLING BACK to Supabase API: {str(jwt_error)[:100]}")
+                    logger.info("🐌 Using Supabase API verification (slow path)")
+                    user_info = supabase.verify_token(token)
+                    logger.info(f"✅ SUPABASE API verified token for user: {user_info['id']} (fallback successful)")
+                    return user_info
+            else:
+                # Direct Supabase API verification
+                logger.info("🐌 Using Supabase API verification (JWT disabled)")
+                user_info = supabase.verify_token(token)
+                logger.info(f"✅ SUPABASE API verified token for user: {user_info['id']} (direct API)")
+                return user_info
+            
         except Exception as e:
             logger.error(f"Token verification failed: {str(e)}")
             logger.error(traceback.format_exc())
