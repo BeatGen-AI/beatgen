@@ -370,7 +370,7 @@ export class AutoSaveService {
  */
 export const DEFAULT_AUTO_SAVE_CONFIG: AutoSaveConfig = {
   enabled: true,
-  debounceMs: 2000,        // 2 seconds after last change
+  debounceMs: 1000,        // 2 seconds after last change
   maxIntervalMs: 30000,    // Force save every 30 seconds if dirty
   retryAttempts: 3,        // Retry up to 3 times
   retryDelayMs: 1000       // Start with 1 second delay
