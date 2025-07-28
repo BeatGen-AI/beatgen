@@ -324,9 +324,9 @@ export default function HomePage() {
   }
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Main Content */}
-        <div className="max-w-4xl mx-auto projects-container pt-0 mt-0">
+        <div className="max-w-6xl mx-auto projects-container px-2 py-2 md:px-4 md:py-4">
 
           {projectsError && (
             <Alert variant="destructive" className="mb-4">

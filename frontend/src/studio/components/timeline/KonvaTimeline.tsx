@@ -866,9 +866,9 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             style={{
               position: 'sticky',
               top: 0,
-              zIndex: 2,
               height: GRID_CONSTANTS.headerHeight,
               backgroundColor: studioMode === 'dark' ? '#262626' : '#f5f5f5',
+              borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
               borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
               overflow: 'hidden'
             }}

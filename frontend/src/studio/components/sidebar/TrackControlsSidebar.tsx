@@ -196,7 +196,8 @@ const TrackControls: React.FC<TrackControlsProps> = ({
               style={{
                 backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
                 color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
-                fontSize: '11px'
+                fontSize: '10px',
+                fontWeight: 'lighter'
               }}
             >
               {track.name}
@@ -213,17 +214,17 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             >
               Kit:
             </span>
-            <div 
-              className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap"
+            <button
+              className="text-xs p-1 rounded flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               style={{
                 backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
                 color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
-                fontSize: '11px',
-                border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`
+                fontSize: '10px',
+                fontWeight: 'lighter'
               }}
             >
               808 Kit
-            </div>
+            </button>
           </div>
         );
         
@@ -245,7 +246,8 @@ const TrackControls: React.FC<TrackControlsProps> = ({
               style={{
                 backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
                 color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
-                fontSize: '11px'
+                fontSize: '10px',
+                fontWeight: 'lighter'
               }}
               onMouseEnter={(e) => {
                 if (!e.currentTarget.disabled) {
@@ -281,7 +283,8 @@ const TrackControls: React.FC<TrackControlsProps> = ({
               style={{
                 backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
                 color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
-                fontSize: '11px'
+                fontSize: '10px',
+                fontWeight: 'lighter'
               }}
               onMouseEnter={(e) => {
                 if (!e.currentTarget.disabled) {
@@ -347,8 +350,8 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         {renderTypeSpecificControls()}
       </div>
       
-      {/* Controls row - Positioned absolutely at bottom */}
-      <div className="absolute bottom-3 left-2 right-2 grid grid-cols-4 items-center gap-2">
+            {/* Controls row - Positioned absolutely at bottom with even spacing */}
+      <div className="absolute bottom-3 left-2 right-2 grid grid-cols-4 items-center gap-4">
         {/* Volume Knob */}
         <div className="flex justify-center">
           <ControlKnob
@@ -365,7 +368,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             valueFormatter={(val) => `${val}%`}
           />
         </div>
-        
+          
         {/* Pan Knob */}
         <div className="flex justify-center">
           <ControlKnob
@@ -382,10 +385,10 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         </div>
 
         {/* Mute button */}
-        <div className="flex justify-center">
+        <div className="flex justify-center" style={{ transform: 'translateY(1px)' }}>
           <div 
             onClick={handleMuteToggle}
-            className="rounded px-3 py-1 text-xs font-bold cursor-pointer transition-colors"
+            className="rounded px-2.5 py-1 text-xs font-bold cursor-pointer transition-colors"
             style={{
               backgroundColor: track.mute 
                 ? '#fbbf24' 
@@ -413,10 +416,10 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         </div>
         
         {/* Solo Button */}
-        <div className="flex justify-center">
+        <div className="flex justify-center" style={{ transform: 'translateY(1px)' }}>
           <div 
             onClick={handleSoloToggle}
-            className="rounded px-3 py-1 text-xs font-bold cursor-pointer transition-colors"
+            className="rounded px-2.5 py-1 text-xs font-bold cursor-pointer transition-colors"
             style={{
               backgroundColor: (track.solo ?? track.soloed) 
                 ? '#fbbf24' 

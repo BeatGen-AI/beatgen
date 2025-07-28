@@ -28,46 +28,54 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
   };
 
   const handleKeySelect = (key: string) => {
-    onKeyChange(`${key} ${mode}`);
+    const capitalizedMode = mode === 'major' ? 'Major' : 'Minor';
+    onKeyChange(`${key} ${capitalizedMode}`);
     setOpen(false);
   };
 
   const handleModeChange = (newMode: 'major' | 'minor') => {
     setMode(newMode);
     // Update current key if needed
-    if (selectedKey.includes('minor') && newMode === 'major') {
-      onKeyChange(selectedKey.replace('minor', 'major'));
-    } else if (selectedKey.includes('major') && newMode === 'minor') {
-      onKeyChange(selectedKey.replace('major', 'minor'));
+    if (selectedKey.toLowerCase().includes('minor') && newMode === 'major') {
+      onKeyChange(selectedKey.replace(/minor/i, 'Major'));
+    } else if (selectedKey.toLowerCase().includes('major') && newMode === 'minor') {
+      onKeyChange(selectedKey.replace(/major/i, 'Minor'));
     }
   };
 
   return (
-    <div className="w-[132px]">
+    <div className="flex items-center">
       <DropdownMenu open={open} onOpenChange={handleOpenChange}>
         <DropdownMenuTrigger asChild>
           <button
-            className="w-full px-2 rounded text-left transition-colors"
+            className="px-2 rounded text-center transition-colors cursor-pointer outline-none"
             style={{
-              backgroundColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
-              border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+              backgroundColor: 'transparent',
+              border: 'none',
               color: studioMode === 'dark' ? '#ffffff' : '#000000',
               height: '24px',
-              lineHeight: '22px',
-              cursor: 'pointer',
-              fontSize: '14px'
+              lineHeight: '24px',
+              fontSize: '14px',
+              minWidth: '80px'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)';
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+              e.currentTarget.style.backgroundColor = 'transparent';
             }}
           >
-            {selectedKey}
+            {selectedKey.replace('major', 'Major').replace('minor', 'Minor')}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-auto p-2">
+        <DropdownMenuContent 
+          className="w-auto p-2"
+          style={{
+            backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
+            border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+            color: studioMode === 'dark' ? '#ffffff' : '#000000'
+          }}
+        >
           <div className="mb-2">
             <div
               className={cn(
@@ -81,14 +89,25 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
                 variant="ghost"
                 size="sm"
                 onClick={() => handleModeChange('major')}
-                className={cn(
-                  "flex-1 rounded-r-none border-0 px-2",
-                  mode === 'major'
-                    ? studioMode === 'dark'
-                      ? "bg-white/12 text-foreground hover:bg-white/12"
-                      : "bg-black/8 text-foreground hover:bg-black/8"
-                    : "text-muted-foreground hover:bg-accent/50"
-                )}
+                className="flex-1 rounded-r-none border-0 px-2"
+                style={{
+                  backgroundColor: mode === 'major' 
+                    ? (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)')
+                    : 'transparent',
+                  color: mode === 'major' 
+                    ? (studioMode === 'dark' ? '#ffffff' : '#000000')
+                    : (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)')
+                }}
+                onMouseEnter={(e) => {
+                  if (mode !== 'major') {
+                    e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (mode !== 'major') {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
               >
                 Major
               </Button>
@@ -96,14 +115,25 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
                 variant="ghost"
                 size="sm"
                 onClick={() => handleModeChange('minor')}
-                className={cn(
-                  "flex-1 rounded-l-none border-0 px-2",
-                  mode === 'minor'
-                    ? studioMode === 'dark'
-                      ? "bg-white/12 text-foreground hover:bg-white/12"
-                      : "bg-black/8 text-foreground hover:bg-black/8"
-                    : "text-muted-foreground hover:bg-accent/50"
-                )}
+                className="flex-1 rounded-l-none border-0 px-2"
+                style={{
+                  backgroundColor: mode === 'minor' 
+                    ? (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)')
+                    : 'transparent',
+                  color: mode === 'minor' 
+                    ? (studioMode === 'dark' ? '#ffffff' : '#000000')
+                    : (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)')
+                }}
+                onMouseEnter={(e) => {
+                  if (mode !== 'minor') {
+                    e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (mode !== 'minor') {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
               >
                 Minor
               </Button>
@@ -112,23 +142,33 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
           <div className="grid grid-cols-3 gap-1">
             {/* Diatonic Keys */}
             {DIATONIC_KEY_LIST.map((key) => {
-              const isSelected = selectedKey === `${key} ${mode}`;
+              const capitalizedMode = mode === 'major' ? 'Major' : 'Minor';
+              const isSelected = selectedKey === `${key} ${capitalizedMode}` || selectedKey === `${key} ${mode}`;
               return (
                 <Button
                   key={key}
                   variant="ghost"
                   size="sm"
                   onClick={() => handleKeySelect(key)}
-                  className={cn(
-                    "p-2 text-sm",
-                    isSelected
-                      ? studioMode === 'dark'
-                        ? "bg-white/12 text-foreground hover:bg-white/12"
-                        : "bg-black/8 text-foreground hover:bg-black/8"
-                      : studioMode === 'dark'
-                        ? "text-white/70 hover:bg-white/8"
-                        : "text-black/60 hover:bg-black/4"
-                  )}
+                  className="p-2 text-sm"
+                  style={{
+                    backgroundColor: isSelected 
+                      ? (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)')
+                      : 'transparent',
+                    color: isSelected 
+                      ? (studioMode === 'dark' ? '#ffffff' : '#000000')
+                      : (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)')
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
                 >
                   {key}
                 </Button>
@@ -136,23 +176,33 @@ const KeySelector: React.FC<KeySelectorProps> = ({ selectedKey = 'C major', onKe
             })}
             {/* Accidental Keys */}
             {ACCIDENTAL_KEY_LIST.map((key) => {
-              const isSelected = selectedKey === `${key} ${mode}`;
+              const capitalizedMode = mode === 'major' ? 'Major' : 'Minor';
+              const isSelected = selectedKey === `${key} ${capitalizedMode}` || selectedKey === `${key} ${mode}`;
               return (
                 <Button
                   key={key}
                   variant="ghost"
                   size="sm"
                   onClick={() => handleKeySelect(key)}
-                  className={cn(
-                    "p-2 text-sm",
-                    isSelected
-                      ? studioMode === 'dark'
-                        ? "bg-white/12 text-foreground hover:bg-white/12"
-                        : "bg-black/8 text-foreground hover:bg-black/8"
-                      : studioMode === 'dark'
-                        ? "text-white/70 hover:bg-white/8"
-                        : "text-black/60 hover:bg-black/4"
-                  )}
+                  className="p-2 text-sm"
+                  style={{
+                    backgroundColor: isSelected 
+                      ? (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)')
+                      : 'transparent',
+                    color: isSelected 
+                      ? (studioMode === 'dark' ? '#ffffff' : '#000000')
+                      : (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)')
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
                 >
                   {key}
                 </Button>

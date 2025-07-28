@@ -50,7 +50,7 @@ class JWTConfig(BaseModel):
 
     SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 43200)
 
 
 class CORSConfig(BaseModel):

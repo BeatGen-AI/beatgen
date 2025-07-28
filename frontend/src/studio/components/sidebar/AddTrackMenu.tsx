@@ -129,6 +129,13 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           </DropdownMenuItem>
           
           <DropdownMenuItem 
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'audio/*';
+              input.onchange = (e) => handleFileUpload(e as any, true);
+              input.click();
+            }}
             className="text-sm py-2 cursor-pointer"
             style={{
               color: studioMode === 'dark' ? '#ffffff' : '#000000'
@@ -140,16 +147,8 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
               e.currentTarget.style.backgroundColor = 'transparent';
             }}
           >
-            <label className="flex items-center w-full cursor-pointer">
-              <Scissors className="w-4 h-4 mr-3 text-purple-500" />
-              Sampler
-              <input 
-                type="file" 
-                accept="audio/*" 
-                className="hidden" 
-                onChange={(e) => handleFileUpload(e, true)}
-              />
-            </label>
+            <Scissors className="w-4 h-4 mr-3 text-purple-500" />
+            Sampler
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

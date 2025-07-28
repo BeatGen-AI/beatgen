@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Palette, Settings, Brain, Sun, Moon } from 'lucide-react';
-import { IconDeviceImac } from '@tabler/icons-react';
+import { Palette, Settings, Brain } from 'lucide-react';
 import { useAppTheme, useTheme } from '../../../lib/theme-provider';
 import {
   Dialog,
@@ -9,7 +8,7 @@ import {
   DialogTitle,
 } from '../../../components/ui/dialog';
 import { Label } from '../../../components/ui/label';
-import { ToggleGroup, ToggleGroupItem } from '../../../components/ui/toggle-group';
+import { ThemeSwitcher } from '../../../components/ui/ThemeSwitcher';
 import {
   Select,
   SelectContent,
@@ -81,47 +80,11 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
                 UI Theme
               </Label>
             </div>
-            <ToggleGroup 
-              type="single" 
-              value={homepageTheme} 
-              onValueChange={(value) => value && setHomepageTheme(value as any)}
-              className="bg-transparent"
-              style={{
-                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f8fafc',
-                borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-              }}
-            >
-              <ToggleGroupItem 
-                value="light" 
-                aria-label="Light theme"
-                style={{
-                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
-                  backgroundColor: 'transparent'
-                }}
-              >
-                <Sun className="h-4 w-4" />
-              </ToggleGroupItem>
-              <ToggleGroupItem 
-                value="dark" 
-                aria-label="Dark theme"
-                style={{
-                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
-                  backgroundColor: 'transparent'
-                }}
-              >
-                <Moon className="h-4 w-4" />
-              </ToggleGroupItem>
-              <ToggleGroupItem 
-                value="system" 
-                aria-label="System theme"
-                style={{
-                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
-                  backgroundColor: 'transparent'
-                }}
-              >
-                <IconDeviceImac className="h-4 w-4" />
-              </ToggleGroupItem>
-            </ToggleGroup>
+            <ThemeSwitcher
+              value={homepageTheme}
+              onValueChange={setHomepageTheme}
+              useStudioTheme={true}
+            />
           </div>
 
           {/* Studio Theme Setting */}
@@ -138,47 +101,11 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
                 Studio Theme
               </Label>
             </div>
-            <ToggleGroup 
-              type="single" 
-              value={studioTheme} 
-              onValueChange={(value) => value && setStudioTheme(value as any)}
-              className="bg-transparent"
-              style={{
-                backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f8fafc',
-                borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-              }}
-            >
-              <ToggleGroupItem 
-                value="light" 
-                aria-label="Light theme"
-                style={{
-                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
-                  backgroundColor: 'transparent'
-                }}
-              >
-                <Sun className="h-4 w-4" />
-              </ToggleGroupItem>
-              <ToggleGroupItem 
-                value="dark" 
-                aria-label="Dark theme"
-                style={{
-                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
-                  backgroundColor: 'transparent'
-                }}
-              >
-                <Moon className="h-4 w-4" />
-              </ToggleGroupItem>
-              <ToggleGroupItem 
-                value="system" 
-                aria-label="System theme"
-                style={{
-                  color: studioMode === 'dark' ? '#ffffff' : '#000000',
-                  backgroundColor: 'transparent'
-                }}
-              >
-                <IconDeviceImac className="h-4 w-4" />
-              </ToggleGroupItem>
-            </ToggleGroup>
+            <ThemeSwitcher
+              value={studioTheme}
+              onValueChange={setStudioTheme}
+              useStudioTheme={true}
+            />
           </div>
 
           {/* Assistant Model Setting */}

@@ -134,11 +134,11 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
             >
                 <div 
                     ref={ref}
-                    className="grid grid-cols-[1fr_auto_1fr] items-center w-full min-w-fit gap-2 px-4 py-2"
+                    className="grid grid-cols-[1fr_auto_1fr] items-center w-full min-w-fit gap-3 px-2 py-2"
                 >
                     {/* Left section */}
-                    <div className="flex items-center gap-2 justify-self-start">
-                        <div className="flex gap-1">
+                    <div className="flex items-center gap-3 justify-self-start">
+                        <div className="flex gap-3">
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
@@ -236,7 +236,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                         </div>
 
                         <div 
-                            className="flex items-center rounded px-2 py-1 gap-1"
+                            className="flex items-center rounded px-2 py-1 gap-3"
                             style={{
                                 backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9'
                             }}
@@ -249,7 +249,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             onKeyChange={onKeySignatureChange}
                         />
 
-                        <div className="flex gap-1">
+                        <div className="flex gap-3">
                             <button
                                 onClick={handlePlayPause}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
@@ -312,7 +312,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 
                     {/* Right section */}
                     <div className="justify-self-end">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-3">
                             <DropdownMenu open={gridMenuOpen} onOpenChange={setGridMenuOpen}>
                                 <DropdownMenuTrigger asChild>
                                     <button
@@ -446,7 +446,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             </button>
                             
                             <div 
-                                className="font-bold min-w-[40px] text-center px-1 py-1 rounded text-sm"
+                                className="font-bold min-w-[40px] text-center px-2 py-1 rounded text-sm"
                                 style={{
                                     backgroundColor: studioMode === 'dark' ? '#2a2a2a' : '#f1f5f9',
                                     border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,

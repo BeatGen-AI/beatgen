@@ -572,7 +572,7 @@ function Studio({ projectId }: StudioProps) {
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }}
                   >
-                      <IconChevronLeftPipe size={16} />
+                      <IconChevronLeftPipe size={24} />
                   </button>
                 )}
                 {isSidebarOpen && (
@@ -604,7 +604,7 @@ function Studio({ projectId }: StudioProps) {
                 )}
                 {/* Placeholder for right side balance when sidebar is open */}
                 {isSidebarOpen && (
-                  <div className="w-7 min-w-7 ml-2" />
+                  <div className="w-7 min-w-7" />
                 )}
                 {!isSidebarOpen && (
                   <button
@@ -625,7 +625,7 @@ function Studio({ projectId }: StudioProps) {
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }}
                   >
-                      <IconChevronRightPipe size={16} />
+                      <IconChevronRightPipe size={24} />
                   </button>
                 )}
               </div>

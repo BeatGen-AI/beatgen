@@ -7,16 +7,17 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { ThemeSwitcher } from '../../components/ui/ThemeSwitcher';
 import { IconArrowLeft, IconSettings, IconMoon } from '@tabler/icons-react';
-import { useAppTheme } from '../../lib/theme-provider';
+import { useAppTheme, useTheme } from '../../lib/theme-provider';
 import { useRouter } from '@tanstack/react-router';
 
 const SettingsPage: React.FC = () => {
-    const { mode: uiMode, studioMode, toggleUITheme, toggleStudioTheme } = useAppTheme();
+    const { mode: uiMode, studioMode } = useAppTheme();
+    const { homepageTheme, studioTheme, setHomepageTheme, setStudioTheme } = useTheme();
     const router = useRouter();
 
     const handleGoBack = () => {
@@ -42,15 +43,14 @@ const SettingsPage: React.FC = () => {
                         <div className="flex items-center justify-between p-3 rounded-md border">
                             <div className="flex items-center">
                                 <IconMoon className="mr-3 text-muted-foreground" />
-                                <Label htmlFor="ui-theme-switch" className="text-base">
-                                    Dark Mode
+                                <Label className="text-base">
+                                    Theme
                                 </Label>
                             </div>
-                            <Switch
-                                id="ui-theme-switch"
-                                checked={uiMode === 'dark'}
-                                onCheckedChange={toggleUITheme}
-                                aria-label="toggle ui dark mode"
+                            <ThemeSwitcher
+                                value={homepageTheme}
+                                onValueChange={setHomepageTheme}
+                                useStudioTheme={false}
                             />
                         </div>
                     </div>
@@ -62,15 +62,14 @@ const SettingsPage: React.FC = () => {
                         <div className="flex items-center justify-between p-3 rounded-md border">
                             <div className="flex items-center">
                                 <IconSettings className="mr-3 text-muted-foreground" />
-                                <Label htmlFor="studio-theme-switch" className="text-base">
-                                    Dark Mode
+                                <Label className="text-base">
+                                    Theme
                                 </Label>
                             </div>
-                            <Switch
-                                id="studio-theme-switch"
-                                checked={studioMode === 'dark'}
-                                onCheckedChange={toggleStudioTheme}
-                                aria-label="toggle studio dark mode"
+                            <ThemeSwitcher
+                                value={studioTheme}
+                                onValueChange={setStudioTheme}
+                                useStudioTheme={false}
                             />
                         </div>
                     </div>

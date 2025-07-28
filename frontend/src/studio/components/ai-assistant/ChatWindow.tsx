@@ -1029,7 +1029,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   return (
     <div
       className={cn(
-        "fixed right-0 bottom-0 z-[1200]",
+        "fixed right-0 bottom-0",
         isVisible ? "pointer-events-auto" : "pointer-events-none"
       )}
       style={{
