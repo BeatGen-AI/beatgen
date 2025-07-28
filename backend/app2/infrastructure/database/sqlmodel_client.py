@@ -37,8 +37,7 @@ is_direct_connection = ".supabase.co:5432" in ASYNC_DATABASE_URL
 is_session_mode = ".pooler.supabase.com:5432" in ASYNC_DATABASE_URL
 is_transaction_mode = ".pooler.supabase.com:6543" in ASYNC_DATABASE_URL
 
-# For transaction mode, we need to ensure prepared statements are disabled
-# Try a different approach with URL-based configuration
+# Detect connection type and configure accordingly
 
 # Supabase uses Supavisor connection pooler (not pgbouncer)
 logger.info(f"ASYNC_DATABASE_URL: {ASYNC_DATABASE_URL}")
@@ -73,10 +72,10 @@ def get_connect_args():
         "ssl": "require",
     }
     
-    # CRITICAL: Set statement_cache_size as integer, not string
+    # Set statement_cache_size based on pooling mode
     if is_transaction_mode:
-        base_args["statement_cache_size"] = 0  # Integer 0, not string "0"
-        logger.info("🔧 Setting statement_cache_size=0 (integer) for transaction mode")
+        base_args["statement_cache_size"] = 0  # Disable for transaction mode
+        logger.info("Setting statement_cache_size=0 for transaction mode")
     else:
         base_args["statement_cache_size"] = 100
         
@@ -84,7 +83,7 @@ def get_connect_args():
 
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
-    echo=True if is_transaction_mode else False,  # Enable logging for transaction mode debugging
+    echo=False,
     
     # Optimized settings based on connection type
     pool_pre_ping=True,
