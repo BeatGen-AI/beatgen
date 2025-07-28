@@ -6,6 +6,8 @@ from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import pool
+from sqlalchemy.pool import NullPool
+from uuid import uuid4
 from app2.core.config import settings
 from app2.core.logging import get_logger
 
@@ -37,7 +39,7 @@ is_direct_connection = ".supabase.co:5432" in ASYNC_DATABASE_URL
 is_session_mode = ".pooler.supabase.com:5432" in ASYNC_DATABASE_URL
 is_transaction_mode = ".pooler.supabase.com:6543" in ASYNC_DATABASE_URL
 
-# Detect connection type and configure accordingly
+# statement_cache_size will be handled via connect_args for better type safety
 
 # Supabase uses Supavisor connection pooler (not pgbouncer)
 logger.info(f"ASYNC_DATABASE_URL: {ASYNC_DATABASE_URL}")
@@ -62,50 +64,57 @@ statement_cache_size = 0 if is_transaction_mode else 100
 logger.info(f"Setting statement_cache_size to: {statement_cache_size}")
 
 def get_connect_args():
-    """Get connection args with proper statement cache configuration"""
-    base_args = {
-        "command_timeout": 30,
-        "server_settings": {
-            "application_name": "beatgen",
-            "statement_timeout": "30s"
-        },
-        "ssl": "require",
-    }
-    
-    # Set statement_cache_size based on pooling mode
+    """Get connection args optimized for Supabase pooling mode"""
     if is_transaction_mode:
-        base_args["statement_cache_size"] = 0  # Disable for transaction mode
-        logger.info("Setting statement_cache_size=0 for transaction mode")
+        # Transaction mode: use unique prepared statement names to avoid conflicts
+        args = {
+            "statement_cache_size": 0,  # CRITICAL: No prepared statements in transaction mode
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",  # Unique names
+            "command_timeout": 30,
+            "server_settings": {
+                "application_name": "beatgen",
+                "statement_timeout": "30s"
+            },
+            "ssl": "require",
+        }
+        logger.info("Using transaction mode settings: statement_cache_size=0, unique prepared statement names, NullPool")
     else:
-        base_args["statement_cache_size"] = 100
-        
-    return base_args
+        # Session/direct mode: can use prepared statements with default naming
+        args = {
+            "statement_cache_size": 100,
+            "command_timeout": 30,
+            "server_settings": {
+                "application_name": "beatgen",
+                "statement_timeout": "30s"
+            },
+            "ssl": "require",
+        }
+        logger.info("Using session/direct mode settings with statement caching")
+    
+    return args
 
-engine = create_async_engine(
-    ASYNC_DATABASE_URL,
-    echo=False,
-    
-    # Optimized settings based on connection type
-    pool_pre_ping=True,
-    pool_recycle=300,
-    # Direct connection can handle more connections efficiently
-    pool_size=20 if is_direct_connection else 15,
-    max_overflow=10 if is_direct_connection else 5,
-    pool_timeout=30,
-    
-    # Connection-specific settings - CRITICAL for transaction mode
-    connect_args=get_connect_args(),
-    
-    # Additional engine-level query timeout
-    execution_options={
-        "postgresql_readonly": False,
-        "postgresql_deferrable": False,
-        "isolation_level": "READ_COMMITTED",
-        "statement_timeout": 30000,  # 30 second timeout for queries
-        # Disable SQLAlchemy's statement compilation cache for transaction mode
-        "compiled_cache": None if is_transaction_mode else {},
-    }
-)
+# Configure engine based on connection type
+if is_transaction_mode:
+    # Transaction mode: Use NullPool, let Supabase handle all pooling
+    engine = create_async_engine(
+        ASYNC_DATABASE_URL,
+        echo=False,
+        poolclass=NullPool,  # CRITICAL: No SQLAlchemy pooling in transaction mode
+        connect_args=get_connect_args(),
+        pool_pre_ping=True,  # Still useful for connection health checks
+    )
+else:
+    # Session/direct mode: Use SQLAlchemy pooling
+    engine = create_async_engine(
+        ASYNC_DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        pool_size=20 if is_direct_connection else 15,
+        max_overflow=10 if is_direct_connection else 5,
+        pool_timeout=30,
+        connect_args=get_connect_args(),
+    )
 
 # Note: Event listeners for async engines are not supported in SQLAlchemy
 # We rely on the connect_args to properly configure the asyncpg connection
