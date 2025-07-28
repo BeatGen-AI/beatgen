@@ -107,6 +107,15 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
 
   const canGenerate = !isGenerating && prompt.trim().length > 0;
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (canGenerate) {
+        onGenerate();
+      }
+    }
+  };
+
   // Calculate if we have bottom elements that need space
   const hasBottomElements = (showRandomButton && (randomPrompts || onRandomPrompt)) || 
                            customSelectComponent || 
@@ -123,6 +132,7 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
           maxLength={maxLength}
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
+          onKeyDown={handleKeyDown}
           className={`pr-16 min-h-[100px] resize-none ${
             textareaBottomLeftComponent || textareaBottomRightComponent ? 'pb-8' : 'pb-2'
           }`}
