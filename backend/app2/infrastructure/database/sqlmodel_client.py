@@ -79,6 +79,8 @@ engine = create_async_engine(
         "ssl": "require",
         # Prepared statements: enabled for direct/session, disabled for transaction
         "statement_cache_size": 0 if is_transaction_mode else 100,
+        # Additional asyncpg setting to ensure no prepared statements in transaction mode
+        "prepared_statement_cache_size": 0 if is_transaction_mode else 100,
     },
     
     # Additional engine-level query timeout
