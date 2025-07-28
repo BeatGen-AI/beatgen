@@ -9,6 +9,7 @@ import { Button } from '../../../components/ui/button';
 import { Alert, AlertDescription } from '../../../components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../../components/ui/accordion';
 import { cn } from '../../../lib/utils';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface Instrument {
     id: string;
@@ -95,6 +96,7 @@ export const VirtualInstrumentsModal = ({ open, onClose, onSelect }: VirtualInst
     const [soundfonts, setSoundfonts] = useState<InstrumentFileRead[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [expanded, setExpanded] = useState(false);
+    const { studioMode } = useAppTheme();
 
     // Fetch available soundfonts when the modal opens
     useEffect(() => {
@@ -166,9 +168,18 @@ export const VirtualInstrumentsModal = ({ open, onClose, onSelect }: VirtualInst
 
     return (
         <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+            <DialogContent 
+                className="max-w-4xl max-h-[90vh] overflow-auto"
+                style={{
+                    backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
+                    borderColor: studioMode === 'dark' ? '#333333' : '#e5e7eb',
+                    color: studioMode === 'dark' ? '#ffffff' : '#000000'
+                }}
+            >
                 <DialogHeader>
-                    <DialogTitle>Choose Virtual Instrument</DialogTitle>
+                    <DialogTitle style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}>
+                        Choose Virtual Instrument
+                    </DialogTitle>
                 </DialogHeader>
                 
                 {error && (
