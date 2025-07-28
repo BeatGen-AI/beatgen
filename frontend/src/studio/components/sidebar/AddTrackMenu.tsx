@@ -13,6 +13,7 @@ import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_
 import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
 // Import types from store types file
 import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload, AudioTrackPayload } from '../../stores/types';
+import { useAppTheme } from '../../../lib/theme-provider';
 
 interface AddTrackMenuProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
   onAddTrack, 
   onFileUpload 
 }) => {
+  const { studioMode } = useAppTheme();
   const [isVirtualInstrumentModalOpen, setIsVirtualInstrumentModalOpen] = useState(false);
   const [isDrumMachineModalOpen, setIsDrumMachineModalOpen] = useState(false);
   const [isAudioTracksModalOpen, setIsAudioTracksModalOpen] = useState(false);
@@ -58,13 +60,29 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
         <DropdownMenuTrigger asChild>
           {children}
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-48 bg-card border-border">
+        <DropdownMenuContent 
+          className="w-48"
+          style={{
+            backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
+            borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+            color: studioMode === 'dark' ? '#ffffff' : '#000000'
+          }}
+        >
           <DropdownMenuItem 
             onClick={() => {
               setIsVirtualInstrumentModalOpen(true);
               onOpenChange(false);
             }}
             className="text-sm py-2 cursor-pointer"
+            style={{
+              color: studioMode === 'dark' ? '#ffffff' : '#000000'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <Piano className="w-4 h-4 mr-3 text-blue-500" />
             Virtual Instrument
@@ -76,6 +94,15 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
               onOpenChange(false); 
             }}
             className="text-sm py-2 cursor-pointer"
+            style={{
+              color: studioMode === 'dark' ? '#ffffff' : '#000000'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <Music className="w-4 h-4 mr-3 text-orange-500" />
             Drum Machine
@@ -87,12 +114,32 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
               onOpenChange(false);
             }}
             className="text-sm py-2 cursor-pointer"
+            style={{
+              color: studioMode === 'dark' ? '#ffffff' : '#000000'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <AudioWaveform className="w-4 h-4 mr-3 text-green-500" />
             Audio Tracks
           </DropdownMenuItem>
           
-          <DropdownMenuItem className="text-sm py-2 cursor-pointer">
+          <DropdownMenuItem 
+            className="text-sm py-2 cursor-pointer"
+            style={{
+              color: studioMode === 'dark' ? '#ffffff' : '#000000'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
             <label className="flex items-center w-full cursor-pointer">
               <Scissors className="w-4 h-4 mr-3 text-purple-500" />
               Sampler

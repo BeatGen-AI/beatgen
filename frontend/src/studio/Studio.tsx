@@ -558,7 +558,7 @@ function Studio({ projectId }: StudioProps) {
                       onClick={() => {
                          setIsSidebarOpen(false);
                       }}
-                      className="rounded-lg min-w-7 w-7 p-1 mr-2 transition-colors"
+                      className="rounded-lg min-w-7 w-7 h-7 p-1 mr-2 transition-colors flex items-center justify-center"
                       style={{
                         backgroundColor: 'transparent',
                         color: studioMode === 'dark' ? '#ffffff' : '#000000',
@@ -572,7 +572,7 @@ function Studio({ projectId }: StudioProps) {
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }}
                   >
-                      <IconChevronLeftPipe size={20} />
+                      <IconChevronLeftPipe size={16} />
                   </button>
                 )}
                 {isSidebarOpen && (
@@ -583,18 +583,18 @@ function Studio({ projectId }: StudioProps) {
                     onFileUpload={uploadAudioFile}
                   >
                     <button
-                      className="h-6 text-xs font-bold flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap rounded transition-colors px-2"
+                      className="h-6 text-xs font-bold flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap rounded transition-all duration-200 px-2 flex items-center justify-center"
                       style={{
-                        backgroundColor: studioMode === 'dark' ? '#2563eb' : '#3b82f6',
+                        background: 'linear-gradient(135deg, #e539a9, #c63ba6, #a93fbf, #8247d8, #6050e0, #4160e2)',
                         color: '#ffffff',
                         border: 'none',
                         cursor: 'pointer'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1d4ed8' : '#2563eb';
+                        e.currentTarget.style.boxShadow = '0 0 12px rgba(229, 57, 169, 0.6), 0 0 24px rgba(129, 71, 216, 0.4), 0 4px 16px rgba(229, 57, 169, 0.3)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2563eb' : '#3b82f6';
+                        e.currentTarget.style.boxShadow = 'none';
                       }}
                     >
                       <Plus className="w-3 h-3 mr-1" />
@@ -611,7 +611,7 @@ function Studio({ projectId }: StudioProps) {
                       onClick={() => {
                            setIsSidebarOpen(true);
                       }}
-                      className="rounded-lg min-w-7 w-7 p-1 m-auto transition-colors"
+                      className="rounded-lg min-w-7 w-7 h-7 p-1 m-auto transition-colors flex items-center justify-center"
                       style={{
                         backgroundColor: 'transparent',
                         color: studioMode === 'dark' ? '#ffffff' : '#000000',
@@ -625,7 +625,7 @@ function Studio({ projectId }: StudioProps) {
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }}
                   >
-                      <IconChevronRightPipe size={20} />
+                      <IconChevronRightPipe size={16} />
                   </button>
                 )}
               </div>
@@ -721,6 +721,7 @@ function Studio({ projectId }: StudioProps) {
           <ChatWindow 
             isOpen={isChatOpen}
             onClose={handleChatToggle}
+            controlBarHeight={controlBarHeight}
           />
           
           {/* Render the new piano roll windows directly in Studio */}

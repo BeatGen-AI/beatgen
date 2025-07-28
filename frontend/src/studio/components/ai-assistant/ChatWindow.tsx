@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { useAppTheme } from '../../../lib/theme-provider';
 import { 
   interactWithAssistant,
   cancelAssistantRequest,
@@ -50,6 +51,7 @@ interface Message {
 interface ChatWindowProps {
   isOpen: boolean;
   onClose: () => void;
+  controlBarHeight?: number;
 }
 
 // Define available AI models (placeholder)
@@ -67,24 +69,66 @@ interface GenerationChoiceButtonsProps {
 }
 
 const GenerationChoiceButtons: React.FC<GenerationChoiceButtonsProps> = ({ onMidiChoice, onAudioChoice }) => {
+  const { studioMode } = useAppTheme();
+  
   return (
-    <Card className="p-4 border mb-2">
-      <p className="text-sm text-muted-foreground mb-4">
+    <div 
+      className="p-4 mb-2 rounded-lg"
+      style={{
+        backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#f8fafc',
+        border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+      }}
+    >
+      <p 
+        className="text-sm mb-4"
+        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
+      >
         Choose your generation method:
       </p>
       <div className="flex flex-col gap-2">
-        <Button onClick={onMidiChoice}>
+        <button
+          onClick={onMidiChoice}
+          className="px-4 py-2 rounded transition-colors"
+          style={{
+            backgroundColor: studioMode === 'dark' ? '#2563eb' : '#3b82f6',
+            color: '#ffffff',
+            border: 'none',
+            cursor: 'pointer'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1d4ed8' : '#2563eb';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2563eb' : '#3b82f6';
+          }}
+        >
           Generate Midi Melody
-        </Button>
-        <Button onClick={onAudioChoice}>
+        </button>
+        <button
+          onClick={onAudioChoice}
+          className="px-4 py-2 rounded transition-colors"
+          style={{
+            backgroundColor: studioMode === 'dark' ? '#2563eb' : '#3b82f6',
+            color: '#ffffff',
+            border: 'none',
+            cursor: 'pointer'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1d4ed8' : '#2563eb';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2563eb' : '#3b82f6';
+          }}
+        >
           Generate Audio Melody
-        </Button>
+        </button>
       </div>
-    </Card>
+    </div>
   );
 };
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeight = 50 }) => {
+  const { studioMode } = useAppTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -1000,39 +1044,67 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
   return (
     <div
       className={cn(
-        "fixed right-0 top-[50px] bottom-0 z-[1200]",
+        "fixed right-0 bottom-0 z-[1200]",
         isVisible ? "pointer-events-auto" : "pointer-events-none"
       )}
+      style={{
+        top: `${controlBarHeight}px`
+      }}
     >
       <div
         className={cn(
-          "h-full bg-background/95 text-foreground flex flex-col border-l transition-transform duration-[225ms] ease-[cubic-bezier(0,0,0.2,1)] shadow-lg",
+          "h-full flex flex-col transition-transform duration-[225ms] ease-[cubic-bezier(0,0,0.2,1)] shadow-lg",
           isOpen ? "translate-x-0" : "translate-x-full",
           isVisible ? "visible" : "invisible"
         )}
-        style={{ width: CHAT_WINDOW_WIDTH }}
+        style={{
+          backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          color: studioMode === 'dark' ? '#ffffff' : '#000000',
+          borderLeft: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+          width: CHAT_WINDOW_WIDTH
+        }}
       >
         {/* Header */}
         <div 
-          className="flex items-center justify-between px-2 border-b bg-background/90 shrink-0"
-          style={{ height: GRID_CONSTANTS.headerHeight }}
+          className="flex items-center justify-between px-2 shrink-0"
+          style={{ 
+            height: GRID_CONSTANTS.headerHeight,
+            backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+            borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+          }}
         >
           <div className="flex items-center px-1">
             <IconAi size={28} />
-            <h3 className="text-base font-medium ml-2">
+            <h3 
+              className="text-base font-medium ml-2"
+              style={{ color: studioMode === 'dark' ? '#ffffff' : '#000000' }}
+            >
               Assistant
             </h3>
           </div>
           
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
             onClick={onClose}
-            className="h-auto p-1 rounded-md hover:bg-accent"
+            className="h-auto p-1 rounded-md transition-colors"
             aria-label="Close assistant"
+            style={{
+              backgroundColor: 'transparent',
+              color: studioMode === 'dark' ? '#ffffff' : '#000000',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <IconX size={12} />
-          </Button>
+          </button>
         </div>
         
         {/* Messages */}
@@ -1091,7 +1163,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 flex border-t bg-background/90">
+        <div 
+          className="p-4 flex"
+          style={{
+            backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+            borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+          }}
+        >
           <div className="relative w-full">
             {/* Chips Box */}
             <div className="absolute top-1 left-2 flex gap-2 z-10 mt-2">
@@ -1116,17 +1194,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose }) => {
             </div>
 
             {/* TextField */}
-            <Textarea
+            <textarea
               placeholder={isLoading ? `Generating${animatedDots}` : "Ask me anything about your project..."}
               value={prompt}
               onChange={handleTextChange}
               onKeyDown={handleKeyPress}
               disabled={isLoading}
-              className={cn(
-                "w-full bg-background/80 border-border pt-5 pb-4 min-h-[20px] resize-none",
-                "hover:border-muted-foreground focus-visible:border-primary",
-                "border-0 focus-visible:border focus-visible:ring-0"
-              )}
+              className="w-full pt-5 pb-4 min-h-[20px] resize-none outline-none"
+              style={{
+                backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                color: studioMode === 'dark' ? '#ffffff' : '#000000',
+                border: 'none',
+                borderRadius: '6px'
+              }}
             />
 
             {/* Bottom Box with Send Button */}
