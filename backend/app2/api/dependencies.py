@@ -215,13 +215,15 @@ async def get_current_user_with_token(
 
 
 async def get_current_user_model(
+    request: Request,
     user_info: Dict[str, Any] = Depends(get_current_user),
     user_repository: UserRepository = Depends(get_user_repository),
 ):
     """
-    Get the current authenticated user as a User model
+    Get the current authenticated user as a User model with request-scoped caching
 
     Args:
+        request: The FastAPI request object (for caching)
         user_info: The user info from the token
         user_repository: The user repository
 
@@ -237,8 +239,16 @@ async def get_current_user_model(
     if not user_id:
         raise UnauthorizedException("User ID not found in token")
     
+    # Check if user model is already cached in this request
+    cache_key = f"current_user_model_{user_id}"
+    if hasattr(request.state, cache_key):
+        logger.debug("Returning cached user model")
+        return getattr(request.state, cache_key)
+    
     try:
         user = await user_repository.find_by_id(user_id)
+        # Cache the result in request state
+        setattr(request.state, cache_key, user)
         return user
     except Exception:
         raise UnauthorizedException("User not found")

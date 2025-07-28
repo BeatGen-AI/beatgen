@@ -3,6 +3,7 @@ import traceback
 import uuid
 import httpx
 import hashlib
+import os
 
 from fastapi import Request, Response
 from cachetools import TTLCache
@@ -10,6 +11,7 @@ from cachetools import TTLCache
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import UnauthorizedException, ServiceException, ValidationException, NotFoundException
 from app2.infrastructure.database.supabase_client import supabase
+from app2.infrastructure.jwt_verifier import jwt_verifier
 from app2.repositories.user_repository import UserRepository
 from app2.repositories.auth_identity_repository import AuthIdentityRepository
 from app2.models.user import User
@@ -253,12 +255,13 @@ class AuthService:
             logger.error(traceback.format_exc())
             raise ServiceException(f"Failed to send password reset email: {str(e)}")
 
-    async def verify_token(self, token: str) -> Dict[str, Any]:
+    async def verify_token(self, token: str, use_jwt_verification: bool = None) -> Dict[str, Any]:
         """
         Verify a JWT token and get the user info
 
         Args:
             token: The JWT token to verify
+            use_jwt_verification: Whether to use local JWT verification (faster) or Supabase API
 
         Returns:
             The user info from the token
@@ -266,11 +269,34 @@ class AuthService:
         Raises:
             UnauthorizedException: If the token is invalid
         """
-        logger.info(f"Verifying token: {token[:10]}...")
+        logger.debug(f"Verifying token: {token[:10]}...")
+        
+        # Default to JWT verification (can be overridden with env var AUTH_USE_JWT_VERIFICATION=false)
+        if use_jwt_verification is None:
+            use_jwt_verification = os.getenv("AUTH_USE_JWT_VERIFICATION", "true").lower() == "true"
+        
         try:
-            user_info = supabase.verify_token(token)
-            logger.info(f"Successfully verified token for user: {user_info['id']}")
-            return user_info
+            if use_jwt_verification:
+                try:
+                    # Try local JWT verification first (much faster)
+                    logger.info("🔐 Attempting local JWT verification")
+                    user_info = await jwt_verifier.verify_token(token)
+                    logger.info(f"⚡ JWT VERIFIED LOCALLY for user: {user_info['id']} (fast path)")
+                    return user_info
+                except Exception as jwt_error:
+                    # If JWT verification fails (e.g., JWKS not available), fall back to API
+                    logger.warning(f"🔄 JWT verification failed, FALLING BACK to Supabase API: {str(jwt_error)[:100]}")
+                    logger.info("🐌 Using Supabase API verification (slow path)")
+                    user_info = supabase.verify_token(token)
+                    logger.info(f"✅ SUPABASE API verified token for user: {user_info['id']} (fallback successful)")
+                    return user_info
+            else:
+                # Direct Supabase API verification
+                logger.info("🐌 Using Supabase API verification (JWT disabled)")
+                user_info = supabase.verify_token(token)
+                logger.info(f"✅ SUPABASE API verified token for user: {user_info['id']} (direct API)")
+                return user_info
+            
         except Exception as e:
             logger.error(f"Token verification failed: {str(e)}")
             logger.error(traceback.format_exc())
@@ -289,23 +315,35 @@ class AuthService:
         Raises:
             UnauthorizedException: If the token is invalid
         """
-        # Generate secure cache key using hash to prevent collisions
-        cache_key = f"user_{hashlib.sha256(token.encode()).hexdigest()[:16]}"
+        # Generate secure cache key using full hash to prevent collisions
+        cache_key = f"user_{hashlib.sha256(token.encode()).hexdigest()}"
         
         # Check TTL cache first (automatically handles expiration)
+        logger.info(f"🔍 CACHE CHECK: Looking for cache_key: {cache_key}, cache size: {len(_token_cache)}")
         if cache_key in _token_cache:
-            logger.debug(f"Returning cached user info for token: {token[:10]}...")
+            logger.info(f"✅ CACHE HIT: Returning cached user info for token: {token[:10]}...")
             return _token_cache[cache_key]
         
-        logger.info(f"Getting current user from token: {token[:10]}...")
+        logger.info(f"❌ CACHE MISS: Getting current user from token: {token[:10]}... (cache_key: {cache_key})")
         user_info = await self.verify_token(token)
         
-        # If we have auth identity mapping, get the canonical user ID
+        # If we have auth identity mapping, get the canonical user ID (with caching)
         if self.auth_identity_repository and "id" in user_info:
             auth_provider_id = user_info["id"]
-            identity = await self.auth_identity_repository.find_by_auth_provider_id(
-                uuid.UUID(auth_provider_id)
-            )
+            
+            # Check cache for identity mapping
+            identity_cache_key = f"identity_{auth_provider_id}"
+            if identity_cache_key in _token_cache:
+                identity = _token_cache[identity_cache_key]
+                logger.debug(f"✅ IDENTITY CACHE HIT for {auth_provider_id}")
+            else:
+                identity = await self.auth_identity_repository.find_by_auth_provider_id(
+                    uuid.UUID(auth_provider_id)
+                )
+                # Cache identity mapping for 10 minutes (longer than token cache)
+                if identity:
+                    _token_cache[identity_cache_key] = identity
+                logger.debug(f"❌ IDENTITY CACHE MISS for {auth_provider_id}")
             
             if identity:
                 # Replace the auth provider ID with the canonical user profile ID
@@ -318,6 +356,7 @@ class AuthService:
         
         # Cache the result (TTL handled automatically)
         _token_cache[cache_key] = user_info
+        logger.info(f"💾 CACHED: Stored user info for cache_key: {cache_key}, cache size: {len(_token_cache)}")
         
         return user_info
 

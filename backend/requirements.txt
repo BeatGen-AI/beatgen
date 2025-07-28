@@ -10,6 +10,8 @@ music21==9.5.0
 numpy==1.26.4
 openai==1.78.0
 pydantic==2.11.4
+PyJWT[crypto]>=2.10.1
+cryptography>=3.4.0
 pydantic_ai==0.2.0
 psycopg2-binary
 pytest==8.3.5

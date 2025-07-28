@@ -532,12 +532,35 @@ class ProjectTrackRepository:
         """
         self.logger.info(f"Batch upserting {len(project_tracks_data)} project-tracks")
         try:
-            results = []
-            for project_track_data in project_tracks_data:
-                result = await self.upsert(project_track_data)
-                results.append(result)
+            if not project_tracks_data:
+                return []
             
-            self.logger.info(f"Successfully upserted {len(results)} project-tracks")
+            # Build VALUES clause for bulk insert using PostgreSQL ON CONFLICT
+            from sqlalchemy.dialects.postgresql import insert
+            
+            # Use PostgreSQL's INSERT ... ON CONFLICT for true upsert
+            stmt = insert(ProjectTrack.__table__)
+            
+            # Define conflict handling - update all columns except primary key and timestamps
+            update_dict = {
+                col.name: stmt.excluded[col.name] 
+                for col in ProjectTrack.__table__.columns 
+                if col.name not in ['id', 'created_at']
+            }
+            
+            stmt = stmt.on_conflict_do_update(
+                index_elements=['project_id', 'track_index'],
+                set_=update_dict
+            ).returning(ProjectTrack.__table__)
+            
+            # Execute batch insert
+            result = await self.session.execute(stmt, project_tracks_data)
+            results = [ProjectTrack.model_validate(row._asdict()) for row in result.fetchall()]
+            
+            # Flush to ensure changes are visible
+            await self.session.flush()
+            
+            self.logger.info(f"Successfully batch upserted {len(results)} project-tracks in single query")
             return results
             
         except Exception as e:

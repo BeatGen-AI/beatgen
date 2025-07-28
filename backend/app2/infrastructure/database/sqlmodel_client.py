@@ -5,11 +5,13 @@ SQLModel database client for the application
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.pool import NullPool
 from uuid import uuid4
 from app2.core.config import settings
 from app2.core.logging import get_logger
+import asyncio
+import time
 
 # Import all models to ensure they're registered with SQLModel metadata
 # This is necessary for create_all to create all tables
@@ -79,9 +81,10 @@ def get_connect_args():
         }
         logger.info("Using transaction mode settings: statement_cache_size=0, unique prepared statement names, NullPool")
     else:
-        # Session/direct mode: can use prepared statements with default naming
+        # Session/direct mode: disable prepared statements to avoid idle in transaction
         args = {
-            "statement_cache_size": 100,
+            "statement_cache_size": 0,  # CRITICAL: No prepared statements to avoid pooler conflicts
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",  # Unique names if any are created
             "command_timeout": 30,
             "server_settings": {
                 "application_name": "beatgen",
@@ -104,15 +107,15 @@ if is_transaction_mode:
         pool_pre_ping=True,  # Still useful for connection health checks
     )
 else:
-    # Session/direct mode: Use SQLAlchemy pooling
+    # Session/direct mode: Use SQLAlchemy pooling to reuse Supavisor connections
     engine = create_async_engine(
         ASYNC_DATABASE_URL,
         echo=False,
         pool_pre_ping=True,
-        pool_recycle=300,
-        pool_size=20 if is_direct_connection else 15,
-        max_overflow=10 if is_direct_connection else 5,
-        pool_timeout=30,
+        pool_recycle=300,  # Recycle connections every 5 minutes
+        pool_size=8,       # Smaller pool since Supavisor handles the real pooling  
+        max_overflow=4,    # Allow some overflow
+        pool_timeout=5,    # Fast timeout - don't wait long for connections
         connect_args=get_connect_args(),
     )
 
@@ -139,14 +142,18 @@ async def create_db_and_tables():
 
 async def get_session():
     """Get an async database session - use as a dependency in FastAPI routes"""
+    session_id = f"session_{id(object())}"
+    logger.debug(f"Creating session: {session_id}")
+    
     async with async_session_factory() as session:
         try:
             yield session
         except Exception as e:
-            logger.error(f"Session error: {str(e)}")
+            logger.error(f"Session {session_id} error: {str(e)}")
             await session.rollback()
             raise
         finally:
+            logger.debug(f"Closing session: {session_id}")
             await session.close()
 
 
@@ -155,13 +162,50 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def get_async_session():
     """Get an async database session context manager - use in service methods"""
+    session_id = f"async_session_{id(object())}"
+    logger.debug(f"Creating async session: {session_id}")
+    
     async with async_session_factory() as session:
         try:
             yield session
             await session.commit()
+            logger.debug(f"Committed async session: {session_id}")
         except Exception as e:
-            logger.error(f"Session error: {str(e)}")
+            logger.error(f"Async session {session_id} error: {str(e)}")
             await session.rollback()
             raise
         finally:
+            logger.debug(f"Closing async session: {session_id}")
             await session.close()
+
+
+async def get_connection_stats():
+    """Get current database connection statistics"""
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(text("""
+                SELECT count(*), state, application_name 
+                FROM pg_stat_activity 
+                WHERE datname = current_database()
+                GROUP BY state, application_name
+                ORDER BY count(*) DESC
+            """))
+            stats = result.fetchall()
+            logger.info("Database connection stats:")
+            for count, state, app_name in stats:
+                logger.info(f"  {count} connections - {state} - {app_name}")
+            return stats
+    except Exception as e:
+        logger.error(f"Failed to get connection stats: {e}")
+        return []
+
+
+async def monitor_connections():
+    """Periodic connection monitoring task"""
+    while True:
+        try:
+            await get_connection_stats()
+            await asyncio.sleep(60)  # Check every minute
+        except Exception as e:
+            logger.error(f"Connection monitoring error: {e}")
+            await asyncio.sleep(60)
