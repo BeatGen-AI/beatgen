@@ -307,14 +307,14 @@ const TrackControls: React.FC<TrackControlsProps> = ({
         height: `${GRID_CONSTANTS.trackHeight}px`,
         borderLeft: `3px solid ${trackColor}`,
         borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
-        backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
+        backgroundColor: studioMode === 'dark' ? '#0a0a0a' : '#f8fafc',
         color: studioMode === 'dark' ? '#ffffff' : '#000000'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2a2a2a' : '#f5f5f5';
+        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1a1a1a' : '#f1f5f9';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1a1a1a' : '#ffffff';
+        e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#0a0a0a' : '#f8fafc';
       }}
     >
       {/* Track Name and Delete Button */}
