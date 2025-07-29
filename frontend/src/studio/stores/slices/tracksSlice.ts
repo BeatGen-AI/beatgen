@@ -4,7 +4,7 @@ import { Position } from '../../components/track';
 import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTrackPayload, DrumTrackPayload, MidiTrackPayload, AudioTrackPayload, AudioTrackOptions, SamplerTrackOptions, MidiTrackOptions, AnyTrackRead, MidiTrack, AudioTrack, SamplerTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, DrumTrackOptions } from '../types';
 import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions';
-import type { Action } from '../../core/state/history/actions'; 
+import type { Action } from '../../core/state/history/actions';
 import { InstanceAdd, InstanceMove, InstanceResize, InstanceDelete } from '../../core/state/history/actions/InstanceActions';
 import { TRACK_CONFIG, DEFAULT_SAMPLER_CONFIG } from '../config';
 import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
@@ -22,7 +22,7 @@ import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audio
 export interface TracksSlice {
   tracks: CombinedTrack[];
   activeInstanceByTrack: Record<string, string>; // trackId -> instanceId mapping
-  
+
   // Basic state manipulation
   setTracks: (tracks: CombinedTrack[]) => void;
   updateTracks: (newTracks: CombinedTrack[]) => void;
@@ -58,7 +58,7 @@ export interface TracksSlice {
 
   // Add missing action definitions
   handleAddTrack: (type: TrackType, payload?: AddTrackPayload) => Promise<CombinedTrack | null>;
-  handleInstrumentChange: (trackId: string, instrumentId: string, instrumentName: string, instrumentStorageKey: string) => Promise<void>; 
+  handleInstrumentChange: (trackId: string, instrumentId: string, instrumentName: string, instrumentStorageKey: string) => Promise<void>;
   replaceTrackAudioFile: (trackId: string, file: File) => Promise<void>;
 
   // Expose internal helper for nested updates
@@ -81,10 +81,10 @@ export interface TracksSlice {
   duplicateMultipleTracks: (trackIds: string[], offsetX?: number) => Promise<CombinedTrack[]>;
   deleteMultipleTracks: (trackIds: string[]) => Promise<void>;
   resizeMultipleTracks: (trackIds: string[], widthDelta: number, anchor: 'left' | 'right') => Promise<void>;
-  
+
   // Group position operations for group moving
   updateMultipleTrackPositions: (trackIds: string[], deltaX: number, deltaY: number) => Promise<void>;
-  
+
   // Track instance management
   addTrackInstance: (trackId: string, position?: Position, sourceInstance?: Partial<TrackInstance>) => Promise<string | null>;
   updateTrackInstance: (trackId: string, instanceId: string, updates: Partial<TrackInstance>) => void;
@@ -92,24 +92,24 @@ export interface TracksSlice {
   getTrackInstances: (trackId: string) => TrackInstance[];
   handleInstancePositionChange: (trackId: string, instanceId: string, newPosition: Position, isDragEnd: boolean) => void;
   handleInstanceResizeEnd: (trackId: string, instanceId: string, deltaPixels: number, resizeDirection: 'left' | 'right') => void;
-  updateMultipleInstancePositions: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
-  resizeMultipleInstances: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
-  deleteMultipleInstances: (instanceDeletions: Array<{trackId: string, instanceId: string}>) => Promise<void>;
+  updateMultipleInstancePositions: (instanceUpdates: Array<{ trackId: string, instanceId: string, deltaX: number, deltaY: number }>) => void;
+  resizeMultipleInstances: (instanceUpdates: Array<{ trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right' }>) => void;
+  deleteMultipleInstances: (instanceDeletions: Array<{ trackId: string, instanceId: string }>) => Promise<void>;
 }
 
 // Remove local type alias if it causes confusion
 // type TracksSliceCreator = StateCreator<RootState, [], [], TracksSlice>;
 
 // Revert to the simpler definition without explicit StateCreator and third argument
-export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => { 
-  const rootGet = get as GetFn; 
+export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
+  const rootGet = get as GetFn;
   // Get store instance via rootGet when needed inside functions
   // const storeInstance = rootGet().store; // Don't get it here at the top level
 
   // Utility to set state within this slice or the root state
   const setTracksState = (partial: Partial<TracksSlice> | ((state: TracksSlice) => Partial<TracksSlice>)) => set(partial);
   const updateRootState = <K extends keyof RootState>(
-    key: K, 
+    key: K,
     value: RootState[K] | ((prev: RootState[K]) => RootState[K])
   ) => {
     const rootUpdater = rootGet()._updateState;
@@ -119,7 +119,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     } else {
       console.warn(`_updateState not found, using direct set for key: ${String(key)}`);
       // Pass the value/function directly to Zustand's set
-      set({ [key]: value }); 
+      set({ [key]: value });
     }
   };
 
@@ -149,172 +149,172 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   // Update a specific track's state in the tracks array
   const updateTrackState = (trackId: string, updates: Partial<CombinedTrack & TrackParameter>) => {
     set(produce((draft: RootState) => {
-        const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
-        if (trackIndex !== -1) {
-            Object.assign(draft.tracks[trackIndex], updates);
-            // Mark track as dirty when modified, unless explicitly setting dirty to false
-            if (updates.dirty !== false) {
-                draft.tracks[trackIndex].dirty = true;
-            }
+      const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
+      if (trackIndex !== -1) {
+        Object.assign(draft.tracks[trackIndex], updates);
+        // Mark track as dirty when modified, unless explicitly setting dirty to false
+        if (updates.dirty !== false) {
+          draft.tracks[trackIndex].dirty = true;
         }
+      }
     }));
   };
 
   // Update all tracks and recalculate indices
   const updateTracks = (newTracks: CombinedTrack[]) => {
-      set(produce((draft: RootState) => {
-          // Create a fresh array with cloned tracks to avoid frozen object issues
-          draft.tracks = newTracks.map((track, index) => ({
-              ...track,
-              track_number: index,
-              // Ensure each track has instances
-              instances: track.instances 
-                  // ? track.instances 
-                  // : [{
-                  //     id: `${track.id}_instance_1`,
-                  //     x_position: track.x_position || 0,
-                  //     y_position: track.y_position || 0,
-                  //     trim_start_ticks: track.trim_start_ticks || 0,
-                  //     trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
-                  // }]
-          }));
+    set(produce((draft: RootState) => {
+      // Create a fresh array with cloned tracks to avoid frozen object issues
+      draft.tracks = newTracks.map((track, index) => ({
+        ...track,
+        track_number: index,
+        // Ensure each track has instances
+        instances: track.instances
+        // ? track.instances 
+        // : [{
+        //     id: `${track.id}_instance_1`,
+        //     x_position: track.x_position || 0,
+        //     y_position: track.y_position || 0,
+        //     trim_start_ticks: track.trim_start_ticks || 0,
+        //     trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
+        // }]
       }));
-      
-      // After updating tracks, register instances with MidiManager
-      const midiManager = rootGet().store?.getMidiManager();
-      console.log('[updateTracks] MidiManager available:', !!midiManager);
-      if (midiManager) {
-          // Use the tracks from state after the update
-          rootGet().tracks.forEach(track => {
-              // Only process MIDI-based tracks
-              if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER' || track.track_type === 'DRUM') {
-                  console.log(`[updateTracks] Processing ${track.track_type} track ${track.id} with ${track.instances?.length || 0} instances`);
-                  // Ensure track exists in MidiManager
-                  if (!midiManager.hasTrack(track.id)) {
-                      midiManager.createTrack(track.id, track.track_type.toLowerCase(), track.name);
-                  }
-                  
-                  // Register all instances
-                  if (track.instances && track.instances.length > 0) {
-                      track.instances.forEach(instance => {
-                          midiManager.registerInstance(track.id, instance.id);
-                      });
-                      
-                      // Migrate notes without instance IDs to the first instance
-                      midiManager.migrateNotesToFirstInstance(track.id, track.instances[0].id);
-                  }
-              }
-          });
-      }
+    }));
+
+    // After updating tracks, register instances with MidiManager
+    const midiManager = rootGet().store?.getMidiManager();
+    console.log('[updateTracks] MidiManager available:', !!midiManager);
+    if (midiManager) {
+      // Use the tracks from state after the update
+      rootGet().tracks.forEach(track => {
+        // Only process MIDI-based tracks
+        if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER' || track.track_type === 'DRUM') {
+          console.log(`[updateTracks] Processing ${track.track_type} track ${track.id} with ${track.instances?.length || 0} instances`);
+          // Ensure track exists in MidiManager
+          if (!midiManager.hasTrack(track.id)) {
+            midiManager.createTrack(track.id, track.track_type.toLowerCase(), track.name);
+          }
+
+          // Register all instances
+          if (track.instances && track.instances.length > 0) {
+            track.instances.forEach(instance => {
+              midiManager.registerInstance(track.id, instance.id);
+            });
+
+            // Migrate notes without instance IDs to the first instance
+            midiManager.migrateNotesToFirstInstance(track.id, track.instances[0].id);
+          }
+        }
+      });
+    }
   };
 
   // Action to recalculate and add/update the index property for UI ordering
   const updateTrackIndices = () => {
     set(produce((draft: RootState) => {
-        draft.tracks.forEach((track, index) => {
-            // Mutate draft directly
-            // !! IMPORTANT: Ensure CombinedTrack has track_number !!
-            track.track_number = index; 
-        });
+      draft.tracks.forEach((track, index) => {
+        // Mutate draft directly
+        // !! IMPORTANT: Ensure CombinedTrack has track_number !!
+        track.track_number = index;
+      });
     }));
   };
 
   // Internal helper to update the nested track object using Immer
   const _updateNestedTrackData = (trackId: string, nestedUpdates: Partial<AnyTrackRead>) => {
     set(produce((draft: RootState) => {
-        const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
-        if (trackIndex !== -1 && draft.tracks[trackIndex].track) {
-            Object.assign(draft.tracks[trackIndex].track, nestedUpdates);
-        } else {
-            console.warn(`_updateNestedTrackData: Track or track.track not found for ID ${trackId}`);
-        }
+      const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
+      if (trackIndex !== -1 && draft.tracks[trackIndex].track) {
+        Object.assign(draft.tracks[trackIndex].track, nestedUpdates);
+      } else {
+        console.warn(`_updateNestedTrackData: Track or track.track not found for ID ${trackId}`);
+      }
     }));
   };
 
   // Helper to correct audio track durations directly in draft state
   const correctAudioTrackDurations = (tracks: CombinedTrack[], currentBpm: number) => {
-      tracks.forEach(track => {
-          if (track.track_type === 'AUDIO' && track.instances) {
-              const audioDuration = getAudioDuration(track);
-              if (audioDuration > 0) {
-                  const correctDurationTicks = calculateAudioDurationTicks(audioDuration, currentBpm);
-                  
-                  // Check if instances need to be updated (have default/incorrect values)
-                  const needsUpdate = track.instances.some(instance => 
-                      instance.trim_end_ticks === 1920 || 
-                      instance.trim_end_ticks <= 0 ||
-                      isNaN(instance.trim_end_ticks)
-                  );
-                  
-                  if (needsUpdate) {
-                      // Update instances directly in the track (will be in draft state when called from setTracks)
-                      track.instances = track.instances.map(instance => ({
-                          ...instance,
-                          trim_end_ticks: correctDurationTicks
-                      }));
-                      
-                      // Update track duration directly
-                      track.duration_ticks = correctDurationTicks;
-                  }
-              }
+    tracks.forEach(track => {
+      if (track.track_type === 'AUDIO' && track.instances) {
+        const audioDuration = getAudioDuration(track);
+        if (audioDuration > 0) {
+          const correctDurationTicks = calculateAudioDurationTicks(audioDuration, currentBpm);
+
+          // Check if instances need to be updated (have default/incorrect values)
+          const needsUpdate = track.instances.some(instance =>
+            instance.trim_end_ticks === 1920 ||
+            instance.trim_end_ticks <= 0 ||
+            isNaN(instance.trim_end_ticks)
+          );
+
+          if (needsUpdate) {
+            // Update instances directly in the track (will be in draft state when called from setTracks)
+            track.instances = track.instances.map(instance => ({
+              ...instance,
+              trim_end_ticks: correctDurationTicks
+            }));
+
+            // Update track duration directly
+            track.duration_ticks = correctDurationTicks;
           }
-      });
+        }
+      }
+    });
   };
 
   // Explicitly define setTracks within the slice scope
   const setTracks = (newTracks: CombinedTrack[]) => {
-      const currentBpm = rootGet().bpm || 120;
-      
-      set(produce((draft: RootState) => {
-          draft.tracks = newTracks;
-          draft.tracks.forEach((track, index) => { 
-              // !! IMPORTANT: Ensure CombinedTrack has track_number !!
-              track.track_number = index;
-              // Mark loaded tracks as clean (not dirty) since they come from database
-              track.dirty = false;
-              
-              // // Handle backward compatibility: create default instance if none exist
-              // if (!track.instances || track.instances.length === 0) {
-              //     console.log(`Track ${track.id} has no instances, creating default instance`);
-              //     track.instances = [{
-              //         id: `${track.id}_instance_1`,
-              //         x_position: track.x_position || 0,
-              //         y_position: track.y_position || 0,
-              //         trim_start_ticks: track.trim_start_ticks || 0,
-              //         trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
-              //     }];
-              // }
-          });
-          
-          // Correct audio track durations within the same state update
-          correctAudioTrackDurations(draft.tracks, currentBpm);
-      }), true);
-      
-      // After setting tracks, register instances with MidiManager and migrate notes
-      const midiManager = rootGet().store?.getMidiManager();
-      console.log('[setTracks] MidiManager available:', !!midiManager);
-      if (midiManager) {
-          newTracks.forEach(track => {
-              // Only process MIDI-based tracks
-              if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER' || track.track_type === 'DRUM') {
-                  console.log(`[setTracks] Processing ${track.track_type} track ${track.id} with ${track.instances?.length || 0} instances`);
-                  // Ensure track exists in MidiManager
-                  if (!midiManager.hasTrack(track.id)) {
-                      midiManager.createTrack(track.id, track.track_type.toLowerCase(), track.name);
-                  }
-                  
-                  // Register all instances
-                  if (track.instances && track.instances.length > 0) {
-                      track.instances.forEach(instance => {
-                          midiManager.registerInstance(track.id, instance.id);
-                      });
-                      
-                      // Migrate notes without instance IDs to the first instance
-                      midiManager.migrateNotesToFirstInstance(track.id, track.instances[0].id);
-                  }
-              }
-          });
-      }
+    const currentBpm = rootGet().bpm || 120;
+
+    set(produce((draft: RootState) => {
+      draft.tracks = newTracks;
+      draft.tracks.forEach((track, index) => {
+        // !! IMPORTANT: Ensure CombinedTrack has track_number !!
+        track.track_number = index;
+        // Mark loaded tracks as clean (not dirty) since they come from database
+        track.dirty = false;
+
+        // // Handle backward compatibility: create default instance if none exist
+        // if (!track.instances || track.instances.length === 0) {
+        //     console.log(`Track ${track.id} has no instances, creating default instance`);
+        //     track.instances = [{
+        //         id: `${track.id}_instance_1`,
+        //         x_position: track.x_position || 0,
+        //         y_position: track.y_position || 0,
+        //         trim_start_ticks: track.trim_start_ticks || 0,
+        //         trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
+        //     }];
+        // }
+      });
+
+      // Correct audio track durations within the same state update
+      correctAudioTrackDurations(draft.tracks, currentBpm);
+    }), true);
+
+    // After setting tracks, register instances with MidiManager and migrate notes
+    const midiManager = rootGet().store?.getMidiManager();
+    console.log('[setTracks] MidiManager available:', !!midiManager);
+    if (midiManager) {
+      newTracks.forEach(track => {
+        // Only process MIDI-based tracks
+        if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER' || track.track_type === 'DRUM') {
+          console.log(`[setTracks] Processing ${track.track_type} track ${track.id} with ${track.instances?.length || 0} instances`);
+          // Ensure track exists in MidiManager
+          if (!midiManager.hasTrack(track.id)) {
+            midiManager.createTrack(track.id, track.track_type.toLowerCase(), track.name);
+          }
+
+          // Register all instances
+          if (track.instances && track.instances.length > 0) {
+            track.instances.forEach(instance => {
+              midiManager.registerInstance(track.id, instance.id);
+            });
+
+            // Migrate notes without instance IDs to the first instance
+            midiManager.migrateNotesToFirstInstance(track.id, track.instances[0].id);
+          }
+        }
+      });
+    }
   };
 
   // --- Selectors Implementation --- 
@@ -328,10 +328,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const tracks = rootGet().tracks; // Get current tracks from root state
     return tracks
       // Ensure track and track.track exist before filtering
-      .filter(t => 
-          t.track_type === 'SAMPLER' && 
-          t.track && 
-          (t.track as SamplerTrackRead).drum_track_id === drumTrackId
+      .filter(t =>
+        t.track_type === 'SAMPLER' &&
+        t.track &&
+        (t.track as SamplerTrackRead).drum_track_id === drumTrackId
       )
       .map(t => t.track as SamplerTrackRead); // Map to the nested track data
   };
@@ -345,15 +345,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const { timeSignature, bpm, tracks, executeHistoryAction, _withStore, _withErrorHandling } = rootGet();
 
     if (!_withStore || !_withErrorHandling) {
-        console.error("_withStore or _withErrorHandling not available");
-        return null;
+      console.error("_withStore or _withErrorHandling not available");
+      return null;
     }
 
     const createLogic = async (passedStore: Store): Promise<CombinedTrack | null> => {
-      const trackId = (options.id || options.trackId) ?? crypto.randomUUID(); 
+      const trackId = (options.id || options.trackId) ?? crypto.randomUUID();
       const visibleTrackCount = rootGet().getVisibleTrackCount();
       const position = options.position as Position || { x: 0, y: visibleTrackCount * GRID_CONSTANTS.trackHeight };
-      
+
       const trackProps = {
         id: trackId,
         volume: options.volume ?? 80,
@@ -365,14 +365,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         instrumentName: (options as any).instrumentName,
         instrumentStorageKey: (options as any).instrumentStorageKey,
       };
-      
+
       const typeConfig = TRACK_CONFIG[type];
       if (!typeConfig) throw new Error(`Invalid track type: ${type}`);
-      
+
       // Extract the file object early
-      const file = type === 'AUDIO' ? (options as AudioTrackOptions).audioFile : 
-                   type === 'SAMPLER' ? (options as SamplerTrackOptions).sampleFile : 
-                   undefined;
+      const file = type === 'AUDIO' ? (options as AudioTrackOptions).audioFile :
+        type === 'SAMPLER' ? (options as SamplerTrackOptions).sampleFile :
+          undefined;
 
       // Handle audio file cache update for existing tracks (ID stays the same)
       if (type === 'AUDIO' && (options as any).isExistingTrack && file) {
@@ -384,15 +384,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         }
       }
 
-      await passedStore.getAudioEngine().createTrack(trackId, name); 
-      
+      await passedStore.getAudioEngine().createTrack(trackId, name);
+
       // Calculate defaults
-      const beatsPerBar = timeSignature[0]; 
+      const beatsPerBar = timeSignature[0];
       const defaultBars = 4;
       const totalBeats = defaultBars * beatsPerBar;
       // TODO: Confirm PULSES_PER_QUARTER_NOTE is appropriate for ticks calculation relative to project settings
-      const defaultDurationTicks = totalBeats * PULSES_PER_QUARTER_NOTE; 
-      
+      const defaultDurationTicks = totalBeats * PULSES_PER_QUARTER_NOTE;
+
       // Calculate duration_ticks for audio tracks
       let calculatedDurationTicks = options.duration ?? defaultDurationTicks;
       if (type === 'AUDIO') {
@@ -405,69 +405,69 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       // Build base trackData (serializable)
       const trackData: Omit<CombinedTrack, 'track'> & { track?: any } = {
         id: trackId,
-        name: name, 
+        name: name,
         track_type: type,
         track_number: visibleTrackCount + 1, // Add track number
         volume: trackProps.volume,
         pan: trackProps.pan,
-        mute: trackProps.muted, 
+        mute: trackProps.muted,
         duration_ticks: calculatedDurationTicks,
         dirty: true, // New tracks are dirty by default (need to be saved)
         // Initialize with empty instances array
         instances: [],
       };
-      
+
       // Get initial *serializable* nested track properties
       const typeSpecificProps = typeConfig.initTrack(trackId, undefined); // Pass undefined for file here
       Object.assign(trackData, typeSpecificProps); // Assign top-level props like baseMidiNote
       let nestedTrackDataObject: any = { ...typeSpecificProps, type, id: trackId, name: name };
-      
+
       // Add only *serializable* type-specific data available at creation
       if (type === 'MIDI') {
-          const midiOptions = options as MidiTrackOptions;
-          nestedTrackDataObject = {
-              ...nestedTrackDataObject,
-              instrument_id: midiOptions.instrumentId,
-              instrument_name: midiOptions.instrumentName,
-              instrument_storage_key: midiOptions.instrumentStorageKey,
-              notes: [], 
-              // Construct instrument_file object
-              instrument_file: midiOptions.instrumentId ? { 
-                  id: midiOptions.instrumentId, 
-                  name: midiOptions.instrumentName || '', 
-                  storage_key: midiOptions.instrumentStorageKey || '' 
-              } : undefined
-          } as MidiTrack;
-      } 
+        const midiOptions = options as MidiTrackOptions;
+        nestedTrackDataObject = {
+          ...nestedTrackDataObject,
+          instrument_id: midiOptions.instrumentId,
+          instrument_name: midiOptions.instrumentName,
+          instrument_storage_key: midiOptions.instrumentStorageKey,
+          notes: [],
+          // Construct instrument_file object
+          instrument_file: midiOptions.instrumentId ? {
+            id: midiOptions.instrumentId,
+            name: midiOptions.instrumentName || '',
+            storage_key: midiOptions.instrumentStorageKey || ''
+          } : undefined
+        } as MidiTrack;
+      }
       else if (type === 'AUDIO') {
-          const audioOptions = options as AudioTrackOptions;
-          nestedTrackDataObject = {
-              ...nestedTrackDataObject,
-              audio_file_storage_key: audioOptions.storage_key,
-              audio_file_name: audioOptions.audio_file_name, // Get name from extracted file variable
-              // Metadata initialized as undefined
-              audio_file_format: audioOptions.audio_file_format,
-              audio_file_size: audioOptions.audio_file_size,
-              audio_file_duration: audioOptions.audio_file_duration,
-              audio_file_sample_rate: audioOptions.audio_file_sample_rate,
-              waveform_data: audioOptions.waveform_data,
-          } // NO audioFile property here
+        const audioOptions = options as AudioTrackOptions;
+        nestedTrackDataObject = {
+          ...nestedTrackDataObject,
+          audio_file_storage_key: audioOptions.storage_key,
+          audio_file_name: audioOptions.audio_file_name, // Get name from extracted file variable
+          // Metadata initialized as undefined
+          audio_file_format: audioOptions.audio_file_format,
+          audio_file_size: audioOptions.audio_file_size,
+          audio_file_duration: audioOptions.audio_file_duration,
+          audio_file_sample_rate: audioOptions.audio_file_sample_rate,
+          waveform_data: audioOptions.waveform_data,
+        } // NO audioFile property here
       }
       else if (type === 'SAMPLER') {
-           const samplerOptions = options as SamplerTrackOptions;
-           nestedTrackDataObject = {
-              ...nestedTrackDataObject,
-              baseMidiNote: samplerOptions.baseMidiNote ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote,
-              grainSize: samplerOptions.grainSize ?? DEFAULT_SAMPLER_CONFIG.grainSize,
-              overlap: samplerOptions.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap,
-              audio_file_name: file?.name, // Get name from extracted file variable
-              storage_key: samplerOptions.storage_key,
-              drum_track_id: samplerOptions.drum_track_id || null,
-              waveform_data: samplerOptions.waveform_data,
-              // NO sampleFile property here
-           }
+        const samplerOptions = options as SamplerTrackOptions;
+        nestedTrackDataObject = {
+          ...nestedTrackDataObject,
+          baseMidiNote: samplerOptions.baseMidiNote ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote,
+          grainSize: samplerOptions.grainSize ?? DEFAULT_SAMPLER_CONFIG.grainSize,
+          overlap: samplerOptions.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap,
+          audio_file_name: file?.name, // Get name from extracted file variable
+          storage_key: samplerOptions.storage_key,
+          drum_track_id: samplerOptions.drum_track_id || null,
+          waveform_data: samplerOptions.waveform_data,
+          // NO sampleFile property here
+        }
       }
-      
+
       // Calculate proper trim_end_ticks for audio tracks
       let initialTrimEndTicks = options.trim_end_ticks;
       if (!initialTrimEndTicks) {
@@ -485,47 +485,47 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
 
       const initialInstance = {
-          id: `${trackId}_instance_1`,
-          x_position: position.x,
-          y_position: position.y,
-          trim_start_ticks: options.trim_start_ticks ?? 0,
-          trim_end_ticks: initialTrimEndTicks
+        id: `${trackId}_instance_1`,
+        x_position: position.x,
+        y_position: position.y,
+        trim_start_ticks: options.trim_start_ticks ?? 0,
+        trim_end_ticks: initialTrimEndTicks
       };
-      
-      const finalTrackData = { 
-          ...trackData, 
-          track: nestedTrackDataObject as AnyTrackRead,
-          // Initialize with a single instance
-          instances: [initialInstance]
+
+      const finalTrackData = {
+        ...trackData,
+        track: nestedTrackDataObject as AnyTrackRead,
+        // Initialize with a single instance
+        instances: [initialInstance]
       } as CombinedTrack;
-      
+
       console.log('[Track Creation] New track with instance:', {
-          trackId,
-          trackName: name,
-          trackType: type,
-          instance: initialInstance
+        trackId,
+        trackName: name,
+        trackType: type,
+        instance: initialInstance
       });
 
       // Register instance with MidiManager for MIDI-based tracks
       if (type === 'MIDI' || type === 'SAMPLER' || type === 'DRUM') {
-          const midiManager = passedStore.getMidiManager();
-          if (midiManager) {
-              // First create the track in MidiManager if it doesn't exist
-              if (!midiManager.hasTrack(trackId)) {
-                  midiManager.createTrack(trackId, type.toLowerCase(), name);
-              }
-              // Register the instance
-              midiManager.registerInstance(trackId, initialInstance.id);
+        const midiManager = passedStore.getMidiManager();
+        if (midiManager) {
+          // First create the track in MidiManager if it doesn't exist
+          if (!midiManager.hasTrack(trackId)) {
+            midiManager.createTrack(trackId, type.toLowerCase(), name);
           }
+          // Register the instance
+          midiManager.registerInstance(trackId, initialInstance.id);
+        }
       }
 
       // Create action, passing the serializable trackData AND the separate file object
-      const action = new Actions.AddTrack(get, finalTrackData, file); 
-      
+      const action = new Actions.AddTrack(get, finalTrackData, file);
+
       // Execute history action 
       await rootGet().executeHistoryAction(action);
-      
-      return finalTrackData; 
+
+      return finalTrackData;
     };
 
     return _withErrorHandling(async () => _withStore(createLogic)(), `createTrackAndRegisterWithHistory: ${type}`)();
@@ -540,15 +540,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const { timeSignature, bpm, tracks, _withStore, _withErrorHandling } = rootGet();
 
     if (!_withStore || !_withErrorHandling) {
-        console.error("_withStore or _withErrorHandling not available");
-        return null;
+      console.error("_withStore or _withErrorHandling not available");
+      return null;
     }
 
     const createLogic = async (passedStore: Store): Promise<{ trackData: CombinedTrack, file?: File } | null> => {
-      const trackId = (options.id || options.trackId) ?? crypto.randomUUID(); 
+      const trackId = (options.id || options.trackId) ?? crypto.randomUUID();
       const visibleTrackCount = rootGet().getVisibleTrackCount();
       const position = options.position as Position || { x: 0, y: visibleTrackCount * GRID_CONSTANTS.trackHeight };
-      
+
       const trackProps = {
         id: trackId,
         volume: options.volume ?? 80,
@@ -559,98 +559,98 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         instrumentName: (options as any).instrumentName,
         instrumentStorageKey: (options as any).instrumentStorageKey,
       };
-      
+
       const typeConfig = TRACK_CONFIG[type];
       if (!typeConfig) throw new Error(`Invalid track type: ${type}`);
-      
+
       // Extract the file object early
-      const file = type === 'AUDIO' ? (options as AudioTrackOptions).audioFile : 
-                   type === 'SAMPLER' ? (options as SamplerTrackOptions).sampleFile : 
-                   undefined;
+      const file = type === 'AUDIO' ? (options as AudioTrackOptions).audioFile :
+        type === 'SAMPLER' ? (options as SamplerTrackOptions).sampleFile :
+          undefined;
 
       // Don't create in audio engine yet - that will be done by the action
-      
+
       // Calculate defaults
-      const beatsPerBar = timeSignature[0]; 
+      const beatsPerBar = timeSignature[0];
       const defaultBars = 4;
       const totalBeats = defaultBars * beatsPerBar;
-      const defaultDurationTicks = totalBeats * PULSES_PER_QUARTER_NOTE; 
-      
+      const defaultDurationTicks = totalBeats * PULSES_PER_QUARTER_NOTE;
+
       // Build base trackData (serializable)
       const trackData: Omit<CombinedTrack, 'track'> & { track?: any } = {
         id: trackId,
-        name: name, 
+        name: name,
         track_type: type,
         track_number: visibleTrackCount + 1, // Add track number
         volume: trackProps.volume,
         pan: trackProps.pan,
-        mute: trackProps.muted, 
+        mute: trackProps.muted,
         duration_ticks: options.duration ?? defaultDurationTicks,
         dirty: true, // New tracks are dirty by default (need to be saved)
         // Initialize with empty instances array
         instances: [],
       };
-      
+
       // Get initial *serializable* nested track properties
       const typeSpecificProps = typeConfig.initTrack(trackId, undefined); // Pass undefined for file here
       Object.assign(trackData, typeSpecificProps); // Assign top-level props like baseMidiNote
       let nestedTrackDataObject: any = { ...typeSpecificProps, type, id: trackId, name: name };
-      
+
       // Add only *serializable* type-specific data available at creation
       if (type === 'MIDI') {
-          const midiOptions = options as MidiTrackOptions;
-          nestedTrackDataObject = {
-              ...nestedTrackDataObject,
-              instrument_id: midiOptions.instrumentId,
-              instrument_name: midiOptions.instrumentName,
-              instrument_storage_key: midiOptions.instrumentStorageKey,
-              notes: [], 
-              // Construct instrument_file object
-              instrument_file: midiOptions.instrumentId ? { 
-                  id: midiOptions.instrumentId, 
-                  name: midiOptions.instrumentName || '', 
-                  storage_key: midiOptions.instrumentStorageKey || '' 
-              } : undefined
-          } as MidiTrack;
-      } 
+        const midiOptions = options as MidiTrackOptions;
+        nestedTrackDataObject = {
+          ...nestedTrackDataObject,
+          instrument_id: midiOptions.instrumentId,
+          instrument_name: midiOptions.instrumentName,
+          instrument_storage_key: midiOptions.instrumentStorageKey,
+          notes: [],
+          // Construct instrument_file object
+          instrument_file: midiOptions.instrumentId ? {
+            id: midiOptions.instrumentId,
+            name: midiOptions.instrumentName || '',
+            storage_key: midiOptions.instrumentStorageKey || ''
+          } : undefined
+        } as MidiTrack;
+      }
       else if (type === 'AUDIO') {
-          const audioOptions = options as AudioTrackOptions;
-          nestedTrackDataObject = {
-              ...nestedTrackDataObject,
-              audio_file_storage_key: audioOptions.storage_key,
-              audio_file_name: audioOptions.audio_file_name,
-              audio_file_format: audioOptions.audio_file_format,
-              audio_file_size: audioOptions.audio_file_size,
-              audio_file_duration: audioOptions.audio_file_duration,
-              audio_file_sample_rate: audioOptions.audio_file_sample_rate,
-              waveform_data: audioOptions.waveform_data,
-          };
+        const audioOptions = options as AudioTrackOptions;
+        nestedTrackDataObject = {
+          ...nestedTrackDataObject,
+          audio_file_storage_key: audioOptions.storage_key,
+          audio_file_name: audioOptions.audio_file_name,
+          audio_file_format: audioOptions.audio_file_format,
+          audio_file_size: audioOptions.audio_file_size,
+          audio_file_duration: audioOptions.audio_file_duration,
+          audio_file_sample_rate: audioOptions.audio_file_sample_rate,
+          waveform_data: audioOptions.waveform_data,
+        };
       }
       else if (type === 'SAMPLER') {
-           const samplerOptions = options as SamplerTrackOptions;
-           nestedTrackDataObject = {
-              ...nestedTrackDataObject,
-              baseMidiNote: samplerOptions.baseMidiNote ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote,
-              grainSize: samplerOptions.grainSize ?? DEFAULT_SAMPLER_CONFIG.grainSize,
-              overlap: samplerOptions.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap,
-              audio_file_name: file?.name,
-              storage_key: samplerOptions.storage_key,
-              drum_track_id: samplerOptions.drum_track_id || null,
-              waveform_data: samplerOptions.waveform_data,
-           };
+        const samplerOptions = options as SamplerTrackOptions;
+        nestedTrackDataObject = {
+          ...nestedTrackDataObject,
+          baseMidiNote: samplerOptions.baseMidiNote ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote,
+          grainSize: samplerOptions.grainSize ?? DEFAULT_SAMPLER_CONFIG.grainSize,
+          overlap: samplerOptions.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap,
+          audio_file_name: file?.name,
+          storage_key: samplerOptions.storage_key,
+          drum_track_id: samplerOptions.drum_track_id || null,
+          waveform_data: samplerOptions.waveform_data,
+        };
       }
-      
-      const finalTrackData = { 
-          ...trackData, 
-          track: nestedTrackDataObject as AnyTrackRead,
-          // Initialize with a single instance
-          instances: [{
-              id: `${trackId}_instance_1`,
-              x_position: position.x,
-              y_position: position.y,
-              trim_start_ticks: options.trim_start_ticks ?? 0,
-              trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
-          }]
+
+      const finalTrackData = {
+        ...trackData,
+        track: nestedTrackDataObject as AnyTrackRead,
+        // Initialize with a single instance
+        instances: [{
+          id: `${trackId}_instance_1`,
+          x_position: position.x,
+          y_position: position.y,
+          trim_start_ticks: options.trim_start_ticks ?? 0,
+          trim_end_ticks: options.trim_end_ticks ?? (options.duration ?? defaultDurationTicks)
+        }]
       } as CombinedTrack;
 
       // Return the data without executing any action
@@ -661,63 +661,63 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
 
   const handleTrackDelete = async (trackId: string) => {
-      const { executeHistoryAction, _withStore, _withErrorHandling } = rootGet();
-      const storeInstance = rootGet().store; // Get the Store instance
-      const trackToDelete = findTrackById(trackId);
+    const { executeHistoryAction, _withStore, _withErrorHandling } = rootGet();
+    const storeInstance = rootGet().store; // Get the Store instance
+    const trackToDelete = findTrackById(trackId);
 
-      if (!trackToDelete) {
-          console.error(`Track ${trackId} not found for deletion`);
-          return;
+    if (!trackToDelete) {
+      console.error(`Track ${trackId} not found for deletion`);
+      return;
+    }
+
+    // If this is a drum track, delete it together with all its samplers
+    if (trackToDelete.track_type === 'DRUM') {
+      const allTrackIds = expandDrumSelection([trackId]);
+      await deleteMultipleTracks(allTrackIds);
+      return;
+    }
+
+    if (!storeInstance || !_withStore || !_withErrorHandling) {
+      console.error("_withStore or _withErrorHandling not available for delete");
+      return;
+    }
+
+    const deleteLogic = async (passedStore: Store) => {
+
+      // Create history action BEFORE modifying state
+      const action = new Actions.DeleteTrack(get, { ...trackToDelete });
+
+      set(produce((draft: RootState) => {
+        const initialLength = draft.tracks.length;
+        draft.tracks = draft.tracks.filter(t => t.id !== trackId);
+        if (draft.tracks.length < initialLength) { // Only re-index if deletion occurred
+          draft.tracks.forEach((track, index) => {
+            // !! IMPORTANT: Ensure CombinedTrack has track_number !!
+            track.track_number = index;
+          });
+        }
+      }));
+
+      try {
+        await passedStore.getAudioEngine().removeTrack(trackId);
+      } catch (engineError) {
+        console.error(`Error removing track ${trackId} from audio engine:`, engineError);
       }
 
-      // If this is a drum track, delete it together with all its samplers
-      if (trackToDelete.track_type === 'DRUM') {
-          const allTrackIds = expandDrumSelection([trackId]);
-          await deleteMultipleTracks(allTrackIds);
-          return;
+      try {
+        if (trackToDelete.track_type === 'SAMPLER') {
+        }
+        if (trackToDelete.track_type === 'MIDI') {
+        }
+      } catch (disconnectError) {
+        console.error(`Error during track disconnection for ${trackId}:`, disconnectError);
       }
 
-      if (!storeInstance || !_withStore || !_withErrorHandling) {
-          console.error("_withStore or _withErrorHandling not available for delete");
-          return;
-      }
+      // Execute history action AFTER state change (or consider order)
+      await executeHistoryAction(action);
+    };
 
-      const deleteLogic = async (passedStore: Store) => {
-          
-          // Create history action BEFORE modifying state
-          const action = new Actions.DeleteTrack(get, { ...trackToDelete });
-
-          set(produce((draft: RootState) => {
-              const initialLength = draft.tracks.length;
-              draft.tracks = draft.tracks.filter(t => t.id !== trackId);
-              if (draft.tracks.length < initialLength) { // Only re-index if deletion occurred
-                  draft.tracks.forEach((track, index) => { 
-                      // !! IMPORTANT: Ensure CombinedTrack has track_number !!
-                      track.track_number = index; 
-                  }); 
-              }
-          }));
-
-          try {
-              await passedStore.getAudioEngine().removeTrack(trackId);
-          } catch (engineError) {
-              console.error(`Error removing track ${trackId} from audio engine:`, engineError);
-          }
-
-          try {
-              if (trackToDelete.track_type === 'SAMPLER') {
-              }
-              if (trackToDelete.track_type === 'MIDI') {
-              }
-          } catch (disconnectError) {
-              console.error(`Error during track disconnection for ${trackId}:`, disconnectError);
-          }
-
-          // Execute history action AFTER state change (or consider order)
-          await executeHistoryAction(action);
-      };
-
-      await _withErrorHandling(async () => _withStore(deleteLogic)(), `handleTrackDelete: ${trackId}`)();
+    await _withErrorHandling(async () => _withStore(deleteLogic)(), `handleTrackDelete: ${trackId}`)();
   };
 
   // --- New: removeSamplerTrack Action Implementation --- 
@@ -727,8 +727,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     // 1. Basic Validation
     if (!samplerTrack || samplerTrack.track_type !== 'SAMPLER' || !samplerTrack.track) {
-        console.error(`Sampler track ${samplerTrackId} not found or invalid.`);
-        return;
+      console.error(`Sampler track ${samplerTrackId} not found or invalid.`);
+      return;
     }
     const drumTrackId = (samplerTrack.track as SamplerTrackRead)?.drum_track_id;
 
@@ -736,58 +736,58 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     // Note: We call handleTrackDelete, NOT Actions.DeleteTrack directly, 
     // because handleTrackDelete includes engine removal and state updates.
     // The history action for deleting the sampler itself is handled within handleTrackDelete.
-    await handleTrackDelete(samplerTrackId); 
+    await handleTrackDelete(samplerTrackId);
 
     // 3. Update Parent Drum Track (if applicable)
     if (drumTrackId) {
-        // Need to use _withErrorHandling or similar if accessing state after potential async operations
-        const updateParentLogic = async () => { // Wrap in async for safety
-            const parentDrumTrack = selectDrumTrackById(drumTrackId); // Use the selector
+      // Need to use _withErrorHandling or similar if accessing state after potential async operations
+      const updateParentLogic = async () => { // Wrap in async for safety
+        const parentDrumTrack = selectDrumTrackById(drumTrackId); // Use the selector
 
-            if (parentDrumTrack) {
-                const oldSamplerIds = parentDrumTrack.sampler_track_ids || [];
-                const newSamplerIds = oldSamplerIds.filter(id => id !== samplerTrackId);
+        if (parentDrumTrack) {
+          const oldSamplerIds = parentDrumTrack.sampler_track_ids || [];
+          const newSamplerIds = oldSamplerIds.filter(id => id !== samplerTrackId);
 
-                if (oldSamplerIds.length !== newSamplerIds.length) {
-                    
-                    // Update parent state using Immer via _updateNestedTrackData
-                    _updateNestedTrackData(drumTrackId, { sampler_track_ids: newSamplerIds } as Partial<DrumTrackRead>);
+          if (oldSamplerIds.length !== newSamplerIds.length) {
 
-                    // History action for the PARENT update
-                    const parentUpdateAction = new Actions.UpdateDrumTrackSamplers(
-                        get,
-                        drumTrackId,
-                        oldSamplerIds,
-                        newSamplerIds
-                    );
-                    await executeHistoryAction(parentUpdateAction); 
-                } else {
-                    }
-            } else {
-                console.warn(`Parent drum track ${drumTrackId} not found after deleting sampler ${samplerTrackId}. Cannot update parent.`);
-            }
-        };
-        
-        // Wrap the parent update logic in error handling
-        if (_withErrorHandling) { 
-            await _withErrorHandling(updateParentLogic, `removeSamplerTrackParentUpdate: ${samplerTrackId}`)();
+            // Update parent state using Immer via _updateNestedTrackData
+            _updateNestedTrackData(drumTrackId, { sampler_track_ids: newSamplerIds } as Partial<DrumTrackRead>);
+
+            // History action for the PARENT update
+            const parentUpdateAction = new Actions.UpdateDrumTrackSamplers(
+              get,
+              drumTrackId,
+              oldSamplerIds,
+              newSamplerIds
+            );
+            await executeHistoryAction(parentUpdateAction);
+          } else {
+          }
         } else {
-            console.error("_withErrorHandling not available for parent update in removeSamplerTrack");
-            await updateParentLogic(); // Attempt without handler
+          console.warn(`Parent drum track ${drumTrackId} not found after deleting sampler ${samplerTrackId}. Cannot update parent.`);
         }
+      };
+
+      // Wrap the parent update logic in error handling
+      if (_withErrorHandling) {
+        await _withErrorHandling(updateParentLogic, `removeSamplerTrackParentUpdate: ${samplerTrackId}`)();
+      } else {
+        console.error("_withErrorHandling not available for parent update in removeSamplerTrack");
+        await updateParentLogic(); // Attempt without handler
+      }
     } else {
     }
   };
 
   // --- Parameter Change Handlers --- 
   const handleTrackParameterChange = <K extends keyof TrackParameter>(
-    trackId: string, 
-    paramName: K, 
+    trackId: string,
+    paramName: K,
     newValue: TrackParameter[K]
   ) => {
     const { executeHistoryAction, _withStore, _withErrorHandling } = rootGet();
     // Get store instance inside the handler if not using _withStore
-    const currentStoreInstance = rootGet().store; 
+    const currentStoreInstance = rootGet().store;
     if (!currentStoreInstance) {
       console.error("_withStore not available for parameter change");
       return;
@@ -799,10 +799,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     // Make changeLogic async to ensure it returns a Promise
     const changeLogic = async (passedStore: Store) => { // _withStore still provides it
-      const track = findTrackById(trackId); 
-      if (!track) { 
+      const track = findTrackById(trackId);
+      if (!track) {
         console.error(`Track with ID ${trackId} not found in handleTrackParameterChange`);
-        return; 
+        return;
       }
       const oldValue = (track as any)[paramName];
       if (paramName !== 'position' && oldValue === newValue) return;
@@ -813,23 +813,23 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const historyParamName = paramName as string;
 
       if (paramName === 'muted') {
-        updateObj.mute = newValue as boolean; 
-        updateObj.muted = newValue as boolean; 
+        updateObj.mute = newValue as boolean;
+        updateObj.muted = newValue as boolean;
       } else if (paramName === 'name') {
         updateObj.name = newValue as string;
-        engineUpdateNeeded = false; 
+        engineUpdateNeeded = false;
       } else if (paramName === 'position' || paramName === 'soloed') {
-         // Should be handled by specific handlers, exit here
-         console.warn(`Direct change via handleTrackParameterChange is discouraged for ${paramName}.`);
-         engineUpdateNeeded = false;
-         return;
+        // Should be handled by specific handlers, exit here
+        console.warn(`Direct change via handleTrackParameterChange is discouraged for ${paramName}.`);
+        engineUpdateNeeded = false;
+        return;
       } else {
         (updateObj as any)[paramName] = newValue;
       }
 
       // Update State
       updateTrackState(trackId, updateObj);
-      
+
       // Update Audio Engine 
       if (engineUpdateNeeded) {
         const audioEngine = passedStore.getAudioEngine();
@@ -839,29 +839,29 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           // Mute/Solo handled by specific handlers
         }
       }
-      
+
       // Create and Execute History Action
       const convertToActionValue = (val: any): number => {
-        if (typeof val === 'boolean' ) return val ? 1 : 0;
-        if (typeof val === 'number' ) return val;
-        return 0; 
+        if (typeof val === 'boolean') return val ? 1 : 0;
+        if (typeof val === 'number') return val;
+        return 0;
       };
       const oldActionValue = convertToActionValue(oldValue);
       const newActionValue = convertToActionValue(newValue);
-      
+
       const action = new Actions.ParameterChange(
         get,
         trackId,
-        historyParamName as any, 
+        historyParamName as any,
         oldActionValue,
         newActionValue
       );
-      
+
       await executeHistoryAction(action); // Await the history action
     };
 
     // Pass the _withStore HOF result to _withErrorHandling
-    _withErrorHandling(async () => _withStore(changeLogic)(), `handleTrackParameterChange: ${String(paramName)}`)(); 
+    _withErrorHandling(async () => _withStore(changeLogic)(), `handleTrackParameterChange: ${String(paramName)}`)();
   };
 
   const handleTrackPositionChange = (trackId: string, newPosition: Position, isDragEnd: boolean) => {
@@ -869,88 +869,88 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const storeInstance = rootGet().store; // Get the Store instance
 
     if (!storeInstance) {
-        console.error("_withErrorHandling is not available in handleTrackPositionChange");
-        return;
+      console.error("_withErrorHandling is not available in handleTrackPositionChange");
+      return;
     }
     if (!_withErrorHandling) {
-        console.error("_withErrorHandling is not available in handleTrackPositionChange");
-        return;
+      console.error("_withErrorHandling is not available in handleTrackPositionChange");
+      return;
     }
 
     // Fix 3: Make changeLogic async
     const changeLogic = async () => {
-        if (!storeInstance) {
-            console.error('Store not available in handleTrackPositionChange');
-            return;
-        }
-        
-        const track = findTrackById(trackId);
-        if (!track) {
-            console.error(`Track ${trackId} not found in handleTrackPositionChange`);
-            return;
-        }
-        
-        // Get the first instance (for now we're working with single instances)
-        const instances = track.instances || [];
-        if (instances.length === 0) {
-            console.error(`Track ${trackId} has no instances`);
-            return;
-        }
-        
-        const firstInstance = instances[0];
-        const oldPosition = { x: firstInstance.x_position, y: firstInstance.y_position };
+      if (!storeInstance) {
+        console.error('Store not available in handleTrackPositionChange');
+        return;
+      }
 
-        // Skip if nothing changed at drag end
-        if (isDragEnd && 
-            oldPosition.x === newPosition.x && 
-            oldPosition.y === newPosition.y) {
-            console.log('No position change detected - skipping update');
-            return;
-        }
-        
-        // Update the instance position
-        const updatedInstances = instances.map((instance, idx) => 
-            idx === 0 
-                ? { ...instance, x_position: newPosition.x, y_position: newPosition.y }
-                : instance
+      const track = findTrackById(trackId);
+      if (!track) {
+        console.error(`Track ${trackId} not found in handleTrackPositionChange`);
+        return;
+      }
+
+      // Get the first instance (for now we're working with single instances)
+      const instances = track.instances || [];
+      if (instances.length === 0) {
+        console.error(`Track ${trackId} has no instances`);
+        return;
+      }
+
+      const firstInstance = instances[0];
+      const oldPosition = { x: firstInstance.x_position, y: firstInstance.y_position };
+
+      // Skip if nothing changed at drag end
+      if (isDragEnd &&
+        oldPosition.x === newPosition.x &&
+        oldPosition.y === newPosition.y) {
+        console.log('No position change detected - skipping update');
+        return;
+      }
+
+      // Update the instance position
+      const updatedInstances = instances.map((instance, idx) =>
+        idx === 0
+          ? { ...instance, x_position: newPosition.x, y_position: newPosition.y }
+          : instance
+      );
+
+      console.log('[Instance Update] Position change:', {
+        trackId,
+        instanceId: firstInstance.id,
+        oldPosition,
+        newPosition,
+        updatedInstance: updatedInstances[0]
+      });
+
+      // Update track state with new instances array
+      updateTrackState(trackId, {
+        instances: updatedInstances,
+        dirty: true
+      });
+
+      // Update audio engine
+      storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
+
+      if (isDragEnd) {
+        // Use instance action for history
+        const action = new InstanceMove(
+          get,
+          trackId,
+          firstInstance.id,
+          oldPosition.x,
+          oldPosition.y,
+          newPosition.x,
+          newPosition.y
         );
-        
-        console.log('[Instance Update] Position change:', {
-            trackId,
-            instanceId: firstInstance.id,
-            oldPosition,
-            newPosition,
-            updatedInstance: updatedInstances[0]
-        });
-        
-        // Update track state with new instances array
-        updateTrackState(trackId, { 
-            instances: updatedInstances,
-            dirty: true
-        });
-        
-        // Update audio engine
-        storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
-        
-        if (isDragEnd) {
-            // Use instance action for history
-            const action = new InstanceMove(
-                get,
-                trackId,
-                firstInstance.id,
-                oldPosition.x,
-                oldPosition.y,
-                newPosition.x,
-                newPosition.y
-            );
-            await executeHistoryAction(action);
-            
-            if (isPlaying && storeInstance.getTransport()?.handleTrackPositionChange) {
-              storeInstance.getTransport().handleTrackPositionChange(trackId, newPosition.x);
-            }
+        await executeHistoryAction(action);
+
+        if (isPlaying && storeInstance.getTransport()?.handleTrackPositionChange) {
+          storeInstance.getTransport().handleTrackPositionChange(trackId, newPosition.x);
         }
+      }
     };
-    
+
     _withErrorHandling(changeLogic, 'handleTrackPositionChange')(); // Pass async function directly
   };
 
@@ -968,52 +968,52 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     }
 
     const soloLogic = (passedStore: Store) => {
-        updateTrackState(trackId, { soloed: soloed, solo: soloed }); // Use local helper
+      updateTrackState(trackId, { soloed: soloed, solo: soloed }); // Use local helper
 
-        const currentTracks = rootGet().tracks;
-        const targetTrack = currentTracks.find(t => t.id === trackId);
-        if (!targetTrack) return; // Should not happen if updateTrackState worked
-        
-        // Re-evaluate solo status based on the *current* state of all tracks
-        const isAnyTrackSoloed = currentTracks.some(t => (t as any).soloed); 
+      const currentTracks = rootGet().tracks;
+      const targetTrack = currentTracks.find(t => t.id === trackId);
+      if (!targetTrack) return; // Should not happen if updateTrackState worked
 
-        const audioEngine = passedStore.getAudioEngine();
-        const historyActions = [];
+      // Re-evaluate solo status based on the *current* state of all tracks
+      const isAnyTrackSoloed = currentTracks.some(t => (t as any).soloed);
 
-        // Helper function to check if a track should be unmuted based on solo relationships
-        const shouldTrackBeUnmuted = (track: CombinedTrack): boolean => {
-            if (!isAnyTrackSoloed) return true; // If nothing is soloed, unmute all
-            if ((track as any).soloed) return true; // If this track itself is soloed
-            
-            // Special handling for drum tracks and their samplers
-            if (track.track_type === 'SAMPLER' && track.track) {
-                const samplerData = track.track as SamplerTrackRead;
-                if (samplerData.drum_track_id) {
-                    // Check if the parent drum track is soloed
-                    const parentDrumTrack = currentTracks.find(t => t.id === samplerData.drum_track_id);
-                    if (parentDrumTrack && (parentDrumTrack as any).soloed) {
-                        return true; // Keep sampler tracks unmuted if their drum track is soloed
-                    }
-                }
+      const audioEngine = passedStore.getAudioEngine();
+      const historyActions = [];
+
+      // Helper function to check if a track should be unmuted based on solo relationships
+      const shouldTrackBeUnmuted = (track: CombinedTrack): boolean => {
+        if (!isAnyTrackSoloed) return true; // If nothing is soloed, unmute all
+        if ((track as any).soloed) return true; // If this track itself is soloed
+
+        // Special handling for drum tracks and their samplers
+        if (track.track_type === 'SAMPLER' && track.track) {
+          const samplerData = track.track as SamplerTrackRead;
+          if (samplerData.drum_track_id) {
+            // Check if the parent drum track is soloed
+            const parentDrumTrack = currentTracks.find(t => t.id === samplerData.drum_track_id);
+            if (parentDrumTrack && (parentDrumTrack as any).soloed) {
+              return true; // Keep sampler tracks unmuted if their drum track is soloed
             }
-            
-            return false; // Mute everything else
-        };
-
-        for (const track of currentTracks) {
-            const oldMuteState = track.mute;
-            const shouldBeMuted = !shouldTrackBeUnmuted(track);
-            
-            if (oldMuteState !== shouldBeMuted) {
-                updateTrackState(track.id, { mute: shouldBeMuted }); // Use local helper
-                audioEngine.setTrackMute(track.id, shouldBeMuted);
-                
-                const action = new Actions.ParameterChange( get, track.id, 'muted', oldMuteState ? 1 : 0, shouldBeMuted ? 1 : 0 );
-                historyActions.push(action);
-            }
+          }
         }
-        // Use get() to call historySlice action
-        historyActions.forEach(action => rootGet().executeHistoryAction(action));
+
+        return false; // Mute everything else
+      };
+
+      for (const track of currentTracks) {
+        const oldMuteState = track.mute;
+        const shouldBeMuted = !shouldTrackBeUnmuted(track);
+
+        if (oldMuteState !== shouldBeMuted) {
+          updateTrackState(track.id, { mute: shouldBeMuted }); // Use local helper
+          audioEngine.setTrackMute(track.id, shouldBeMuted);
+
+          const action = new Actions.ParameterChange(get, track.id, 'muted', oldMuteState ? 1 : 0, shouldBeMuted ? 1 : 0);
+          historyActions.push(action);
+        }
+      }
+      // Use get() to call historySlice action
+      historyActions.forEach(action => rootGet().executeHistoryAction(action));
     };
 
     _withErrorHandling(async () => _withStore(soloLogic)(), `handleTrackSoloToggle: ${trackId}`)();
@@ -1021,57 +1021,57 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
   // Implementation for uploadAudioFile
   const uploadAudioFile = async (
-    file: File, 
+    file: File,
     isSampler = false
   ): Promise<CombinedTrack | null> => {
     const { _withErrorHandling } = rootGet();
-    
-    const uploadLogic = async (): Promise<CombinedTrack | null> => {
-        const trackName = file.name.split('.').slice(0, -1).join('.') || file.name; // Get filename without extension
-        const trackType: TrackType = isSampler ? 'SAMPLER' : 'AUDIO';
-        
-        // Process audio file to get metadata including waveform data
-        const metadata = await processAudioFile(file);
-        
-        const options: TrackOptions = isSampler 
-            ? { 
-                id: crypto.randomUUID(), 
-                sampleFile: file, 
-                ...DEFAULT_SAMPLER_CONFIG,
-                audio_file_format: metadata.format,
-                audio_file_duration: metadata.duration,
-                audio_file_size: file.size,
-                audio_file_sample_rate: metadata.sampleRate,
-                waveform_data: metadata.waveform
-            } 
-            : { 
-                id: crypto.randomUUID(), 
-                audioFile: file,
-                audio_file_format: metadata.format,
-                audio_file_duration: metadata.duration,
-                audio_file_size: file.size,
-                audio_file_sample_rate: metadata.sampleRate,
-                waveform_data: metadata.waveform
-            };
 
-        await SampleManager.getInstance(db).putSampleBlob(options.id, file, 'sample', trackName);
-        
-        // Call the main track creation function (already handles history)
-        // Assuming createTrackAndRegisterWithHistory is available via get()
-        const newTrack = await get().createTrackAndRegisterWithHistory(trackType, trackName, options);
-        
-        if (!newTrack) {
-          throw new Error(`Failed to create ${trackType} track from file upload`);
+    const uploadLogic = async (): Promise<CombinedTrack | null> => {
+      const trackName = file.name.split('.').slice(0, -1).join('.') || file.name; // Get filename without extension
+      const trackType: TrackType = isSampler ? 'SAMPLER' : 'AUDIO';
+
+      // Process audio file to get metadata including waveform data
+      const metadata = await processAudioFile(file);
+
+      const options: TrackOptions = isSampler
+        ? {
+          id: crypto.randomUUID(),
+          sampleFile: file,
+          ...DEFAULT_SAMPLER_CONFIG,
+          audio_file_format: metadata.format,
+          audio_file_duration: metadata.duration,
+          audio_file_size: file.size,
+          audio_file_sample_rate: metadata.sampleRate,
+          waveform_data: metadata.waveform
         }
-        
-        return newTrack;
+        : {
+          id: crypto.randomUUID(),
+          audioFile: file,
+          audio_file_format: metadata.format,
+          audio_file_duration: metadata.duration,
+          audio_file_size: file.size,
+          audio_file_sample_rate: metadata.sampleRate,
+          waveform_data: metadata.waveform
+        };
+
+      await SampleManager.getInstance(db).putSampleBlob(options.id, file, 'sample', trackName);
+
+      // Call the main track creation function (already handles history)
+      // Assuming createTrackAndRegisterWithHistory is available via get()
+      const newTrack = await get().createTrackAndRegisterWithHistory(trackType, trackName, options);
+
+      if (!newTrack) {
+        throw new Error(`Failed to create ${trackType} track from file upload`);
+      }
+
+      return newTrack;
     };
 
     // Wrap with error handling
     if (!_withErrorHandling) {
-        console.error("_withErrorHandling not available for uploadAudioFile");
-        // Attempt without handler?
-        try { return await uploadLogic(); } catch { return null; }
+      console.error("_withErrorHandling not available for uploadAudioFile");
+      // Attempt without handler?
+      try { return await uploadLogic(); } catch { return null; }
     }
     return _withErrorHandling(uploadLogic, 'uploadAudioFile')();
   };
@@ -1083,230 +1083,230 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     if (!fullTrack || !_withErrorHandling) { return; }
 
     const resizeLogic = async () => {
-        // Get the first instance (for now we're working with single instances)
-        const instances = fullTrack.instances || [];
-        if (instances.length === 0) {
-            console.error(`Track ${trackId} has no instances for resize`);
-            return;
-        }
-        
-        const firstInstance = instances[0];
-        const oldTrimStartTicks = firstInstance.trim_start_ticks || 0;
-        const oldTrimEndTicks = firstInstance.trim_end_ticks || fullTrack.duration_ticks || 0; 
-        const oldPositionX = firstInstance.x_position || 0;
-        const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
+      // Get the first instance (for now we're working with single instances)
+      const instances = fullTrack.instances || [];
+      if (instances.length === 0) {
+        console.error(`Track ${trackId} has no instances for resize`);
+        return;
+      }
 
-        console.log('[tracksSlice] handleTrackResizeEnd:', {
-            trackId,
-            deltaPixels,
-            deltaTicks,
-            resizeDirection,
-            oldPositionX,
-            oldTrimStartTicks,
-            oldTrimEndTicks,
-            trackDuration: fullTrack.duration_ticks,
-            instanceId: firstInstance.id,
-            bpm,
-            timeSignature,
-            ppq: MUSIC_CONSTANTS.pulsesPerQuarterNote
-        });
+      const firstInstance = instances[0];
+      const oldTrimStartTicks = firstInstance.trim_start_ticks || 0;
+      const oldTrimEndTicks = firstInstance.trim_end_ticks || fullTrack.duration_ticks || 0;
+      const oldPositionX = firstInstance.x_position || 0;
+      const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
 
-        let newTrimStartTicks = oldTrimStartTicks;
-        let newTrimEndTicks = oldTrimEndTicks;
-        let newPositionX = oldPositionX;
+      console.log('[tracksSlice] handleTrackResizeEnd:', {
+        trackId,
+        deltaPixels,
+        deltaTicks,
+        resizeDirection,
+        oldPositionX,
+        oldTrimStartTicks,
+        oldTrimEndTicks,
+        trackDuration: fullTrack.duration_ticks,
+        instanceId: firstInstance.id,
+        bpm,
+        timeSignature,
+        ppq: MUSIC_CONSTANTS.pulsesPerQuarterNote
+      });
 
-        if (resizeDirection === 'left') {
-            // For left resize, deltaTicks represents position change
-            // When making bigger from left, deltaTicks is negative (moving left)
-            newPositionX = oldPositionX + deltaTicks;
-            newPositionX = Math.max(0, newPositionX); // Don't go past timeline start
-            
-            // Adjust trim_start by the same amount the position moved
-            const actualPositionDelta = newPositionX - oldPositionX;
-            newTrimStartTicks = oldTrimStartTicks + actualPositionDelta;
-            
-            // trim_start can go negative when expanding beyond original content
-            // Don't clamp to trim_end - that prevents expansion
-            
-        } else { 
-            // For right resize, deltaTicks represents width change
-            newTrimEndTicks = oldTrimEndTicks + deltaTicks;
-            // Ensure trim end doesn't go below trim start
-            newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
-            
-        }
+      let newTrimStartTicks = oldTrimStartTicks;
+      let newTrimEndTicks = oldTrimEndTicks;
+      let newPositionX = oldPositionX;
 
-        // Update the instance with new trim values
-        const updatedInstances = instances.map((instance, idx) => 
-            idx === 0 
-                ? { 
-                    ...instance, 
-                    trim_start_ticks: newTrimStartTicks,
-                    trim_end_ticks: newTrimEndTicks,
-                    x_position: newPositionX
-                  }
-                : instance
-        );
-        
-        console.log('[Instance Update] Resize:', {
-            trackId,
-            instanceId: firstInstance.id,
-            resizeDirection,
-            oldTrim: { start: oldTrimStartTicks, end: oldTrimEndTicks },
-            newTrim: { start: newTrimStartTicks, end: newTrimEndTicks },
-            oldPositionX,
-            newPositionX,
-            updatedInstance: updatedInstances[0]
-        });
-        
-        // Update track state with new instances array
-        updateTrackState(trackId, { 
-            instances: updatedInstances,
-            dirty: true
-        });
+      if (resizeDirection === 'left') {
+        // For left resize, deltaTicks represents position change
+        // When making bigger from left, deltaTicks is negative (moving left)
+        newPositionX = oldPositionX + deltaTicks;
+        newPositionX = Math.max(0, newPositionX); // Don't go past timeline start
 
-        // Create instance resize action for history
-        const action = new InstanceResize(
-            get, 
-            trackId,
-            firstInstance.id,
-            oldTrimStartTicks,
-            oldTrimEndTicks,
-            oldPositionX,
-            newTrimStartTicks,
-            newTrimEndTicks,
-            newPositionX
-        );
-        
-        await executeHistoryAction(action); 
+        // Adjust trim_start by the same amount the position moved
+        const actualPositionDelta = newPositionX - oldPositionX;
+        newTrimStartTicks = oldTrimStartTicks + actualPositionDelta;
+
+        // trim_start can go negative when expanding beyond original content
+        // Don't clamp to trim_end - that prevents expansion
+
+      } else {
+        // For right resize, deltaTicks represents width change
+        newTrimEndTicks = oldTrimEndTicks + deltaTicks;
+        // Ensure trim end doesn't go below trim start
+        newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
+
+      }
+
+      // Update the instance with new trim values
+      const updatedInstances = instances.map((instance, idx) =>
+        idx === 0
+          ? {
+            ...instance,
+            trim_start_ticks: newTrimStartTicks,
+            trim_end_ticks: newTrimEndTicks,
+            x_position: newPositionX
+          }
+          : instance
+      );
+
+      console.log('[Instance Update] Resize:', {
+        trackId,
+        instanceId: firstInstance.id,
+        resizeDirection,
+        oldTrim: { start: oldTrimStartTicks, end: oldTrimEndTicks },
+        newTrim: { start: newTrimStartTicks, end: newTrimEndTicks },
+        oldPositionX,
+        newPositionX,
+        updatedInstance: updatedInstances[0]
+      });
+
+      // Update track state with new instances array
+      updateTrackState(trackId, {
+        instances: updatedInstances,
+        dirty: true
+      });
+
+      // Create instance resize action for history
+      const action = new InstanceResize(
+        get,
+        trackId,
+        firstInstance.id,
+        oldTrimStartTicks,
+        oldTrimEndTicks,
+        oldPositionX,
+        newTrimStartTicks,
+        newTrimEndTicks,
+        newPositionX
+      );
+
+      await executeHistoryAction(action);
     };
     _withErrorHandling(resizeLogic, 'handleTrackResizeEnd')();
   };
 
   // --- handleAddTrack Implementation (Restoring sampler creation loop) --- 
   const handleAddTrack = async (
-    type: TrackType, 
+    type: TrackType,
     payload?: AddTrackPayload
   ): Promise<CombinedTrack | null> => { // Return only the main track created
-      const rootState = get(); 
-      // Get necessary actions from root state
-      const { createTrackAndRegisterWithHistory, addSamplerTrackToDrumTrack, openDrumMachine, _withErrorHandling } = rootState;
-      
-      // Ensure actions exist
-      if (!_withErrorHandling || !createTrackAndRegisterWithHistory || (type === 'DRUM' && !addSamplerTrackToDrumTrack)) {
-          console.error("handleAddTrack: Missing dependencies");
-          return null;
-      }
+    const rootState = get();
+    // Get necessary actions from root state
+    const { createTrackAndRegisterWithHistory, addSamplerTrackToDrumTrack, openDrumMachine, _withErrorHandling } = rootState;
 
-      const addLogic = async () => {
-          // --- Drum Track Creation with Samplers --- 
-          if (type === 'DRUM') {
-              // 1. Create the main drum track first
-              const count = rootState.tracks.length + 1; 
-              const mainDrumTrackName = TRACK_CONFIG.DRUM.getDefaultName(count, 'Drum Kit');
-              const mainDrumTrack = await createTrackAndRegisterWithHistory('DRUM', mainDrumTrackName, {
-                  instrumentName: 'Drum Sequencer', 
-              });
+    // Ensure actions exist
+    if (!_withErrorHandling || !createTrackAndRegisterWithHistory || (type === 'DRUM' && !addSamplerTrackToDrumTrack)) {
+      console.error("handleAddTrack: Missing dependencies");
+      return null;
+    }
 
-              if (!mainDrumTrack || !mainDrumTrack.id) {
-                  console.error("Failed to create main drum track record");
-                  return null; // Return null if main track creation fails
-              }
-              const mainDrumTrackId = mainDrumTrack.id;
+    const addLogic = async () => {
+      // --- Drum Track Creation with Samplers --- 
+      if (type === 'DRUM') {
+        // 1. Create the main drum track first
+        const count = rootState.tracks.length + 1;
+        const mainDrumTrackName = TRACK_CONFIG.DRUM.getDefaultName(count, 'Drum Kit');
+        const mainDrumTrack = await createTrackAndRegisterWithHistory('DRUM', mainDrumTrackName, {
+          instrumentName: 'Drum Sequencer',
+        });
 
-              // 2. Check for samples payload and add corresponding Sampler Tracks
-              if (payload && 'samples' in payload && Array.isArray(payload.samples)) {
-                  const drumPayload = payload as DrumTrackPayload;
-                  
-                  // Sequentially add sampler tracks using the dedicated action
-                  for (const sample of drumPayload.samples) {
-                      try {
-                          // Prepare sampleData for the action (ensure fields match)
-                          const sampleDataForAction = {
-                              id: sample.id, // Assuming DrumSamplePublicRead has id
-                              display_name: sample.display_name, // Assuming DrumSamplePublicRead has display_name
-                              storage_key: sample.storage_key, // Assuming DrumSamplePublicRead has storage_key
-                              // Add other necessary fields if addSamplerTrackToDrumTrack expects them
-                          };
-                          // Call action to create sampler and link it (handles history)
-                          await addSamplerTrackToDrumTrack(mainDrumTrackId, sampleDataForAction);
-                      } catch (error) {
-                          console.error(`Failed to add sampler track for sample ${sample.display_name} to drum track ${mainDrumTrackId}:`, error);
-                          // Decide whether to continue or stop if one sampler fails
-                      }
-                  }
-              } else {
-              }
-              
-              // 3. Open UI (optional)
-              if (openDrumMachine) {
-                  openDrumMachine(mainDrumTrackId);
-              }
+        if (!mainDrumTrack || !mainDrumTrack.id) {
+          console.error("Failed to create main drum track record");
+          return null; // Return null if main track creation fails
+        }
+        const mainDrumTrackId = mainDrumTrack.id;
 
-              // Return the main drum track object after attempting sampler additions
-              // Fetch the latest state in case samplers modified it (though unlikely here)
-              return rootState.findTrackById(mainDrumTrackId); 
-          }
-          
-          // --- Standard/MIDI/AUDIO/Sampler Track Creation --- 
-          const countStd = rootState.tracks.length + 1;
-          let instrumentNameStd: string | undefined;
-          let trackOptionsStd: TrackOptions = {};
-          if (type === 'MIDI' && payload && 'instrumentId' in payload) {
-              const midiPayload = payload as MidiTrackPayload;
-              instrumentNameStd = midiPayload.instrumentName;
-              trackOptionsStd = { 
-                  instrumentId: midiPayload.instrumentId,
-                  instrumentName: midiPayload.instrumentName,
-                  instrumentStorageKey: midiPayload.instrumentStorageKey
+        // 2. Check for samples payload and add corresponding Sampler Tracks
+        if (payload && 'samples' in payload && Array.isArray(payload.samples)) {
+          const drumPayload = payload as DrumTrackPayload;
+
+          // Sequentially add sampler tracks using the dedicated action
+          for (const sample of drumPayload.samples) {
+            try {
+              // Prepare sampleData for the action (ensure fields match)
+              const sampleDataForAction = {
+                id: sample.id, // Assuming DrumSamplePublicRead has id
+                display_name: sample.display_name, // Assuming DrumSamplePublicRead has display_name
+                storage_key: sample.storage_key, // Assuming DrumSamplePublicRead has storage_key
+                // Add other necessary fields if addSamplerTrackToDrumTrack expects them
               };
-          } else if (type === 'AUDIO' && payload && 'audioTrackData' in payload) {
-              const audioPayload = payload as AudioTrackPayload;
-              const existingTrack = audioPayload.audioTrackData;
-              
-              if (existingTrack) {
-                  instrumentNameStd = existingTrack.name;
-                  
-                  // Retrieve the audio file from IndexedDB
-                  let audioFile: File | undefined;
-                  try {
-                      const cachedFile = await db.getAudioFile(existingTrack.id);
-                      if (cachedFile) {
-                          audioFile = new File([cachedFile.data], existingTrack.name, { 
-                              type: cachedFile.type 
-                          });
-                      }
-                  } catch (error) {
-                      console.warn('Failed to retrieve audio file from IndexedDB:', error);
-                  }
-                  
-                  trackOptionsStd = {
-                      id: existingTrack.id, // Use original track ID instead of generating new UUID
-                      name: existingTrack.name,
-                      storage_key: existingTrack.audio_file_storage_key,
-                      audio_file_format: existingTrack.audio_file_format,
-                      audio_file_size: existingTrack.audio_file_size,
-                      audio_file_duration: existingTrack.audio_file_duration,
-                      audio_file_sample_rate: existingTrack.audio_file_sample_rate,
-                      waveform_data: existingTrack.waveform_data,
-                      audioFile: audioFile, // Include the actual file for audio engine
-                      isExistingTrack: true, // Flag to indicate this is an existing track
-                  };
-              }
+              // Call action to create sampler and link it (handles history)
+              await addSamplerTrackToDrumTrack(mainDrumTrackId, sampleDataForAction);
+            } catch (error) {
+              console.error(`Failed to add sampler track for sample ${sample.display_name} to drum track ${mainDrumTrackId}:`, error);
+              // Decide whether to continue or stop if one sampler fails
+            }
           }
-          const trackNameStd = TRACK_CONFIG[type]?.getDefaultName(countStd, instrumentNameStd) || `Track ${countStd}`;
-          const trackData = await createTrackAndRegisterWithHistory(type, trackNameStd, trackOptionsStd);
-          return trackData;
+        } else {
+        }
+
+        // 3. Open UI (optional)
+        if (openDrumMachine) {
+          openDrumMachine(mainDrumTrackId);
+        }
+
+        // Return the main drum track object after attempting sampler additions
+        // Fetch the latest state in case samplers modified it (though unlikely here)
+        return rootState.findTrackById(mainDrumTrackId);
       }
-      
-      return _withErrorHandling(addLogic, 'handleAddTrack')();
+
+      // --- Standard/MIDI/AUDIO/Sampler Track Creation --- 
+      const countStd = rootState.tracks.length + 1;
+      let instrumentNameStd: string | undefined;
+      let trackOptionsStd: TrackOptions = {};
+      if (type === 'MIDI' && payload && 'instrumentId' in payload) {
+        const midiPayload = payload as MidiTrackPayload;
+        instrumentNameStd = midiPayload.instrumentName;
+        trackOptionsStd = {
+          instrumentId: midiPayload.instrumentId,
+          instrumentName: midiPayload.instrumentName,
+          instrumentStorageKey: midiPayload.instrumentStorageKey
+        };
+      } else if (type === 'AUDIO' && payload && 'audioTrackData' in payload) {
+        const audioPayload = payload as AudioTrackPayload;
+        const existingTrack = audioPayload.audioTrackData;
+
+        if (existingTrack) {
+          instrumentNameStd = existingTrack.name;
+
+          // Retrieve the audio file from IndexedDB
+          let audioFile: File | undefined;
+          try {
+            const cachedFile = await db.getAudioFile(existingTrack.id);
+            if (cachedFile) {
+              audioFile = new File([cachedFile.data], existingTrack.name, {
+                type: cachedFile.type
+              });
+            }
+          } catch (error) {
+            console.warn('Failed to retrieve audio file from IndexedDB:', error);
+          }
+
+          trackOptionsStd = {
+            id: existingTrack.id, // Use original track ID instead of generating new UUID
+            name: existingTrack.name,
+            storage_key: existingTrack.audio_file_storage_key,
+            audio_file_format: existingTrack.audio_file_format,
+            audio_file_size: existingTrack.audio_file_size,
+            audio_file_duration: existingTrack.audio_file_duration,
+            audio_file_sample_rate: existingTrack.audio_file_sample_rate,
+            waveform_data: existingTrack.waveform_data,
+            audioFile: audioFile, // Include the actual file for audio engine
+            isExistingTrack: true, // Flag to indicate this is an existing track
+          };
+        }
+      }
+      const trackNameStd = TRACK_CONFIG[type]?.getDefaultName(countStd, instrumentNameStd) || `Track ${countStd}`;
+      const trackData = await createTrackAndRegisterWithHistory(type, trackNameStd, trackOptionsStd);
+      return trackData;
+    }
+
+    return _withErrorHandling(addLogic, 'handleAddTrack')();
   };
 
   // Handle Instrument Change (placeholder, needs track update and engine calls)
   const handleInstrumentChange = async (
-    trackId: string, 
-    instrumentId: string, 
-    instrumentName: string, 
+    trackId: string,
+    instrumentId: string,
+    instrumentName: string,
     instrumentStorageKey: string
   ): Promise<void> => {
     console.warn("handleInstrumentChange needs implementation in tracksSlice");
@@ -1324,16 +1324,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
   // Replace Track Audio File (placeholder, needs findTrackById, engine calls, sampler init)
   const replaceTrackAudioFile = async (trackId: string, file: File): Promise<void> => {
-      console.warn("replaceTrackAudioFile needs implementation in tracksSlice");
-      // Original logic:
-      // const { store, findTrackById, updateTrackState, _withErrorHandling } = get();
-      // const track = findTrackById(trackId);
-      // ... checks ...
-      // if (track.type === 'sampler') store?.getTransport().getSamplerController()?.getSampler(trackId)?.stopPlayback();
-      // await updateTrackWithAudioInfo(trackId, file); // Need this helper or its logic
-      // const updates = track.type === 'audio' ? { audioFile: file } : { sampleFile: file };
-      // if (track.type === 'sampler') await initializeSampler(trackId, file, {...}); // Need initializeSampler helper
-      // updateTrackState(trackId, updates);
+    console.warn("replaceTrackAudioFile needs implementation in tracksSlice");
+    // Original logic:
+    // const { store, findTrackById, updateTrackState, _withErrorHandling } = get();
+    // const track = findTrackById(trackId);
+    // ... checks ...
+    // if (track.type === 'sampler') store?.getTransport().getSamplerController()?.getSampler(trackId)?.stopPlayback();
+    // await updateTrackWithAudioInfo(trackId, file); // Need this helper or its logic
+    // const updates = track.type === 'audio' ? { audioFile: file } : { sampleFile: file };
+    // if (track.type === 'sampler') await initializeSampler(trackId, file, {...}); // Need initializeSampler helper
+    // updateTrackState(trackId, updates);
   };
 
   // --- New Action: Add Sampler to Drum Track --- 
@@ -1343,66 +1343,66 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   ): Promise<CombinedTrack | null> => {
     const { createTrackAndRegisterWithHistory, executeHistoryAction, _withErrorHandling } = rootGet();
     if (!createTrackAndRegisterWithHistory || !executeHistoryAction || !_withErrorHandling) {
-        console.error("addSamplerTrackToDrumTrack: Missing dependencies");
-        return null;
+      console.error("addSamplerTrackToDrumTrack: Missing dependencies");
+      return null;
     }
 
     const addSamplerLogic = async (): Promise<CombinedTrack | null> => {
-        // 1. Prepare Sampler Options, linking to parent
-        const samplerOptions: SamplerTrackOptions = {
-            name: sampleData.display_name,          // Use sample name for track name initially
-            storage_key: sampleData.storage_key,    // Pass storage key
-            drum_track_id: drumTrackId,             // **Link to parent**
-            // Add any other relevant options derived from sampleData if needed
-            // e.g., baseMidiNote might be derived or default
-        };
-        const samplerTrackName = sampleData.display_name; // Or generate a more unique name
+      // 1. Prepare Sampler Options, linking to parent
+      const samplerOptions: SamplerTrackOptions = {
+        name: sampleData.display_name,          // Use sample name for track name initially
+        storage_key: sampleData.storage_key,    // Pass storage key
+        drum_track_id: drumTrackId,             // **Link to parent**
+        // Add any other relevant options derived from sampleData if needed
+        // e.g., baseMidiNote might be derived or default
+      };
+      const samplerTrackName = sampleData.display_name; // Or generate a more unique name
 
 
-        // 2. Create the Sampler Track (handles its own history for creation)
-        const newSamplerTrack = await createTrackAndRegisterWithHistory('SAMPLER', samplerTrackName, samplerOptions);
+      // 2. Create the Sampler Track (handles its own history for creation)
+      const newSamplerTrack = await createTrackAndRegisterWithHistory('SAMPLER', samplerTrackName, samplerOptions);
 
-        if (!newSamplerTrack || !newSamplerTrack.id) {
-            console.error(`Failed to create sampler track for sample ${sampleData.display_name}`);
-            return null;
-        }
-        const newSamplerTrackId = newSamplerTrack.id;
-
-
-        // 3. Update Parent Drum Track's State
-        const parentDrumTrack = selectDrumTrackById(drumTrackId); // Use the selector
-        if (!parentDrumTrack) {
-            console.error(`Parent drum track ${drumTrackId} not found in state after creating sampler.`);
-            // Potentially rollback sampler creation? Or just log error.
-            return newSamplerTrack; // Return sampler even if parent update fails?
-        }
-
-        const oldSamplerIds = parentDrumTrack.sampler_track_ids || [];
-        // Ensure no duplicates (though unlikely with UUIDs)
-        const newSamplerIds = [...new Set([...oldSamplerIds, newSamplerTrackId])];
+      if (!newSamplerTrack || !newSamplerTrack.id) {
+        console.error(`Failed to create sampler track for sample ${sampleData.display_name}`);
+        return null;
+      }
+      const newSamplerTrackId = newSamplerTrack.id;
 
 
-        _updateNestedTrackData(drumTrackId, { sampler_track_ids: newSamplerIds } as Partial<DrumTrackRead>);
+      // 3. Update Parent Drum Track's State
+      const parentDrumTrack = selectDrumTrackById(drumTrackId); // Use the selector
+      if (!parentDrumTrack) {
+        console.error(`Parent drum track ${drumTrackId} not found in state after creating sampler.`);
+        // Potentially rollback sampler creation? Or just log error.
+        return newSamplerTrack; // Return sampler even if parent update fails?
+      }
+
+      const oldSamplerIds = parentDrumTrack.sampler_track_ids || [];
+      // Ensure no duplicates (though unlikely with UUIDs)
+      const newSamplerIds = [...new Set([...oldSamplerIds, newSamplerTrackId])];
 
 
-        // 4. Add History Action for the Parent Update
-        // **ASSUMES Actions.UpdateDrumTrackSamplers exists and takes (get, drumTrackId, oldIds, newIds)**
-        try {
-            const parentUpdateAction = new Actions.UpdateDrumTrackSamplers(
-                get, 
-                drumTrackId, 
-                oldSamplerIds, 
-                newSamplerIds
-            );
-            await executeHistoryAction(parentUpdateAction);
-
-        } catch (historyError) {
-            console.error("Error executing history action for parent drum track update:", historyError);
-            // Consider if state needs rollback here
-        }
+      _updateNestedTrackData(drumTrackId, { sampler_track_ids: newSamplerIds } as Partial<DrumTrackRead>);
 
 
-        return newSamplerTrack;
+      // 4. Add History Action for the Parent Update
+      // **ASSUMES Actions.UpdateDrumTrackSamplers exists and takes (get, drumTrackId, oldIds, newIds)**
+      try {
+        const parentUpdateAction = new Actions.UpdateDrumTrackSamplers(
+          get,
+          drumTrackId,
+          oldSamplerIds,
+          newSamplerIds
+        );
+        await executeHistoryAction(parentUpdateAction);
+
+      } catch (historyError) {
+        console.error("Error executing history action for parent drum track update:", historyError);
+        // Consider if state needs rollback here
+      }
+
+
+      return newSamplerTrack;
     };
 
     return _withErrorHandling(addSamplerLogic, 'addSamplerTrackToDrumTrack')();
@@ -1412,7 +1412,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   const duplicateTrack = async (trackId: string, newPosition?: Position): Promise<CombinedTrack | null> => {
     const { tracks } = rootGet();
     const track = tracks.find(t => t.id === trackId);
-    
+
     if (!track) {
       console.error(`Track with id ${trackId} not found for duplication`);
       return null;
@@ -1424,15 +1424,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const duplicatedTracks = await duplicateMultipleTracks([trackId], offsetX);
       return duplicatedTracks.find(t => t.track_type === 'DRUM') || null;
     }
-    
+
     // Create a new instance instead of a new track
     const instanceId = await addTrackInstance(trackId, newPosition);
-    
+
     if (!instanceId) {
       console.error(`Failed to create instance for track ${trackId}`);
       return null;
     }
-    
+
     // Return the track with updated instances
     return findTrackById(trackId) || null;
   };
@@ -1441,52 +1441,52 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const finalTrackIds = expandDrumSelection(trackIds);
     const { tracks, bpm, timeSignature, executeHistoryAction } = rootGet();
     const updatedTracks: CombinedTrack[] = [];
-    
+
     // Calculate base offset if not provided
     let baseOffsetX = offsetX;
     if (baseOffsetX === 0) {
       // Find the rightmost instance position among selected tracks
       const selectedTracks = tracks.filter(t => finalTrackIds.includes(t.id));
       let maxRightPosition = 0;
-      
+
       selectedTracks.forEach(track => {
         // Get instances - skip tracks without instances
-        const instances = track.instances && track.instances.length > 0 
-          ? track.instances 
+        const instances = track.instances && track.instances.length > 0
+          ? track.instances
           : [];
-        
+
         // Find rightmost instance
         instances.forEach(instance => {
           const instanceEnd = instance.x_position + (instance.trim_end_ticks - instance.trim_start_ticks);
           maxRightPosition = Math.max(maxRightPosition, instanceEnd);
         });
       });
-      
+
       baseOffsetX = maxRightPosition + pixelsToTicks(96, bpm, timeSignature); // 96px gap in ticks
     }
 
     // Find the leftmost instance position to calculate relative positions
     const selectedTracks = tracks.filter(t => finalTrackIds.includes(t.id));
     let minX = Infinity;
-    
+
     selectedTracks.forEach(track => {
       const instances = getTrackInstancesOrDefault(track);
       instances.forEach(instance => {
         minX = Math.min(minX, instance.x_position);
       });
     });
-    
+
     // Collect all instance add actions
     const instanceAddActions: InstanceAdd[] = [];
-    
+
     // Create instances for each track
     for (const trackId of finalTrackIds) {
       const track = tracks.find(t => t.id === trackId);
       if (!track) continue;
-      
+
       // Get instances for this track
       const originalInstances = getTrackInstancesOrDefault(track);
-      
+
       // Determine the starting number for new instances of this track
       const allInstances = getTrackInstancesOrDefault(track);
       let maxInstanceNum = 0;
@@ -1500,7 +1500,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         }
       });
       let nextInstanceNum = maxInstanceNum + 1;
-      
+
       for (const originalInstance of originalInstances) {
         // Calculate relative position
         const relativeX = originalInstance.x_position - minX;
@@ -1508,7 +1508,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           x: baseOffsetX + relativeX,
           y: originalInstance.y_position
         };
-        
+
         // Create new instance object with a sequential ID
         const instanceId = `${trackId}_instance_${nextInstanceNum}`;
         nextInstanceNum++; // Increment for the next instance of this track
@@ -1520,15 +1520,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           trim_start_ticks: originalInstance.trim_start_ticks,
           trim_end_ticks: originalInstance.trim_end_ticks
         };
-        
+
         // Create the action but don't execute it yet
         instanceAddActions.push(new InstanceAdd(get, trackId, newInstance));
       }
-      
+
       // Track will be updated when the group action executes
       updatedTracks.push(track);
     }
-    
+
     // Execute all instance adds as a single group action
     if (instanceAddActions.length > 0) {
       const groupAction = new Actions.GroupAction(
@@ -1538,7 +1538,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       );
       await executeHistoryAction(groupAction);
     }
-    
+
     // Return the updated tracks
     return finalTrackIds.map(id => findTrackById(id)).filter(Boolean) as CombinedTrack[];
   };
@@ -1552,7 +1552,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const deleteMultipleLogic = async (): Promise<void> => {
       const actions: Action[] = [];
-      
+
       // Create delete actions for all tracks
       for (const trackId of trackIds) {
         const track = tracks.find(t => t.id === trackId);
@@ -1561,7 +1561,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           actions.push(action);
         }
       }
-      
+
       // Execute as a single group action
       if (actions.length > 0) {
         const groupAction = new Actions.GroupAction(
@@ -1586,7 +1586,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const resizeMultipleLogic = async (): Promise<void> => {
       const deltaPixels = widthDelta; // Assuming widthDelta is already in pixels
       const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
-      
+
       // Collect resize data for all tracks
       const trackResizeData: Array<{
         trackId: string;
@@ -1597,7 +1597,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         newTrimEndTicks: number;
         newPositionX: number;
       }> = [];
-      
+
       for (const trackId of trackIds) {
         const track = tracks.find(t => t.id === trackId);
         if (track && track.instances?.[0]) {
@@ -1605,11 +1605,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           const oldTrimStartTicks = firstInstance.trim_start_ticks || 0;
           const oldTrimEndTicks = firstInstance.trim_end_ticks || track.duration_ticks || 0;
           const oldPositionX = firstInstance.x_position || 0;
-          
+
           let newTrimStartTicks = oldTrimStartTicks;
           let newTrimEndTicks = oldTrimEndTicks;
           let newPositionX = oldPositionX;
-          
+
           if (anchor === 'left') {
             // Left resize: deltaTicks represents position change
             newTrimStartTicks = oldTrimStartTicks + deltaTicks;
@@ -1623,7 +1623,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             // Ensure trim end doesn't go below trim start
             newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
           }
-          
+
           trackResizeData.push({
             trackId,
             oldTrimStartTicks,
@@ -1635,11 +1635,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           });
         }
       }
-      
+
       // Create and execute group resize action
       if (trackResizeData.length > 0) {
         // Create individual resize actions
-        const actions: Action[] = trackResizeData.map(data => 
+        const actions: Action[] = trackResizeData.map(data =>
           new Actions.TrackResize(
             get,
             data.trackId,
@@ -1651,7 +1651,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             data.newPositionX
           )
         );
-        
+
         // Execute as a single group action
         const groupAction = new Actions.GroupAction(
           get,
@@ -1674,7 +1674,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const updatePositionsLogic = async (): Promise<void> => {
       const actions: Action[] = [];
-      
+
       // Create position change actions for all tracks
       trackIds.forEach(trackId => {
         const track = tracks.find(t => t.id === trackId);
@@ -1684,7 +1684,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           const newX = Math.max(0, firstInstance.x_position + deltaX);
           const newY = Math.max(0, firstInstance.y_position + deltaY);
           const newPosition = { x: newX, y: newY };
-          
+
           // Create action but don't execute it
           const action = new Actions.TrackPosition(
             get,
@@ -1695,7 +1695,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           actions.push(action);
         }
       });
-      
+
       // Execute all position changes as a single group action
       if (actions.length > 0) {
         const groupAction = new Actions.GroupAction(
@@ -1709,24 +1709,24 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     return _withErrorHandling(updatePositionsLogic, `updateMultipleTrackPositions`)();
   };
-  
+
   // Track instance management functions
   const getTrackInstancesOrDefault = (track: CombinedTrack): TrackInstance[] => {
     return track.instances || [];
   };
-  
+
   const addTrackInstance = async (trackId: string, position?: Position, sourceInstance?: Partial<TrackInstance>): Promise<string | null> => {
     const { tracks, bpm, timeSignature, executeHistoryAction } = rootGet();
     const track = tracks.find(t => t.id === trackId);
-    
+
     if (!track) {
       console.error(`Track ${trackId} not found`);
       return null;
     }
-    
+
     // Get instances or create default
     const instances = getTrackInstancesOrDefault(track);
-    
+
     // Generate new instance ID with a monotonically increasing number
     let maxInstanceNum = 0;
     instances.forEach(instance => {
@@ -1739,7 +1739,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
     });
     const instanceId = `${trackId}_instance_${maxInstanceNum + 1}`;
-    
+
     // Calculate position for new instance
     let newPosition = position;
     if (!newPosition && instances.length > 0) {
@@ -1755,7 +1755,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       // Default position if track has no instances
       newPosition = { x: 0, y: 0 };
     }
-    
+
     // Calculate proper trim_end_ticks for audio tracks
     let trimEndTicks = sourceInstance?.trim_end_ticks;
     if (!trimEndTicks) {
@@ -1781,7 +1781,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       trim_start_ticks: sourceInstance?.trim_start_ticks ?? 0,
       trim_end_ticks: trimEndTicks
     };
-    
+
     // Register instance with MidiManager for MIDI-based tracks
     if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER' || track.track_type === 'DRUM') {
       const midiManager = rootGet().store?.getMidiManager();
@@ -1790,53 +1790,53 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         midiManager.registerInstance(trackId, instanceId);
       }
     }
-    
+
     // Create history action for adding instance
     const action = new Actions.InstanceAdd(get, trackId, newInstance);
     await executeHistoryAction(action);
-    
+
     return instanceId;
   };
-  
+
   const updateTrackInstance = (trackId: string, instanceId: string, updates: Partial<TrackInstance>): void => {
     const track = findTrackById(trackId);
     if (!track || !track.instances) return;
-    
-    const updatedInstances = track.instances.map(instance => 
-      instance.id === instanceId 
+
+    const updatedInstances = track.instances.map(instance =>
+      instance.id === instanceId
         ? { ...instance, ...updates }
         : instance
     );
-    
+
     updateTrackState(trackId, { instances: updatedInstances });
   };
-  
+
   const deleteTrackInstance = (trackId: string, instanceId: string): void => {
     const { executeHistoryAction } = rootGet();
     const track = findTrackById(trackId);
     if (!track || !track.instances) return;
-    
+
     // Don't delete if it's the only instance
     if (track.instances.length <= 1) {
       console.warn("Cannot delete the last instance of a track");
       return;
     }
-    
+
     // Find the instance to delete
     const instanceToDelete = track.instances.find(inst => inst.id === instanceId);
     if (!instanceToDelete) {
       console.error(`Instance ${instanceId} not found in track ${trackId}`);
       return;
     }
-    
-    // Unregister instance with MidiManager for MIDI-based tracks
+
+    // Unregister instance with MidiManager for MIDI-based tracksw
     if (track.track_type === 'MIDI' || track.track_type === 'SAMPLER' || track.track_type === 'DRUM') {
       const midiManager = rootGet().store?.getMidiManager();
       if (midiManager) {
         midiManager.unregisterInstance(trackId, instanceId);
       }
     }
-    
+
     // Create and execute the delete action
     const action = new Actions.InstanceDelete(
       get,
@@ -1845,204 +1845,230 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     );
     executeHistoryAction(action);
   };
-  
+
   const getTrackInstances = (trackId: string): TrackInstance[] => {
     const track = findTrackById(trackId);
     if (!track) return [];
-    
+
     return getTrackInstancesOrDefault(track);
   };
-  
+
   const handleInstancePositionChange = (trackId: string, instanceId: string, newPosition: Position, isDragEnd: boolean): void => {
     const { bpm, timeSignature, isPlaying, executeHistoryAction, _withErrorHandling } = rootGet();
     const storeInstance = rootGet().store;
 
     if (!storeInstance || !_withErrorHandling) {
-        console.error("Store or _withErrorHandling is not available in handleInstancePositionChange");
-        return;
+      console.error("Store or _withErrorHandling is not available in handleInstancePositionChange");
+      return;
     }
 
     const changeLogic = async () => {
-        const track = findTrackById(trackId);
-        if (!track || !track.instances) {
-            console.error(`Track ${trackId} not found or has no instances`);
-            return;
-        }
-        
-        const instance = track.instances.find(inst => inst.id === instanceId);
-        if (!instance) {
-            console.error(`Instance ${instanceId} not found in track ${trackId}`);
-            return;
-        }
-        
-        const oldPosition = { x: instance.x_position, y: instance.y_position };
+      const track = findTrackById(trackId);
+      if (!track || !track.instances) {
+        console.error(`Track ${trackId} not found or has no instances`);
+        return;
+      }
 
-        // Skip if nothing changed at drag end
-        if (isDragEnd && 
-            oldPosition.x === newPosition.x && 
-            oldPosition.y === newPosition.y) {
-            return;
-        }
-        
-        if (isDragEnd) {
-            // If this is a drum track, move it together with all its samplers
-            if (track.track_type === 'DRUM') {
-                const deltaX = newPosition.x - oldPosition.x;
-                const deltaY = newPosition.y - oldPosition.y;
-                const allTrackIds = expandDrumSelection([trackId]);
-                
-                // Create instance updates for all tracks
-                const instanceUpdates = allTrackIds.map(tId => {
-                    const targetTrack = findTrackById(tId);
-                    if (targetTrack?.instances?.[0]) {
-                        return {
-                            trackId: tId,
-                            instanceId: targetTrack.instances[0].id,
-                            deltaX,
-                            deltaY
-                        };
-                    }
-                    return null;
-                }).filter(Boolean) as Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>;
+      const instance = track.instances.find(inst => inst.id === instanceId);
+      if (!instance) {
+        console.error(`Instance ${instanceId} not found in track ${trackId}`);
+        return;
+      }
 
-                if (instanceUpdates.length > 0) {
-                    updateMultipleInstancePositions(instanceUpdates);
-                }
-                return;
-            }
+      const oldPosition = { x: instance.x_position, y: instance.y_position };
 
-            // Create instance-specific position action for history
-            const action = new Actions.InstanceMove(
-                get,
-                trackId,
-                instanceId,
-                oldPosition.x,
-                oldPosition.y,
-                newPosition.x,
-                newPosition.y
-            );
-            await executeHistoryAction(action);
-            
-            // Update notes for this instance if it's a MIDI-based track
-            if (track.track_type === 'MIDI') {
-                const midiManager = storeInstance.getMidiManager();
-                if (midiManager) {
-                    const deltaX = newPosition.x - oldPosition.x;
-                    midiManager.moveInstance(trackId, instanceId, deltaX);
-                }
-            }
-            
-            if (isPlaying && storeInstance.getTransport()?.handleTrackPositionChange) {
-              storeInstance.getTransport().handleTrackPositionChange(trackId, newPosition.x);
-            }
-        } else {
-            // During drag, update position directly without history
-            updateTrackInstance(trackId, instanceId, { 
-                x_position: newPosition.x, 
-                y_position: newPosition.y
-            });
-            
-            // Update audio engine for this specific instance
-            // TODO: Audio engine needs to support instance-based positioning
-            storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
-        }
-    };
-    
-    _withErrorHandling(changeLogic, 'handleInstancePositionChange')();
-  };
-  
-  const handleInstanceResizeEnd = (trackId: string, instanceId: string, deltaPixels: number, resizeDirection: 'left' | 'right'): void => {
-    const { bpm, timeSignature, executeHistoryAction, _withErrorHandling } = rootGet();
-    const track = findTrackById(trackId);
-    if (!track || !track.instances || !_withErrorHandling) { return; }
+      // Skip if nothing changed at drag end
+      if (isDragEnd &&
+        oldPosition.x === newPosition.x &&
+        oldPosition.y === newPosition.y) {
+        return;
+      }
 
-    const resizeLogic = async () => {
-        const instance = track.instances?.find(inst => inst.id === instanceId);
-        if (!instance) {
-            console.error(`Instance ${instanceId} not found in track ${trackId}`);
-            return;
-        }
-        
-        const oldTrimStartTicks = instance.trim_start_ticks;
-        const oldTrimEndTicks = instance.trim_end_ticks;
-        const oldPositionX = instance.x_position;
-        const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
-
-        let newTrimStartTicks = oldTrimStartTicks;
-        let newTrimEndTicks = oldTrimEndTicks;
-        let newPositionX = oldPositionX;
-
-        if (resizeDirection === 'left') {
-            // For left resize, deltaTicks represents position change
-            // When making bigger from left, deltaTicks is negative (moving left)
-            newPositionX = oldPositionX + deltaTicks;
-            newPositionX = Math.max(0, newPositionX); // Don't go past timeline start
-            
-            // Adjust trim_start by the same amount the position moved
-            const actualPositionDelta = newPositionX - oldPositionX;
-            newTrimStartTicks = oldTrimStartTicks + actualPositionDelta;
-            
-            // trim_start can go negative when expanding beyond original content
-            // Don't clamp to trim_end - that prevents expansion
-        } else { 
-            // For right resize, deltaTicks represents width change
-            newTrimEndTicks = oldTrimEndTicks + deltaTicks;
-            // Ensure trim end doesn't go below trim start
-            newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
-        }
-
-        // If this is a drum track, resize it together with all its samplers
+      if (isDragEnd) {
+        // If this is a drum track, move it together with all its samplers
         if (track.track_type === 'DRUM') {
-            const allTrackIds = expandDrumSelection([trackId]);
-            
-            // Create instance updates for all tracks
-            const instanceUpdates = allTrackIds.map(tId => {
-                const targetTrack = findTrackById(tId);
-                if (targetTrack?.instances?.[0]) {
-                    return {
-                        trackId: tId,
-                        instanceId: targetTrack.instances[0].id,
-                        widthDelta: deltaPixels,
-                        anchor: resizeDirection
-                    };
-                }
-                return null;
-            }).filter(Boolean) as Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>;
+          const deltaX = newPosition.x - oldPosition.x;
+          const deltaY = newPosition.y - oldPosition.y;
+          const allTrackIds = expandDrumSelection([trackId]);
 
-            if (instanceUpdates.length > 0) {
-                resizeMultipleInstances(instanceUpdates);
+          // Create instance updates for all tracks
+          const instanceUpdates = allTrackIds.map(tId => {
+            const targetTrack = findTrackById(tId);
+            if (targetTrack?.instances?.[0]) {
+              return {
+                trackId: tId,
+                instanceId: targetTrack.instances[0].id,
+                deltaX,
+                deltaY
+              };
             }
-            return;
+            return null;
+          }).filter(Boolean) as Array<{ trackId: string, instanceId: string, deltaX: number, deltaY: number }>;
+
+          if (instanceUpdates.length > 0) {
+            updateMultipleInstancePositions(instanceUpdates);
+          }
+          return;
         }
 
-        // Create instance-specific resize action for history
-        const action = new Actions.InstanceResize(
-            get,
-            trackId,
-            instanceId,
-            oldTrimStartTicks,
-            oldTrimEndTicks,
-            oldPositionX,
-            newTrimStartTicks,
-            newTrimEndTicks,
-            newPositionX
+        // Create instance-specific position action for history
+        const action = new Actions.InstanceMove(
+          get,
+          trackId,
+          instanceId,
+          oldPosition.x,
+          oldPosition.y,
+          Math.max(newPosition.x, 0),
+          Math.max(newPosition.y, 0)
+
         );
         await executeHistoryAction(action);
-        
+
         // Update notes for this instance if it's a MIDI-based track
         if (track.track_type === 'MIDI') {
-            const midiManager = rootGet().store?.getMidiManager();
-            if (midiManager) {
-                // Filter notes based on new trim values
-                midiManager.trimInstance(trackId, instanceId, newTrimStartTicks, newTrimEndTicks);
-            }
+          const midiManager = storeInstance.getMidiManager();
+          if (midiManager) {
+            const deltaX = newPosition.x - oldPosition.x;
+            midiManager.moveInstance(trackId, instanceId, deltaX);
+          }
         }
+
+        if (isPlaying && storeInstance.getTransport()?.handleTrackPositionChange) {
+          storeInstance.getTransport().handleTrackPositionChange(trackId, Math.max(newPosition.x, 0));
+        }
+
+      } else {
+        // During drag, update position directly without history
+        updateTrackInstance(trackId, instanceId, {
+          x_position: newPosition.x,
+          y_position: newPosition.y
+        });
+
+        // Update audio engine for this specific instance
+        // TODO: Audio engine needs to support instance-based positioning
+        storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
+      }
     };
-    
+
+    _withErrorHandling(changeLogic, 'handleInstancePositionChange')();
+  };
+
+  const handleInstanceResizeEnd = (
+    trackId: string,
+    instanceId: string,
+    deltaPixels: number,
+    resizeDirection: 'left' | 'right'
+  ): void => {
+    const { bpm, timeSignature, executeHistoryAction, _withErrorHandling } = rootGet();
+    const track = findTrackById(trackId);
+    if (!track || !track.instances || !_withErrorHandling) return;
+
+    const resizeLogic = async () => {
+      const instance = track.instances.find(inst => inst.id === instanceId);
+      if (!instance) {
+        console.error(`Instance ${instanceId} not found in track ${trackId}`);
+        return;
+      }
+
+      const oldTrimStartTicks = instance.trim_start_ticks;
+      const oldTrimEndTicks = instance.trim_end_ticks;
+      const oldPositionX = instance.x_position;
+      const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
+
+      let newTrimStartTicks = oldTrimStartTicks;
+      let newTrimEndTicks = oldTrimEndTicks;
+      let newPositionX = oldPositionX;
+
+      if (resizeDirection === 'left') {
+        newPositionX = Math.max(0, oldPositionX + deltaTicks);
+        const actualPositionDelta = newPositionX - oldPositionX;
+        newTrimStartTicks = oldTrimStartTicks + actualPositionDelta;
+      } else {
+        newTrimEndTicks = Math.max(newTrimStartTicks, oldTrimEndTicks + deltaTicks);
+      }
+
+      // Handle DRUM tracks: resize all linked samplers
+      if (track.track_type === 'DRUM') {
+        const allTrackIds = expandDrumSelection([trackId]);
+        const instanceUpdates = allTrackIds
+          .map(tId => {
+            const targetTrack = findTrackById(tId);
+            if (targetTrack?.instances?.[0]) {
+              return {
+                trackId: tId,
+                instanceId: targetTrack.instances[0].id,
+                widthDelta: deltaPixels,
+                anchor: resizeDirection
+              };
+            }
+            return null;
+          })
+          .filter(Boolean) as Array<{
+            trackId: string;
+            instanceId: string;
+            widthDelta: number;
+            anchor: 'left' | 'right';
+          }>;
+
+        if (instanceUpdates.length > 0) {
+          resizeMultipleInstances(instanceUpdates);
+        }
+        return;
+      }
+
+      const action = new Actions.InstanceResize(
+        get,
+        trackId,
+        instanceId,
+        oldTrimStartTicks,
+        oldTrimEndTicks,
+        oldPositionX,
+        newTrimStartTicks,
+        newTrimEndTicks,
+        newPositionX
+      );
+      await executeHistoryAction(action);
+
+      // Update playback for MIDI tracks
+      if (track.track_type === 'MIDI') {
+        const midiManager = rootGet().store?.getMidiManager();
+        if (midiManager) {
+          midiManager.trimInstance(trackId, instanceId, newTrimStartTicks, newTrimEndTicks);
+        }
+      }
+
+      // Update playback for AUDIO tracks
+      if (track.track_type === 'AUDIO') {
+        const audioEngine = rootGet().store?.getAudioEngine();
+        if (audioEngine?.setTrackTrim) {
+          audioEngine.setTrackTrim(trackId, newTrimStartTicks, newTrimEndTicks);
+
+          updateTrackInstance(trackId, instanceId, {
+            x_position: newPositionX,
+            trim_start_ticks: newTrimStartTicks,
+            trim_end_ticks: newTrimEndTicks
+          });
+
+          const transport = rootGet().store?.getTransport();
+          if (transport?.isPlaying) {
+            // Seek transport to current position and restart playback
+            const currentPos = transport.position;
+            transport.seek(currentPos); // ensure correct waveform position
+            transport.play(); // restart playback with updated trims
+          }
+        }
+      }
+    };
+
     _withErrorHandling(resizeLogic, 'handleInstanceResizeEnd')();
   };
-  
-  const updateMultipleInstancePositions = (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>): void => {
+
+
+
+
+
+
+  const updateMultipleInstancePositions = (instanceUpdates: Array<{ trackId: string, instanceId: string, deltaX: number, deltaY: number }>): void => {
     const { _withErrorHandling, executeHistoryAction } = rootGet();
     if (!_withErrorHandling) {
       console.error("_withErrorHandling not available");
@@ -2052,19 +2078,19 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const updateLogic = async () => {
       // Create individual instance move actions
       const actions: InstanceMove[] = [];
-      
+
       instanceUpdates.forEach(update => {
         const track = findTrackById(update.trackId);
         if (!track || !track.instances) return;
-        
+
         const instance = track.instances.find(inst => inst.id === update.instanceId);
         if (!instance) return;
-        
+
         const oldX = instance.x_position;
         const oldY = instance.y_position;
         const newX = Math.max(0, oldX + update.deltaX);
         const newY = Math.max(0, oldY + update.deltaY);
-        
+
         actions.push(new InstanceMove(
           get,
           update.trackId,
@@ -2075,7 +2101,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           newY
         ));
       });
-      
+
       if (actions.length > 0) {
         // Create group action for all instance moves
         const groupAction = new Actions.GroupAction(
@@ -2086,11 +2112,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         await executeHistoryAction(groupAction);
       }
     };
-    
+
     _withErrorHandling(updateLogic, 'updateMultipleInstancePositions')();
   };
-  
-  const resizeMultipleInstances = (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>): void => {
+
+  const resizeMultipleInstances = (instanceUpdates: Array<{ trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right' }>): void => {
     const { bpm, timeSignature, _withErrorHandling, executeHistoryAction } = rootGet();
     if (!_withErrorHandling) {
       console.error("_withErrorHandling not available");
@@ -2100,23 +2126,23 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const resizeLogic = async () => {
       // Create individual instance resize actions
       const actions: InstanceResize[] = [];
-      
+
       instanceUpdates.forEach(update => {
         const track = findTrackById(update.trackId);
         if (!track || !track.instances) return;
-        
+
         const instance = track.instances.find(inst => inst.id === update.instanceId);
         if (!instance) return;
-        
+
         const deltaTicks = pixelsToTicks(update.widthDelta, bpm, timeSignature);
         const oldTrimStartTicks = instance.trim_start_ticks;
         const oldTrimEndTicks = instance.trim_end_ticks;
         const oldPositionX = instance.x_position;
-        
+
         let newTrimStartTicks = oldTrimStartTicks;
         let newTrimEndTicks = oldTrimEndTicks;
         let newPositionX = oldPositionX;
-        
+
         if (update.anchor === 'left') {
           // For left resize, adjust trim start and position
           newTrimStartTicks = oldTrimStartTicks + deltaTicks;
@@ -2130,7 +2156,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           // Ensure trim end doesn't go below trim start
           newTrimEndTicks = Math.max(newTrimStartTicks, newTrimEndTicks);
         }
-        
+
         actions.push(new InstanceResize(
           get,
           update.trackId,
@@ -2143,7 +2169,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           newPositionX
         ));
       });
-      
+
       if (actions.length > 0) {
         // Create group action for all instance resizes
         const groupAction = new Actions.GroupAction(
@@ -2154,11 +2180,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         await executeHistoryAction(groupAction);
       }
     };
-    
+
     _withErrorHandling(resizeLogic, 'resizeMultipleInstances')();
   };
-  
-  const deleteMultipleInstances = async (instanceDeletions: Array<{trackId: string, instanceId: string}>): Promise<void> => {
+
+  const deleteMultipleInstances = async (instanceDeletions: Array<{ trackId: string, instanceId: string }>): Promise<void> => {
     const { _withErrorHandling, executeHistoryAction } = rootGet();
     if (!_withErrorHandling) {
       console.error("_withErrorHandling not available");
@@ -2168,30 +2194,30 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const deleteLogic = async () => {
       // Create individual instance delete actions
       const actions: InstanceDelete[] = [];
-      
+
       for (const deletion of instanceDeletions) {
         const track = findTrackById(deletion.trackId);
         if (!track || !track.instances) continue;
-        
+
         // Don't delete if it's the only instance
         if (track.instances.length <= 1) {
           console.warn(`Cannot delete the last instance of track ${deletion.trackId}`);
           continue;
         }
-        
+
         const instance = track.instances.find(inst => inst.id === deletion.instanceId);
         if (!instance) {
           console.error(`Instance ${deletion.instanceId} not found in track ${deletion.trackId}`);
           continue;
         }
-        
+
         actions.push(new Actions.InstanceDelete(
           get,
           deletion.trackId,
           instance
         ));
       }
-      
+
       if (actions.length > 0) {
         // Create group action for all instance deletions
         const groupAction = new Actions.GroupAction(
@@ -2202,16 +2228,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         await executeHistoryAction(groupAction);
       }
     };
-    
+
     return _withErrorHandling(deleteLogic, 'deleteMultipleInstances')();
   };
 
   // Get count of visible tracks (excludes sampler tracks that are part of drum tracks)
   const getVisibleTrackCount = (): number => {
     const state = rootGet();
-    const count = state.tracks.filter(track => 
-      !(track.track_type === 'SAMPLER' && 
-        track.track && 
+    const count = state.tracks.filter(track =>
+      !(track.track_type === 'SAMPLER' &&
+        track.track &&
         (track.track as SamplerTrackRead).drum_track_id)
     ).length;
     return count;
@@ -2271,10 +2297,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     duplicateMultipleTracks,
     deleteMultipleTracks,
     resizeMultipleTracks,
-    
+
     // Group position operations for group moving
     updateMultipleTrackPositions,
-    
+
     // Track instance management
     addTrackInstance,
     updateTrackInstance,
