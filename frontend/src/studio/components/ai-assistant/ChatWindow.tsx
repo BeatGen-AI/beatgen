@@ -574,8 +574,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
               denominator: timeSignature[1]
             },
             key_signature: keySignature,
-            project_title: projectTitle,
-            generation_type: generationType || 'midi'
+            project_name: projectTitle,
+            generation_type: generationType || 'midi',
+            tracks: tracks.map(track => ({
+              id: track.id,
+              name: track.name,
+              type: track.type,
+              volume: track.volume,
+              pan: track.pan,
+              muted: track.muted,
+              soloed: track.soloed,
+              instrument: track.instrumentName || track.instrument
+            }))
           }
         },
         setupStreamCallbacks()
