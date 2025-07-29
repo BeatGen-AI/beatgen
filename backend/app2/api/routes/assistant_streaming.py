@@ -812,17 +812,25 @@ async def process_generate_audio_request(
         else:
             duration = None
         
-        # Generate audio
+        # Generate audio with service-specific parameters
         logger.info(f"Generating audio - BPM: {bpm}, Key: {key_signature}, Bars: {bars}, Duration: {duration}s")
-        audio_data, generation_result = await audio_service.generate_and_download_audio(
-            prompt=enhanced_prompt,
-            negative_prompt=negative_prompt,
-            # These parameters are used by Stability AI, ignored by others
-            duration=duration,
-            bpm=bpm,
-            bars=bars,
-            key=key_signature
-        )
+        
+        # Check if this is Stability AI service (supports additional parameters)
+        if context.model == 'stability/stable-audio-2':
+            audio_data, generation_result = await audio_service.generate_and_download_audio(
+                prompt=enhanced_prompt,
+                negative_prompt=negative_prompt,
+                duration=duration,
+                bpm=bpm,
+                bars=bars,
+                key=key_signature
+            )
+        else:
+            # VertexAI and FAL AI services only support prompt and negative_prompt
+            audio_data, generation_result = await audio_service.generate_and_download_audio(
+                prompt=enhanced_prompt,
+                negative_prompt=negative_prompt
+            )
         
         await sse_queue.stage(
             name="processing_audio",
