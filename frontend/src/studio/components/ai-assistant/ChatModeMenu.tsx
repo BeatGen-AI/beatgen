@@ -75,6 +75,7 @@ const ChatModeMenu: React.FC<ChatModeMenuProps> = ({ triggerLabel, onSelect, sel
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
+        side="top"
         className={getDropdownClassName()}
         sideOffset={4}
       >
