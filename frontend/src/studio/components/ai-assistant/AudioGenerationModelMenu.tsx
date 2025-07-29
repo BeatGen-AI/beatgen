@@ -8,18 +8,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Clock } from 'lucide-react';
 import { useAppTheme } from '../../../lib/theme-provider';
-
-// Audio model information
-const AUDIO_MODEL_INFO: Record<string, { duration: string; description: string }> = {
-  "vertex-ai/lyria2": {
-    duration: "30s",
-    description: "Lyria 2 (Vertex AI)"
-  },
-  "stability/stable-audio-2": {
-    duration: "120s",
-    description: "Stable Audio 2.0"
-  }
-};
+import { getAudioModelInfo } from '../../config/audioModels';
+import { 
+  getBadgeClassName, 
+  getDropdownClassName, 
+  getMenuItemClassName, 
+  getTextColor 
+} from '../../utils/menuStyles';
 
 interface AudioGenerationModelMenuProps {
   triggerLabel: string; // Label for the trigger
@@ -34,7 +29,7 @@ const AudioGenerationModelMenu: React.FC<AudioGenerationModelMenuProps> = ({
   onSelect, 
   models, 
   selectedModel, 
-  disabled 
+  disabled = false
 }) => {
   const { studioMode } = useAppTheme();
   
@@ -42,52 +37,12 @@ const AudioGenerationModelMenu: React.FC<AudioGenerationModelMenuProps> = ({
     onSelect(model);
   };
 
-  const getModelInfo = (model: string) => {
-    return AUDIO_MODEL_INFO[model] || { duration: "30s", description: model };
-  };
-
-  const getTextColor = () => {
-    return studioMode === 'dark' ? 'text-gray-400' : 'text-gray-600';
-  };
-
-  const getDropdownClassName = () => {
-    if (studioMode === 'dark') {
-      // Match Material-UI menu styling for dark mode
-      return "w-52 z-[9999] p-1 bg-[rgb(48,48,48)] border-0 shadow-lg rounded-lg focus:outline-none";
-    }
-    // Light mode styling
-    return "w-52 z-[9999] p-1 bg-white border border-gray-200 shadow-lg rounded-lg focus:outline-none";
-  };
-
-  const getItemClassName = (isSelected: boolean) => {
-    const baseClasses = "flex items-center justify-between cursor-pointer min-h-0 transition-colors text-xs rounded";
-    const paddingClasses = "px-2 py-1";
-    
-    if (studioMode === 'dark') {
-      // Dark mode: Match Material-UI MenuItem styling
-      const textColor = 'text-white';
-      const selectedClass = isSelected ? 'bg-[rgba(255,255,255,0.1)]' : '';
-      const hoverClass = 'hover:bg-[rgba(255,255,255,0.08)]';
-      return `${baseClasses} ${paddingClasses} ${textColor} ${selectedClass} ${hoverClass}`;
-    } else {
-      // Light mode styling
-      const textColor = 'text-gray-900';
-      const selectedClass = isSelected ? 'bg-gray-100' : '';
-      const hoverClass = 'hover:bg-gray-50';
-      return `${baseClasses} ${paddingClasses} ${textColor} ${selectedClass} ${hoverClass}`;
-    }
-  };
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Badge 
           variant="secondary"
-          className={`cursor-pointer h-5 text-xs border-0 ${
-            studioMode === 'dark' 
-              ? 'bg-[rgba(60,60,60,0.8)] text-white hover:bg-[rgba(60,60,60,0.9)]'
-              : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-          } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={getBadgeClassName(studioMode, disabled)}
           style={{
             borderRadius: '5px',
             fontSize: '0.7rem'
@@ -99,21 +54,21 @@ const AudioGenerationModelMenu: React.FC<AudioGenerationModelMenuProps> = ({
       <DropdownMenuContent
         align="start"
         side="top"
-        className={getDropdownClassName()}
+        className={getDropdownClassName(studioMode, 'w-52')}
         sideOffset={4}
       >
         {models.map((model) => {
-          const modelInfo = getModelInfo(model);
+          const modelInfo = getAudioModelInfo(model);
           const isSelected = selectedModel === model;
           
           return (
             <DropdownMenuItem
               key={model}
               onClick={() => handleSelect(model)}
-              className={getItemClassName(isSelected)}
+              className={getMenuItemClassName(studioMode, isSelected, 'sm')}
             >
               <span className="text-xs font-medium truncate">{modelInfo.description}</span>
-              <div className={`text-[10px] font-medium ml-2 shrink-0 flex items-center gap-0.5 ${getTextColor()}`}>
+              <div className={`text-[10px] font-medium ml-2 shrink-0 flex items-center gap-0.5 ${getTextColor(studioMode, 'muted')}`}>
                 {modelInfo.duration}
                 <Clock className="w-3 h-3" />
               </div>

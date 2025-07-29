@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Music, Loader2 } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { AudioTrackRead } from '../../../../platform/types/dto/track_models/audio_track';
@@ -9,7 +9,11 @@ interface TrackListPanelProps {
   onSelectTrack: (track: AudioTrackRead) => void;
 }
 
-const TrackListPanel: React.FC<TrackListPanelProps> = ({ onSelectTrack }) => {
+export interface TrackListPanelRef {
+  refreshTracks: () => void;
+}
+
+const TrackListPanel = forwardRef<TrackListPanelRef, TrackListPanelProps>(({ onSelectTrack }, ref) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [tracks, setTracks] = useState<AudioTrackRead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -101,11 +105,9 @@ const TrackListPanel: React.FC<TrackListPanelProps> = ({ onSelectTrack }) => {
   }, []);
 
   // Expose refresh function via ref (could be used by parent)
-  React.useImperativeHandle(
-    React.forwardRef<{ refreshTracks: () => void }, TrackListPanelProps>(() => null),
-    () => ({ refreshTracks }),
-    [refreshTracks]
-  );
+  useImperativeHandle(ref, () => ({
+    refreshTracks
+  }), [refreshTracks]);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -155,6 +157,6 @@ const TrackListPanel: React.FC<TrackListPanelProps> = ({ onSelectTrack }) => {
       </div>
     </div>
   );
-};
+});
 
 export default TrackListPanel;
