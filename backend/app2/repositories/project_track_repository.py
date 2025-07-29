@@ -500,7 +500,10 @@ class ProjectTrackRepository:
             }
             
             result = await self.session.execute(query, upsert_data)
-            await self.session.commit()
+            
+            # Just flush to make changes visible within the transaction
+            # Commit/rollback is handled by the service-level transaction context
+            await self.session.flush()
             
             # Convert result to ProjectTrack object
             row = result.fetchone()
@@ -512,7 +515,6 @@ class ProjectTrackRepository:
                 raise DatabaseException("Upsert operation did not return a result")
                 
         except Exception as e:
-            await self.session.rollback()
             self.logger.error(f"Error upserting project-track: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to upsert project-track: {str(e)}")
@@ -532,35 +534,12 @@ class ProjectTrackRepository:
         """
         self.logger.info(f"Batch upserting {len(project_tracks_data)} project-tracks")
         try:
-            if not project_tracks_data:
-                return []
-            
-            # Build VALUES clause for bulk insert using PostgreSQL ON CONFLICT
-            from sqlalchemy.dialects.postgresql import insert
-            
-            # Use PostgreSQL's INSERT ... ON CONFLICT for true upsert
-            stmt = insert(ProjectTrack.__table__)
-            
-            # Define conflict handling - update all columns except primary key and timestamps
-            update_dict = {
-                col.name: stmt.excluded[col.name] 
-                for col in ProjectTrack.__table__.columns 
-                if col.name not in ['id', 'created_at']
-            }
-            
-            stmt = stmt.on_conflict_do_update(
-                index_elements=['project_id', 'track_index'],
-                set_=update_dict
-            ).returning(ProjectTrack.__table__)
-            
-            # Execute batch insert
-            result = await self.session.execute(stmt, project_tracks_data)
-            results = [ProjectTrack.model_validate(row._asdict()) for row in result.fetchall()]
-            
-            # Flush to ensure changes are visible
-            await self.session.flush()
-            
-            self.logger.info(f"Successfully batch upserted {len(results)} project-tracks in single query")
+            results = []
+            for project_track_data in project_tracks_data:
+                result = await self.upsert(project_track_data)
+                results.append(result)
+
+            self.logger.info(f"Successfully upserted {len(results)} project-tracks")
             return results
             
         except Exception as e:

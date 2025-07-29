@@ -350,6 +350,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         if (eventType === 'step_event') {
           console.log('🎵🎵🎵 STEP EVENT RECEIVED:', data);
           console.log('🎵🎵🎵 Current isStepMode:', isStepMode);
+          console.log('🔍 STEP EVENT DETAILS:', {
+            step_id: data.step_id,
+            step_name: data.step_name,
+            event_type: data.event_type,
+            content_length: data.content?.length || 0,
+            timestamp: new Date().toISOString()
+          });
           stepManager.addEvent(data);
           
           // Execute actions immediately when they arrive
