@@ -58,6 +58,7 @@ interface GenerationPromptControlProps {
   submitButtonAriaLabel?: string;
   className?: string;
   useStudioTheme?: boolean;
+  textareaTopPadding?: number;
 }
 
 const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
@@ -89,6 +90,7 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
   submitButtonAriaLabel = "Generate",
   className = "",
   useStudioTheme = false,
+  textareaTopPadding = 10,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { mode, studioMode } = useAppTheme();
@@ -153,7 +155,7 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
           className={`pr-16 min-h-[120px] resize-none ${
             textareaBottomLeftComponent || textareaBottomRightComponent ? 'pb-8' : 'pb-2'
           } ${
-            textareaTopLeftComponent || textareaTopRightComponent ? 'pt-10' : 'pt-2'
+            textareaTopLeftComponent || textareaTopRightComponent ? `pt-${textareaTopPadding}` : 'pt-2'
           } ${'pl-3'}`
         }
           style={useStudioTheme ? {
