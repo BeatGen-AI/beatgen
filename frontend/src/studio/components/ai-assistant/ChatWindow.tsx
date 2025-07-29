@@ -1115,7 +1115,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         </div>
         
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 px-2 flex flex-col gap-3">
+        <div className="flex-1 overflow-y-auto p-2 px-6 flex flex-col gap-3">
           {isStepMode && steps.length > 0 ? (
             // Step-based rendering for music generation
             <>
