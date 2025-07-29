@@ -236,18 +236,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       // Update the specific step message in the messages array
       const stepMessageId = currentStepMessageIdRef.current;
       if (stepMessageId !== null) {
-        console.log('🔄 Updating step message ID:', stepMessageId, 'with steps:', updatedSteps.length);
         setMessages(prev => {
-          const updated = prev.map(msg => 
+          return prev.map(msg => 
             msg.messageId === stepMessageId 
               ? { ...msg, steps: updatedSteps }
               : msg
           );
-          console.log('🔄 Updated messages array:', updated);
-          return updated;
         });
-      } else {
-        console.warn('⚠️ No currentStepMessageId set for step update');
       }
     };
 
@@ -257,18 +252,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     };
   }, [stepManager]);
 
-  // Debug log for streaming state changes
-  useEffect(() => {
-    console.log('🔄 STREAMING STATE CHANGED:', { 
-      isStreaming, 
-      streamingText, 
-      currentMessageId,
-      isLoading,
-      messagesCount: messages.length,
-      lastMessage: messages.length > 0 ? messages[messages.length - 1] : null
-    });
-  }, [isStreaming, streamingText, currentMessageId, isLoading, messages]);
-  
   // Scroll to bottom of messages whenever messages change
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -331,32 +314,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         handleAction(action.type, action.data);
         
         // Add action message
-        setMessages(prev => [
-          ...prev, 
-          { 
-            type: 'assistant',
-            text: '', 
-            action: action.type,
-            actionData: action.data
-          }
-        ]);
+        // setMessages(prev => [
+        //   ...prev, 
+        //   { 
+        //     type: 'assistant',
+        //     text: '', 
+        //     action: action.type,
+        //     actionData: action.data
+        //   }
+        // ]);
       },
       
       // New handlers for streaming text
       onEvent: (eventType, data) => {
-        console.log(`⭐⭐⭐ RECEIVED CUSTOM EVENT: ${eventType}`, data);
         
         // Handle step events for music generation
         if (eventType === 'step_event') {
-          console.log('🎵🎵🎵 STEP EVENT RECEIVED:', data);
-          console.log('🎵🎵🎵 Current isStepMode:', isStepMode);
-          console.log('🔍 STEP EVENT DETAILS:', {
-            step_id: data.step_id,
-            step_name: data.step_name,
-            event_type: data.event_type,
-            content_length: data.content?.length || 0,
-            timestamp: new Date().toISOString()
-          });
           stepManager.addEvent(data);
           
           // Execute actions immediately when they arrive
@@ -398,21 +371,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
                 }
               ];
             });
-          } else {
-            console.log('🎵 In step mode - skipping assistant message creation');
           }
         }
         else if (eventType === 'response_chunk') {
-          console.log('🟡 STREAMING CHUNK - Received chunk:', { 
-            chunk: data.chunk, 
-            messageId: data.message_id,
-            isStepMode: isStepMode
-          });
           
           // If we're in step mode, route streaming to the step system
           if (isStepMode) {
-            console.log('🎵 Routing chunk to step system');
-            
             // If this is the first chunk, start streaming
             if (!stepManager.hasActiveStream) {
               stepManager.startStreaming();
@@ -429,24 +393,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             const updatedMessages = [...prev];
             const lastMessageIndex = updatedMessages.length - 1;
             
-            console.log('🟡 Current messages state:', { 
-              messagesCount: updatedMessages.length,
-              lastMessage: lastMessageIndex >= 0 ? updatedMessages[lastMessageIndex] : null
-            });
             
             // Check if the last message is a streaming message
             if (lastMessageIndex >= 0 && updatedMessages[lastMessageIndex].isStreaming) {
-              console.log('🟢 Found streaming message at index:', lastMessageIndex);
-              
               // Add the chunk to the existing text
               const existingText = updatedMessages[lastMessageIndex].text || '';
               const newText = existingText + data.chunk;
-              
-              console.log('🟢 Updating text:', { 
-                oldText: existingText, 
-                chunk: data.chunk, 
-                newText 
-              });
               
               // Create a new message object to ensure React detects the change
               updatedMessages[lastMessageIndex] = {
@@ -457,8 +409,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
               // Also update streamingText state separately
               setStreamingText(newText);
             } else {
-              console.warn('⚠️ No streaming message found to update. Creating one now.');
-              
               // If no streaming message exists (which shouldn't happen),
               // create one as a fallback
               updatedMessages.push({
@@ -483,7 +433,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             
             // If we're in step mode, finalize the step streaming
             if (isStepMode) {
-              console.log('🎵 Finalizing step streaming');
               stepManager.finalizeStreaming();
             } else {
               // Legacy message-based streaming finalization
@@ -580,14 +529,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       }
       
       // Initialize step mode for generate requests
-      console.log('🔍 Checking apiMode:', apiMode, 'for step mode initialization');
       if (apiMode === 'generate') {
-        console.log('✅ Entering generate mode initialization');
         setIsStepMode(true);
         
-        // Add a step message to the messages array FIRST
-        console.log('📝 About to create step message');
-        // Calculate the step message ID first
+        // Add a step message to the messages array
         const stepMessageId = messages.length.toString();
         setMessages(prev => {
           const stepMessage: Message = {
@@ -595,19 +540,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             steps: [],
             messageId: stepMessageId
           };
-          console.log('🎯 Created step message with ID:', stepMessageId);
           return [...prev, stepMessage];
         });
+        
         // Set the current step message ID (both state and ref)
         setCurrentStepMessageId(stepMessageId);
         currentStepMessageIdRef.current = stepMessageId;
-        console.log('🎯 Set currentStepMessageId to:', stepMessageId);
         
-        // Now reset the step manager (this will trigger step updates)
-        stepManager.reset(); // Reset for new generation
-        console.log('🎵 Initialized step mode for music generation');
+        // Reset the step manager (this will trigger step updates)
+        stepManager.reset();
       } else {
-        console.log('🚫 Not in generate mode, setting isStepMode to false');
         setIsStepMode(false);
       }
       
@@ -629,17 +571,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
               denominator: timeSignature[1]
             },
             key_signature: keySignature,
-            project_name: projectTitle,
+            project_title: projectTitle,
             generation_type: generationType || 'midi',
             tracks: tracks.map(track => ({
               id: track.id,
               name: track.name,
-              type: track.type,
+              type: track.track_type,
               volume: track.volume,
               pan: track.pan,
-              muted: track.muted,
+              muted: track.mute,
               soloed: track.soloed,
-              instrument: track.instrumentName || track.instrument
+              instrument: (track.track as MidiTrackRead)?.instrument_file?.display_name || track.name
             }))
           }
         },
@@ -1195,7 +1137,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
                 />
               );
             } else if (msg.type === 'steps') {
-              console.log('📋 Rendering StepRenderer with steps:', msg.steps?.length || 0);
               return (
                 <StepRenderer 
                   key={index}
