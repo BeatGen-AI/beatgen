@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Menu, MenuItem, ListItemIcon, ListItemText, Divider, useTheme } from '@mui/material';
-import PianoIcon from '@mui/icons-material/Piano';
-import AudioFileIcon from '@mui/icons-material/AudioFile';
-import GraphicEqIcon from '@mui/icons-material/GraphicEq';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
+import { Piano, AudioWaveform, Music, Scissors } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { VirtualInstrumentsBottomSheet } from '../modals/VirtualInstrumentBottomSheet';
 import { DrumMachineBottomSheet } from '../modals/drum-machine/DrumModelBottomSheet';
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
@@ -15,8 +17,8 @@ import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload, AudioTr
 
 interface AddTrackMenuProps {
   isOpen: boolean;
-  anchorEl: HTMLElement | null;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
   // Use imported types
   onAddTrack: (type: TrackType, payload?: AddTrackPayload) => void;
   // Keep onFileUpload for direct audio/sampler uploads for now
@@ -26,13 +28,13 @@ interface AddTrackMenuProps {
 
 export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({ 
   isOpen, 
-  anchorEl, 
-  onClose, 
+  onOpenChange, 
+  children,
   onAddTrack, 
   onFileUpload,
   isAIAssistantOpen = false 
 }) => {
-  const theme = useTheme();
+  // Remove theme usage
   const [isVirtualInstrumentBottomSheetOpen, setIsVirtualInstrumentBottomSheetOpen] = useState(false);
   const [isDrumMachineBottomSheetOpen, setIsDrumMachineBottomSheetOpen] = useState(false);
   
@@ -99,113 +101,82 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           // Or potentially call onAddTrack here if we refactor later
           // onAddTrack(isSampler ? 'sampler' : 'audio', { file });
       }
-      onClose();
+      onOpenChange(false);
       console.log('File uploaded');
     }
   };
   
   return (
     <>
-      <Menu
-        open={isOpen}
-        anchorEl={anchorEl}
-        onClose={onClose}
-        PaperProps={{
-          sx: { 
-            bgcolor: 'background.paper', 
-            color: 'text.primary', 
-            minWidth: 180, 
-            boxShadow: theme.shadows[3]
-          } 
-        }}
-      >
-        <MenuItem onClick={() => {
-          // Close drum modal if open
-          setIsDrumMachineBottomSheetOpen(false);
-          // Reset virtual instrument height to default when opening
-          setVirtualInstrumentHeight(400);
-          // Fetch soundfonts if not already loaded
-          fetchSoundfonts();
-          setIsVirtualInstrumentBottomSheetOpen(true);
-          setExpandedBottomSheet('virtual');
-          onClose();
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <ListItemIcon><PianoIcon sx={{ color: '#e91e63' }} /></ListItemIcon>
-          <ListItemText primary="Virtual Instrument" />
-        </MenuItem>
+      <DropdownMenu open={isOpen} onOpenChange={onOpenChange}>
+        <DropdownMenuTrigger asChild>
+          {children}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-48">
+          <DropdownMenuItem 
+            onClick={() => {
+              // Close drum modal if open
+              setIsDrumMachineBottomSheetOpen(false);
+              // Reset virtual instrument height to default when opening
+              setVirtualInstrumentHeight(400);
+              // Fetch soundfonts if not already loaded
+              fetchSoundfonts();
+              setIsVirtualInstrumentBottomSheetOpen(true);
+              setExpandedBottomSheet('virtual');
+              onOpenChange(false);
+            }}
+            className="text-sm py-2 cursor-pointer"
+          >
+            <Piano className="w-4 h-4 mr-3 text-blue-500" />
+            Virtual Instrument
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem 
+            onClick={() => { 
+              // Close VI modal if open
+              setIsVirtualInstrumentBottomSheetOpen(false);
+              // Reset drum machine height to default when opening
+              setDrumMachineHeight(400);
+              // Fetch drum samples if not already loaded
+              fetchDrumSamples();
+              setIsDrumMachineBottomSheetOpen(true);
+              setExpandedBottomSheet('drum');
+              onOpenChange(false); 
+            }}
+            className="text-sm py-2 cursor-pointer"
+          >
+            <Music className="w-4 h-4 mr-3 text-orange-500" />
+            Drum Machine
+          </DropdownMenuItem>
         
-        <MenuItem onClick={() => { 
-          // Close VI modal if open
-          setIsVirtualInstrumentBottomSheetOpen(false);
-          // Reset drum machine height to default when opening
-          setDrumMachineHeight(400);
-          // Fetch drum samples if not already loaded
-          fetchDrumSamples();
-          setIsDrumMachineBottomSheetOpen(true);
-          setExpandedBottomSheet('drum');
-          onClose(); 
-        }}
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <ListItemIcon><GraphicEqIcon sx={{ color: '#ff5722' }} /></ListItemIcon>
-          <ListItemText primary="Drum Machine" />
-        </MenuItem>
-        
-        <MenuItem
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover
-            }
-          }}
-        >
-          <label style={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
-            <ListItemIcon><AudioFileIcon sx={{ color: '#4caf50' }} /></ListItemIcon>
-            <ListItemText primary="Import Audio" />
-            <input 
-              type="file" 
-              accept="audio/*" 
-              style={{ display: 'none' }} 
-              onChange={(e) => handleFileUpload(e, false)}
-            />
-          </label>
-        </MenuItem>
-        <MenuItem
-          sx={{ 
-            fontSize: '13px',
-            py: 1,
-            '&:hover': { 
-              bgcolor: theme.palette.action.hover 
-            }
-          }}
-        >
-          <label style={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
-            <ListItemIcon><ContentCutIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-            <ListItemText primary="Sampler" />
-            <input 
-              type="file" 
-              accept="audio/*" 
-              style={{ display: 'none' }} 
-              onChange={(e) => handleFileUpload(e, true)}
-            />
-          </label>
-        </MenuItem>
-      </Menu>
+          <DropdownMenuItem 
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'audio/*';
+              input.onchange = (e) => handleFileUpload(e as any, false);
+              input.click();
+            }}
+            className="text-sm py-2 cursor-pointer"
+          >
+            <AudioWaveform className="w-4 h-4 mr-3 text-green-500" />
+            Import Audio
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'audio/*';
+              input.onchange = (e) => handleFileUpload(e as any, true);
+              input.click();
+            }}
+            className="text-sm py-2 cursor-pointer"
+          >
+            <Scissors className="w-4 h-4 mr-3 text-purple-500" />
+            Sampler
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Bottom Sheet Container - anchored to bottom of viewport */}
       {/* Virtual Instruments Bottom Sheet */}
