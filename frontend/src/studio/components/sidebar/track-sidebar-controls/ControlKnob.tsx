@@ -295,7 +295,7 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
       
       {label && (
         <span 
-          className="text-gray-400 mt-0"
+          className="text-gray-400 mt-px"
           style={{ 
             fontSize: size <= 30 ? '0.5rem' : size <= 40 ? '0.6rem' : '0.7rem' 
           }}

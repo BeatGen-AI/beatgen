@@ -36,8 +36,9 @@ import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { createDefaultInstance } from '../../utils/instanceHelpers';
 
 interface Message {
-  text: string;
-  isUser: boolean;
+  type: 'user' | 'assistant' | 'steps';
+  text?: string;
+  isUser?: boolean; // Keep for backward compatibility
   mode?: string;
   selectedTrack?: {
     id: string;
@@ -47,6 +48,7 @@ interface Message {
   actionData?: any;
   isStreaming?: boolean; // Flag to indicate this message is currently streaming
   messageId?: string; // Unique identifier for the message
+  steps?: Step[]; // For step-based messages
 }
 
 interface ChatWindowProps {
@@ -153,6 +155,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   const [stepManager] = useState(() => new StepManager());
   const [steps, setSteps] = useState<Step[]>([]);
   const [isStepMode, setIsStepMode] = useState(true);
+  const [currentStepMessageId, setCurrentStepMessageId] = useState<string | null>(null);
+  const currentStepMessageIdRef = useRef<string | null>(null);
   
   // Generation choice state
   const [showGenerationChoiceButtons, setShowGenerationChoiceButtons] = useState(false);
@@ -217,8 +221,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     if (isOpen && messages.length === 0) {
       setMessages([
         { 
-          text: "Hi! I'm your AI assistant. How can I help with your music project today?", 
-          isUser: false 
+          type: 'assistant',
+          text: "Hi! I'm your AI assistant. How can I help with your music project today?"
         }
       ]);
     }
@@ -228,6 +232,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   useEffect(() => {
     const handleStepUpdate = (updatedSteps: Step[]) => {
       setSteps(updatedSteps);
+      
+      // Update the specific step message in the messages array
+      const stepMessageId = currentStepMessageIdRef.current;
+      if (stepMessageId !== null) {
+        console.log('🔄 Updating step message ID:', stepMessageId, 'with steps:', updatedSteps.length);
+        setMessages(prev => {
+          const updated = prev.map(msg => 
+            msg.messageId === stepMessageId 
+              ? { ...msg, steps: updatedSteps }
+              : msg
+          );
+          console.log('🔄 Updated messages array:', updated);
+          return updated;
+        });
+      } else {
+        console.warn('⚠️ No currentStepMessageId set for step update');
+      }
     };
 
     stepManager.addListener(handleStepUpdate);
@@ -313,8 +334,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         setMessages(prev => [
           ...prev, 
           { 
+            type: 'assistant',
             text: '', 
-            isUser: false,
             action: action.type,
             actionData: action.data
           }
@@ -347,28 +368,32 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
           setCurrentMessageId(messageId);
           setIsStreaming(true);
           
-          // Only add a message if we don't have any assistant messages yet
-          setMessages(prev => {
-            // Check if we already have any non-user messages at the end
-            const lastIndex = prev.length - 1;
-            if (lastIndex >= 0 && !prev[lastIndex].isUser) {
-              // Just update the existing message to be streaming
-              return prev.map((msg, i) => 
-                i === lastIndex ? { ...msg, isStreaming: true, messageId } : msg
-              );
-            }
-            
-            // Add a new message if needed
-            return [
-              ...prev,
-              { 
-                text: '',
-                isUser: false,
-                isStreaming: true,
-                messageId
+          // Only add assistant message if NOT in step mode
+          if (!isStepMode) {
+            setMessages(prev => {
+              // Check if we already have any assistant messages at the end
+              const lastIndex = prev.length - 1;
+              if (lastIndex >= 0 && prev[lastIndex].type === 'assistant') {
+                // Just update the existing message to be streaming
+                return prev.map((msg, i) => 
+                  i === lastIndex ? { ...msg, isStreaming: true, messageId } : msg
+                );
               }
-            ];
-          });
+              
+              // Add a new message if needed
+              return [
+                ...prev,
+                { 
+                  type: 'assistant',
+                  text: '',
+                  isStreaming: true,
+                  messageId
+                }
+              ];
+            });
+          } else {
+            console.log('🎵 In step mode - skipping assistant message creation');
+          }
         }
         else if (eventType === 'response_chunk') {
           console.log('🟡 STREAMING CHUNK - Received chunk:', { 
@@ -430,8 +455,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
               // If no streaming message exists (which shouldn't happen),
               // create one as a fallback
               updatedMessages.push({
+                type: 'assistant',
                 text: data.chunk,
-                isUser: false,
                 isStreaming: true,
                 messageId: data.message_id
               });
@@ -479,11 +504,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         console.log('Stream complete with response:', response);
         setIsLoading(false);
         
-        // Only add the assistant's response if we're not already streaming it
-        if (!isStreaming) {
+        // Only add the assistant's response if we're not already streaming it AND not in step mode
+        if (!isStreaming && !isStepMode) {
           setMessages(prev => [
             ...prev, 
-            { text: response.response, isUser: false }
+            { type: 'assistant', text: response.response }
           ]);
         }
         
@@ -503,8 +528,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         setMessages(prev => [
           ...prev, 
           { 
-            text: `Sorry, I encountered an error: ${error.message || 'Unknown error'}`, 
-            isUser: false 
+            type: 'assistant',
+            text: `Sorry, I encountered an error: ${error.message || 'Unknown error'}`
           }
         ]);
         
@@ -548,11 +573,34 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       }
       
       // Initialize step mode for generate requests
+      console.log('🔍 Checking apiMode:', apiMode, 'for step mode initialization');
       if (apiMode === 'generate') {
+        console.log('✅ Entering generate mode initialization');
         setIsStepMode(true);
+        
+        // Add a step message to the messages array FIRST
+        console.log('📝 About to create step message');
+        // Calculate the step message ID first
+        const stepMessageId = messages.length.toString();
+        setMessages(prev => {
+          const stepMessage: Message = {
+            type: 'steps',
+            steps: [],
+            messageId: stepMessageId
+          };
+          console.log('🎯 Created step message with ID:', stepMessageId);
+          return [...prev, stepMessage];
+        });
+        // Set the current step message ID (both state and ref)
+        setCurrentStepMessageId(stepMessageId);
+        currentStepMessageIdRef.current = stepMessageId;
+        console.log('🎯 Set currentStepMessageId to:', stepMessageId);
+        
+        // Now reset the step manager (this will trigger step updates)
         stepManager.reset(); // Reset for new generation
         console.log('🎵 Initialized step mode for music generation');
       } else {
+        console.log('🚫 Not in generate mode, setting isStepMode to false');
         setIsStepMode(false);
       }
       
@@ -598,8 +646,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     } catch (error) {
       console.error('Error starting assistant interaction:', error);
       setMessages(prev => [...prev, { 
-        text: "Sorry, I encountered an error processing your request.", 
-        isUser: false 
+        type: 'assistant',
+        text: "Sorry, I encountered an error processing your request."
       }]);
       setIsLoading(false);
     }
@@ -628,8 +676,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     if (mode === 'Generate' && !selectedGenerationType) {
       // Add user message to chat with current mode and selected track
       const userMessage: Message = { 
+        type: 'user',
         text: prompt, 
-        isUser: true,
         mode: mode,
         selectedTrack: selectedTrack
       };
@@ -645,8 +693,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     
     // For non-Generate mode or when generation type is already selected, proceed normally
     const userMessage: Message = { 
+      type: 'user',
       text: selectedGenerationType ? pendingPrompt : prompt, 
-      isUser: true,
       mode: mode,
       selectedTrack: selectedTrack
     };
@@ -1116,47 +1164,41 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-2 px-6 flex flex-col gap-3">
-          {isStepMode && steps.length > 0 ? (
-            // Step-based rendering for music generation
-            <>
-              {/* Show user message */}
-              {messages.filter(msg => msg.isUser).map((msg, index) => (
+          {/* Show all conversation history */}
+          {messages.map((msg, index) => {
+            if (msg.type === 'user') {
+              return (
                 <UserChatBubble 
                   key={index} 
-                  text={msg.text}
+                  text={msg.text || ''}
                   mode={msg.mode}
                   selectedTrack={msg.selectedTrack}
                 />
-              ))}
-              
-              {/* Show step progress */}
-              <StepRenderer 
-                steps={steps}
-                onActionClick={handleAction}
-              />
-            </>
-          ) : (
-            // Legacy message rendering for chat/edit modes
-            messages.map((msg, index) => 
-              msg.isUser ? (
-                <UserChatBubble 
-                  key={index} 
-                  text={msg.text}
-                  mode={msg.mode}
-                  selectedTrack={msg.selectedTrack}
-                />
-              ) : (
+              );
+            } else if (msg.type === 'assistant') {
+              return (
                 <AssistantChatBubble 
                   key={index} 
-                  text={msg.text}
+                  text={msg.text || ''}
                   action={msg.action}
                   onActionClick={msg.action && msg.actionData ? 
                       () => handleAction(msg.action!, msg.actionData) : 
-                      undefined}
-                  />
-              )
-            )
-          )}
+                      undefined
+                  }
+                />
+              );
+            } else if (msg.type === 'steps') {
+              console.log('📋 Rendering StepRenderer with steps:', msg.steps?.length || 0);
+              return (
+                <StepRenderer 
+                  key={index}
+                  steps={msg.steps || []}
+                  onActionClick={handleAction}
+                />
+              );
+            }
+            return null;
+          })}
           
           {/* Generation choice buttons */}
           {showGenerationChoiceButtons && (
