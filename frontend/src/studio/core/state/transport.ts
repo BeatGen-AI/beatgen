@@ -1,6 +1,5 @@
 import * as Tone from 'tone';
 import AudioFilePlayer from '../audio-engine/audioFilePlayer/audioEngine';
-import { convertVolumeToDecibels } from '../../utils/audioProcessing';
 import { calculatePositionTime } from '../../constants/gridConstants';
 import { SoundfontEngineController } from '../audio-engine/soundfontEngineController';
 import { SamplerController } from '../audio-engine/samplerController';
@@ -527,8 +526,9 @@ export class TransportController implements Transport {
                 
                 // Clear any volume automations
                 track.player.volume.cancelScheduledValues(Tone.now());
-                // Set volume using our conversion utility
-                track.player.volume.value = convertVolumeToDecibels(track.volume, track.muted);
+                // Let the audio engine handle volume setting with proper dB conversion
+                this.audioEngine.setTrackVolume(track.id, track.volume);
+                this.audioEngine.setTrackMute(track.id, track.muted);
             }
         });
         
