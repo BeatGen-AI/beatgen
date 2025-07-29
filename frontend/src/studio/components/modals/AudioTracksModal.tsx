@@ -6,6 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { getSoundsPaginated, downloadAudioTrackFile } from '../../../platform/api/sounds';
 import { db } from '../../core/db/dexie-client';
 import { cn } from '@/lib/utils';
@@ -172,6 +175,10 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   
   // Generation state
   const [generatePrompt, setGeneratePrompt] = useState('');
+  const [selectedModel, setSelectedModel] = useState('fal-ai/lyria2');
+  const [bpm, setBpm] = useState(120);
+  const [keySignature, setKeySignature] = useState('C Major');
+  const [bars, setBars] = useState(4);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -180,6 +187,16 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
   const [generatedAudioBlob, setGeneratedAudioBlob] = useState<Blob | null>(null);
   
   const ITEMS_PER_PAGE = 12;
+
+  // Calculate duration from BPM and bars (assumes 4/4 time signature)
+  const calculateDuration = (bpm: number, bars: number): number => {
+    const beatsPerBar = 4;
+    const totalBeats = bars * beatsPerBar;
+    const durationSeconds = (totalBeats / bpm) * 60;
+    return Math.round(durationSeconds * 10) / 10; // Round to 1 decimal place
+  };
+
+  const duration = calculateDuration(bpm, bars);
 
   const handleTrackSelect = (track: AudioTrackRead) => {
     onSelectTrack(track);
@@ -282,11 +299,13 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
         {
           prompt: generatePrompt,
           mode: 'generate-audio',
-          model: 'fal-ai/lyria2',
+          model: selectedModel,
           context: {
-            bpm: 120, // Default BPM, could be made configurable
+            bpm: bpm,
             time_signature: { numerator: 4, denominator: 4 },
-            key_signature: 'C Major'
+            key_signature: keySignature,
+            bars: bars,
+            duration: duration
           }
         },
         streamCallbacks
@@ -326,6 +345,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
     setGenerationStatus('');
     setGenerationError(null);
     setGeneratePrompt('');
+    // Keep the selected model as-is for user convenience
   };
 
   // Fetch tracks function
@@ -589,7 +609,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
             )}
 
             <TabsContent value="generate" className="flex-grow overflow-hidden m-0">
-              <div className="h-full flex flex-col p-6">
+              <div className="h-full overflow-y-auto p-6">
                 {/* Header and Tips - Top Section */}
                 <div className="flex-shrink-0 space-y-6 mb-6">
                   <div className="text-center">
@@ -600,37 +620,107 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                     </p>
                   </div>
 
-                  {/* Help Text */}
-                  <div className="bg-muted/30 rounded-lg p-4">
-                    <h4 className="font-medium mb-2">Tips for better results:</h4>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• Be specific about the instrument (e.g., "acoustic guitar", "piano")</li>
-                      <li>• Mention the style or genre if desired</li>
-                      <li>• Specify key signature for musical coherence</li>
-                      <li>• Keep descriptions clear and concise</li>
-                    </ul>
+                  {/* Model Selection */}
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-sm font-medium">Model</Label>
+                      <Select value={selectedModel} onValueChange={setSelectedModel}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select audio generation model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fal-ai/lyria2">Lyria2 (FAL AI) - 30s clips</SelectItem>
+                          <SelectItem value="vertex-ai/lyria2">Lyria2 (Vertex AI) - 30s clips</SelectItem>
+                          <SelectItem value="stability/stable-audio-2">Stable Audio 2.0 - Up to 120s</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </div>
 
-                {/* Flexible space to push textarea to bottom */}
-                <div className="flex-grow"></div>
+                  {/* Musical Controls */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-3 gap-4">
+                      {/* BPM */}
+                      <div>
+                        <Label htmlFor="bpm" className="text-sm font-medium">BPM</Label>
+                        <Input
+                          id="bpm"
+                          type="number"
+                          min="60"
+                          max="200"
+                          value={bpm}
+                          onChange={(e) => setBpm(parseInt(e.target.value) || 120)}
+                          className="mt-1"
+                        />
+                      </div>
 
-                {/* Textarea and Controls - Bottom Section */}
-                <div className="flex-shrink-0 space-y-4">
-                  <GenerationPromptControl
-                    prompt={generatePrompt}
-                    onPromptChange={setGeneratePrompt}
-                    onGenerate={handleGenerateAudio}
-                    isGenerating={isGenerating}
-                    useStudioTheme={!useUiMode}
-                    placeholder="Describe the audio you want to generate (e.g., 'acoustic guitar melody in C major', 'piano chord progression', 'violin solo')"
-                    maxLength={500}
-                    showRandomButton={false}
-                    showSelect={false}
-                    submitButtonAriaLabel="Generate Audio"
-                  />
+                      {/* Bars */}
+                      <div>
+                        <Label htmlFor="bars" className="text-sm font-medium">Bars</Label>
+                        <Input
+                          id="bars"
+                          type="number"
+                          min="1"
+                          max={selectedModel === 'stability/stable-audio-2' ? "16" : "8"}
+                          value={bars}
+                          onChange={(e) => setBars(parseInt(e.target.value) || 4)}
+                          className="mt-1"
+                        />
+                      </div>
 
-                  {/* Generated Audio Player or Generation Status */}
+                      {/* Duration Preview */}
+                      <div>
+                        <Label className="text-sm font-medium">Duration</Label>
+                        <div className="mt-1 px-3 py-2 bg-muted rounded-md text-sm">
+                          {duration}s
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Key Signature */}
+                    <div>
+                      <Label className="text-sm font-medium">Key Signature</Label>
+                      <Select value={keySignature} onValueChange={setKeySignature}>
+                        <SelectTrigger className="w-full mt-1">
+                          <SelectValue placeholder="Select key signature" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="C Major">C Major</SelectItem>
+                          <SelectItem value="G Major">G Major</SelectItem>
+                          <SelectItem value="D Major">D Major</SelectItem>
+                          <SelectItem value="A Major">A Major</SelectItem>
+                          <SelectItem value="E Major">E Major</SelectItem>
+                          <SelectItem value="B Major">B Major</SelectItem>
+                          <SelectItem value="F# Major">F# Major</SelectItem>
+                          <SelectItem value="C# Major">C# Major</SelectItem>
+                          <SelectItem value="F Major">F Major</SelectItem>
+                          <SelectItem value="Bb Major">Bb Major</SelectItem>
+                          <SelectItem value="Eb Major">Eb Major</SelectItem>
+                          <SelectItem value="Ab Major">Ab Major</SelectItem>
+                          <SelectItem value="Db Major">Db Major</SelectItem>
+                          <SelectItem value="Gb Major">Gb Major</SelectItem>
+                          <SelectItem value="Cb Major">Cb Major</SelectItem>
+                          <SelectItem value="A Minor">A Minor</SelectItem>
+                          <SelectItem value="E Minor">E Minor</SelectItem>
+                          <SelectItem value="B Minor">B Minor</SelectItem>
+                          <SelectItem value="F# Minor">F# Minor</SelectItem>
+                          <SelectItem value="C# Minor">C# Minor</SelectItem>
+                          <SelectItem value="G# Minor">G# Minor</SelectItem>
+                          <SelectItem value="D# Minor">D# Minor</SelectItem>
+                          <SelectItem value="A# Minor">A# Minor</SelectItem>
+                          <SelectItem value="D Minor">D Minor</SelectItem>
+                          <SelectItem value="G Minor">G Minor</SelectItem>
+                          <SelectItem value="C Minor">C Minor</SelectItem>
+                          <SelectItem value="F Minor">F Minor</SelectItem>
+                          <SelectItem value="Bb Minor">Bb Minor</SelectItem>
+                          <SelectItem value="Eb Minor">Eb Minor</SelectItem>
+                          <SelectItem value="Ab Minor">Ab Minor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Generation Status or Help Text */}
                   {generatedTrack && generatedAudioBlob ? (
                     <div className="bg-muted/50 rounded-lg p-4 space-y-4">
                       <div className="flex items-center justify-between">
@@ -685,7 +775,40 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                         </span>
                       </div>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <h4 className="font-medium mb-2">Tips for better results:</h4>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>• Be specific about the instrument (e.g., "acoustic guitar", "piano")</li>
+                        <li>• Mention the style or genre if desired</li>
+                        <li>• Specify key signature for musical coherence</li>
+                        <li>• Keep descriptions clear and concise</li>
+                        {selectedModel === 'stability/stable-audio-2' && (
+                          <li>• Stable Audio supports longer durations and precise BPM control</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/* Flexible space to push textarea to bottom */}
+                <div className="flex-grow"></div>
+
+                {/* Textarea and Controls - Bottom Section */}
+                <div className="flex-shrink-0 space-y-4">
+                  <GenerationPromptControl
+                    prompt={generatePrompt}
+                    onPromptChange={setGeneratePrompt}
+                    onGenerate={handleGenerateAudio}
+                    isGenerating={isGenerating}
+                    useStudioTheme={!useUiMode}
+                    placeholder="Describe the audio you want to generate (e.g., 'acoustic guitar melody in C major', 'piano chord progression', 'violin solo')"
+                    maxLength={500}
+                    showRandomButton={false}
+                    showSelect={false}
+                    submitButtonAriaLabel="Generate Audio"
+                  />
+
 
                   {/* Generation Error */}
                   {generationError && (

@@ -38,7 +38,7 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
   if (tracks.length === 0) {
     return (
       <div 
-        className="p-4 text-center flex flex-col items-center justify-center h-full"
+        className="p-4 text-center flex flex-col justify-center h-full"
         style={{
           color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)'
         }}
