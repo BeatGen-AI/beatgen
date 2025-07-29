@@ -28,6 +28,7 @@ class ProviderAdapter(ABC):
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         system_prompt: Optional[str] = None,
+        tools: Optional[List[Any]] = None,
         **kwargs: Any
     ) -> None:
         """
@@ -44,6 +45,7 @@ class ProviderAdapter(ABC):
         self.api_key = api_key
         self.base_url = base_url
         self.system_prompt = system_prompt
+        self.tools = tools
         self.provider_kwargs = kwargs
         self.agent = self._initialize_agent()
 
@@ -62,7 +64,8 @@ class ProviderAdapter(ABC):
         history: Sequence[ModelMessage],
         stream: bool = False,
         model_settings: Optional[Dict[str, Any]] = None,
-        usage_limits: Optional[Dict[str, Any]] = None
+        usage_limits: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> Union[Any, Tuple[Any, Optional[Dict[str, Any]]]]:
         """
         Sends messages to the LLM and gets a response.
@@ -73,6 +76,7 @@ class ProviderAdapter(ABC):
             stream: Whether to stream the response.
             model_settings: Provider-specific model settings.
             usage_limits: Usage limits for the request.
+            tools: Optional list of Pydantic AI tool functions for the LLM to use.
 
         Returns:
             If stream is False, returns tuple of (response_content, usage_dict)

@@ -286,7 +286,7 @@ function Studio({ projectId }: StudioProps) {
       // Cleanup on unmount
       delete (window as any).storeInstance;
     };
-  }, [initializeAudio, loadProject]);
+  }, [initializeAudio, loadProject, projectId, existingProjectId]);
   
   // Handlers
   const handleBpmChange = (event: React.ChangeEvent<HTMLInputElement>) => {

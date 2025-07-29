@@ -85,6 +85,9 @@ class OpenAIAdapter(ProviderAdapter):
         if self.system_prompt:
             agent_kwargs['instructions'] = self.system_prompt # Pydantic AI recommends 'instructions'
         
+        if self.tools:
+            agent_kwargs['tools'] = self.tools
+        
         return Agent(model=model, **agent_kwargs)
 
     async def send_message_async(
@@ -93,7 +96,8 @@ class OpenAIAdapter(ProviderAdapter):
         history: Sequence[ModelMessage],
         stream: bool = False,
         model_settings: Optional[Dict[str, Any]] = None,
-        usage_limits: Optional[Dict[str, Any]] = None
+        usage_limits: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> Any: # Return type will be Union[RunResult.output, AsyncGenerator[AnyStreamEvent, None]]
         """
         Sends messages to the OpenAI LLM and gets a response.
@@ -107,6 +111,10 @@ class OpenAIAdapter(ProviderAdapter):
             "model_settings": model_settings,
             "usage_limits": usage_limits
         }
+        
+        # Add tools if provided (Pydantic AI uses 'toolsets' not 'tools')
+        if tools:
+            common_params["toolsets"] = [tools] if not isinstance(tools[0], list) else tools
 
         if stream:
             async def stream_generator() -> AsyncGenerator[AnyStreamEvent, None]:
