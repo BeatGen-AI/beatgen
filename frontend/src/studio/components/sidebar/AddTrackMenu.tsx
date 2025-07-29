@@ -11,7 +11,7 @@ import { getPublicDrumSamples } from '../../../platform/api/drum_samples';
 import { getPublicSoundfonts } from '../../../platform/api/soundfonts';
 import { InstrumentFileRead } from 'src/platform/types/project';
 // Import types from store types file
-import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload } from '../../stores/types';
+import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload, AudioTrackPayload } from '../../stores/types';
 
 interface AddTrackMenuProps {
   isOpen: boolean;

@@ -1,4 +1,4 @@
-#!/Users/jonnyamo/Developer/beatgen/backend/venv/bin/python
+#!/Users/jonnyamo/Developer/beatgen/backend/venv/bin/python3.12
 
 import sys
 import json
