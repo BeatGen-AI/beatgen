@@ -350,9 +350,13 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
         const newX = pixelsToLogical(mousePos.x - offset.x);
         const newY = mousePos.y - offset.y; // Y is in pixels
         
+        // Apply constraints to prevent negative coordinates
+        const constrainedX = snapToGridValue(Math.max(0, newX)); // Prevent x < 0
+        const constrainedY = snapYToTrackGrid(Math.max(0, newY)); // Prevent y < 0
+        
         updates.set(itemId, {
-          x: snapToGridValue(newX),
-          y: snapYToTrackGrid(newY) // Snap Y to track grid
+          x: constrainedX,
+          y: constrainedY
         });
       });
 
@@ -374,13 +378,20 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       dragUpdateFrameRef.current = null;
     }
 
-    // Get final positions
+    // Get final positions with constraints applied
     const updates = new Map<string, Position>();
     
     dragStartRef.current.initialOffsets.forEach((offset, itemId) => {
       const item = items.find(i => i.id === itemId);
       if (item) {
-        updates.set(itemId, { x: item.x, y: item.y });
+        // Apply constraints to final position
+        const constrainedX = Math.max(0, item.x); // Prevent x < 0
+        const constrainedY = Math.max(0, item.y); // Prevent y < 0
+        
+        updates.set(itemId, { 
+          x: constrainedX, 
+          y: constrainedY 
+        });
       }
     });
 
@@ -396,7 +407,7 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
     if (cursorManager) {
       cursorManager.resetInteractionCursor();
     }
-  }, [isDragging, items, onDragEnd]);
+  }, [isDragging, items, onDragEnd, cursorManager]);
 
   // Start resize operation
   const startResize = useCallback((itemId: string, direction: 'left' | 'right', mousePos: Position) => {

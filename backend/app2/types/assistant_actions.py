@@ -119,8 +119,8 @@ class VolumeData(ActionData):
     value: float = Field(
         ...,
         ge=0.0,
-        le=1.0,
-        description="The new volume value between 0 (silent) and 1 (full volume)",
+        le=100.0,
+        description="The new volume value between 0 (silent) and 100 (full volume)",
     )
 
 

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Knob } from 'primereact/knob';
 import { cn } from '../../../../lib/utils';
 
+
 interface ControlKnobProps {
   value: number;
   onChange: (event: Event, value: number) => void;
@@ -29,6 +30,9 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
   label,
   type,
   valueFormatter = (val) => {
+    if (type === 'volume') {
+      return `${val}%`;
+    }
     if (type === 'pan') {
       if (val === 0) return 'C'; 
       return val < 0 ? `L${Math.abs(val)}` : `R${val}`;
@@ -218,17 +222,29 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
           </div>
         </div>
         
-        {/* Slider overlay */}
+        {/* Slider overlay - render in portal */}
         {showSlider && (
           <div 
             ref={sliderRef}
-            className={`absolute left-1/2 z-[99999] bg-[#2A2A2A] border rounded-lg shadow-lg p-4 ${
-              sliderPosition === 'above' ? 'bottom-full mb-4' : 'top-full mt-4'
-            }`}
+            className={`fixed z-[99999] bg-[#2A2A2A] border rounded-lg shadow-lg p-4`}
             style={{ 
               borderColor: color,
               width: size <= 30 ? 150 : 200,
-              transform: `translateX(calc(-50% - ${horizontalOffset}px))`
+              left: knobRef.current ? (() => {
+                const rect = knobRef.current.getBoundingClientRect();
+                const sliderWidth = size <= 30 ? 150 : 200;
+                const knobCenterX = rect.left + rect.width / 2;
+                return `${knobCenterX - sliderWidth / 2 - horizontalOffset}px`;
+              })() : '0px',
+              top: knobRef.current ? (() => {
+                const rect = knobRef.current.getBoundingClientRect();
+                const sliderHeight = 120;
+                if (sliderPosition === 'above') {
+                  return `${rect.bottom - sliderHeight}px`;
+                } else {
+                  return `${rect.bottom}px`;
+                }
+              })() : '0px'
             }}
             onMouseEnter={handleSliderMouseEnter}
             onMouseLeave={handleSliderMouseLeave}
@@ -242,7 +258,7 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
                 min={min}
                 max={max}
                 step={step}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
                 style={{
                   background: `linear-gradient(to right, ${color} 0%, ${color} ${((value - min) / (max - min)) * 100}%, #374151 ${((value - min) / (max - min)) * 100}%, #374151 100%)`
                 }}
@@ -250,8 +266,8 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
               <style>{`
                 .slider::-webkit-slider-thumb {
                   appearance: none;
-                  height: 20px;
-                  width: 20px;
+                  height: 16px;
+                  width: 16px;
                   border-radius: 50%;
                   background: ${color};
                   cursor: pointer;
@@ -279,7 +295,7 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
       
       {label && (
         <span 
-          className="text-gray-400 mt-0"
+          className="text-gray-400 mt-px"
           style={{ 
             fontSize: size <= 30 ? '0.5rem' : size <= 40 ? '0.6rem' : '0.7rem' 
           }}

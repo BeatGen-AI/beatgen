@@ -26,6 +26,16 @@ export interface AssistantRequestOptions {
     key_signature?: string;
     project_title?: string;
     generation_type?: 'midi' | 'audio';
+    tracks?: Array<{
+      id: string;
+      name: string;
+      type: string;
+      volume: number;
+      pan: number;
+      muted: boolean;
+      soloed: boolean;
+      instrument: string;
+    }>;
   };
 }
 

@@ -179,6 +179,45 @@ function Studio({ projectId }: StudioProps) {
     }
   });
 
+  // Real-time volume change handler (doesn't go through history)
+  const handleTrackVolumeChangeLive = useCallback((trackId: string, volume: number) => {
+    if (!store) return;
+    
+    // Update audio engines directly without history
+    const audioEngine = store.getAudioEngine();
+    const soundfontController = store.getSoundfontController();
+    const samplerController = store.getSamplerController();
+    
+    // Set volume on all audio engines
+    audioEngine.setTrackVolume(trackId, volume);
+    soundfontController?.setTrackVolume?.(trackId, volume);
+    samplerController?.setTrackVolume?.(trackId, volume);
+    
+    // Handle drum track volume propagation to sampler tracks
+    const track = tracks.find(t => t.id === trackId);
+    if (track?.track_type === 'DRUM') {
+      const samplerTracks = tracks.filter(t => 
+        t.track_type === 'SAMPLER' && 
+        t.track && 
+        'drum_track_id' in t.track && 
+        (t.track as any).drum_track_id === trackId
+      );
+      samplerTracks.forEach(samplerTrack => {
+        audioEngine.setTrackVolume(samplerTrack.id, volume);
+        samplerController?.setTrackVolume?.(samplerTrack.id, volume);
+      });
+    }
+  }, [store, tracks]);
+
+  // Real-time pan change handler (doesn't go through history)
+  const handleTrackPanChangeLive = useCallback((trackId: string, pan: number) => {
+    if (!store) return;
+    
+    // Update audio engine directly without history
+    const audioEngine = store.getAudioEngine();
+    audioEngine.setTrackPan(trackId, pan);
+  }, [store]);
+
   // Effect to measure control bar height
   useLayoutEffect(() => {
     if (controlBarRef.current) {
@@ -636,7 +675,9 @@ function Studio({ projectId }: StudioProps) {
                 <TrackControlsSidebar 
                   tracks={tracks}
                   onVolumeChange={handleTrackVolumeChange}
+                  onVolumeChangeLive={handleTrackVolumeChangeLive}
                   onPanChange={handleTrackPanChange}
+                  onPanChangeLive={handleTrackPanChangeLive}
                   onMuteToggle={handleTrackMuteToggle}
                   onSoloToggle={handleTrackSoloToggle}
                   onTrackDelete={handleTrackDelete}

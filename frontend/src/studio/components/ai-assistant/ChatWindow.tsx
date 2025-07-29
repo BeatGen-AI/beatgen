@@ -36,8 +36,9 @@ import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { createDefaultInstance } from '../../utils/instanceHelpers';
 
 interface Message {
-  text: string;
-  isUser: boolean;
+  type: 'user' | 'assistant' | 'steps';
+  text?: string;
+  isUser?: boolean; // Keep for backward compatibility
   mode?: string;
   selectedTrack?: {
     id: string;
@@ -47,6 +48,7 @@ interface Message {
   actionData?: any;
   isStreaming?: boolean; // Flag to indicate this message is currently streaming
   messageId?: string; // Unique identifier for the message
+  steps?: Step[]; // For step-based messages
 }
 
 interface ChatWindowProps {
@@ -76,8 +78,8 @@ const GenerationChoiceButtons: React.FC<GenerationChoiceButtonsProps> = ({ onMid
     <div 
       className="p-4 mb-2 rounded-lg"
       style={{
-        backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#f8fafc',
-        border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+        backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
+        border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
       }}
     >
       <p 
@@ -153,6 +155,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   const [stepManager] = useState(() => new StepManager());
   const [steps, setSteps] = useState<Step[]>([]);
   const [isStepMode, setIsStepMode] = useState(true);
+  const [currentStepMessageId, setCurrentStepMessageId] = useState<string | null>(null);
+  const currentStepMessageIdRef = useRef<string | null>(null);
   
   // Generation choice state
   const [showGenerationChoiceButtons, setShowGenerationChoiceButtons] = useState(false);
@@ -217,8 +221,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     if (isOpen && messages.length === 0) {
       setMessages([
         { 
-          text: "Hi! I'm your AI assistant. How can I help with your music project today?", 
-          isUser: false 
+          type: 'assistant',
+          text: "Hi! I'm your AI assistant. How can I help with your music project today?"
         }
       ]);
     }
@@ -228,6 +232,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   useEffect(() => {
     const handleStepUpdate = (updatedSteps: Step[]) => {
       setSteps(updatedSteps);
+      
+      // Update the specific step message in the messages array
+      const stepMessageId = currentStepMessageIdRef.current;
+      if (stepMessageId !== null) {
+        setMessages(prev => {
+          return prev.map(msg => 
+            msg.messageId === stepMessageId 
+              ? { ...msg, steps: updatedSteps }
+              : msg
+          );
+        });
+      }
     };
 
     stepManager.addListener(handleStepUpdate);
@@ -236,18 +252,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     };
   }, [stepManager]);
 
-  // Debug log for streaming state changes
-  useEffect(() => {
-    console.log('🔄 STREAMING STATE CHANGED:', { 
-      isStreaming, 
-      streamingText, 
-      currentMessageId,
-      isLoading,
-      messagesCount: messages.length,
-      lastMessage: messages.length > 0 ? messages[messages.length - 1] : null
-    });
-  }, [isStreaming, streamingText, currentMessageId, isLoading, messages]);
-  
   // Scroll to bottom of messages whenever messages change
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -310,25 +314,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         handleAction(action.type, action.data);
         
         // Add action message
-        setMessages(prev => [
-          ...prev, 
-          { 
-            text: '', 
-            isUser: false,
-            action: action.type,
-            actionData: action.data
-          }
-        ]);
+        // setMessages(prev => [
+        //   ...prev, 
+        //   { 
+        //     type: 'assistant',
+        //     text: '', 
+        //     action: action.type,
+        //     actionData: action.data
+        //   }
+        // ]);
       },
       
       // New handlers for streaming text
       onEvent: (eventType, data) => {
-        console.log(`⭐⭐⭐ RECEIVED CUSTOM EVENT: ${eventType}`, data);
         
         // Handle step events for music generation
         if (eventType === 'step_event') {
-          console.log('🎵🎵🎵 STEP EVENT RECEIVED:', data);
-          console.log('🎵🎵🎵 Current isStepMode:', isStepMode);
           stepManager.addEvent(data);
           
           // Execute actions immediately when they arrive
@@ -347,40 +348,35 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
           setCurrentMessageId(messageId);
           setIsStreaming(true);
           
-          // Only add a message if we don't have any assistant messages yet
-          setMessages(prev => {
-            // Check if we already have any non-user messages at the end
-            const lastIndex = prev.length - 1;
-            if (lastIndex >= 0 && !prev[lastIndex].isUser) {
-              // Just update the existing message to be streaming
-              return prev.map((msg, i) => 
-                i === lastIndex ? { ...msg, isStreaming: true, messageId } : msg
-              );
-            }
-            
-            // Add a new message if needed
-            return [
-              ...prev,
-              { 
-                text: '',
-                isUser: false,
-                isStreaming: true,
-                messageId
+          // Only add assistant message if NOT in step mode
+          if (!isStepMode) {
+            setMessages(prev => {
+              // Check if we already have any assistant messages at the end
+              const lastIndex = prev.length - 1;
+              if (lastIndex >= 0 && prev[lastIndex].type === 'assistant') {
+                // Just update the existing message to be streaming
+                return prev.map((msg, i) => 
+                  i === lastIndex ? { ...msg, isStreaming: true, messageId } : msg
+                );
               }
-            ];
-          });
+              
+              // Add a new message if needed
+              return [
+                ...prev,
+                { 
+                  type: 'assistant',
+                  text: '',
+                  isStreaming: true,
+                  messageId
+                }
+              ];
+            });
+          }
         }
         else if (eventType === 'response_chunk') {
-          console.log('🟡 STREAMING CHUNK - Received chunk:', { 
-            chunk: data.chunk, 
-            messageId: data.message_id,
-            isStepMode: isStepMode
-          });
           
           // If we're in step mode, route streaming to the step system
           if (isStepMode) {
-            console.log('🎵 Routing chunk to step system');
-            
             // If this is the first chunk, start streaming
             if (!stepManager.hasActiveStream) {
               stepManager.startStreaming();
@@ -397,24 +393,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             const updatedMessages = [...prev];
             const lastMessageIndex = updatedMessages.length - 1;
             
-            console.log('🟡 Current messages state:', { 
-              messagesCount: updatedMessages.length,
-              lastMessage: lastMessageIndex >= 0 ? updatedMessages[lastMessageIndex] : null
-            });
             
             // Check if the last message is a streaming message
             if (lastMessageIndex >= 0 && updatedMessages[lastMessageIndex].isStreaming) {
-              console.log('🟢 Found streaming message at index:', lastMessageIndex);
-              
               // Add the chunk to the existing text
               const existingText = updatedMessages[lastMessageIndex].text || '';
               const newText = existingText + data.chunk;
-              
-              console.log('🟢 Updating text:', { 
-                oldText: existingText, 
-                chunk: data.chunk, 
-                newText 
-              });
               
               // Create a new message object to ensure React detects the change
               updatedMessages[lastMessageIndex] = {
@@ -425,13 +409,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
               // Also update streamingText state separately
               setStreamingText(newText);
             } else {
-              console.warn('⚠️ No streaming message found to update. Creating one now.');
-              
               // If no streaming message exists (which shouldn't happen),
               // create one as a fallback
               updatedMessages.push({
+                type: 'assistant',
                 text: data.chunk,
-                isUser: false,
                 isStreaming: true,
                 messageId: data.message_id
               });
@@ -451,7 +433,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             
             // If we're in step mode, finalize the step streaming
             if (isStepMode) {
-              console.log('🎵 Finalizing step streaming');
               stepManager.finalizeStreaming();
             } else {
               // Legacy message-based streaming finalization
@@ -479,11 +460,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         console.log('Stream complete with response:', response);
         setIsLoading(false);
         
-        // Only add the assistant's response if we're not already streaming it
-        if (!isStreaming) {
+        // Only add the assistant's response if we're not already streaming it AND not in step mode
+        if (!isStreaming && !isStepMode) {
           setMessages(prev => [
             ...prev, 
-            { text: response.response, isUser: false }
+            { type: 'assistant', text: response.response }
           ]);
         }
         
@@ -503,8 +484,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         setMessages(prev => [
           ...prev, 
           { 
-            text: `Sorry, I encountered an error: ${error.message || 'Unknown error'}`, 
-            isUser: false 
+            type: 'assistant',
+            text: `Sorry, I encountered an error: ${error.message || 'Unknown error'}`
           }
         ]);
         
@@ -550,8 +531,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       // Initialize step mode for generate requests
       if (apiMode === 'generate') {
         setIsStepMode(true);
-        stepManager.reset(); // Reset for new generation
-        console.log('🎵 Initialized step mode for music generation');
+        
+        // Add a step message to the messages array
+        const stepMessageId = messages.length.toString();
+        setMessages(prev => {
+          const stepMessage: Message = {
+            type: 'steps',
+            steps: [],
+            messageId: stepMessageId
+          };
+          return [...prev, stepMessage];
+        });
+        
+        // Set the current step message ID (both state and ref)
+        setCurrentStepMessageId(stepMessageId);
+        currentStepMessageIdRef.current = stepMessageId;
+        
+        // Reset the step manager (this will trigger step updates)
+        stepManager.reset();
       } else {
         setIsStepMode(false);
       }
@@ -575,7 +572,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             },
             key_signature: keySignature,
             project_title: projectTitle,
-            generation_type: generationType || 'midi'
+            generation_type: generationType || 'midi',
+            tracks: tracks.map(track => ({
+              id: track.id,
+              name: track.name,
+              type: track.track_type,
+              volume: track.volume,
+              pan: track.pan,
+              muted: track.mute,
+              soloed: track.soloed,
+              instrument: (track.track as MidiTrackRead)?.instrument_file?.display_name || track.name
+            }))
           }
         },
         setupStreamCallbacks()
@@ -588,8 +595,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     } catch (error) {
       console.error('Error starting assistant interaction:', error);
       setMessages(prev => [...prev, { 
-        text: "Sorry, I encountered an error processing your request.", 
-        isUser: false 
+        type: 'assistant',
+        text: "Sorry, I encountered an error processing your request."
       }]);
       setIsLoading(false);
     }
@@ -618,8 +625,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     if (mode === 'Generate' && !selectedGenerationType) {
       // Add user message to chat with current mode and selected track
       const userMessage: Message = { 
+        type: 'user',
         text: prompt, 
-        isUser: true,
         mode: mode,
         selectedTrack: selectedTrack
       };
@@ -635,8 +642,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     
     // For non-Generate mode or when generation type is already selected, proceed normally
     const userMessage: Message = { 
+      type: 'user',
       text: selectedGenerationType ? pendingPrompt : prompt, 
-      isUser: true,
       mode: mode,
       selectedTrack: selectedTrack
     };
@@ -946,25 +953,37 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         }
         break;
       case 'update_track':
-        if (actionData?.trackId) {
-          const track = tracks.find(t => t.id === actionData.trackId);
+        if (actionData?.track_id) {
+          const track = tracks.find(t => t.id === actionData.track_id);
           if (track) {
             console.log(`Updating track ${track.name}`);
             // Using existing track update functionality
             // This will be handled by separate actions in the store
           } else {
-            console.log(`Track ${actionData.trackId} not found`);
+            console.log(`Track ${actionData.track_id} not found`);
           }
         }
         break;
       case 'adjust_volume':
-        if (actionData?.trackId && typeof actionData?.value === 'number') {
-          handleTrackVolumeChange(actionData.trackId, actionData.value);
+        if (actionData?.track_id && typeof actionData?.value === 'number') {
+          handleTrackVolumeChange(actionData.track_id, actionData.value);
         }
         break;
       case 'toggle_mute':
-        if (actionData?.trackId && typeof actionData?.muted === 'boolean') {
-          handleTrackMuteToggle(actionData.trackId, actionData.muted);
+        if (actionData?.track_id && typeof actionData?.muted === 'boolean') {
+          handleTrackMuteToggle(actionData.track_id, actionData.muted);
+        }
+        break;
+      case 'adjust_pan':
+        if (actionData?.track_id && typeof actionData?.value === 'number') {
+          console.log(`Adjusting pan for track ${actionData.track_id} to ${actionData.value}`);
+          // TODO: Implement handleTrackPanChange function
+        }
+        break;
+      case 'toggle_solo':
+        if (actionData?.track_id && typeof actionData?.soloed === 'boolean') {
+          console.log(`Setting solo for track ${actionData.track_id} to ${actionData.soloed}`);
+          // TODO: Implement handleTrackSoloToggle function
         }
         break;
       case 'change_time_signature':
@@ -974,8 +993,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         break;
       case 'move_track':
         console.log('Moving track:', actionData);
-        if (actionData?.trackId && typeof actionData?.position?.x === 'number' && typeof actionData?.position?.y === 'number') {
-          handleTrackPositionChange(actionData.trackId, {
+        if (actionData?.track_id && typeof actionData?.position?.x === 'number' && typeof actionData?.position?.y === 'number') {
+          handleTrackPositionChange(actionData.track_id, {
             x: actionData.position.x,
             y: actionData.position.y
           }, true);
@@ -1043,9 +1062,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
           isVisible ? "visible" : "invisible"
         )}
         style={{
-          backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          backgroundColor: studioMode === 'dark' ? '#0a0a0a' : '#f8fafc',
           color: studioMode === 'dark' ? '#ffffff' : '#000000',
-          borderLeft: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+          borderLeft: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
           width: CHAT_WINDOW_WIDTH
         }}
       >
@@ -1054,8 +1073,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
           className="flex items-center justify-between px-2 shrink-0"
           style={{ 
             height: GRID_CONSTANTS.headerHeight,
-            backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)',
-            borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+            backgroundColor: studioMode === 'dark' ? '#0a0a0a' : '#f8fafc',
+            borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
           }}
         >
           <div className="flex items-center px-1">
@@ -1093,48 +1112,41 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         </div>
         
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 px-2 flex flex-col gap-3">
-          {isStepMode && steps.length > 0 ? (
-            // Step-based rendering for music generation
-            <>
-              {/* Show user message */}
-              {messages.filter(msg => msg.isUser).map((msg, index) => (
+        <div className="flex-1 overflow-y-auto p-2 px-6 flex flex-col gap-3">
+          {/* Show all conversation history */}
+          {messages.map((msg, index) => {
+            if (msg.type === 'user') {
+              return (
                 <UserChatBubble 
                   key={index} 
-                  text={msg.text}
+                  text={msg.text || ''}
                   mode={msg.mode}
                   selectedTrack={msg.selectedTrack}
                 />
-              ))}
-              
-              {/* Show step progress */}
-              <StepRenderer 
-                steps={steps}
-                onActionClick={handleAction}
-              />
-            </>
-          ) : (
-            // Legacy message rendering for chat/edit modes
-            messages.map((msg, index) => 
-              msg.isUser ? (
-                <UserChatBubble 
-                  key={index} 
-                  text={msg.text}
-                  mode={msg.mode}
-                  selectedTrack={msg.selectedTrack}
-                />
-              ) : (
+              );
+            } else if (msg.type === 'assistant') {
+              return (
                 <AssistantChatBubble 
                   key={index} 
-                  text={msg.text}
+                  text={msg.text || ''}
                   action={msg.action}
                   onActionClick={msg.action && msg.actionData ? 
                       () => handleAction(msg.action!, msg.actionData) : 
-                      undefined}
-                  />
-              )
-            )
-          )}
+                      undefined
+                  }
+                />
+              );
+            } else if (msg.type === 'steps') {
+              return (
+                <StepRenderer 
+                  key={index}
+                  steps={msg.steps || []}
+                  onActionClick={handleAction}
+                />
+              );
+            }
+            return null;
+          })}
           
           {/* Generation choice buttons */}
           {showGenerationChoiceButtons && (
@@ -1151,8 +1163,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         <div 
           className="p-4"
           style={{
-            backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)',
-            borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+            backgroundColor: studioMode === 'dark' ? '#0a0a0a' : '#f8fafc',
+            borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
           }}
         >
           {/* Mode and Context Chips */}

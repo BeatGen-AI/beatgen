@@ -10,7 +10,9 @@ import { useAppTheme } from '../../../lib/theme-provider';
 interface TrackControlsSidebarProps {
   tracks: CombinedTrack[];
   onVolumeChange: (trackId: string, volume: number) => void;
+  onVolumeChangeLive?: (trackId: string, volume: number) => void; // For real-time updates during dragging
   onPanChange: (trackId: string, pan: number) => void;
+  onPanChangeLive?: (trackId: string, pan: number) => void; // For real-time updates during dragging
   onMuteToggle: (trackId: string, muted: boolean) => void;
   onSoloToggle: (trackId: string, soloed: boolean) => void;
   onTrackDelete: (trackId: string) => void;
@@ -22,7 +24,9 @@ interface TrackControlsSidebarProps {
 const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
   tracks,
   onVolumeChange,
+  onVolumeChangeLive,
   onPanChange,
+  onPanChangeLive,
   onMuteToggle,
   onSoloToggle,
   onTrackDelete,
@@ -50,14 +54,16 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
   }
 
   return (
-    <div className="w-full h-full overflow-auto">
+    <div className="w-full h-full overflow-auto relative z-[100000]">
       {tracks.map((track, index) => (
         <TrackControls 
           key={track.id}
           track={track}
           index={index}
           onVolumeChange={onVolumeChange}
+          onVolumeChangeLive={onVolumeChangeLive}
           onPanChange={onPanChange}
+          onPanChangeLive={onPanChangeLive}
           onMuteToggle={onMuteToggle}
           onSoloToggle={onSoloToggle}
           onTrackDelete={onTrackDelete}
@@ -74,7 +80,9 @@ interface TrackControlsProps {
   track: CombinedTrack;
   index: number;
   onVolumeChange: (trackId: string, volume: number) => void;
+  onVolumeChangeLive?: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
+  onPanChangeLive?: (trackId: string, pan: number) => void;
   onMuteToggle: (trackId: string, muted: boolean) => void;
   onSoloToggle: (trackId: string, soloed: boolean) => void;
   onTrackDelete: (trackId: string) => void;
@@ -87,7 +95,9 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   track,
   index,
   onVolumeChange,
+  onVolumeChangeLive,
   onPanChange,
+  onPanChangeLive,
   onMuteToggle,
   onSoloToggle,
   onTrackDelete,
@@ -122,10 +132,16 @@ const TrackControls: React.FC<TrackControlsProps> = ({
     setLocalPan(track.pan ?? 0);
   }, [track.pan]);
   
-  // Handler for volume changes during dragging (updates local state only)
+  // Handler for volume changes during dragging (updates local state and audio engine in real-time)
   const handleVolumeChange = (event: Event, newValue: number | number[]) => {
-    // Just update local component state, no store updates
-    setLocalVolume(newValue as number);
+    const volume = newValue as number;
+    // Update local component state
+    setLocalVolume(volume);
+    
+    // Update audio engine in real-time if live handler is provided
+    if (onVolumeChangeLive) {
+      onVolumeChangeLive(track.id, volume);
+    }
   };
   
   // Handler for volume changes when drag completes (updates store)
@@ -133,10 +149,16 @@ const TrackControls: React.FC<TrackControlsProps> = ({
     onVolumeChange(track.id, newValue as number);
   };
   
-  // Handler for pan changes during dragging (updates local state only)
+  // Handler for pan changes during dragging (updates local state and audio engine in real-time)
   const handlePanChange = (event: Event, newValue: number | number[]) => {
-    // Just update local component state, no store updates
-    setLocalPan(newValue as number);
+    const pan = newValue as number;
+    // Update local component state
+    setLocalPan(pan);
+    
+    // Update audio engine in real-time if live handler is provided
+    if (onPanChangeLive) {
+      onPanChangeLive(track.id, pan);
+    }
   };
   
   // Handler for pan changes when drag completes (updates store)
@@ -365,7 +387,6 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             onChange={handleVolumeChange}
             onChangeCommitted={handleVolumeChangeCommitted}
             disabled={track.mute ?? false}
-            valueFormatter={(val) => `${val}%`}
           />
         </div>
           

@@ -137,7 +137,7 @@ class BaseRepository(Generic[T]):
 
             # Add to session
             self.session.add(model_instance)
-            await self.session.flush()
+            await self.session.commit()
             await self.session.refresh(model_instance)
 
             self.logger.info(
@@ -145,6 +145,7 @@ class BaseRepository(Generic[T]):
             )
             return model_instance
         except Exception as e:
+            await self.session.rollback()
             self.logger.error(f"Error creating record: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to create record: {str(e)}")
@@ -174,14 +175,15 @@ class BaseRepository(Generic[T]):
                 if hasattr(model_instance, key):
                     setattr(model_instance, key, value)
 
-            # Add changes to session
+            # Commit changes
             self.session.add(model_instance)
-            await self.session.flush()
+            await self.session.commit()
             await self.session.refresh(model_instance)
 
             self.logger.info(f"Updated {self.model_class.__name__} with ID {id}")
             return model_instance
         except Exception as e:
+            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
             self.logger.error(f"Error updating record: {str(e)}")
@@ -209,11 +211,12 @@ class BaseRepository(Generic[T]):
 
             # Delete the record
             self.session.delete(model_instance)
-            await self.session.flush()
+            await self.session.commit()
 
             self.logger.info(f"Deleted {self.model_class.__name__} with ID {id}")
             return True
         except Exception as e:
+            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
             self.logger.error(f"Error deleting record: {str(e)}")

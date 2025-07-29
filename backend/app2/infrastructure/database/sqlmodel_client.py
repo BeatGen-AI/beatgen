@@ -111,12 +111,17 @@ else:
     engine = create_async_engine(
         ASYNC_DATABASE_URL,
         echo=False,
+        pool_size=10,
+        max_overflow=10,
+        pool_recycle=1800,
+        pool_timeout=10,
         pool_pre_ping=True,
-        pool_recycle=300,  # Recycle connections every 5 minutes
-        pool_size=8,       # Smaller pool since Supavisor handles the real pooling  
-        max_overflow=4,    # Allow some overflow
-        pool_timeout=5,    # Fast timeout - don't wait long for connections
-        connect_args=get_connect_args(),
+        connect_args={
+            "ssl": "require",
+            # Prepared statements work fine in session mode
+            "statement_cache_size": 100,  # Default is fine
+            "command_timeout": 60,
+        },
     )
 
 # Note: Event listeners for async engines are not supported in SQLAlchemy

@@ -526,117 +526,177 @@ async def process_generate_request(
         raise
 
 
-async def process_edit_request(request_id: str, context, queue: asyncio.Queue):
-    """Process an edit mode request"""
+async def process_edit_request(request_id: str, context, sse_queue: SSEQueueManager):
+    """Process an edit mode request using LLM tool calling with persistent ChatSession"""
 
-    # Create message ID for this session
-    message_id = f"msg-{int(time.time())}"
+    try:
+        logger.info(f"Processing edit request with LLM tools: {request_id}")
 
-    # Response streaming setup
-    await queue.put(
-        (
-            "response_start",
-            {
-                "message_id": message_id,
-                "request_id": request_id,
-                "track_id": context.track_id,
-            },
+        # Send processing stage
+        await sse_queue.stage(
+            name="analyzing", 
+            description="Analyzing your edit request"
         )
-    )
 
-    # Send processing stage
-    await queue.put(
-        ("stage", {"name": "processing", "description": "Processing your edit request"})
-    )
+        # Import edit tools and chat session manager
+        from app2.llm.tools.edit_tools import get_tool_actions, clear_tool_actions
+        from app2.llm.chat_session_manager import chat_session_manager
 
-    # Stream fake AI response chunks (for now)
-    full_response = ""
-    chunks = [
-        f"Working on your edit request for track {context.track_id}... ",
-        "Analyzing your instructions and determining necessary changes... ",
-        f"Applying changes based on: '{context.prompt}'... ",
-    ]
+        # Clear any previous tool actions
+        clear_tool_actions()
 
-    for i, chunk in enumerate(chunks):
-        await asyncio.sleep(0.5)  # Simulate processing time
-        full_response += chunk
-        await queue.put(
-            (
-                "response_chunk",
-                {"message_id": message_id, "chunk": chunk, "chunk_index": i},
+        # Extract project_id from context - try multiple sources
+        project_id = None
+        if context.context:
+            project_id = (
+                context.context.get('project_id') or
+                context.context.get('projectId') or 
+                context.context.get('project_title')  # fallback to project title as identifier
             )
+        
+        # Fallback to user_id if no project context (shouldn't happen in normal flow)
+        if not project_id:
+            project_id = f"user_{context.user_id}"
+            logger.warning(f"No project_id found in context, using fallback: {project_id}")
+
+        # Get or create persistent ChatSession for this project
+        chat_session = chat_session_manager.get_or_create_session(
+            project_id=project_id,
+            mode="edit",
+            model=context.model,
+            sse_queue=sse_queue,
+            user_id=context.user_id,
+            track_context=context.context
         )
 
-    # Mark response as complete
-    await queue.put(("response_end", {"message_id": message_id, "is_complete": True}))
+        logger.info(f"Using ChatSession for project {project_id}, user {context.user_id}, session count: {chat_session_manager.get_session_count()}")
 
-    # Simple edit example (adjust volume)
-    action = AssistantAction(
-        type="adjust_volume",
-        data={
-            "trackId": context.track_id,
-            "value": 80,  # Example volume value
-        },
-    )
+        # Send the edit request to the LLM with tools  
+        edit_prompt = f"Please edit: {context.prompt}"
+        
+        await sse_queue.stage(
+            name="processing", 
+            description="Determining the best way to make your requested changes"
+        )
 
-    # Send the action to the client
-    await queue.put(("action", action.dict()))
+        # Import streaming events for proper handling
+        from app2.llm.streaming import TextDeltaEvent
+        
+        # Use ChatSession to process the edit request with streaming
+        logger.info("Streaming edit request response...")
+        full_response_text = ""
+        try:
+            stream_generator = await chat_session.send_message_async(
+                user_prompt_content=edit_prompt,
+                stream=True
+            )
+            
+            event_count = 0
+            async for event in stream_generator:
+                event_count += 1
+                logger.debug(f"EDIT STREAMING EVENT #{event_count} - TYPE: {type(event)}")
+                
+                # Handle different event types
+                if isinstance(event, TextDeltaEvent):
+                    text_chunk = event.delta
+                    full_response_text += text_chunk
+                    await sse_queue.add_chunk(text_chunk)
+                elif isinstance(event, str):
+                    # Direct string chunks (if music agent pattern works)
+                    full_response_text += event
+                    await sse_queue.add_chunk(event)
+                else:
+                    # Log unknown event types for debugging
+                    logger.debug(f"EDIT STREAMING UNKNOWN EVENT: {type(event)} - {event}")
+                    
+            logger.info(f"Total streaming events processed: {event_count}")
+            logger.info("Finished streaming edit response.")
+        except Exception as e:
+            logger.error(f"Error during streaming: {e}")
+            raise
 
-    # Create empty track data (no note changes in this example)
-    track_data = TrackData(notes=[], instrument_name="Edited Track", instrument_id=None)
+        logger.info(f"Edit LLM response streamed, full response length: {len(full_response_text)}")
 
-    # Create final response
-    final_response = EditResponse(
-        response=full_response, track=track_data, actions=[action]
-    )
+        # Get actions that were created by tool calls
+        tool_actions = get_tool_actions()
+        logger.info(f"Tool actions retrieved: {len(tool_actions)} actions")
+        
+        # If tools were called, send the actions
+        if tool_actions:
+            logger.info(f"Processing {len(tool_actions)} tool actions")
+            for i, action in enumerate(tool_actions):
+                logger.info(f"Sending tool action #{i+1}: {action.action_type} with data: {action.data}")
+                try:
+                    await sse_queue.action(action)
+                    logger.info(f"Successfully sent action #{i+1} to SSE queue")
+                except Exception as e:
+                    logger.error(f"Failed to send action #{i+1}: {e}")
+        else:
+            logger.info("No tool actions were generated - AI provided explanation only")
 
-    # Send complete event
-    await queue.put(("complete", final_response.dict()))
-    logger.info(f"Edit request completed successfully: {request_id}")
+        # Create response
+        full_response = f"Applied edit: {context.prompt}"
+        track_data = TrackData(notes=[], instrument_name="Edited", instrument_id=None)
+        final_response_obj = EditResponse(
+            response=full_response, track=track_data, actions=tool_actions
+        )
+
+        # Send complete event
+        await sse_queue.complete(final_response_obj.model_dump())
+        logger.info(f"Edit request completed successfully: {request_id}")
+
+    except Exception as e:
+        logger.error(f"Error in edit request {request_id}: {str(e)}")
+        await sse_queue.error(
+            message=f"Failed to process edit request: {str(e)}",
+            error_data={"error": "edit_failed", "details": str(e)}
+        )
+        raise
 
 
-async def process_chat_request(request_id: str, context, queue: asyncio.Queue):
+async def process_chat_request(request_id: str, context, sse_queue: SSEQueueManager):
     """Process a chat mode request"""
-    # Create message ID for this session
-    message_id = f"msg-{int(time.time())}"
+    
+    try:
+        logger.info(f"Processing chat request: {request_id}")
 
-    # Response streaming setup
-    await queue.put(
-        ("response_start", {"message_id": message_id, "request_id": request_id})
-    )
-
-    # Send processing stage
-    await queue.put(
-        ("stage", {"name": "processing", "description": "Processing your question"})
-    )
-
-    # Stream fake AI response chunks (for now)
-    full_response = ""
-    chunks = [
-        "I'm your AI music assistant. ",
-        "I can help with music production, arrangement, and theory. ",
-        f"Regarding your question: '{context.prompt}', I'll do my best to assist.",
-    ]
-
-    for i, chunk in enumerate(chunks):
-        await asyncio.sleep(0.5)  # Simulate processing time
-        full_response += chunk
-        await queue.put(
-            (
-                "response_chunk",
-                {"message_id": message_id, "chunk": chunk, "chunk_index": i},
-            )
+        # Send processing stage
+        await sse_queue.stage(
+            name="processing", 
+            description="Processing your question"
         )
 
-    # Mark response as complete
-    await queue.put(("response_end", {"message_id": message_id, "is_complete": True}))
+        # Create message ID for this session
+        message_id = f"msg-{int(time.time())}"
 
-    # Create final response
-    final_response = AssistantResponse(response=full_response)
+        # Stream AI response chunks with delays to simulate processing
+        chunks = [
+            "I'm your AI music assistant. ",
+            "I can help with music production, arrangement, and theory. ",
+            f"Regarding your question: '{context.prompt}', I'll do my best to assist."
+        ]
 
-    # Send complete event
-    await queue.put(("complete", final_response.dict()))
-    logger.info(f"Chat request completed successfully: {request_id}")
+        full_response = ""
+        
+        for chunk in chunks:
+            await asyncio.sleep(0.6)  # Simulate processing time
+            full_response += chunk
+            await sse_queue.add_chunk(chunk)
+
+        # Create final response
+        final_response_obj = AssistantResponse(response=full_response)
+
+        # Send complete event
+        await sse_queue.complete(final_response_obj.model_dump())
+        logger.info(f"Chat request completed successfully: {request_id}")
+
+    except Exception as e:
+        logger.error(f"Error in chat request {request_id}: {str(e)}")
+        await sse_queue.error(
+            message=f"Failed to process chat request: {str(e)}",
+            error_data={"error": "chat_failed", "details": str(e)}
+        )
+        raise
 
 
 async def process_generate_audio_request(

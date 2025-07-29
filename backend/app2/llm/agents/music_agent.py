@@ -1721,7 +1721,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         logger.info(f"Available soundfonts length: {len(self._available_soundfonts)}")
         logger.info(f"Available drum samples length: {len(self._available_drum_samples)}")
         
-        await queue.add_chunk(f"Doing research for prompt: '{request.user_prompt}'...\n\n")
+        #await queue.add_chunk(f"Doing research for prompt: '{request.user_prompt}'...\n\n")
         
         # Initialize context (needed for _emit_step_events)
         self.context = MusicGenerationContext(
