@@ -13,7 +13,7 @@ export interface Transport {
     position: number;        // Current playback position
     isPlaying: boolean;
     tempo: number;
-    
+
     play(tracks?: CombinedTrack[]): Promise<void>;
     pause(): void;
     stop(): void;
@@ -35,11 +35,11 @@ export class TransportController implements Transport {
         Tone.getTransport().bpm.value = initialBpm;
         this.soundfontController = new SoundfontEngineController(initialBpm);
         this.samplerController = new SamplerController();
-        
+
         // We'll initialize the soundfont controller later when the audio context is available
         // This happens in the Store's initializeAudio method via initializeSoundfont
     }
-    
+
     setMidiManager(midiManager: MidiManager): void {
         this.midiManager = midiManager;
     }
@@ -59,7 +59,7 @@ export class TransportController implements Transport {
     getSoundfontController(): SoundfontEngineController {
         return this.soundfontController;
     }
-    
+
     getSamplerController(): SamplerController {
         return this.samplerController;
     }
@@ -67,7 +67,7 @@ export class TransportController implements Transport {
     getAudioEngine(): AudioFilePlayer {
         return this.audioEngine;
     }
-    
+
     /**
      * Converts a track's position (in ticks) to a time offset (in seconds)
      * This is crucial for properly aligning tracks on the timeline
@@ -79,14 +79,14 @@ export class TransportController implements Transport {
         // First convert ticks to beats
         const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote; // Standard MIDI ticks per quarter note
         const beats = trackXTicks / ppq;
-        
+
         // Then convert beats to seconds based on current BPM
         const bpm = Tone.getTransport().bpm.value;
         const secondsPerBeat = 60 / bpm;
-        
+
         return beats * secondsPerBeat;
     }
-    
+
     /**
      * Calculates the correct playback time for a track based on:
      * 1. Current transport position
@@ -99,11 +99,11 @@ export class TransportController implements Transport {
     private calculateTrackPlayPosition(transportTime: number, trackXTicks: number): number {
         // Get track's start time offset based on its position
         const trackOffset = this.getTrackTimeOffset(trackXTicks);
-        
+
         // Cases:
         // 1. If transport < trackOffset: track shouldn't play yet (return negative to indicate this)
         // 2. If transport >= trackOffset: track should play at (transport - trackOffset)
-        
+
         if (transportTime < trackOffset) {
             // Track shouldn't be playing yet
             return -1;
@@ -115,7 +115,7 @@ export class TransportController implements Transport {
 
     // Track the IDs of scheduled events so we can clean them up
     private scheduledEvents: number[] = [];
-    
+
     public async play(tracks?: CombinedTrack[]): Promise<void> {
         if (this.isStarting) return;
         this.isStarting = true;
@@ -124,98 +124,67 @@ export class TransportController implements Transport {
 
         try {
             // Ensure both Tone.js and js-synthesizer contexts are resumed
-            // This is critical - if context resumption fails, we should not continue playback
-            try {
-                await audioContextManager.ensureContextsResumed();
-                
-                // Verify both contexts are actually running before proceeding
-                if (!audioContextManager.areContextsRunning()) {
-                    console.error('TransportController: Audio contexts not in running state after resumption');
-                    this.isStarting = false;
-                    throw new Error('Cannot start playback: Audio contexts failed to reach running state');
-                }
-                
-                console.log('TransportController: Audio contexts successfully resumed and verified');
-            } catch (contextError) {
-                console.error('TransportController: Failed to resume audio contexts - aborting playback:', contextError);
+            await audioContextManager.ensureContextsResumed();
+            if (!audioContextManager.areContextsRunning()) {
+                console.error('TransportController: Audio contexts not in running state after resumption');
                 this.isStarting = false;
-                throw new Error(`Cannot start playback: Audio context resumption failed - ${contextError.message}`);
+                throw new Error('Cannot start playback: Audio contexts failed to reach running state');
             }
-            
+
+            console.log('TransportController: Audio contexts successfully resumed and verified');
+
             // Clear any previously scheduled events
             this.clearScheduledEvents();
-            
-            // CRITICAL: Get the EXACT transport position right before playback starts
-            // This ensures we're using the most current position for calculations
+
             const transportPosition = Tone.getTransport().seconds;
             console.log(`[TransportController.play] transportPosition determined as: ${transportPosition.toFixed(4)}s`);
-            console.log(`Starting playback at transport position: ${transportPosition}s`);
-            
-            // Ensure all players are completely reset before starting new playback
+
+            // Reset all players before starting new playback
             this.audioEngine.getAllTracks().forEach(track => {
                 if (track.player) {
-                    // Always stop and unsync ALL players before starting playback
                     if (track.player.state === "started") {
                         track.player.stop();
                     }
-                    // CRITICAL: Ensure completely unsynced
                     track.player.unsync();
-                    
-                    // Cancel any volume ramps
                     track.player.volume.cancelScheduledValues(Tone.now());
                 }
             });
-            
-            // Process each track instance with its specific timeline position
-            // If tracks are provided, use them; otherwise fall back to audio engine tracks
+
+            // Process tracks to schedule playback
             if (tracks && tracks.length > 0) {
-                // New instance-aware approach
                 tracks.forEach(track => {
-                    // Skip tracks without instances
                     if (!track.instances || track.instances.length === 0) return;
-                    
-                    // Process each instance of the track
+
                     track.instances.forEach(instance => {
                         try {
                             const trackXTicks = instance.x_position;
                             const trimStartTicks = instance.trim_start_ticks;
                             const trimEndTicks = instance.trim_end_ticks;
-                            
-                            // For audio tracks, get the player from audio engine
+
                             if (track.track_type === 'AUDIO') {
                                 const audioTrack = this.audioEngine.getAllTracks().find(t => t.id === track.id);
                                 if (!audioTrack || !audioTrack.player) return;
-                                
-                                // Calculate the offset when this instance should start playing
+
                                 const trackPositionOffset = this.getTrackTimeOffset(trackXTicks);
-                                
-                                // TODO: Handle instance-specific playback for audio tracks
-                                // For now, use the first instance only (temporary)
-                                if (instance.id.endsWith('_instance_1')) {
-                                    // Apply trim settings if needed
-                                    const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote;
-                                    const bpm = Tone.getTransport().bpm.value;
-                                    const trimStartSec = (trimStartTicks / ppq) * (60 / bpm);
-                                    const trimEndSec = (trimEndTicks / ppq) * (60 / bpm);
-                                    
-                                    if (trimStartTicks > 0 || trimEndTicks < track.duration_ticks) {
-                                        // Set trim on the player
-                                        (audioTrack.player as any)._trimSettings = {
-                                            trimEnabled: true,
-                                            trimStartSeconds: trimStartSec,
-                                            trimEndSeconds: trimEndSec
-                                        };
-                                    }
-                                    
-                                    // Schedule playback
-                                    if (trackPositionOffset <= transportPosition) {
-                                        const startOffset = Math.max(0, transportPosition - trackPositionOffset);
-                                        audioTrack.player.stop();
-                                        audioTrack.player.unsync();
-                                        audioTrack.player.start(0, trimStartSec + startOffset);
-                                        audioTrack.player.sync();
-                                        console.log(`Audio track ${track.id} instance ${instance.id} synced, starting at offset ${startOffset}s`);
-                                    }
+                                const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote;
+                                const bpm = Tone.getTransport().bpm.value;
+                                const trimStartSec = (trimStartTicks / ppq) * (60 / bpm);
+                                const trimEndSec = (trimEndTicks / ppq) * (60 / bpm);
+
+                                if (trimStartTicks > 0 || trimEndTicks < track.duration_ticks) {
+                                    (audioTrack.player as any)._trimSettings = {
+                                        trimEnabled: true,
+                                        trimStartSeconds: trimStartSec,
+                                        trimEndSeconds: trimEndSec
+                                    };
+                                }
+
+                                if (trackPositionOffset <= transportPosition) {
+                                    const startOffset = Math.max(0, transportPosition - trackPositionOffset);
+                                    audioTrack.player.stop();
+                                    audioTrack.player.unsync();
+                                    audioTrack.player.sync().start(0, trimStartSec + startOffset);
+                                    console.log(`Audio track ${track.id} instance ${instance.id} synced, starting at offset ${startOffset}s`);
                                 }
                             }
                         } catch (error) {
@@ -224,133 +193,69 @@ export class TransportController implements Transport {
                     });
                 });
             } else {
-                // Fallback to old approach for backward compatibility
+                // Fallback for old untrimmed tracks
                 this.audioEngine.getAllTracks().forEach(track => {
                     if (!track.player) return;
-                    
+
                     try {
                         const trackXTicks = track.position?.x || 0;
-                    
-                    // Get track's trim settings if available
-                    const hasTrimSettings = 
-                        track.player && 
-                        (track.player as any)._trimSettings && 
-                        (track.player as any)._trimSettings.trimEnabled;
-                    
-                    // Calculate the offset when this track should start playing
-                    // Standard offset based on track position in ticks
-                    const trackPositionOffset = this.getTrackTimeOffset(trackXTicks);
-                    
-                    // If trim settings exist, adjust playback accordingly
-                    if (hasTrimSettings) {
+                        const trackPositionOffset = this.getTrackTimeOffset(trackXTicks);
                         const trimSettings = (track.player as any)._trimSettings;
-                        console.log(`Scheduling trimmed track ${track.id}:`, trimSettings);
-                        
-                        // Clean start and sync of player
-                        if (track.player.state === "started") {
+                        const hasTrimSettings = trimSettings?.trimEnabled;
+
+                        const startOffset = Math.max(0, transportPosition - trackPositionOffset);
+
+                        if (hasTrimSettings) {
+                            const trimStartSec = trimSettings.trimStartSeconds;
+                            const trimEndSec = trimSettings.trimEndSeconds;
+                            const trimmedDuration = trimEndSec - trimStartSec;
+
+                            if (startOffset < trimmedDuration) {
+                                const playFrom = trimStartSec + startOffset;
+                                track.player.stop();
+                                track.player.unsync();
+                                track.player.start(0, playFrom);
+                                track.player.sync();
+                                console.log(`Trimmed track ${track.id} playing from ${playFrom}s`);
+                            } else {
+                                console.log(`Skipped track ${track.id}: transport position past trimmed region`);
+                            }
+                        } else if (trackPositionOffset <= transportPosition) {
                             track.player.stop();
-                        }
-                        track.player.unsync();
-                        
-                        // Calculate how much time has passed since the transport position
-                        const effectiveStartTime = Math.max(0, transportPosition - trackPositionOffset);
-                        
-                        // Check if we should skip ahead in the trimmed audio
-                        const trimStartSec = trimSettings.trimStartSeconds;
-                        const trimEndSec = trimSettings.trimEndSeconds;
-                        const trimmedDuration = trimEndSec - trimStartSec;
-                        
-                        if (effectiveStartTime <= 0) {
-                            // Normal start from beginning of trimmed region
-                            console.log(`Starting trimmed track ${track.id} from beginning of trim`);
-                            // Set start position to trim start and sync playback
-                            track.player.start(0, trimStartSec);
-                            track.player.sync();
-                        } else if (effectiveStartTime < trimmedDuration) {
-                            // Start from a point inside the trimmed region
-                            const startOffset = trimStartSec + effectiveStartTime;
-                            console.log(`Starting trimmed track ${track.id} from offset ${startOffset}s`);
+                            track.player.unsync();
                             track.player.start(0, startOffset);
                             track.player.sync();
-                        } else {
-                            // We're past the end of this track - don't schedule
-                            console.log(`Transport position ${transportPosition}s is past end of trimmed track ${track.id}`);
-                        }
-                    } else {
-                        // Normal scheduling for untrimmed tracks - existing code path
-                        console.log(`Scheduling untrimmed track ${track.id} with offset ${trackPositionOffset}s`);
-                        
-                        // Clean start and sync of player
-                        if (track.player.state === "started") {
-                            track.player.stop();
-                        }
-                        track.player.unsync();
-                        
-                        // Sync the player with the transport and set its start position
-                        // Only schedule if the track should be playing at this position
-                        if (trackPositionOffset <= transportPosition) {
-                            const startOffset = Math.max(0, transportPosition - trackPositionOffset);
-                            
-                            // CRITICAL: We must start the player at the correct offset
-                            // This is calculated as the difference between transport position
-                            // and the track's own position on the timeline
-                            track.player.start(0, startOffset);
-                            track.player.sync();
-                            
                             console.log(`Track ${track.id} synced, starting at offset ${startOffset}s`);
-                        } else {
-                            // Track is in the future, don't schedule yet
-                            console.log(`Track ${track.id} is in the future, not scheduling yet`);
                         }
+
+                    } catch (error) {
+                        console.error(`Error scheduling track ${track.id}:`, error);
                     }
-                } catch (error) {
-                    console.error(`Error scheduling track ${track.id}:`, error);
-                }
-            });
+                });
+
             }
 
-            // URGENT FIX: Force a clean Transport start
-            // This is critical to ensure correct timing
+            // Restart Tone.Transport if needed
             const transportWasRunning = Tone.getTransport().state === "started";
-            if (transportWasRunning) {
-                console.log("Transport was already running, pausing before restart");
-                Tone.getTransport().pause();
-            }
-            
-            // Double check transport position is still as expected
+            if (transportWasRunning) Tone.getTransport().pause();
+
             console.log(`Transport position before start: ${Tone.getTransport().seconds}s`);
-            
-            // Start soundfont player if available
+
             try {
-                console.log(`Starting soundfont player. Transport position: ${transportPosition}s`);
-                console.log(`Tracks passed to soundfont:`, tracks?.map(t => ({
-                    id: t.id,
-                    type: t.track_type,
-                    instances: t.instances?.length || 0
-                })));
                 await this.getSoundfontController().play(transportPosition, tracks, this.midiManager);
             } catch (error) {
                 console.error('Failed to start soundfont player:', error);
             }
-            
-            // Start sampler tracks
+
             try {
-                console.log('Starting sampler tracks');
-                console.log(`Tracks passed to sampler:`, tracks?.map(t => ({
-                    id: t.id,
-                    type: t.track_type,
-                    instances: t.instances?.length || 0
-                })));
-                const bpm = Tone.Transport.bpm.value; // Get current BPM
+                const bpm = Tone.Transport.bpm.value;
                 await this.getSamplerController().play(transportPosition, bpm, tracks, this.midiManager);
             } catch (error) {
                 console.error('Failed to start sampler tracks:', error);
             }
-            
-            // Start transport with a clean slate, BUT from the current transportPosition
+
             Tone.getTransport().start(undefined, transportPosition);
-            console.log(`[TransportController.play] After Tone.Transport.start(undefined, ${transportPosition.toFixed(4)}). Current Tone.Transport.seconds: ${Tone.getTransport().seconds.toFixed(4)}s`);
-            console.log(`Transport started from offset ${transportPosition}s, state:`, Tone.getTransport().state);
+            console.log(`[TransportController.play] After start. Position: ${Tone.getTransport().seconds.toFixed(4)}s`);
         } catch (error) {
             console.error('Error starting playback:', error);
             this.stop();
@@ -358,7 +263,8 @@ export class TransportController implements Transport {
             this.isStarting = false;
         }
     }
-    
+
+
     // Clear any scheduled events (called when stopping, seeking, or starting playback)
     private clearScheduledEvents(): void {
         console.log(`Clearing all scheduled events (${this.scheduledEvents.length})`);
@@ -370,10 +276,10 @@ export class TransportController implements Transport {
 
     public pause(): void {
         console.log('Pausing playback at position:', this.position);
-        
+
         // Clear any scheduled events
         this.clearScheduledEvents();
-        
+
         // Pause soundfont player if available
         try {
             console.log('Pausing soundfont player');
@@ -381,7 +287,7 @@ export class TransportController implements Transport {
         } catch (error) {
             console.error('Failed to pause soundfont player:', error);
         }
-        
+
         // Pause sampler tracks
         try {
             console.log('Pausing sampler tracks');
@@ -389,7 +295,7 @@ export class TransportController implements Transport {
         } catch (error) {
             console.error('Failed to pause sampler tracks:', error);
         }
-        
+
         // Fade out before stopping
         this.audioEngine.getAllTracks().forEach(track => {
             if (track.player) {
@@ -404,7 +310,7 @@ export class TransportController implements Transport {
         setTimeout(() => {
             // Pause the transport first (doesn't reset position)
             Tone.getTransport().pause();
-            
+
             // Stop all playing players to ensure clean state
             this.audioEngine.getAllTracks().forEach(track => {
                 if (track.player && track.player.state === "started") {
@@ -413,7 +319,7 @@ export class TransportController implements Transport {
                     track.player.unsync();
                 }
             });
-            
+
             console.log('Transport: Paused at position', currentPosition);
         }, TransportController.FADE_TIME * 1000);
     }
@@ -421,10 +327,10 @@ export class TransportController implements Transport {
     public async stop(): Promise<void> {
         console.log('Stopping transport and resetting position to 0');
         this.isStarting = false; // Reset starting state
-        
+
         // Clear any scheduled events
         this.clearScheduledEvents();
-        
+
         // Stop soundfont player if available
         if (this.getSoundfontController()) {
             try {
@@ -434,7 +340,7 @@ export class TransportController implements Transport {
                 console.error('Failed to stop soundfont player:', error);
             }
         }
-        
+
         // Stop sampler tracks
         try {
             console.log('Stopping sampler tracks at position', this.position);
@@ -442,7 +348,7 @@ export class TransportController implements Transport {
         } catch (error) {
             console.error('Failed to stop sampler tracks:', error);
         }
-        
+
         // Stop players first with fade out
         this.audioEngine.getAllTracks().forEach(track => {
             if (track.player) {
@@ -453,24 +359,24 @@ export class TransportController implements Transport {
         setTimeout(() => {
             // First stop the Transport so no more scheduling happens
             Tone.getTransport().stop();
-            
+
             // Then reset transport position to 0
             Tone.getTransport().seconds = 0;
-            
+
             // Now stop all audio playback
             this.audioEngine.stopAllPlayback();
-            
+
             // Prepare players for future playback - completely reset their state
             this.audioEngine.getAllTracks().forEach(track => {
                 if (track.player) {
                     // Unsync to clear any previous state
                     track.player.unsync();
-                    
+
                     // No need to seek here - we'll handle positioning when play is called
                     console.log(`Reset player for track ${track.id}`);
                 }
             });
-            
+
             console.log('Transport: Successfully reset to position 0');
         }, TransportController.FADE_TIME * 1000);
     }
@@ -478,21 +384,21 @@ export class TransportController implements Transport {
     public seek(position: number): void {
         // Bounds checking
         position = Math.max(0, Math.min(position, this.maxPosition));
-        
+
         const wasPlaying = this.isPlaying;
         const prevPosition = this.position;
-        
+
         console.log(`SEEKING: From ${prevPosition}s to ${position}s (delta: ${position - prevPosition}s)`);
-        
+
         // COMPLETELY RESET EVERYTHING
-        
+
         // 1. First stop the Transport entirely
         // This is more aggressive than pause and ensures a clean slate
         Tone.getTransport().stop();
-        
+
         // 2. Clear all scheduled events
         this.clearScheduledEvents();
-        
+
         // 3. Seek in soundfont player if available
         try {
             console.log(`Seeking soundfont player to ${position}s`);
@@ -500,20 +406,20 @@ export class TransportController implements Transport {
         } catch (error) {
             console.error('Failed to seek soundfont player:', error);
         }
-        
+
         // 3b. Handle seeking sampler tracks
         try {
             console.log(`Seeking sampler tracks to ${position}s`);
-            
+
             // Get current BPM for timing calculations
             const bpm = Tone.Transport.bpm.value;
-            
+
             // Seek the sampler controller
             this.getSamplerController().seek(position, bpm);
         } catch (error) {
             console.error('Failed to seek sampler tracks:', error);
         }
-        
+
         // 4. Completely reset all players
         this.audioEngine.getAllTracks().forEach(track => {
             if (track.player) {
@@ -521,36 +427,36 @@ export class TransportController implements Transport {
                 if (track.player.state === "started") {
                     track.player.stop();
                 }
-                
+
                 // Completely reset player state
                 track.player.unsync();
-                
+
                 // Clear any volume automations
                 track.player.volume.cancelScheduledValues(Tone.now());
                 // Set volume using our conversion utility
                 track.player.volume.value = convertVolumeToDecibels(track.volume, track.muted);
             }
         });
-        
+
         // 5. Set the Transport position with a clean state
         // Because we completely stopped the transport, this should be reliable
         Tone.getTransport().seconds = position;
-        
+
         // Double check that it actually set correctly
         console.log(`Transport position set to ${position}s, verified: ${Tone.getTransport().seconds}s`);
-        
+
         if (Math.abs(Tone.getTransport().seconds - position) > 0.001) {
             console.warn("Transport position didn't set properly - forcing again");
             Tone.getTransport().seconds = position;
         }
-        
+
         // If was playing, restart with the new position
         if (wasPlaying) {
             // Use a small delay to ensure Tone.js state is updated
             // This is a crucial step to ensure reliable seeking
             setTimeout(() => {
                 console.log(`Restarting playback from position: ${Tone.getTransport().seconds}s`);
-                this.play(); 
+                this.play();
             }, 30); // 30ms is a good compromise
         }
     }
@@ -560,7 +466,7 @@ export class TransportController implements Transport {
         const validBpm = Math.max(1, Math.min(bpm, 999));
         Tone.getTransport().bpm.value = validBpm;
         await this.soundfontController.setGlobalBPM(validBpm);
-        
+
         // Update BPM for sampler tracks if they are playing
         if (this.isPlaying) {
             const currentPosition = this.position;
@@ -576,7 +482,7 @@ export class TransportController implements Transport {
     public async loadAudioFile(trackId: string, file: File, position?: { x: number, y: number }): Promise<void> {
         try {
             await this.audioEngine.createTrack(trackId, file.name, file);
-            
+
             const track = this.audioEngine.getAllTracks().find(t => t.id === trackId);
             if (!track?.player) {
                 throw new Error(`Failed to create player for track ${trackId}`);
@@ -585,7 +491,7 @@ export class TransportController implements Transport {
             // Safely access buffer duration
             const duration = track.player.buffer?.duration ?? 0;
             this.maxPosition = Math.max(this.maxPosition, duration);
-            
+
             // If position is provided, set it in the AudioEngine
             if (position) {
                 console.log(`TransportController: Setting track ${trackId} position to x:${position.x}, y:${position.y}`);
@@ -605,7 +511,7 @@ export class TransportController implements Transport {
         } catch (error) {
             console.error(`Error cleaning up sampler for track ${trackId}:`, error);
         }
-        
+
         // Recalculate maxPosition when a track is removed
         this.maxPosition = Math.max(
             0,
@@ -614,13 +520,13 @@ export class TransportController implements Transport {
                 .map(t => t.player?.buffer?.duration ?? 0)
         );
     }
-    
+
     public setPosition(position: number): void {
         console.log(`[TransportController.setPosition] Received position: ${typeof position === 'number' ? position.toFixed(4) : position}`);
         // Just an alias for seek - make sure we pass the position value directly
         this.seek(position);
     }
-    
+
     /**
      * Handle track position changes during playback
      * This recalculates and adjusts the playback for a specific track that was moved
@@ -635,7 +541,7 @@ export class TransportController implements Transport {
             console.log(`Track ${trackId} position changed, but not playing - no action needed`);
             return;
         }
-        
+
         // Find the track
         const track = this.audioEngine.getAllTracks().find(t => t.id === trackId);
         if (!track || !track.player) {
@@ -643,25 +549,25 @@ export class TransportController implements Transport {
             console.warn(`Track ${trackId} or its player not found during position change while playing. Skipping sync for now.`);
             return; // Continue to return, but log the warning
         }
-        
+
         console.log(`Handling position change for track ${trackId} to x:${newPositionXTicks} ticks during playback`);
-        
+
         // CRITICAL: This function needs to stop and restart ALL tracks to ensure proper synchronization
         // This is because Tone.js transport synchronization doesn't support repositioning individual tracks
-        
+
         // 1. Capture current global transport position
         const currentPosition = this.position;
-        
+
         // 2. Stop all playback by using the seek method, which properly handles the transport
         console.log(`Pausing playback at ${currentPosition}s and recalculating all tracks`);
-        
+
         // To prevent an infinite loop when the seek itself triggers player updates,
         // we need to temporarily disable the transport
         const wasPlaying = this.isPlaying;
-        
+
         // Stop all playback immediately and clear scheduled events
         this.clearScheduledEvents();
-        
+
         // Stop all players and unsync them
         this.audioEngine.getAllTracks().forEach(t => {
             if (t.player) {
@@ -671,13 +577,13 @@ export class TransportController implements Transport {
                 t.player.unsync();
             }
         });
-        
+
         // Pause the transport
         Tone.getTransport().pause();
-        
+
         // Set the global transport position
         Tone.getTransport().seconds = currentPosition;
-        
+
         // Now restart if needed
         if (wasPlaying) {
             // Use setTimeout to allow the UI to update before restarting

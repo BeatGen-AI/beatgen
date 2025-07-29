@@ -1,14 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { TanStackRouterVite } from '@tanstack/router-vite-plugin'
-import fs from 'fs'
-import https from 'https'
-import path from "path"
-import tailwindcss from "@tailwindcss/vite"
-
-// Removed srcPath check as it was causing issues in Vercel build environment
-// const srcPath = path.resolve(__dirname, '../src')
-// console.log('Source path exists:', fs.existsSync(srcPath))
+import path from 'path'
+import tailwindcss from '@tailwindcss/vite'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
@@ -22,9 +16,7 @@ export default defineConfig(({ command }) => {
       TanStackRouterVite(),
     ],
     define: {
-      // Provide browser-compatible values for Node.js globals
       'process.env': JSON.stringify({}),
-      // Set NODE_ENV based on mode
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || (isDev ? 'development' : 'production')),
     },
     resolve: {
@@ -39,102 +31,65 @@ export default defineConfig(({ command }) => {
       ]
     },
     server: {
-      port: 5173, // Default Vite port
+      port: 5173,
+      host: true,
       proxy: {
-        // '/api': {
-        //   target: 'https://localhost:8000', // Use HTTPS to match backend
-        //   changeOrigin: true,
-        //   secure: false, // Allow self-signed certificates
-        //   agent: new https.Agent({
-        //      minVersion: 'TLSv1.2'
-        //   })
-        // }
         '/auth': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
         '/users': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
         '/projects/': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
         '/sounds': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
         '/soundfonts': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
         '/drum-samples': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
         '/assistant': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
-        '/health': { 
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+        '/health': {
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
         '/subscriptions': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
         '/webhooks': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         },
         '/credits/': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
+          target: 'http://localhost:8000',
+          changeOrigin: true
         }
-      },
-      https: isDev ? {
-        key: fs.readFileSync(path.resolve(__dirname, '.cert/key.pem')),
-        cert: fs.readFileSync(path.resolve(__dirname, '.cert/cert.pem'))
-      } : undefined, // HTTPS only for dev server
-      host: true // This is important to expose the server to the network for local dev
+      }
     },
-    // Log resolved paths for debugging
     optimizeDeps: {
       include: ['react', 'react-dom'],
       exclude: []
     },
-    // Special handling for audio files
     assetsInclude: ['**/*.wav', '**/*.mp3', '**/*.ogg', '**/*.midi', '**/*.mid'],
     build: {
       outDir: 'dist',
-      sourcemap: true, // Consider setting to false or 'hidden' for production
+      sourcemap: true,
       rollupOptions: {
         output: {
-          // Use hashed filenames for cache busting in production
           entryFileNames: 'assets/[name]-[hash].js',
           chunkFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash].[ext]'

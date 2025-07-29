@@ -1,119 +1,67 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { IconPlayerPlay, IconPlayerPause, IconPlayerSkipBack, IconDownload } from '@tabler/icons-react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { IconPlayerPlay, IconPlayerPause, IconPlayerSkipBack, IconDownload } from '@tabler/icons-react';
 import { cn } from '@/lib/utils';
-import AudioPreview from './AudioPreview';
+import * as Tone from 'tone';
 
 interface AudioPlayerProps {
   audioBlob: Blob;
   className?: string;
-  onTimeUpdate?: (currentTime: number) => void;
-  onDurationChange?: (duration: number) => void;
-  fileName?: string; // Optional filename for download
-  color?: string; // Color for the waveform
+  fileName?: string;
+  color?: string;
 }
 
 const AudioPlayer: React.FC<AudioPlayerProps> = ({
   audioBlob,
   className,
-  onTimeUpdate,
-  onDurationChange,
   fileName,
   color
 }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const playerRef = useRef<Tone.Player | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Convert blob to URL on mount
   useEffect(() => {
     const url = URL.createObjectURL(audioBlob);
-    setAudioUrl(url);
 
-    // Cleanup URL on unmount
+    const player = new Tone.Player(url, () => {
+      setDuration(player.buffer.duration);
+      setIsLoaded(true);
+    }).toDestination();
+
+    player.sync().start(0, player.loopStart || 0); // syncs with Tone.Transport
+    playerRef.current = player;
+
     return () => {
+      player.dispose();
       URL.revokeObjectURL(url);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [audioBlob]);
 
-  // Initialize audio element when URL is available
+  // Update current time every 100ms while playing
   useEffect(() => {
-    if (!audioUrl) return;
+    if (!playerRef.current) return;
 
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
-
-    const handleLoadedMetadata = () => {
-      const audioDuration = audio.duration;
-      setDuration(audioDuration);
-      onDurationChange?.(audioDuration);
-    };
-
-    const handleTimeUpdate = () => {
-      const time = audio.currentTime;
-      setCurrentTime(time);
-      onTimeUpdate?.(time);
-    };
-
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-    };
-
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('play', handlePlay);
-    audio.addEventListener('pause', handlePause);
-
-    return () => {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('play', handlePlay);
-      audio.removeEventListener('pause', handlePause);
-      audio.pause();
-    };
-  }, [audioUrl, onTimeUpdate, onDurationChange]);
-
-  const handlePlayPause = () => {
-    if (!audioRef.current) return;
-    
-    if (isPlaying) {
-      audioRef.current.pause();
-      // state will update via the 'pause' event listener
+    if (Tone.Transport.state === 'started') {
+      intervalRef.current = setInterval(() => {
+        setCurrentTime(Tone.Transport.seconds % duration);
+      }, 100);
     } else {
-      audioRef.current.play().catch(() => {
-        setIsPlaying(false);
-      });
-      // state will update via the 'play' event listener if successful
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    }
+  }, [duration, Tone.Transport.state]);
+
+  const handleSkipToStart = () => {
+    if (playerRef.current) {
+      Tone.Transport.seconds = 0;
+      setCurrentTime(0);
     }
   };
 
-  const handleSeek = (position: number) => {
-    if (!audioRef.current || !duration) return;
-
-    const seekTime = position * duration;
-    audioRef.current.currentTime = seekTime;
-    setCurrentTime(seekTime);
-  };
-
-  const handleSkipToStart = () => {
-    if (!audioRef.current) return;
-
-    audioRef.current.currentTime = 0;
-    setCurrentTime(0);
-  };
-
   const handleDownload = () => {
-    if (!audioBlob) return;
-
     const url = URL.createObjectURL(audioBlob);
     const link = document.createElement('a');
     link.href = url;
@@ -124,31 +72,30 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  if (!audioUrl) {
-    return (
-      <div className={cn('flex items-center justify-center p-4', className)}>
-        <span className="text-sm text-muted-foreground">Loading audio...</span>
-      </div>
-    );
-  }
-
   return (
     <div className={cn('space-y-2', className)}>
-      {/* Control buttons - Above the waveform */}
       <div className="flex justify-between items-center">
         <div className="flex gap-1">
+          {/* Play/pause now controlled by Tone.Transport, no direct handling here */}
           <Button
             variant="ghost"
             size="icon"
-            onClick={handlePlayPause}
             className="h-6 w-6 bg-background/80 backdrop-blur-sm hover:bg-background/90 border border-border/50"
+            onClick={() => {
+              if (Tone.Transport.state === 'started') {
+                Tone.Transport.pause();
+              } else {
+                Tone.start().then(() => Tone.Transport.start());
+              }
+            }}
           >
-            {isPlaying ? (
+            {Tone.Transport.state === 'started' ? (
               <IconPlayerPause size={12} />
             ) : (
               <IconPlayerPlay size={12} />
             )}
           </Button>
+
           <Button
             variant="ghost"
             size="icon"
@@ -158,7 +105,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             <IconPlayerSkipBack size={12} />
           </Button>
         </div>
-        
+
         <Button
           variant="ghost"
           size="icon"
@@ -169,17 +116,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         </Button>
       </div>
 
-      {/* Waveform with AudioPreview */}
-      <AudioPreview
-        audioUrl={audioUrl}
-        variant="card"
-        duration={duration}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        onWaveformClick={handleSeek}
-        color={color}
-        className="w-full"
-      />
+      {/* Simple progress display */}
+      <div className="text-xs text-muted-foreground">
+        {isLoaded ? `${currentTime.toFixed(2)} / ${duration.toFixed(2)} sec` : 'Loading...'}
+      </div>
     </div>
   );
 };
