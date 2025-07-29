@@ -710,57 +710,28 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                     showRandomButton={false}
                     showSelect={false}
                     submitButtonAriaLabel="Generate Audio"
-                    topComponent={
-                      <div className="space-y-4">
-                        {/* Key Signature */}
-                        <div>
-                          <Label className="text-sm font-medium">Key Signature</Label>
-                          <div className="mt-1">
-                            <KeySelectorMenu
-                              triggerLabel={keySignature}
-                              onSelect={setKeySignature}
-                              selectedKey={keySignature}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-4">
-                          {/* BPM */}
-                          <div>
-                            <Label className="text-sm font-medium">BPM</Label>
-                            <div className="mt-1">
-                              <BPMSelector
-                                triggerLabel={`${bpm} BPM`}
-                                onSelect={setBpm}
-                                selectedBPM={bpm}
-                                min={60}
-                                max={200}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Bars */}
-                          <div>
-                            <Label className="text-sm font-medium">Bars</Label>
-                            <div className="mt-1">
-                              <BarSelector
-                                triggerLabel={`${bars} bars`}
-                                onSelect={setBars}
-                                selectedBars={bars}
-                                min={1}
-                                max={selectedModel === 'stability/stable-audio-2' ? 16 : 8}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Duration Preview */}
-                          <div>
-                            <Label className="text-sm font-medium">Duration</Label>
-                            <div className="mt-1 px-3 py-2 bg-muted rounded-md text-sm">
-                              {duration}s
-                            </div>
-                          </div>
-                        </div>
+                    textareaTopPadding={8}
+                    textareaTopLeftComponent={
+                      <div className="flex gap-2">
+                        <KeySelectorMenu
+                          triggerLabel={keySignature}
+                          onSelect={setKeySignature}
+                          selectedKey={keySignature}
+                        />
+                        <BPMSelector
+                          triggerLabel={`${bpm} BPM`}
+                          onSelect={setBpm}
+                          selectedBPM={bpm}
+                          min={60}
+                          max={200}
+                        />
+                        <BarSelector
+                          triggerLabel={`${bars} bars`}
+                          onSelect={setBars}
+                          selectedBars={bars}
+                          min={1}
+                          max={selectedModel === 'stability/stable-audio-2' ? 16 : 8}
+                        />
                       </div>
                     }
                     textareaBottomLeftComponent={
