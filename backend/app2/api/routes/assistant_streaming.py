@@ -41,6 +41,8 @@ from app2.core.logging import get_api_logger
 from app2.llm.available_models import ModelInfo
 from app2.llm import available_models
 from app2.llm.agents.music_agent import SongRequest, music_agent
+from app2.llm.agents.conversational_agent import create_conversational_agent
+from app2.llm.agents.pydantic_unified_agent import create_pydantic_unified_agent
 from pydantic import BaseModel
 from app2.infrastructure.database.sqlmodel_client import get_async_session
 from sqlmodel import Session
@@ -70,7 +72,7 @@ load_dotenv()
 class AssistantRequestModel(AssistantRequest):
     """Unified request model for all assistant interaction types"""
 
-    mode: Literal["generate", "edit", "chat", "generate-audio"]
+    mode: Literal["generate", "edit", "chat", "generate-audio", "unified"]
 
 
 # Response schema for request creation
@@ -305,6 +307,8 @@ async def process_assistant_request(request_id: str):
             elif context.mode == "edit":
                 # If process_edit_request needs a session, pass it here
                 await process_edit_request(request_id, context, sse_queue)
+            elif context.mode == "unified":
+                await process_unified_request(request_id, context, sse_queue, session)
             else:  # chat
                 # If process_chat_request needs a session, pass it here
                 await process_chat_request(request_id, context, sse_queue)
@@ -526,117 +530,111 @@ async def process_generate_request(
         raise
 
 
-async def process_edit_request(request_id: str, context, queue: asyncio.Queue):
+async def process_edit_request(request_id: str, context, sse_queue: SSEQueueManager):
     """Process an edit mode request"""
 
-    # Create message ID for this session
-    message_id = f"msg-{int(time.time())}"
+    try:
+        logger.info(f"Processing edit request: {request_id}")
 
-    # Response streaming setup
-    await queue.put(
-        (
-            "response_start",
-            {
-                "message_id": message_id,
-                "request_id": request_id,
-                "track_id": context.track_id,
-            },
-        )
-    )
-
-    # Send processing stage
-    await queue.put(
-        ("stage", {"name": "processing", "description": "Processing your edit request"})
-    )
-
-    # Stream fake AI response chunks (for now)
-    full_response = ""
-    chunks = [
-        f"Working on your edit request for track {context.track_id}... ",
-        "Analyzing your instructions and determining necessary changes... ",
-        f"Applying changes based on: '{context.prompt}'... ",
-    ]
-
-    for i, chunk in enumerate(chunks):
-        await asyncio.sleep(0.5)  # Simulate processing time
-        full_response += chunk
-        await queue.put(
-            (
-                "response_chunk",
-                {"message_id": message_id, "chunk": chunk, "chunk_index": i},
-            )
+        # Send processing stage
+        await sse_queue.stage(
+            name="processing", 
+            description="Processing your edit request"
         )
 
-    # Mark response as complete
-    await queue.put(("response_end", {"message_id": message_id, "is_complete": True}))
+        # Create message ID for this session
+        message_id = f"msg-{int(time.time())}"
 
-    # Simple edit example (adjust volume)
-    action = AssistantAction(
-        type="adjust_volume",
-        data={
-            "trackId": context.track_id,
-            "value": 80,  # Example volume value
-        },
-    )
+        # Send response start event
+        await sse_queue.add_chunk(f"Working on your edit request for track {context.track_id}...")
 
-    # Send the action to the client
-    await queue.put(("action", action.dict()))
+        # Stream AI response chunks with delays to simulate processing
+        chunks = [
+            "Analyzing your instructions and determining necessary changes... ",
+            f"Applying changes based on: '{context.prompt}'... ",
+            "Finalizing track modifications... "
+        ]
 
-    # Create empty track data (no note changes in this example)
-    track_data = TrackData(notes=[], instrument_name="Edited Track", instrument_id=None)
+        full_response = f"Working on your edit request for track {context.track_id}... "
+        
+        for chunk in chunks:
+            await asyncio.sleep(0.8)  # Simulate processing time
+            full_response += chunk
+            await sse_queue.add_chunk(chunk)
 
-    # Create final response
-    final_response = EditResponse(
-        response=full_response, track=track_data, actions=[action]
-    )
+        # Simple edit example (adjust volume)
+        action = AssistantAction.adjust_volume(
+            track_id=context.track_id,
+            value=0.8  # Volume between 0.0 and 1.0 (80% volume)
+        )
 
-    # Send complete event
-    await queue.put(("complete", final_response.dict()))
-    logger.info(f"Edit request completed successfully: {request_id}")
+        # Send the action to the client
+        await sse_queue.action(action)
+
+        # Create empty track data (no note changes in this example)
+        track_data = TrackData(notes=[], instrument_name="Edited Track", instrument_id=None)
+
+        # Create final response
+        final_response_obj = EditResponse(
+            response=full_response, track=track_data, actions=[action]
+        )
+
+        # Send complete event
+        await sse_queue.complete(final_response_obj.model_dump())
+        logger.info(f"Edit request completed successfully: {request_id}")
+
+    except Exception as e:
+        logger.error(f"Error in edit request {request_id}: {str(e)}")
+        await sse_queue.error(
+            message=f"Failed to process edit request: {str(e)}",
+            error_data={"error": "edit_failed", "details": str(e)}
+        )
+        raise
 
 
-async def process_chat_request(request_id: str, context, queue: asyncio.Queue):
+async def process_chat_request(request_id: str, context, sse_queue: SSEQueueManager):
     """Process a chat mode request"""
-    # Create message ID for this session
-    message_id = f"msg-{int(time.time())}"
+    
+    try:
+        logger.info(f"Processing chat request: {request_id}")
 
-    # Response streaming setup
-    await queue.put(
-        ("response_start", {"message_id": message_id, "request_id": request_id})
-    )
-
-    # Send processing stage
-    await queue.put(
-        ("stage", {"name": "processing", "description": "Processing your question"})
-    )
-
-    # Stream fake AI response chunks (for now)
-    full_response = ""
-    chunks = [
-        "I'm your AI music assistant. ",
-        "I can help with music production, arrangement, and theory. ",
-        f"Regarding your question: '{context.prompt}', I'll do my best to assist.",
-    ]
-
-    for i, chunk in enumerate(chunks):
-        await asyncio.sleep(0.5)  # Simulate processing time
-        full_response += chunk
-        await queue.put(
-            (
-                "response_chunk",
-                {"message_id": message_id, "chunk": chunk, "chunk_index": i},
-            )
+        # Send processing stage
+        await sse_queue.stage(
+            name="processing", 
+            description="Processing your question"
         )
 
-    # Mark response as complete
-    await queue.put(("response_end", {"message_id": message_id, "is_complete": True}))
+        # Create message ID for this session
+        message_id = f"msg-{int(time.time())}"
 
-    # Create final response
-    final_response = AssistantResponse(response=full_response)
+        # Stream AI response chunks with delays to simulate processing
+        chunks = [
+            "I'm your AI music assistant. ",
+            "I can help with music production, arrangement, and theory. ",
+            f"Regarding your question: '{context.prompt}', I'll do my best to assist."
+        ]
 
-    # Send complete event
-    await queue.put(("complete", final_response.dict()))
-    logger.info(f"Chat request completed successfully: {request_id}")
+        full_response = ""
+        
+        for chunk in chunks:
+            await asyncio.sleep(0.6)  # Simulate processing time
+            full_response += chunk
+            await sse_queue.add_chunk(chunk)
+
+        # Create final response
+        final_response_obj = AssistantResponse(response=full_response)
+
+        # Send complete event
+        await sse_queue.complete(final_response_obj.model_dump())
+        logger.info(f"Chat request completed successfully: {request_id}")
+
+    except Exception as e:
+        logger.error(f"Error in chat request {request_id}: {str(e)}")
+        await sse_queue.error(
+            message=f"Failed to process chat request: {str(e)}",
+            error_data={"error": "chat_failed", "details": str(e)}
+        )
+        raise
 
 
 async def process_generate_audio_request(
@@ -846,6 +844,57 @@ async def process_generate_audio_request(
         await sse_queue.error(
             message=f"Failed to generate audio: {str(e)}",
             error_data={"error": "generation_failed", "details": str(e)}
+        )
+
+
+async def process_unified_request(
+    request_id: str, context, sse_queue: SSEQueueManager, session: Session
+):
+    """
+    Process a unified mode request with Pydantic AI tool-based routing.
+    
+    Uses LLM-driven tool selection instead of keyword detection:
+    - generate_music_tool: For creating new music compositions
+    - edit_music_tool: For modifying existing tracks
+    - chat_tool: For general conversations about music
+    - analyze_music_tool: For music analysis and feedback
+    """
+    try:
+        logger.info(f"Processing unified request with Pydantic AI tools: {request_id}")
+        
+        # Get model info
+        model_info = None
+        if context.model:
+            try:
+                model_info = available_models.get_model_by_name(context.model)
+            except ValueError:
+                logger.warning(f"Model {context.model} not found, will use default")
+        
+        if not model_info:
+            model_info = available_models.ALL_MODELS[0]
+            logger.warning(f"Using default model: {model_info.display_name}")
+        
+        # Create Pydantic AI unified agent
+        unified_agent = create_pydantic_unified_agent(
+            model_info=model_info,
+            user_id=context.user_id,
+            session=session
+        )
+        
+        # Process message with automatic tool routing
+        await unified_agent.process_message(
+            user_message=context.prompt,
+            sse_queue=sse_queue,
+            track_context=context.context.get('tracks', []) if context.context else None
+        )
+        
+        logger.info(f"Unified request completed successfully: {request_id}")
+        
+    except Exception as e:
+        logger.error(f"Error in unified request {request_id}: {str(e)}")
+        await sse_queue.error(
+            message=f"I encountered an error: {str(e)}",
+            error_data={"error": "processing_failed", "details": str(e)}
         )
 
 

@@ -4,7 +4,7 @@ import { AssistantAction } from '@/platform/types/dto/assistant';
 
 // Types for request/response
 export interface AssistantRequestOptions {
-  mode: 'chat' | 'generate' | 'edit' | 'generate-audio';
+  mode: 'chat' | 'generate' | 'edit' | 'generate-audio' | 'unified';
   prompt: string;
   model: string;
   context?: {
