@@ -1,41 +1,91 @@
 import React, { useState } from 'react';
-import { Piano, AudioWaveform, Music, Scissors } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../../../components/ui/dropdown-menu';
-import { VirtualInstrumentsModal } from '../modals/VirtualInstrumentsModal';
-import { DrumMachineModal } from '../modals/drum-machine/DrumMachineModal';
-import { AudioTracksModal } from '../modals/AudioTracksModal';
+import { Menu, MenuItem, ListItemIcon, ListItemText, Divider, useTheme } from '@mui/material';
+import PianoIcon from '@mui/icons-material/Piano';
+import AudioFileIcon from '@mui/icons-material/AudioFile';
+import GraphicEqIcon from '@mui/icons-material/GraphicEq';
+import ContentCutIcon from '@mui/icons-material/ContentCut';
+import { VirtualInstrumentsBottomSheet } from '../modals/VirtualInstrumentBottomSheet';
+import { DrumMachineBottomSheet } from '../modals/drum-machine/DrumModelBottomSheet';
 import { DrumSamplePublicRead } from 'src/platform/types/dto/public_models/drum_samples';
-import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
+import { getPublicDrumSamples } from '../../../platform/api/drum_samples';
+import { getPublicSoundfonts } from '../../../platform/api/soundfonts';
+import { InstrumentFileRead } from 'src/platform/types/project';
 // Import types from store types file
 import { TrackType, AddTrackPayload, MidiTrackPayload, DrumTrackPayload, AudioTrackPayload } from '../../stores/types';
-import { useAppTheme } from '../../../lib/theme-provider';
 
 interface AddTrackMenuProps {
   isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  children: React.ReactNode;
+  anchorEl: HTMLElement | null;
+  onClose: () => void;
   // Use imported types
   onAddTrack: (type: TrackType, payload?: AddTrackPayload) => void;
   // Keep onFileUpload for direct audio/sampler uploads for now
   onFileUpload?: (file: File, isSampler?: boolean) => void;
+  isAIAssistantOpen?: boolean;
 }
 
 export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({ 
   isOpen, 
-  onOpenChange, 
-  children,
+  anchorEl, 
+  onClose, 
   onAddTrack, 
-  onFileUpload 
+  onFileUpload,
+  isAIAssistantOpen = false 
 }) => {
-  const { studioMode } = useAppTheme();
-  const [isVirtualInstrumentModalOpen, setIsVirtualInstrumentModalOpen] = useState(false);
-  const [isDrumMachineModalOpen, setIsDrumMachineModalOpen] = useState(false);
-  const [isAudioTracksModalOpen, setIsAudioTracksModalOpen] = useState(false);
+  const theme = useTheme();
+  const [isVirtualInstrumentBottomSheetOpen, setIsVirtualInstrumentBottomSheetOpen] = useState(false);
+  const [isDrumMachineBottomSheetOpen, setIsDrumMachineBottomSheetOpen] = useState(false);
+  
+  // Track which bottom sheet is currently expanded
+  const [expandedBottomSheet, setExpandedBottomSheet] = useState<'virtual' | 'drum' | null>(null);
+  
+  // Track bottom sheet heights
+  const [virtualInstrumentHeight, setVirtualInstrumentHeight] = useState(400); // Default height in px
+  const [drumMachineHeight, setDrumMachineHeight] = useState(400);
+  
+  // Persistent drum samples state to prevent data loss when switching modals
+  const [drumSamples, setDrumSamples] = useState<DrumSamplePublicRead[]>([]);
+  const [drumSamplesLoading, setDrumSamplesLoading] = useState(false);
+  
+  // Persistent soundfonts state to prevent data loss when switching modals
+  const [soundfonts, setSoundfonts] = useState<InstrumentFileRead[]>([]);
+  const [soundfontsLoading, setSoundfontsLoading] = useState(false);
+  
+  // Fetch drum samples once and persist across modal changes
+  const fetchDrumSamples = async () => {
+    if (drumSamples.length > 0) return; // Already loaded
+    
+    try {
+      setDrumSamplesLoading(true);
+      console.log('🥁 AddTrackMenu: Fetching drum samples...');
+      const data = await getPublicDrumSamples();
+      setDrumSamples(data);
+      console.log(`AddTrackMenu: Loaded ${data.length} drum samples`);
+    } catch (err: any) {
+      console.error('AddTrackMenu: Error fetching drum samples:', err);
+      setDrumSamples([]);
+    } finally {
+      setDrumSamplesLoading(false);
+    }
+  };
+  
+  // Fetch soundfonts once and persist across modal changes
+  const fetchSoundfonts = async () => {
+    if (soundfonts.length > 0) return; // Already loaded
+    
+    try {
+      setSoundfontsLoading(true);
+      console.log('🎹 AddTrackMenu: Fetching soundfonts...');
+      const data = await getPublicSoundfonts();
+      setSoundfonts(data);
+      console.log(`AddTrackMenu: Loaded ${data.length} soundfonts`);
+    } catch (err: any) {
+      console.error('AddTrackMenu: Error fetching soundfonts:', err);
+      setSoundfonts([]);
+    } finally {
+      setSoundfontsLoading(false);
+    }
+  };
   
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, isSampler: boolean = false) => {
     const files = event.target.files;
@@ -49,142 +99,183 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
           // Or potentially call onAddTrack here if we refactor later
           // onAddTrack(isSampler ? 'sampler' : 'audio', { file });
       }
-      onOpenChange(false);
+      onClose();
       console.log('File uploaded');
     }
   };
   
   return (
     <>
-      <DropdownMenu open={isOpen} onOpenChange={onOpenChange}>
-        <DropdownMenuTrigger asChild>
-          {children}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent 
-          className="w-48"
-          style={{
-            backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#ffffff',
-            borderColor: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-            color: studioMode === 'dark' ? '#ffffff' : '#000000'
+      <Menu
+        open={isOpen}
+        anchorEl={anchorEl}
+        onClose={onClose}
+        PaperProps={{
+          sx: { 
+            bgcolor: 'background.paper', 
+            color: 'text.primary', 
+            minWidth: 180, 
+            boxShadow: theme.shadows[3]
+          } 
+        }}
+      >
+        <MenuItem onClick={() => {
+          // Close drum modal if open
+          setIsDrumMachineBottomSheetOpen(false);
+          // Reset virtual instrument height to default when opening
+          setVirtualInstrumentHeight(400);
+          // Fetch soundfonts if not already loaded
+          fetchSoundfonts();
+          setIsVirtualInstrumentBottomSheetOpen(true);
+          setExpandedBottomSheet('virtual');
+          onClose();
+        }}
+          sx={{ 
+            fontSize: '13px',
+            py: 1,
+            '&:hover': { 
+              bgcolor: theme.palette.action.hover 
+            }
           }}
         >
-          <DropdownMenuItem 
-            onClick={() => {
-              setIsVirtualInstrumentModalOpen(true);
-              onOpenChange(false);
-            }}
-            className="text-sm py-2 cursor-pointer"
-            style={{
-              color: studioMode === 'dark' ? '#ffffff' : '#000000'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <Piano className="w-4 h-4 mr-3 text-blue-500" />
-            Virtual Instrument
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem 
-            onClick={() => { 
-              setIsDrumMachineModalOpen(true);
-              onOpenChange(false); 
-            }}
-            className="text-sm py-2 cursor-pointer"
-            style={{
-              color: studioMode === 'dark' ? '#ffffff' : '#000000'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <Music className="w-4 h-4 mr-3 text-orange-500" />
-            Drum Machine
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem 
-            onClick={() => {
-              setIsAudioTracksModalOpen(true);
-              onOpenChange(false);
-            }}
-            className="text-sm py-2 cursor-pointer"
-            style={{
-              color: studioMode === 'dark' ? '#ffffff' : '#000000'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <AudioWaveform className="w-4 h-4 mr-3 text-green-500" />
-            Audio Tracks
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem 
-            onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = 'audio/*';
-              input.onchange = (e) => handleFileUpload(e as any, true);
-              input.click();
-            }}
-            className="text-sm py-2 cursor-pointer"
-            style={{
-              color: studioMode === 'dark' ? '#ffffff' : '#000000'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = studioMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <Scissors className="w-4 h-4 mr-3 text-purple-500" />
-            Sampler
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <ListItemIcon><PianoIcon sx={{ color: '#e91e63' }} /></ListItemIcon>
+          <ListItemText primary="Virtual Instrument" />
+        </MenuItem>
+        
+        <MenuItem onClick={() => { 
+          // Close VI modal if open
+          setIsVirtualInstrumentBottomSheetOpen(false);
+          // Reset drum machine height to default when opening
+          setDrumMachineHeight(400);
+          // Fetch drum samples if not already loaded
+          fetchDrumSamples();
+          setIsDrumMachineBottomSheetOpen(true);
+          setExpandedBottomSheet('drum');
+          onClose(); 
+        }}
+          sx={{ 
+            fontSize: '13px',
+            py: 1,
+            '&:hover': { 
+              bgcolor: theme.palette.action.hover 
+            }
+          }}
+        >
+          <ListItemIcon><GraphicEqIcon sx={{ color: '#ff5722' }} /></ListItemIcon>
+          <ListItemText primary="Drum Machine" />
+        </MenuItem>
+        
+        <MenuItem
+          sx={{ 
+            fontSize: '13px',
+            py: 1,
+            '&:hover': { 
+              bgcolor: theme.palette.action.hover
+            }
+          }}
+        >
+          <label style={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
+            <ListItemIcon><AudioFileIcon sx={{ color: '#4caf50' }} /></ListItemIcon>
+            <ListItemText primary="Import Audio" />
+            <input 
+              type="file" 
+              accept="audio/*" 
+              style={{ display: 'none' }} 
+              onChange={(e) => handleFileUpload(e, false)}
+            />
+          </label>
+        </MenuItem>
+        <MenuItem
+          sx={{ 
+            fontSize: '13px',
+            py: 1,
+            '&:hover': { 
+              bgcolor: theme.palette.action.hover 
+            }
+          }}
+        >
+          <label style={{ display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
+            <ListItemIcon><ContentCutIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+            <ListItemText primary="Sampler" />
+            <input 
+              type="file" 
+              accept="audio/*" 
+              style={{ display: 'none' }} 
+              onChange={(e) => handleFileUpload(e, true)}
+            />
+          </label>
+        </MenuItem>
+      </Menu>
 
-      <VirtualInstrumentsModal
-        open={isVirtualInstrumentModalOpen}
-        onClose={() => setIsVirtualInstrumentModalOpen(false)}
-        onSelect={(instrumentId: string, instrumentName: string, instrumentStorageKey?: string) => {
-          const payload: MidiTrackPayload = { instrumentId, instrumentName, instrumentStorageKey };
-          onAddTrack('MIDI', payload);
-          setIsVirtualInstrumentModalOpen(false);
-        }}
-      />
-      <DrumMachineModal
-        open={isDrumMachineModalOpen}
-        onClose={() => setIsDrumMachineModalOpen(false)}
-        onConfirmSelection={(selectedSamples: DrumSamplePublicRead[]) => {
-          const payload: DrumTrackPayload = { samples: selectedSamples };
-          onAddTrack('DRUM', payload);
-          setIsDrumMachineModalOpen(false);
-        }}
-      />
-      <AudioTracksModal
-        open={isAudioTracksModalOpen}
-        onClose={() => setIsAudioTracksModalOpen(false)}
-        onSelectTrack={(track: AudioTrackRead) => {
-          onAddTrack('AUDIO', { audioTrackData: track });
-          setIsAudioTracksModalOpen(false);
-        }}
-        onFileUpload={(file: File) => {
-          if (onFileUpload) {
-            onFileUpload(file, false);
-          }
-          setIsAudioTracksModalOpen(false);
-        }}
-      />
+      {/* Bottom Sheet Container - anchored to bottom of viewport */}
+      {/* Virtual Instruments Bottom Sheet */}
+      {isVirtualInstrumentBottomSheetOpen && (
+        <div 
+          className="fixed bottom-0 left-0 right-0 z-50"
+          style={{ 
+            height: expandedBottomSheet === 'virtual' ? `${virtualInstrumentHeight}px` : '60px',
+            marginRight: isAIAssistantOpen ? '350px' : '0'
+          }}
+        >
+          <VirtualInstrumentsBottomSheet
+            isOpen={isVirtualInstrumentBottomSheetOpen}
+            onClose={() => {
+              setIsVirtualInstrumentBottomSheetOpen(false);
+              setExpandedBottomSheet(null);
+            }}
+            onSelect={(instrumentId: string, instrumentName: string, instrumentStorageKey?: string) => {
+              const payload: MidiTrackPayload = { instrumentId, instrumentName, instrumentStorageKey };
+              onAddTrack('MIDI', payload);
+            }}
+            isMinimized={expandedBottomSheet !== 'virtual' && isVirtualInstrumentBottomSheetOpen}
+            onToggleMinimize={() => {
+              const newExpanded = expandedBottomSheet === 'virtual' ? null : 'virtual';
+              setExpandedBottomSheet(newExpanded);
+            }}
+            height={virtualInstrumentHeight}
+            onHeightChange={setVirtualInstrumentHeight}
+            soundfonts={soundfonts}
+            soundfontsLoading={soundfontsLoading}
+            isAIAssistantOpen={isAIAssistantOpen}
+          />
+        </div>
+      )}
+      
+      {/* Drum Machine Bottom Sheet */}
+      {isDrumMachineBottomSheetOpen && (
+        <div 
+          className="fixed bottom-0 left-0 right-0 z-50"
+          style={{ 
+            height: expandedBottomSheet === 'drum' ? `${drumMachineHeight}px` : '60px',
+            marginRight: isAIAssistantOpen ? '350px' : '0'
+          }}
+        >
+          <DrumMachineBottomSheet
+            isOpen={isDrumMachineBottomSheetOpen}
+            onClose={() => {
+              setIsDrumMachineBottomSheetOpen(false);
+              setExpandedBottomSheet(null);
+            }}
+            onConfirmSelection={(selectedSamples: DrumSamplePublicRead[]) => {
+              const payload: DrumTrackPayload = { samples: selectedSamples };
+              onAddTrack('DRUM', payload);
+              setIsDrumMachineBottomSheetOpen(false);
+              setExpandedBottomSheet(null);
+            }}
+            isMinimized={expandedBottomSheet !== 'drum' && isDrumMachineBottomSheetOpen}
+            onToggleMinimize={() => {
+              const newExpanded = expandedBottomSheet === 'drum' ? null : 'drum';
+              setExpandedBottomSheet(newExpanded);
+            }}
+            height={drumMachineHeight}
+            onHeightChange={setDrumMachineHeight}
+            drumSamples={drumSamples}
+            drumSamplesLoading={drumSamplesLoading}
+            isAIAssistantOpen={isAIAssistantOpen}
+          />
+        </div>
+      )}
+      
     </>
   );
 };
