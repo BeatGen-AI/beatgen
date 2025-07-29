@@ -39,9 +39,9 @@ const BPMControl: React.FC<BPMControlProps> = ({ bpm, onBpmChange }) => {
           min={1}
           max={999}
           className={cn(
-            "p-0 border-0 bg-transparent text-center cursor-pointer outline-none",
+            "p-0 border-0 bg-transparent text-center cursor-text outline-none",
             "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-            "caret-transparent text-base h-6 select-none",
+            "text-base h-6",
             getInputWidth(bpm)
           )}
           style={{
