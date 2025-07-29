@@ -209,6 +209,15 @@ function Studio({ projectId }: StudioProps) {
     }
   }, [store, tracks]);
 
+  // Real-time pan change handler (doesn't go through history)
+  const handleTrackPanChangeLive = useCallback((trackId: string, pan: number) => {
+    if (!store) return;
+    
+    // Update audio engine directly without history
+    const audioEngine = store.getAudioEngine();
+    audioEngine.setTrackPan(trackId, pan);
+  }, [store]);
+
   // Effect to measure control bar height
   useLayoutEffect(() => {
     if (controlBarRef.current) {
@@ -669,6 +678,7 @@ function Studio({ projectId }: StudioProps) {
                   onVolumeChange={handleTrackVolumeChange}
                   onVolumeChangeLive={handleTrackVolumeChangeLive}
                   onPanChange={handleTrackPanChange}
+                  onPanChangeLive={handleTrackPanChangeLive}
                   onMuteToggle={handleTrackMuteToggle}
                   onSoloToggle={handleTrackSoloToggle}
                   onTrackDelete={handleTrackDelete}

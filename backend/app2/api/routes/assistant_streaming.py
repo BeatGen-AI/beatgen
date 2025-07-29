@@ -527,7 +527,7 @@ async def process_generate_request(
 
 
 async def process_edit_request(request_id: str, context, sse_queue: SSEQueueManager):
-    """Process an edit mode request using LLM tool calling for robust edit detection"""
+    """Process an edit mode request using LLM tool calling with persistent ChatSession"""
 
     try:
         logger.info(f"Processing edit request with LLM tools: {request_id}")
@@ -538,124 +538,38 @@ async def process_edit_request(request_id: str, context, sse_queue: SSEQueueMana
             description="Analyzing your edit request"
         )
 
-        # Import edit tools
-        from app2.llm.tools.edit_tools import EDIT_TOOLS, get_tool_actions, clear_tool_actions
-        from app2.llm.chat_wrapper import ChatSession
-        from app2.llm import available_models
+        # Import edit tools and chat session manager
+        from app2.llm.tools.edit_tools import get_tool_actions, clear_tool_actions
+        from app2.llm.chat_session_manager import chat_session_manager
 
         # Clear any previous tool actions
         clear_tool_actions()
 
-        # Get model info for the edit session
-        model_info = available_models.get_model_by_name(context.model) if context.model else available_models.ALL_MODELS[0]
-
-        # Build context for the LLM with comprehensive debug logging
-        logger.info(f"Edit context - track_id: {context.track_id}")
-        logger.info(f"Edit context - context: {context.context}")
-        logger.info(f"Edit context - prompt: {context.prompt}")
+        # Extract project_id from context - try multiple sources
+        project_id = None
+        if context.context:
+            project_id = (
+                context.context.get('project_id') or
+                context.context.get('projectId') or 
+                context.context.get('project_title')  # fallback to project title as identifier
+            )
         
-        # Try multiple sources for track information
-        available_tracks = []
-        selected_track_id = context.track_id
-        
-        # Check if track_id is in context.context (this is the main case!)
-        if context.context and context.context.get('track_id'):
-            selected_track_id = context.context['track_id']
-            logger.info(f"Edit context - found track_id in context.context: {selected_track_id}")
-            # Try to get track name if available
-            track_name = context.context.get('track_name', 'Selected Track')
-            available_tracks = [f"Track {selected_track_id}: {track_name}"]
-        
-        # Check if tracks are in context.context
-        elif context.context and context.context.get('tracks'):
-            tracks_data = context.context['tracks']
-            logger.info(f"Edit context - found tracks in context: {tracks_data}")
-            available_tracks = [f"Track {track.get('id', 'unknown')}: {track.get('name', 'Unnamed')}" 
-                             for track in tracks_data]
-        
-        # Check if there's a single selected track in context  
-        elif context.context and context.context.get('selected_track'):
-            selected_track_data = context.context['selected_track']
-            logger.info(f"Edit context - found selected_track in context: {selected_track_data}")
-            selected_track_id = selected_track_data.get('id')
-            track_name = selected_track_data.get('name', 'Unnamed')
-            available_tracks = [f"Track {selected_track_id}: {track_name}"]
-            
-        # Check if track info is embedded in context.context directly as 'id'
-        elif context.context and context.context.get('id'):
-            logger.info(f"Edit context - found id directly in context: {context.context}")
-            selected_track_id = context.context.get('id')
-            track_name = context.context.get('name', 'Unnamed')
-            available_tracks = [f"Track {selected_track_id}: {track_name}"]
+        # Fallback to user_id if no project context (shouldn't happen in normal flow)
+        if not project_id:
+            project_id = f"user_{context.user_id}"
+            logger.warning(f"No project_id found in context, using fallback: {project_id}")
 
-        logger.info(f"Edit context - processed available_tracks: {available_tracks}")
-        logger.info(f"Edit context - final selected_track_id: {selected_track_id}")
-
-        # Build track context strings
-        track_context = ""
-        if available_tracks:
-            track_context = f"\nAvailable tracks: {', '.join(available_tracks)}"
-        
-        selected_track = ""
-        if selected_track_id:
-            selected_track = f"\nCurrently selected track: {selected_track_id}"
-            
-        logger.info(f"Edit context - final track_context: '{track_context}'")
-        logger.info(f"Edit context - final selected_track: '{selected_track}'")
-
-        # Build system prompt with better track handling
-        if selected_track_id and available_tracks:
-            # We have track context - provide it clearly
-            system_prompt = f"""You are a music production assistant specializing in editing tracks and projects.
-
-Your task is to understand the user's edit request and call the appropriate tool to make the change.
-
-Available tools:
-- adjust_volume: Change track volume levels (requires track_id)
-- adjust_pan: Change track stereo panning (requires track_id)
-- toggle_mute: Mute or unmute tracks (requires track_id)
-- toggle_solo: Solo or unsolo tracks (requires track_id)
-- change_bpm: Change project tempo
-- change_key: Change project key signature
-- change_time_signature: Change project time signature  
-- change_project_name: Change project name
-
-Context:{track_context}{selected_track}
-
-IMPORTANT: For track-specific operations (volume, pan, mute, solo), you MUST use the exact track_id: "{selected_track_id}"
-This is the currently selected track. Use this ID for any track-specific edits.
-Call the appropriate tool based on what the user wants to edit. Be precise with parameter values."""
-        else:
-            # No track context - ask for clarification
-            system_prompt = f"""You are a music production assistant specializing in editing tracks and projects.
-
-Your task is to understand the user's edit request and call the appropriate tool to make the change.
-
-Available tools:
-- adjust_volume: Change track volume levels (requires track_id)
-- adjust_pan: Change track stereo panning (requires track_id)  
-- toggle_mute: Mute or unmute tracks (requires track_id)
-- toggle_solo: Solo or unsolo tracks (requires track_id)
-- change_bpm: Change project tempo
-- change_key: Change project key signature
-- change_time_signature: Change project time signature
-- change_project_name: Change project name
-
-WARNING: No track context is available. For track-specific operations (volume, pan, mute, solo), 
-you need to ask the user to select or specify which track they want to edit.
-For project-level operations (BPM, key, time signature, name), you can proceed normally."""
-
-        logger.info(f"Edit system prompt: {system_prompt}")
-
-        # Create ChatSession with edit tools
-        chat_session = ChatSession(
-            provider_name=model_info.provider_name,
-            model_name=model_info.model_name,
-            queue=sse_queue,
-            system_prompt=system_prompt,
-            api_key=model_info.get_api_key(),
-            tools=EDIT_TOOLS  # Pass tools to ChatSession constructor
+        # Get or create persistent ChatSession for this project
+        chat_session = chat_session_manager.get_or_create_session(
+            project_id=project_id,
+            mode="edit",
+            model=context.model,
+            sse_queue=sse_queue,
+            user_id=context.user_id,
+            track_context=context.context
         )
+
+        logger.info(f"Using ChatSession for project {project_id}, user {context.user_id}, session count: {chat_session_manager.get_session_count()}")
 
         # Send the edit request to the LLM with tools  
         edit_prompt = f"Please edit: {context.prompt}"
@@ -677,39 +591,48 @@ For project-level operations (BPM, key, time signature, name), you can proceed n
                 stream=True
             )
             
+            event_count = 0
             async for event in stream_generator:
-                logger.debug(f"EDIT STREAMING EVENT TYPE: {type(event)}, VALUE: {event}")
+                event_count += 1
+                logger.debug(f"EDIT STREAMING EVENT #{event_count} - TYPE: {type(event)}")
                 
                 # Handle different event types
                 if isinstance(event, TextDeltaEvent):
                     text_chunk = event.delta
-                    logger.debug(f"EDIT STREAMING TEXT DELTA: '{text_chunk}'")
                     full_response_text += text_chunk
                     await sse_queue.add_chunk(text_chunk)
                 elif isinstance(event, str):
                     # Direct string chunks (if music agent pattern works)
-                    logger.debug(f"EDIT STREAMING STRING: '{event}'")
                     full_response_text += event
                     await sse_queue.add_chunk(event)
                 else:
                     # Log unknown event types for debugging
                     logger.debug(f"EDIT STREAMING UNKNOWN EVENT: {type(event)} - {event}")
                     
+            logger.info(f"Total streaming events processed: {event_count}")
             logger.info("Finished streaming edit response.")
         except Exception as e:
             logger.error(f"Error during streaming: {e}")
             raise
 
-        logger.info(f"Edit LLM response streamed")
+        logger.info(f"Edit LLM response streamed, full response length: {len(full_response_text)}")
 
         # Get actions that were created by tool calls
         tool_actions = get_tool_actions()
+        logger.info(f"Tool actions retrieved: {len(tool_actions)} actions")
         
         # If tools were called, send the actions
         if tool_actions:
-            for action in tool_actions:
-                logger.info(f"Using tool-generated action: {action}")
-                await sse_queue.action(action)
+            logger.info(f"Processing {len(tool_actions)} tool actions")
+            for i, action in enumerate(tool_actions):
+                logger.info(f"Sending tool action #{i+1}: {action.action_type} with data: {action.data}")
+                try:
+                    await sse_queue.action(action)
+                    logger.info(f"Successfully sent action #{i+1} to SSE queue")
+                except Exception as e:
+                    logger.error(f"Failed to send action #{i+1}: {e}")
+        else:
+            logger.info("No tool actions were generated - AI provided explanation only")
 
         # Create response
         full_response = f"Applied edit: {context.prompt}"

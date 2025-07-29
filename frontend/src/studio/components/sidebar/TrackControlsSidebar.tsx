@@ -12,6 +12,7 @@ interface TrackControlsSidebarProps {
   onVolumeChange: (trackId: string, volume: number) => void;
   onVolumeChangeLive?: (trackId: string, volume: number) => void; // For real-time updates during dragging
   onPanChange: (trackId: string, pan: number) => void;
+  onPanChangeLive?: (trackId: string, pan: number) => void; // For real-time updates during dragging
   onMuteToggle: (trackId: string, muted: boolean) => void;
   onSoloToggle: (trackId: string, soloed: boolean) => void;
   onTrackDelete: (trackId: string) => void;
@@ -25,6 +26,7 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
   onVolumeChange,
   onVolumeChangeLive,
   onPanChange,
+  onPanChangeLive,
   onMuteToggle,
   onSoloToggle,
   onTrackDelete,
@@ -61,6 +63,7 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
           onVolumeChange={onVolumeChange}
           onVolumeChangeLive={onVolumeChangeLive}
           onPanChange={onPanChange}
+          onPanChangeLive={onPanChangeLive}
           onMuteToggle={onMuteToggle}
           onSoloToggle={onSoloToggle}
           onTrackDelete={onTrackDelete}
@@ -79,6 +82,7 @@ interface TrackControlsProps {
   onVolumeChange: (trackId: string, volume: number) => void;
   onVolumeChangeLive?: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
+  onPanChangeLive?: (trackId: string, pan: number) => void;
   onMuteToggle: (trackId: string, muted: boolean) => void;
   onSoloToggle: (trackId: string, soloed: boolean) => void;
   onTrackDelete: (trackId: string) => void;
@@ -93,6 +97,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   onVolumeChange,
   onVolumeChangeLive,
   onPanChange,
+  onPanChangeLive,
   onMuteToggle,
   onSoloToggle,
   onTrackDelete,
@@ -144,10 +149,16 @@ const TrackControls: React.FC<TrackControlsProps> = ({
     onVolumeChange(track.id, newValue as number);
   };
   
-  // Handler for pan changes during dragging (updates local state only)
+  // Handler for pan changes during dragging (updates local state and audio engine in real-time)
   const handlePanChange = (event: Event, newValue: number | number[]) => {
-    // Just update local component state, no store updates
-    setLocalPan(newValue as number);
+    const pan = newValue as number;
+    // Update local component state
+    setLocalPan(pan);
+    
+    // Update audio engine in real-time if live handler is provided
+    if (onPanChangeLive) {
+      onPanChangeLive(track.id, pan);
+    }
   };
   
   // Handler for pan changes when drag completes (updates store)
