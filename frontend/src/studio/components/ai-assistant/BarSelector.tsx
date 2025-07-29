@@ -9,6 +9,7 @@ interface BarSelectorProps {
   disabled?: boolean;
   min?: number;
   max?: number;
+  themeMode?: 'light' | 'dark'; // Override theme mode, falls back to studioMode
 }
 
 const BarSelector: React.FC<BarSelectorProps> = ({ 
@@ -17,7 +18,8 @@ const BarSelector: React.FC<BarSelectorProps> = ({
   selectedBars,
   disabled = false,
   min = 1,
-  max = 16
+  max = 16,
+  themeMode
 }) => {
   return (
     <NumberSelector
@@ -31,6 +33,7 @@ const BarSelector: React.FC<BarSelectorProps> = ({
       placeholder="Enter number of bars"
       unit="bars"
       icon={<BarChart3 className="w-3 h-3 mr-1" />}
+      themeMode={themeMode}
     />
   );
 };

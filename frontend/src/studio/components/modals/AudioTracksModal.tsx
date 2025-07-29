@@ -275,6 +275,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                 onUseAudio={handleUseAudio}
                 onResetGeneration={handleResetGeneration}
                 useUiMode={useUiMode}
+                effectiveMode={effectiveMode}
               />
             </TabsContent>
           </Tabs>

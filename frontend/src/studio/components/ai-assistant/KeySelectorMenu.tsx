@@ -19,15 +19,18 @@ interface KeySelectorMenuProps {
   onSelect: (key: string) => void;
   selectedKey?: string;
   disabled?: boolean;
+  themeMode?: 'light' | 'dark'; // Override theme mode, falls back to studioMode
 }
 
 const KeySelectorMenu: React.FC<KeySelectorMenuProps> = ({ 
   triggerLabel, 
   onSelect, 
   selectedKey = 'C Major',
-  disabled 
+  disabled,
+  themeMode
 }) => {
   const { studioMode } = useAppTheme();
+  const effectiveTheme = themeMode || studioMode;
   const [mode, setMode] = useState<'major' | 'minor'>(
     selectedKey.toLowerCase().includes('minor') ? 'minor' : 'major'
   );
@@ -48,11 +51,11 @@ const KeySelectorMenu: React.FC<KeySelectorMenuProps> = ({
   };
 
   const getTextColor = () => {
-    return studioMode === 'dark' ? 'text-gray-400' : 'text-gray-600';
+    return effectiveTheme === 'dark' ? 'text-gray-400' : 'text-gray-600';
   };
 
   const getDropdownClassName = () => {
-    if (studioMode === 'dark') {
+    if (effectiveTheme === 'dark') {
       // Match Material-UI menu styling for dark mode
       return "w-auto z-[9999] p-2 bg-[rgb(48,48,48)] border-0 shadow-lg rounded-lg focus:outline-none";
     }
@@ -63,7 +66,7 @@ const KeySelectorMenu: React.FC<KeySelectorMenuProps> = ({
   const getKeyButtonClassName = (key: string, isSelected: boolean) => {
     const baseClasses = "p-2 text-sm transition-colors";
     
-    if (studioMode === 'dark') {
+    if (effectiveTheme === 'dark') {
       const selectedClass = isSelected ? 'bg-[rgba(255,255,255,0.12)] text-white' : 'text-[rgba(255,255,255,0.7)]';
       const hoverClass = isSelected ? '' : 'hover:bg-[rgba(255,255,255,0.08)]';
       return `${baseClasses} ${selectedClass} ${hoverClass}`;
@@ -77,11 +80,11 @@ const KeySelectorMenu: React.FC<KeySelectorMenuProps> = ({
   const getModeButtonStyle = (isActive: boolean) => {
     return {
       backgroundColor: isActive 
-        ? (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)')
+        ? (effectiveTheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)')
         : 'transparent',
       color: isActive 
-        ? (studioMode === 'dark' ? '#ffffff' : '#000000')
-        : (studioMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)')
+        ? (effectiveTheme === 'dark' ? '#ffffff' : '#000000')
+        : (effectiveTheme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)')
     };
   };
 
@@ -91,7 +94,7 @@ const KeySelectorMenu: React.FC<KeySelectorMenuProps> = ({
         <Badge 
           variant="secondary"
           className={`cursor-pointer h-5 text-xs border-0 ${
-            studioMode === 'dark' 
+            effectiveTheme === 'dark' 
               ? 'bg-[rgba(60,60,60,0.8)] text-white hover:bg-[rgba(60,60,60,0.9)]'
               : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
           } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -114,7 +117,7 @@ const KeySelectorMenu: React.FC<KeySelectorMenuProps> = ({
           <div
             className={cn(
               "flex rounded border",
-              studioMode === 'dark'
+              effectiveTheme === 'dark'
                 ? "bg-black/20 border-white/12"
                 : "bg-black/5 border-black/12"
             )}

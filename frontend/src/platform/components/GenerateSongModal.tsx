@@ -21,6 +21,7 @@ import { interactWithAssistant, StreamCallbacks } from '../api/assistant';
 import { isAuthenticated } from '../auth/auth-utils';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from '@/components/ui/card';
+import { useAppTheme } from '../../lib/theme-provider';
 
 interface GenerateSongModalProps {
   open: boolean;
@@ -52,6 +53,7 @@ const GENRE_SUGGESTIONS = ['Pop', 'Rock', 'Electronic', 'Jazz', 'Classical', 'Hi
 const MOOD_SUGGESTIONS = ['Upbeat', 'Chill', 'Energetic', 'Melancholic', 'Dreamy', 'Intense', 'Relaxing'];
 
 export default function GenerateSongModal({ open, onClose, onSaveAsProject }: GenerateSongModalProps) {
+  const { mode } = useAppTheme();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStage, setGenerationStage] = useState(-1);
@@ -61,6 +63,13 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
   const [error, setError] = useState<string | null>(null);
   const connectionRef = useRef<{ close: () => void } | null>(null);
   const userIsAuthenticated = isAuthenticated();
+
+  // Theme-aware badge styling
+  const getBadgeClassName = () => {
+    return mode === 'dark' 
+      ? 'cursor-pointer border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
+      : 'cursor-pointer hover:bg-accent';
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -244,7 +253,7 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
                       <Badge
                         key={genre}
                         variant="outline"
-                        className="cursor-pointer hover:bg-accent"
+                        className={getBadgeClassName()}
                         onClick={() => !isGenerating && handleChipClick(genre, 'genre')}
                       >
                         {genre}
@@ -260,7 +269,7 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
                       <Badge
                         key={mood}
                         variant="outline"
-                        className="cursor-pointer hover:bg-accent"
+                        className={getBadgeClassName()}
                         onClick={() => !isGenerating && handleChipClick(mood, 'mood')}
                       >
                         {mood}
