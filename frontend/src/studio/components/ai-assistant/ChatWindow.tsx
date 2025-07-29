@@ -1167,30 +1167,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
           }}
         >
-          {/* Mode and Context Chips */}
-          <div className="flex gap-2 mb-3">
-            <ChatModeMenu
-              triggerLabel={mode}
-              onSelect={handleModeSelect}
-              selectedMode={mode.toLowerCase().replace(' ', '-')}
-            />
-            {mode === 'Edit' && !selectedTrack && (
-              <AddContextMenu
-                triggerLabel="@"
-                onSelect={handleContextSelect}
-                tracks={tracks.map(track => ({ id: track.id, name: track.name }))}
-              />
-            )}
-            {selectedTrack && (
-              <AddContextChip 
-                trackName={selectedTrack.name}
-                onDelete={handleRemoveContext}
-              />
-            )}
-          </div>
-
           {/* Generation Prompt Control */}
           <GenerationPromptControl
+            topComponent={
+              (mode === 'Edit' && !selectedTrack) || selectedTrack ? (
+                <div className="flex gap-2">
+                  {mode === 'Edit' && !selectedTrack && (
+                    <AddContextMenu
+                      triggerLabel="@"
+                      onSelect={handleContextSelect}
+                      tracks={tracks.map(track => ({ id: track.id, name: track.name }))}
+                    />
+                  )}
+                  {selectedTrack && (
+                    <AddContextChip 
+                      trackName={selectedTrack.name}
+                      onDelete={handleRemoveContext}
+                    />
+                  )}
+                </div>
+              ) : undefined
+            }
             prompt={prompt}
             onPromptChange={setPrompt}
             onGenerate={handleSend}
@@ -1202,6 +1199,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             showSelect={false}
             submitButtonIcon={isLoading ? undefined : undefined}
             submitButtonAriaLabel={isLoading ? "Cancel" : "Send"}
+            textareaTopLeftComponent={
+              <ChatModeMenu
+                triggerLabel={mode}
+                onSelect={handleModeSelect}
+                selectedMode={mode.toLowerCase().replace(' ', '-')}
+              />
+            }
             textareaBottomLeftComponent={
               <ChatModelMenu
                 triggerLabel={selectedModel}

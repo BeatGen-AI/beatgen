@@ -768,15 +768,20 @@ async def process_generate_audio_request(
         bpm = context.context.get('bpm', 120) if context.context else 120
         key_signature = context.context.get('key_signature', 'C Major') if context.context else 'C Major'
         time_signature = context.context.get('time_signature', {'numerator': 4, 'denominator': 4}) if context.context else {'numerator': 4, 'denominator': 4}
+        bars = context.context.get('bars', 4) if context.context else 4
+        duration_from_user = context.context.get('duration') if context.context else None
         
         prompt_text = context.prompt
         
-        # Parse number of bars from prompt (default to 4 bars for musical context)
-        bars = 4  # Default to 4 bars
-        bars_match = re.search(r'(\d+)\s*(?:bar|bars|measure|measures)\b', prompt_text.lower())
-        if bars_match:
-            bars = int(bars_match.group(1))
-            bars = min(max(bars, 1), 16)  # Clamp between 1-16 bars
+        # Use user-provided duration if available, otherwise parse from prompt or use bars calculation
+        if duration_from_user:
+            duration = duration_from_user
+        else:
+            # Parse number of bars from prompt (fallback behavior)
+            bars_match = re.search(r'(\d+)\s*(?:bar|bars|measure|measures)\b', prompt_text.lower())
+            if bars_match:
+                bars = int(bars_match.group(1))
+                bars = min(max(bars, 1), 16)  # Clamp between 1-16 bars
         
         # Match the exact successful format from the API docs example with simplicity emphasis
         enhanced_prompt = f"{prompt_text} solo, simple, minimalist, no accompaniment, no drums, no bass, acoustic"
@@ -794,16 +799,29 @@ async def process_generate_audio_request(
         )
         
         # Create audio generation service instance
-        audio_service = get_audio_generation_service()
+        audio_service = get_audio_generation_service(context.model)
         
         # Enhanced negative prompt to avoid complexity and ensure solo focus
         negative_prompt = "accompaniment, drums, background instruments, complex, layered, arrangement"
         
+        # Use duration from user if provided, otherwise calculate from bars and BPM for Stability AI
+        if duration_from_user:
+            duration = duration_from_user
+        elif hasattr(audio_service, 'calculate_duration_from_bars'):
+            duration = audio_service.calculate_duration_from_bars(bpm, bars)
+        else:
+            duration = None
+        
         # Generate audio
-        logger.info(f"Generating audio - BPM: {bpm}, Key: {key_signature}, Bars: {bars}")
+        logger.info(f"Generating audio - BPM: {bpm}, Key: {key_signature}, Bars: {bars}, Duration: {duration}s")
         audio_data, generation_result = await audio_service.generate_and_download_audio(
             prompt=enhanced_prompt,
-            negative_prompt=negative_prompt
+            negative_prompt=negative_prompt,
+            # These parameters are used by Stability AI, ignored by others
+            duration=duration,
+            bpm=bpm,
+            bars=bars,
+            key=key_signature
         )
         
         await sse_queue.stage(

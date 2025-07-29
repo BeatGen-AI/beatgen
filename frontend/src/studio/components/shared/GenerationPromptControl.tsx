@@ -36,6 +36,9 @@ interface GenerationPromptControlProps {
   // Custom component to render instead of select dropdown
   customSelectComponent?: React.ReactNode;
   
+  // Component to render above the textarea
+  topComponent?: React.ReactNode;
+  
   // Custom bottom components to render (more flexible than customSelectComponent)
   bottomLeftComponent?: React.ReactNode;
   bottomRightComponent?: React.ReactNode;
@@ -43,6 +46,10 @@ interface GenerationPromptControlProps {
   // Components to render inside the textarea at the bottom
   textareaBottomLeftComponent?: React.ReactNode;
   textareaBottomRightComponent?: React.ReactNode;
+  
+  // Components to render inside the textarea at the top
+  textareaTopLeftComponent?: React.ReactNode;
+  textareaTopRightComponent?: React.ReactNode;
   
   // UI customization
   showRandomButton?: boolean;
@@ -69,10 +76,13 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
   selectWidth = "130px",
   renderSelectItem,
   customSelectComponent,
+  topComponent,
   bottomLeftComponent,
   bottomRightComponent,
   textareaBottomLeftComponent,
   textareaBottomRightComponent,
+  textareaTopLeftComponent,
+  textareaTopRightComponent,
   showRandomButton = true,
   showSelect = true,
   submitButtonIcon,
@@ -125,6 +135,13 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
 
   return (
     <div className={`space-y-3 ${className}`}>
+      {/* Top component */}
+      {topComponent && (
+        <div>
+          {topComponent}
+        </div>
+      )}
+      
       <div className="relative">
         <Textarea
           ref={textareaRef}
@@ -133,9 +150,12 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          className={`pr-16 min-h-[100px] resize-none ${
+          className={`pr-16 min-h-[120px] resize-none ${
             textareaBottomLeftComponent || textareaBottomRightComponent ? 'pb-8' : 'pb-2'
-          }`}
+          } ${
+            textareaTopLeftComponent || textareaTopRightComponent ? 'pt-10' : 'pt-2'
+          } ${'pl-3'}`
+        }
           style={useStudioTheme ? {
             backgroundColor: currentTheme === 'dark' ? '#1a1a1a' : '#ffffff',
             color: currentTheme === 'dark' ? '#ffffff' : '#000000',
@@ -143,9 +163,24 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
           } : {}}
         />
         
-        <div className="absolute top-2 right-2 text-xs text-muted-foreground">
+        <div className={`absolute top-2 text-xs text-muted-foreground ${
+          textareaTopRightComponent ? 'right-12' : 'right-2'
+        }`}>
           {prompt.length}/{maxLength}
         </div>
+        
+        {/* Top components inside textarea */}
+        {textareaTopLeftComponent && (
+          <div className="absolute top-2 left-2">
+            {textareaTopLeftComponent}
+          </div>
+        )}
+        
+        {textareaTopRightComponent && (
+          <div className="absolute top-2 right-2">
+            {textareaTopRightComponent}
+          </div>
+        )}
         
         {/* Bottom components inside textarea */}
         {textareaBottomLeftComponent && (
