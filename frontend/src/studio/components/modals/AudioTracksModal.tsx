@@ -308,7 +308,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
             key_signature: keySignature,
             bars: bars,
             duration: duration
-          } as any
+          }
         },
         streamCallbacks
       );
