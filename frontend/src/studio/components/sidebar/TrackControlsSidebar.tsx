@@ -50,7 +50,7 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
   }
 
   return (
-    <div className="w-full h-full overflow-auto">
+    <div className="w-full h-full overflow-auto relative z-[100000]">
       {tracks.map((track, index) => (
         <TrackControls 
           key={track.id}

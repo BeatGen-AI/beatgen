@@ -73,6 +73,9 @@ class AnthropicAdapter(ProviderAdapter):
         if self.system_prompt:
             agent_kwargs['instructions'] = self.system_prompt
         
+        if self.tools:
+            agent_kwargs['tools'] = self.tools
+        
         return Agent(model=model, **agent_kwargs)
 
     async def send_message_async(
@@ -81,7 +84,8 @@ class AnthropicAdapter(ProviderAdapter):
         history: Sequence[ModelMessage],
         stream: bool = False,
         model_settings: Optional[Dict[str, Any]] = None,
-        usage_limits: Optional[Dict[str, Any]] = None
+        usage_limits: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> Any: # Return type will be Union[RunResult.output, AsyncGenerator[AnyStreamEvent, None]]
         """
         Sends messages to the Anthropic LLM and gets a response.
@@ -98,6 +102,11 @@ class AnthropicAdapter(ProviderAdapter):
             "model_settings": model_settings,
             "usage_limits": usage_limits
         }
+        
+        # Note: Tools should be passed to Agent constructor, not run method
+        # This parameter is kept for future compatibility but not used
+        if tools:
+            logger.warning("Tools parameter passed to adapter, but tools should be set on Agent constructor")
 
         if stream:
             async def stream_generator() -> AsyncGenerator[AnyStreamEvent, None]:

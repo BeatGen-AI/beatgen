@@ -36,6 +36,7 @@ class ChatSession:
         system_prompt: Optional[str] = None, # Will be passed to Pydantic AI Agent
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        tools: Optional[List[Any]] = None,  # Pydantic AI tool functions
         **provider_kwargs: Any
     ) -> None:
         """
@@ -57,6 +58,7 @@ class ChatSession:
         self.current_system_prompt = system_prompt
         self.current_api_key = api_key # Store for potential re-use or if adapter needs it explicitly
         self.current_base_url = base_url
+        self.current_tools = tools
         self.current_provider_kwargs = provider_kwargs
         self.is_cancelled = False # Initialize cancellation flag
         
@@ -121,6 +123,10 @@ class ChatSession:
         # If system_prompt is part of current_provider_kwargs, ensure it's passed
         if self.current_system_prompt and 'system_prompt' not in kwargs_for_adapter:
             kwargs_for_adapter['system_prompt'] = self.current_system_prompt
+            
+        # Pass tools if they exist
+        if self.current_tools and 'tools' not in kwargs_for_adapter:
+            kwargs_for_adapter['tools'] = self.current_tools
 
         return adapter_class(
             model_name=model_name,
@@ -151,6 +157,7 @@ class ChatSession:
         model_settings: Optional[Dict[str, Any]] = None,
         usage_limits: Optional[Dict[str, Any]] = None,
         expect_json: bool = False,
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Union[Any, AsyncGenerator[AnyStreamEvent, None]]:
         """
         Sends a message from the user to the LLM and gets a response, potentially streaming.
@@ -161,6 +168,7 @@ class ChatSession:
             model_settings: Optional dictionary of model-specific settings.
             usage_limits: Optional dictionary of usage limits for the request.
             expect_json: If True, will attempt to parse and repair JSON output from the LLM.
+            tools: Optional list of Pydantic AI tool functions for the LLM to use.
 
         Returns:
             If stream is False, returns the complete assistant response content.
@@ -206,7 +214,8 @@ class ChatSession:
                             history=pydantic_ai_formatted_history,
                             stream=True,
                             model_settings=final_model_settings,
-                            usage_limits=final_usage_limits
+                            usage_limits=final_usage_limits,
+                            tools=tools
                         )
                         if not hasattr(async_gen, '__aiter__'):
                             raise TypeError("Adapter did not return an async generator for streaming.")
@@ -259,7 +268,8 @@ class ChatSession:
                     history=pydantic_ai_formatted_history,
                     stream=False,
                     model_settings=final_model_settings,
-                    usage_limits=final_usage_limits
+                    usage_limits=final_usage_limits,
+                    tools=tools
                 )
                 
                 # Handle the new return format from adapters

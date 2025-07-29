@@ -10,44 +10,24 @@ export function convertVolumeToDecibels(linearVolume: number, muted = false): nu
   // If volume is 0, return -Infinity (silence)
   if (linearVolume <= 0) return -Infinity;
   
-  // Map 0-100 to -60dB to 6dB with 80 being 0dB (original volume)
-  // This provides a more natural volume mapping where:
-  // - 80 is the "normal" volume (0dB, the original volume)
-  // - 0-80 ranges from -Infinity to 0dB
-  // - 80-100 ranges from 0dB to +6dB (allowing for some amplification)
-  
   // Ensure volume is between 0-100
   const safeVolume = Math.max(0, Math.min(100, linearVolume));
   
-  // Special case at 80 to ensure exactly 0dB
-  if (safeVolume === 80) return 0;
+  // Convert 0-100 to 0-1 for the fader
+  const position = safeVolume / 100;
   
-  if (safeVolume > 80) {
-    // For 80-100, map to 0dB to +6dB (some amplification)
-    // Convert 80-100 range to 0-1
-    const normalized = (safeVolume - 80) / 20;
-    // Linear mapping to 0dB to +6dB
-    return normalized * 6; // Allows up to +6dB of gain
-  } else {
-    // For 0-80, map to -60dB to 0dB
-    // Convert 0-80 range to 0-1
-    const normalized = safeVolume / 80;
-    
-    if (normalized === 0) return -Infinity;
-    
-    // Cubic curve for volume transform - feels more natural than linear
-    const transformedValue = normalized * normalized * normalized;
-    
-    // Logarithmic formula that maps 0-1 to -60dB-0dB
-    const minDb = -60;
-    const dbValue = minDb * (1 - transformedValue);
-    
-    return dbValue;
-  }
+  // TEMPORARY: Simple linear mapping for debugging
+  // 0% = -20dB, 100% = +6dB (26dB range)
+  const dbValue = -20 + (position * 26);
+  
+  // Debug logging to see what values we're getting
+  console.log(`Volume ${linearVolume}% -> Position ${position} -> ${dbValue.toFixed(1)}dB`);
+  
+  return dbValue;
 }
 
 /**
- * Converts decibels (-Infinity to 6) to linear volume (0-100)
+ * Converts decibels to linear volume (0-100)
  * @param dbValue Decibel value for volume
  * @returns Volume on a scale of 0-100
  */
@@ -55,32 +35,13 @@ export function convertDecibelsToVolume(dbValue: number): number {
   // If -Infinity, return 0
   if (dbValue === -Infinity) return 0;
   
-  // Special case for 0dB
-  if (dbValue === 0) return 80;
+  // TEMPORARY: Simple linear mapping for debugging
+  // Reverse of: -20 + (position * 26) = dbValue
+  // So: position = (dbValue + 20) / 26
+  const position = Math.max(0, Math.min(1, (dbValue + 20) / 26));
   
-  // Handle positive dB values (0 to +6dB maps to 80-100)
-  if (dbValue > 0) {
-    // Ensure the dB value is in the expected range
-    const safeDbValue = Math.min(6, dbValue);
-    // Linear mapping from 0-6dB to 80-100
-    return 80 + (safeDbValue / 6) * 20;
-  } else {
-    // Handle negative dB values (-60dB to 0dB maps to 0-80)
-    // Ensure the dB value is in the expected range
-    const safeDbValue = Math.max(-60, dbValue);
-    
-    // Reverse the logarithmic mapping
-    const minDb = -60;
-    
-    // Calculate the normalized value (0-1)
-    const normalizedValue = 1 - (safeDbValue / minDb);
-    
-    // Apply cubic root to reverse the cubic transform
-    const linearValue = Math.cbrt(normalizedValue);
-    
-    // Convert to 0-80 range
-    return linearValue * 80;
-  }
+  // Convert 0-1 position back to 0-100 volume
+  return position * 100;
 }
 
 /**
@@ -238,4 +199,76 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export class SimpleFader {
+  private minDb: number;
+  private maxDb: number;
+  private unityPos: number;
+
+  constructor(minDb = -60, maxDb = 12, unityPos = 0.75) {
+    this.minDb = minDb;
+    this.maxDb = maxDb;
+    this.unityPos = unityPos;
+  }
+
+  /**
+   * Convert linear position (0-1) to dB
+   * Uses x³·⁵ curve below unity for DAW-like response
+   */
+  positionToDb(position: number): number {
+    position = Math.max(0, Math.min(1, position));
+    
+    if (position === 0) return -Infinity;
+    
+    if (position < this.unityPos) {
+      // DAW-style curve: x³·⁵ gives much better low-end response
+      const normalized = position / this.unityPos;
+      const curve = Math.pow(normalized, 3.5);
+      return this.minDb + (this.minDb * -curve);
+    }
+    
+    // Linear above unity for predictable boost
+    const normalized = (position - this.unityPos) / (1 - this.unityPos);
+    return normalized * this.maxDb;
+  }
+
+  /**
+   * Convert dB to linear position (0-1)
+   * Inverse of the x³·⁵ curve
+   */
+  dbToPosition(db: number): number {
+    if (db <= this.minDb || !isFinite(db)) return 0;
+    if (db >= this.maxDb) return 1;
+    
+    if (db > 0) {
+      const normalized = db / this.maxDb;
+      return this.unityPos + normalized * (1 - this.unityPos);
+    }
+    
+    // Inverse of x³·⁵ is x^(1/3.5)
+    const normalized = (db - this.minDb) / (-this.minDb);
+    const position = Math.pow(normalized, 1/3.5);
+    return position * this.unityPos;
+  }
+
+  /**
+   * Get amplitude multiplier for audio (0-1+)
+   */
+  getAmplitude(position: number): number {
+    const db = this.positionToDb(position);
+    if (!isFinite(db)) return 0;
+    return Math.pow(10, db / 20);
+  }
+}
+
+// Standalone conversion helpers
+export function dbToAmplitude(db: number): number {
+  if (!isFinite(db)) return 0;
+  return Math.pow(10, db / 20);
+}
+
+export function amplitudeToDb(amplitude: number): number {
+  if (amplitude <= 0) return -Infinity;
+  return 20 * Math.log10(amplitude);
 }
