@@ -76,8 +76,8 @@ const GenerationChoiceButtons: React.FC<GenerationChoiceButtonsProps> = ({ onMid
     <div 
       className="p-4 mb-2 rounded-lg"
       style={{
-        backgroundColor: studioMode === 'dark' ? '#1a1a1a' : '#f8fafc',
-        border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+        backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
+        border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
       }}
     >
       <p 
@@ -946,25 +946,37 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         }
         break;
       case 'update_track':
-        if (actionData?.trackId) {
-          const track = tracks.find(t => t.id === actionData.trackId);
+        if (actionData?.track_id) {
+          const track = tracks.find(t => t.id === actionData.track_id);
           if (track) {
             console.log(`Updating track ${track.name}`);
             // Using existing track update functionality
             // This will be handled by separate actions in the store
           } else {
-            console.log(`Track ${actionData.trackId} not found`);
+            console.log(`Track ${actionData.track_id} not found`);
           }
         }
         break;
       case 'adjust_volume':
-        if (actionData?.trackId && typeof actionData?.value === 'number') {
-          handleTrackVolumeChange(actionData.trackId, actionData.value);
+        if (actionData?.track_id && typeof actionData?.value === 'number') {
+          handleTrackVolumeChange(actionData.track_id, actionData.value);
         }
         break;
       case 'toggle_mute':
-        if (actionData?.trackId && typeof actionData?.muted === 'boolean') {
-          handleTrackMuteToggle(actionData.trackId, actionData.muted);
+        if (actionData?.track_id && typeof actionData?.muted === 'boolean') {
+          handleTrackMuteToggle(actionData.track_id, actionData.muted);
+        }
+        break;
+      case 'adjust_pan':
+        if (actionData?.track_id && typeof actionData?.value === 'number') {
+          console.log(`Adjusting pan for track ${actionData.track_id} to ${actionData.value}`);
+          // TODO: Implement handleTrackPanChange function
+        }
+        break;
+      case 'toggle_solo':
+        if (actionData?.track_id && typeof actionData?.soloed === 'boolean') {
+          console.log(`Setting solo for track ${actionData.track_id} to ${actionData.soloed}`);
+          // TODO: Implement handleTrackSoloToggle function
         }
         break;
       case 'change_time_signature':
@@ -974,8 +986,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         break;
       case 'move_track':
         console.log('Moving track:', actionData);
-        if (actionData?.trackId && typeof actionData?.position?.x === 'number' && typeof actionData?.position?.y === 'number') {
-          handleTrackPositionChange(actionData.trackId, {
+        if (actionData?.track_id && typeof actionData?.position?.x === 'number' && typeof actionData?.position?.y === 'number') {
+          handleTrackPositionChange(actionData.track_id, {
             x: actionData.position.x,
             y: actionData.position.y
           }, true);
@@ -1043,9 +1055,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
           isVisible ? "visible" : "invisible"
         )}
         style={{
-          backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          backgroundColor: studioMode === 'dark' ? '#0a0a0a' : '#f8fafc',
           color: studioMode === 'dark' ? '#ffffff' : '#000000',
-          borderLeft: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+          borderLeft: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
           width: CHAT_WINDOW_WIDTH
         }}
       >
@@ -1054,8 +1066,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
           className="flex items-center justify-between px-2 shrink-0"
           style={{ 
             height: GRID_CONSTANTS.headerHeight,
-            backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)',
-            borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+            backgroundColor: studioMode === 'dark' ? '#0a0a0a' : '#f8fafc',
+            borderBottom: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
           }}
         >
           <div className="flex items-center px-1">
@@ -1151,8 +1163,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         <div 
           className="p-4"
           style={{
-            backgroundColor: studioMode === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.9)',
-            borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`
+            backgroundColor: studioMode === 'dark' ? '#0a0a0a' : '#f8fafc',
+            borderTop: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
           }}
         >
           {/* Mode and Context Chips */}

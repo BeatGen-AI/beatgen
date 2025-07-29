@@ -122,6 +122,14 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
   // Track the content transform during left-side resize
   const [contentTransform, setContentTransform] = useState(0);
   
+  // Constraint function to prevent negative coordinates
+  const constrainPosition = useCallback((x: number, y: number) => {
+    return {
+      x: Math.max(0, x), // Prevent x < 0
+      y: Math.max(0, y)  // Prevent y < 0
+    };
+  }, []);
+  
   // Calculate the normal content offset for trimming from the beginning
   const calculateContentOffset = () => {
     const firstInstance = getFirstInstance(track);
@@ -305,13 +313,25 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
       const firstInstance = getFirstInstance(track);
       // Convert track position from ticks to pixels for display
       const pixelX = ticksToPixels(firstInstance?.x_position ?? 0, bpm, timeSignature);
+      const rawY = firstInstance?.y_position ?? 0;
       
-      trackRef.current.style.left = `${pixelX}px`;
-      trackRef.current.style.top = `${firstInstance?.y_position ?? 0}px`;
+      // Apply constraints to prevent negative coordinates
+      const constrainedPosition = constrainPosition(pixelX, rawY);
+      
+      trackRef.current.style.left = `${constrainedPosition.x}px`;
+      trackRef.current.style.top = `${constrainedPosition.y}px`;
       trackRef.current.style.width = `${trackWidth}px`;
       
+      // If position was constrained, update the track data
+      if (constrainedPosition.x !== pixelX || constrainedPosition.y !== rawY) {
+        const constrainedTicks = pixelsToTicks(constrainedPosition.x, bpm, timeSignature);
+        onPositionChange(track.id, { 
+          x: constrainedTicks, 
+          y: constrainedPosition.y 
+        }, true);
+      }
     }
-  }, [track.instances, trackWidth, track.id, bpm, timeSignature, track.duration_ticks]);
+  }, [track.instances, trackWidth, track.id, bpm, timeSignature, track.duration_ticks, constrainPosition, onPositionChange]);
   
   // Handle resize delta from parent (when using interaction manager for group resize)
   useEffect(() => {
@@ -330,23 +350,31 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         // Right resize - just change width
         const newWidth = Math.max(48, initialDim.width + delta);
         trackRef.current.style.width = `${newWidth}px`;
-        // Keep position unchanged
+        // Keep position unchanged but apply constraints
         const firstInstance = getFirstInstance(track);
         const currentPosPixels = ticksToPixels(firstInstance?.x_position ?? 0, bpm, timeSignature);
-        trackRef.current.style.left = `${currentPosPixels}px`;
+        const currentY = firstInstance?.y_position ?? 0;
+        const constrainedPosition = constrainPosition(currentPosPixels, currentY);
+        trackRef.current.style.left = `${constrainedPosition.x}px`;
+        trackRef.current.style.top = `${constrainedPosition.y}px`;
       } else if (propResizeDirection === 'left') {
         // Left resize - change both position and width
         const newWidth = Math.max(48, initialDim.width - delta);
         const widthDiff = initialDim.width - newWidth;
         const initialPosPixels = ticksToPixels(initialDim.x, bpm, timeSignature);
         const newX = initialPosPixels + widthDiff;
+        const currentY = getFirstInstance(track)?.y_position ?? 0;
+        
+        // Apply constraints to the new position
+        const constrainedPosition = constrainPosition(newX, currentY);
         
         trackRef.current.style.width = `${newWidth}px`;
-        trackRef.current.style.left = `${newX}px`;
+        trackRef.current.style.left = `${constrainedPosition.x}px`;
+        trackRef.current.style.top = `${constrainedPosition.y}px`;
         
         // Adjust content transform
         if (contentRef.current) {
-          const containerDeltaX = newX - initialPosPixels;
+          const containerDeltaX = constrainedPosition.x - initialPosPixels;
           const initialTransform = calculateContentOffset();
           const transform = initialTransform - containerDeltaX;
           contentRef.current.style.transform = `translateX(${transform}px)`;
@@ -360,7 +388,7 @@ export const BaseTrackPreview: React.FC<BaseTrackPreviewProps> = ({
         contentRef.current.style.transform = `translateX(${contentOffsetX}px)`;
       }
     }
-  }, [isGroupResize, resizeDelta, resizeInitialDimensions, propResizeDirection, bpm, timeSignature, track.instances, track.id, trackWidth, contentTransform, contentOffsetX]);
+  }, [isGroupResize, resizeDelta, resizeInitialDimensions, propResizeDirection, bpm, timeSignature, track.instances, track.id, trackWidth, contentTransform, contentOffsetX, constrainPosition]);
 
   // Calculate the transform to use for content position
   const getContentTransform = () => {
