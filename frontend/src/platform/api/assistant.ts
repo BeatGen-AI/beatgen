@@ -2,41 +2,50 @@ import { apiClient } from './client';
 import { EventSourcePolyfill } from 'event-source-polyfill';
 import { AssistantAction } from '@/platform/types/dto/assistant';
 
+// Base context interface
+interface BaseContext {
+  project_id?: string;
+  track_id?: string;
+  selected_region?: {
+    start_bar: number;
+    end_bar: number;
+  };
+  source?: string;
+  auto_create_project?: boolean;
+  model?: string;
+  // Musical context for better AI generation
+  bpm?: number;
+  time_signature?: {
+    numerator: number;
+    denominator: number;
+  };
+  key_signature?: string;
+  project_title?: string;
+  generation_type?: 'midi' | 'audio';
+  tracks?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    volume: number;
+    pan: number;
+    muted: boolean;
+    soloed: boolean;
+    instrument: string;
+  }>;
+}
+
+// Extended context for audio generation
+interface AudioGenerationContext extends BaseContext {
+  bars?: number;
+  duration?: number;
+}
+
 // Types for request/response
 export interface AssistantRequestOptions {
   mode: 'chat' | 'generate' | 'edit' | 'generate-audio';
   prompt: string;
   model: string;
-  context?: {
-    project_id?: string;
-    track_id?: string;
-    selected_region?: {
-      start_bar: number;
-      end_bar: number;
-    };
-    source?: string;
-    auto_create_project?: boolean;
-    model?: string;
-    // Musical context for better AI generation
-    bpm?: number;
-    time_signature?: {
-      numerator: number;
-      denominator: number;
-    };
-    key_signature?: string;
-    project_title?: string;
-    generation_type?: 'midi' | 'audio';
-    tracks?: Array<{
-      id: string;
-      name: string;
-      type: string;
-      volume: number;
-      pan: number;
-      muted: boolean;
-      soloed: boolean;
-      instrument: string;
-    }>;
-  };
+  context?: BaseContext | AudioGenerationContext;
 }
 
 export interface RequestCreationResponse {
