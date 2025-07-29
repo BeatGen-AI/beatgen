@@ -309,16 +309,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         // Process the action right away
         handleAction(action.type, action.data);
         
-        // Add action message
-        setMessages(prev => [
-          ...prev, 
-          { 
-            text: '', 
-            isUser: false,
-            action: action.type,
-            actionData: action.data
-          }
-        ]);
+        // Only add visible action messages for non-internal actions
+        if (action.type !== 'switch_mode') {
+          setMessages(prev => [
+            ...prev, 
+            { 
+              text: '', 
+              isUser: false,
+              action: action.type,
+              actionData: action.data
+            }
+          ]);
+        }
       },
       
       // New handlers for streaming text
@@ -547,11 +549,25 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat' | 'generate-audio' | 'unified';
       }
       
-      // Initialize step mode for generate requests
+      // Initialize step mode for generate requests or unified mode with music keywords
       if (apiMode === 'generate') {
         setIsStepMode(true);
         stepManager.reset(); // Reset for new generation
         console.log('🎵 Initialized step mode for music generation');
+      } else if (apiMode === 'unified') {
+        // For unified mode, detect if this might be a music generation request
+        const musicKeywords = ["make", "create", "generate", "compose", "beat", "song", "track", "music", "melody", "drum", "bass"];
+        const promptLower = prompt.toLowerCase();
+        const hasMusicKeywords = musicKeywords.some(keyword => promptLower.includes(keyword));
+        
+        if (hasMusicKeywords) {
+          setIsStepMode(true);
+          stepManager.reset(); // Reset for new generation
+          console.log('🎵 Initialized step mode for unified music generation');
+        } else {
+          setIsStepMode(false);
+          console.log('🎵 Chat mode for unified conversation');
+        }
       } else {
         setIsStepMode(false);
       }

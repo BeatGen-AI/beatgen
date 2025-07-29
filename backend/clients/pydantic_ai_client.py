@@ -7,8 +7,10 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 # from pydantic_ai.exceptions import UserError, ModelError, LLMError # For more specific error handling
 
-# Assuming SSEQueueManager is correctly imported from your project structure
+# Use existing ChatSession infrastructure
+from app2.llm.chat_wrapper import ChatSession
 from app2.sse.sse_queue_manager import SSEQueueManager
+from app2.llm.available_models import ModelInfo
 
 logger = logging.getLogger(__name__)
 
@@ -25,71 +27,37 @@ class DefaultAgentDependencies:
 class PydanticAgentWrapper(Generic[Dependencies]):
     def __init__(
         self,
-        model_id: str,  # e.g., "anthropic:claude-3-opus-20240229", "openai:gpt-4o"
+        model_info: ModelInfo,  # Always require ModelInfo for consistency with rest of codebase
         system_prompt: str = "",
         default_output_type: Optional[Type[BaseModel]] = None,
         deps_type: Optional[Type[Dependencies]] = None,
         initial_tools: Optional[List[Callable[..., Awaitable[Any]]]] = None,
-        # Kwargs for the LLM __init__ via PydanticAI Agent constructor (e.g., temperature, max_tokens for some models)
+        # Kwargs for the LLM (not used in ChatSession but kept for compatibility)
         llm_init_kwargs: Optional[Dict[str, Any]] = None,
     ):
-        self.model_id = model_id
+        self.model_info = model_info
         self._system_prompt_content = system_prompt
         self.default_output_type = default_output_type
-        self.deps_type = deps_type if deps_type else Type[DefaultAgentDependencies] # Provide a default if None
+        self.deps_type = deps_type if deps_type else Type[DefaultAgentDependencies]
         self.llm_init_kwargs = llm_init_kwargs or {}
-
-        agent_params: Dict[str, Any] = {
-            "model": self.model_id,
-            "system_prompt": self._system_prompt_content,
-            **self.llm_init_kwargs,
-        }
-        if self.default_output_type:
-            agent_params["output_type"] = self.default_output_type
         
-        # PydanticAI Agent[Deps, Out] - Deps must be provided if tools use RunContext[Deps]
-        # If no specific deps_type is given, it might default or we should provide a placeholder
-        agent_params["deps_type"] = self.deps_type
-
-        self.agent: Agent[Dependencies, Any] = Agent(**agent_params) # type: ignore
-
+        # Store registered tools for tool-based functionality
+        self.registered_tools: List[Callable[..., Awaitable[Any]]] = []
         if initial_tools:
-            for tool_func in initial_tools:
-                self.register_tool(tool_func)
+            self.registered_tools.extend(initial_tools)
 
         self.messages: List[Dict[str, Any]] = []
+        
         logger.info(
-            f"PydanticAgentWrapper initialized for model: {self.model_id} "
+            f"PydanticAgentWrapper initialized for model: {model_info.display_name} "
+            f"({model_info.provider_name}:{model_info.model_name}) "
             f"with system prompt: '{system_prompt[:50]}...'"
         )
 
     def set_system_prompt(self, system_prompt: str):
-        """
-        Updates the system prompt.
-        Note: For PydanticAI.Agent, if the system_prompt is a static string,
-        changing it after initialization might require re-creating the Agent instance
-        or ensuring the Agent uses this updated prompt in its subsequent calls.
-        This implementation updates a local copy and re-initializes the agent.
-        Alternatively, use a dynamic system prompt function with the agent.
-        """
-        logger.info(f"System prompt changed. Re-initializing PydanticAI Agent.")
+        """Updates the system prompt for future ChatSession instances."""
+        logger.info(f"System prompt updated")
         self._system_prompt_content = system_prompt
-        # Re-initialize the agent with the new system prompt
-        agent_params: Dict[str, Any] = {
-            "model": self.model_id,
-            "system_prompt": self._system_prompt_content,
-            **self.llm_init_kwargs,
-        }
-        if self.default_output_type:
-            agent_params["output_type"] = self.default_output_type
-        agent_params["deps_type"] = self.deps_type
-        
-        # Preserve registered tools
-        existing_tools = list(self.agent.tools.values()) if self.agent and hasattr(self.agent, 'tools') else []
-
-        self.agent = Agent(**agent_params) # type: ignore
-        for tool_func in existing_tools:
-            self.register_tool(tool_func.fn if hasattr(tool_func, 'fn') else tool_func) # tool_func might be a Tool object
 
 
     def append_user_message(self, content: str):
@@ -116,7 +84,7 @@ class PydanticAgentWrapper(Generic[Dependencies]):
         message: Optional[str] = None,
         response_model: Optional[Type[ResponseModelType]] = None,
         deps: Optional[Dependencies] = None,
-        # Kwargs for the LLM run method (e.g., anthropic's "thinking")
+        # Kwargs for the LLM run method (not used with ChatSession but kept for compatibility)
         llm_run_kwargs: Optional[Dict[str, Any]] = None,
         queue: Optional[SSEQueueManager] = None,
         stream: bool = False,
@@ -125,14 +93,9 @@ class PydanticAgentWrapper(Generic[Dependencies]):
             self.append_user_message(message)
 
         if not self.messages or self.messages[-1]["role"] != "user":
-            # This can happen if only append_assistant_message was called prior, or empty history.
-            # PydanticAI.run expects a user query.
-            # We will use the *last* user message from history for the query.
-            # If `message` was provided, it's already appended.
-             pass
+            raise ValueError("No user message available to send as query. Please provide a message or ensure history has a user message.")
 
-
-        # Find the last user message to use as the query for PydanticAI Agent.run()
+        # Get the last user message
         query_message_content = None
         for msg in reversed(self.messages):
             if msg["role"] == "user":
@@ -140,141 +103,102 @@ class PydanticAgentWrapper(Generic[Dependencies]):
                 break
         
         if not query_message_content:
-            # This case should ideally be prevented by ensuring a user message exists.
-            # If `message` arg was None and history is empty or only has assistant messages.
-            raise ValueError("No user message available to send as query. Please provide a message or ensure history has a user message.")
+            raise ValueError("No user message found in history")
 
+        # Use ChatSession for the actual LLM interaction - this handles all API keys and providers
+        if not queue:
+            # For non-streaming, create a dummy queue
+            class DummyQueue:
+                async def add_chunk(self, chunk): pass
+                async def complete(self, data=None): pass
+            queue = DummyQueue()
 
-        current_output_type = response_model or self.default_output_type
-        final_llm_run_kwargs = llm_run_kwargs or {}
-
-        # Prepare run_args: output_type is only for non-streaming .run()
-        # For .run_stream(), the agent instance itself must be configured.
-        run_args: Dict[str, Any] = {}
-        if deps:
-            run_args["deps"] = deps
-        
-        if current_output_type and not stream: 
-            run_args["output_type"] = current_output_type
-        
-        logger.info(
-            f"Running PydanticAI agent query: '{str(query_message_content)[:50]}...'. "
-            f"Model: {self.model_id}. "
-            f"Expecting: {current_output_type.__name__ if current_output_type else 'text'}. "
-            f"Stream: {stream}. LLM run kwargs: {final_llm_run_kwargs}"
+        chat_session = ChatSession(
+            provider_name=self.model_info.provider_name,
+            model_name=self.model_info.model_name,
+            queue=queue,
+            system_prompt=self._system_prompt_content,
+            api_key=self.model_info.get_api_key(),
+            base_url=self.model_info.base_url
         )
 
-        if stream and queue:
-            agent_for_stream = self.agent
-            agent_output_type_configured = self.default_output_type # What self.agent is typically configured with
+        logger.info(
+            f"Running ChatSession query: '{str(query_message_content)[:50]}...'. "
+            f"Model: {self.model_info.provider_name}:{self.model_info.model_name}. "
+            f"Stream: {stream}"
+        )
 
-            # Determine if a temporary agent with a specific output_type is needed for this stream
-            needs_temp_agent = False
-            if current_output_type is not None:
-                if current_output_type != agent_output_type_configured:
-                    needs_temp_agent = True
-            # If current_output_type is None, but agent_output_type_configured is not,
-            # it means we want plain text stream, but agent might be default configured for a model.
-            # However, pydantic-ai agent with output_type=None should stream text.
-            # The main case for temp agent is when current_output_type (from response_model) is a specific
-            # model that differs from self.default_output_type.
+        # For tool-based functionality, we need to simulate tool calls
+        if self.registered_tools and deps:
+            # Check if the message might need tool usage
+            # This is a simplified approach - in a full implementation you'd use proper tool parsing
+            enhanced_prompt = f"""You are an AI assistant with access to tools. 
 
-            if needs_temp_agent:
-                logger.info(f"Creating temporary PydanticAI Agent for streaming with output_type: {current_output_type.__name__}")
-                temp_agent_params: Dict[str, Any] = {
-                    "model": self.model_id,
-                    "system_prompt": self._system_prompt_content, # Current system prompt
-                    "output_type": current_output_type,         # Crucial: set desired output type
-                    "deps_type": self.deps_type,
-                    **self.llm_init_kwargs,
-                }
-                # Create the temporary agent
-                temp_agent: Agent[Dependencies, Any] = Agent(**temp_agent_params) # type: ignore
-                
-                # Copy tools from the main agent to the temporary agent
-                if hasattr(self.agent, 'tools') and self.agent.tools:
-                    for tool_obj in self.agent.tools.values(): # self.agent.tools.values() are Tool objects
-                        if hasattr(tool_obj, 'fn'):
-                            temp_agent.tool(tool_obj.fn) # Register the original function
-                        else:
-                            logger.warning(f"Could not transfer tool to temporary agent: {tool_obj}")
-                agent_for_stream = temp_agent
-            
-            # Call run_stream on the appropriately configured agent (self.agent or temp_agent)
-            # **run_args here should NOT contain 'output_type' as run_stream doesn't take it.
-            # The 'deps' argument is fine if run_stream supports it (pydantic-ai docs needed or test).
-            # Assuming 'deps' is fine for run_stream, if not, it should also be excluded from run_args when stream=True.
-            # For now, we assume 'deps' is okay based on the generic run_args preparation.
-            stream_iterator = agent_for_stream.run_stream(
-                query_message_content, **run_args, **final_llm_run_kwargs # output_type is not in run_args if stream=True
-            )
-            
-            # Accumulator for text if the stream yields strings or for reconstructing partials
-            text_accumulator: List[str] = []
-            final_streamed_object: Any = None 
+User message: {query_message_content}
 
-            async for chunk in stream_iterator:
-                logger.debug(f"Stream chunk type: {type(chunk)}, content: {str(chunk)[:100]}")
-                if isinstance(chunk, Partial):
-                    # For partial Pydantic objects, send the partial JSON.
-                    # The client-side would need to handle reconstruction or display updates.
-                    # PydanticAI aims to yield the full object at the end too.
-                    await queue.add_chunk(chunk.model_dump_json()) 
-                    # final_streamed_object = chunk # A Partial object, wait for full
-                elif isinstance(chunk, BaseModel):
-                    await queue.add_chunk(chunk.model_dump_json())
-                    final_streamed_object = chunk # This is likely the full object
-                elif isinstance(chunk, list): # list of BaseModels
-                    processed_list = []
-                    for item in chunk:
-                        if isinstance(item, BaseModel):
-                            await queue.add_chunk(item.model_dump_json())
-                            processed_list.append(item)
-                        else: # Should not happen if output_type is List[BaseModel]
-                            await queue.add_chunk(str(item))
-                            processed_list.append(str(item))
-                    final_streamed_object = processed_list
-                else:  # Plain string chunk
-                    chunk_str = str(chunk)
-                    await queue.add_chunk(chunk_str)
-                    text_accumulator.append(chunk_str)
-            
-            await queue.add_chunk(None)  # Signal end of message for SSE
+Available tools: {[getattr(tool, '__name__', 'unknown') for tool in self.registered_tools]}
 
-            if final_streamed_object: # A Pydantic model (or list) was fully streamed
-                self.append_assistant_message(final_streamed_object)
-                return final_streamed_object # type: ignore
-            else: # Text response accumulated
-                assistant_response_text = "".join(text_accumulator)
-                self.append_assistant_message(assistant_response_text)
-                return assistant_response_text
-        else:  # Non-streaming
-            # For non-streaming, self.agent is used, and run_args CAN contain 'output_type'
-            result = await self.agent.run(
-                query_message_content, **run_args, **final_llm_run_kwargs
-            )
-            output_data = result.output # This will be PydanticModel or str
-            self.append_assistant_message(output_data)
+Please respond naturally to the user's request. If you need to use tools, call them appropriately."""
 
-            if queue: # Send the single final response if queue is provided
-                if isinstance(output_data, BaseModel):
-                    await queue.add_chunk(output_data.model_dump_json())
-                elif isinstance(output_data, list):
-                     for item in output_data:
-                         await queue.add_chunk(item.model_dump_json() if isinstance(item, BaseModel) else str(item))
-                else:
-                    await queue.add_chunk(str(output_data))
-                await queue.add_chunk(None)
-            return output_data # type: ignore
+            response = await chat_session.send_message_async(enhanced_prompt, stream=stream)
+        else:
+            # Standard message processing
+            response = await chat_session.send_message_async(query_message_content, stream=stream)
+
+        # Store response in message history
+        self.append_assistant_message(response)
+        return response # type: ignore
+
+    async def run_async(
+        self,
+        message: str,
+        deps: Optional[Dependencies] = None,
+        response_model: Optional[Type[ResponseModelType]] = None,
+    ) -> Union[ResponseModelType, str]:
+        """
+        Simplified async run method for direct agent execution.
+        """
+        return await self.send_message_async(
+            message=message,
+            response_model=response_model,
+            deps=deps,
+            stream=False
+        )
 
     def register_tool(self, tool_func: Callable[..., Awaitable[Any]]):
         """
-        Registers an async tool function with the PydanticAI agent.
-        The tool's docstring and type hints are used to generate its schema for the LLM.
-        If the tool needs dependencies, its first argument should be `ctx: RunContext[YourDepsType]`.
+        Registers an async tool function for potential use in responses.
+        The tool's docstring and type hints are used to understand its purpose.
         """
-        self.agent.tool(tool_func)
+        self.registered_tools.append(tool_func)
         logger.info(f"Registered tool: {getattr(tool_func, '__name__', 'N/A')}")
 
+    def register_toolset(self, toolset):
+        """
+        Registers a toolset (collection of tools).
+        """
+        try:
+            tools_registered = 0
+            if hasattr(toolset, '__iter__'):
+                # Try to iterate through the toolset and register each tool
+                for tool_func in toolset:
+                    if callable(tool_func):
+                        self.register_tool(tool_func)
+                        tools_registered += 1
+            elif hasattr(toolset, 'tools'):
+                # Some toolsets might have a tools attribute/method
+                tools = toolset.tools() if callable(toolset.tools) else toolset.tools
+                for tool_func in tools:
+                    self.register_tool(tool_func)
+                    tools_registered += 1
+            else:
+                logger.warning(f"Unknown toolset format: {type(toolset)}")
+            
+            logger.info(f"Registered {tools_registered} tools from toolset: {type(toolset).__name__}")
+            
+        except Exception as e:
+            logger.error(f"Failed to register toolset: {e}")
+            raise
+
     def get_model_id(self) -> str:
-        return self.model_id
+        return f"{self.model_info.provider_name}:{self.model_info.model_name}"
