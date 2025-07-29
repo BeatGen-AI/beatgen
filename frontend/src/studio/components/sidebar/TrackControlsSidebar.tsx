@@ -365,7 +365,6 @@ const TrackControls: React.FC<TrackControlsProps> = ({
             onChange={handleVolumeChange}
             onChangeCommitted={handleVolumeChangeCommitted}
             disabled={track.mute ?? false}
-            valueFormatter={(val) => `${val}%`}
           />
         </div>
           
