@@ -16,12 +16,8 @@ export function convertVolumeToDecibels(linearVolume: number, muted = false): nu
   // Convert 0-100 to 0-1 for the fader
   const position = safeVolume / 100;
   
-  // TEMPORARY: Simple linear mapping for debugging
-  // 0% = -20dB, 100% = +6dB (26dB range)
+  // Simple linear mapping: 0% = -20dB, 100% = +6dB (26dB range)
   const dbValue = -20 + (position * 26);
-  
-  // Debug logging to see what values we're getting
-  console.log(`Volume ${linearVolume}% -> Position ${position} -> ${dbValue.toFixed(1)}dB`);
   
   return dbValue;
 }
@@ -35,8 +31,7 @@ export function convertDecibelsToVolume(dbValue: number): number {
   // If -Infinity, return 0
   if (dbValue === -Infinity) return 0;
   
-  // TEMPORARY: Simple linear mapping for debugging
-  // Reverse of: -20 + (position * 26) = dbValue
+  // Simple linear mapping reverse: -20 + (position * 26) = dbValue
   // So: position = (dbValue + 20) / 26
   const position = Math.max(0, Math.min(1, (dbValue + 20) / 26));
   

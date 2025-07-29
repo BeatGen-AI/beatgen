@@ -10,6 +10,7 @@ import { useAppTheme } from '../../../lib/theme-provider';
 interface TrackControlsSidebarProps {
   tracks: CombinedTrack[];
   onVolumeChange: (trackId: string, volume: number) => void;
+  onVolumeChangeLive?: (trackId: string, volume: number) => void; // For real-time updates during dragging
   onPanChange: (trackId: string, pan: number) => void;
   onMuteToggle: (trackId: string, muted: boolean) => void;
   onSoloToggle: (trackId: string, soloed: boolean) => void;
@@ -22,6 +23,7 @@ interface TrackControlsSidebarProps {
 const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
   tracks,
   onVolumeChange,
+  onVolumeChangeLive,
   onPanChange,
   onMuteToggle,
   onSoloToggle,
@@ -57,6 +59,7 @@ const TrackControlsSidebar: React.FC<TrackControlsSidebarProps> = ({
           track={track}
           index={index}
           onVolumeChange={onVolumeChange}
+          onVolumeChangeLive={onVolumeChangeLive}
           onPanChange={onPanChange}
           onMuteToggle={onMuteToggle}
           onSoloToggle={onSoloToggle}
@@ -74,6 +77,7 @@ interface TrackControlsProps {
   track: CombinedTrack;
   index: number;
   onVolumeChange: (trackId: string, volume: number) => void;
+  onVolumeChangeLive?: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
   onMuteToggle: (trackId: string, muted: boolean) => void;
   onSoloToggle: (trackId: string, soloed: boolean) => void;
@@ -87,6 +91,7 @@ const TrackControls: React.FC<TrackControlsProps> = ({
   track,
   index,
   onVolumeChange,
+  onVolumeChangeLive,
   onPanChange,
   onMuteToggle,
   onSoloToggle,
@@ -122,10 +127,16 @@ const TrackControls: React.FC<TrackControlsProps> = ({
     setLocalPan(track.pan ?? 0);
   }, [track.pan]);
   
-  // Handler for volume changes during dragging (updates local state only)
+  // Handler for volume changes during dragging (updates local state and audio engine in real-time)
   const handleVolumeChange = (event: Event, newValue: number | number[]) => {
-    // Just update local component state, no store updates
-    setLocalVolume(newValue as number);
+    const volume = newValue as number;
+    // Update local component state
+    setLocalVolume(volume);
+    
+    // Update audio engine in real-time if live handler is provided
+    if (onVolumeChangeLive) {
+      onVolumeChangeLive(track.id, volume);
+    }
   };
   
   // Handler for volume changes when drag completes (updates store)
