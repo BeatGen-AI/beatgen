@@ -7,6 +7,7 @@ import uuid
 import time
 import logging
 import asyncio
+import os
 from enum import Enum
 from typing import Dict, Any, Optional, Set
 from pydantic import BaseModel
@@ -50,7 +51,7 @@ class RequestContext(BaseModel):
 class RequestManager:
     """
     Manager for assistant request IDs and tracking active requests.
-    Uses an in-memory store with TTL for request tracking.
+    Can use either in-memory storage or distributed database storage based on configuration.
     """
 
     # Singleton instance
@@ -78,17 +79,27 @@ class RequestManager:
         if self._initialized:
             return
 
-        # Active requests by request_id
-        self._requests: Dict[str, RequestContext] = {}
+        # Check if we should use distributed storage
+        self._use_distributed = os.getenv("USE_DISTRIBUTED_REQUESTS", "false").lower() == "true"
+        
+        if self._use_distributed:
+            # Import here to avoid circular imports
+            from app2.services.distributed_requests_service import DistributedRequestsService
+            self._distributed_service = DistributedRequestsService()
+            logger.info("Request manager initialized with distributed storage")
+        else:
+            # Traditional in-memory storage
+            # Active requests by request_id
+            self._requests: Dict[str, RequestContext] = {}
 
-        # Set of request IDs per user
-        self._user_requests: Dict[str, Set[str]] = {}
+            # Set of request IDs per user
+            self._user_requests: Dict[str, Set[str]] = {}
 
-        # Initialize cleanup task as None - will be started when needed
-        self._cleanup_task = None
+            # Initialize cleanup task as None - will be started when needed
+            self._cleanup_task = None
+            logger.info("Request manager initialized with in-memory storage")
 
         self._initialized = True
-        logger.info("Request manager initialized")
 
     async def _cleanup_loop(self):
         """Background task to clean up expired requests"""
@@ -151,12 +162,15 @@ class RequestManager:
         request_id = f"{timestamp}-{unique_id}"
         return request_id
 
-    def can_create_request(self, user_id: str) -> bool:
+    async def can_create_request(self, user_id: str) -> bool:
         """Check if a user can create a new request (rate limiting)"""
-        user_requests = self._user_requests.get(user_id, set())
-        return len(user_requests) < self.MAX_REQUESTS_PER_USER
+        if self._use_distributed:
+            return await self._distributed_service.can_create_request(user_id)
+        else:
+            user_requests = self._user_requests.get(user_id, set())
+            return len(user_requests) < self.MAX_REQUESTS_PER_USER
 
-    def create_request(
+    async def create_request(
         self,
         user_id: str,
         mode: str,
@@ -184,75 +198,113 @@ class RequestManager:
         Raises:
             ValueError: If user has too many active requests
         """
-        # Check rate limiting
-        if not self.can_create_request(user_id):
-            raise ValueError(
-                f"User {user_id} has reached the maximum number of active requests"
+        
+        if self._use_distributed:
+            # Use distributed service
+            request_id = await self._distributed_service.create_request(
+                user_id=user_id,
+                mode=mode,
+                prompt=prompt,
+                model=model,
+                track_id=track_id,
+                context=context
             )
-        
-        # Check global limits
-        if len(self._requests) >= self.MAX_TOTAL_REQUESTS:
-            logger.error(f"Global request limit reached: {len(self._requests)} requests")
-            # Force immediate cleanup
-            self._cleanup_expired_requests()
+            logger.info(f"🔵 REQUEST_MANAGER - Created distributed request {request_id} for user {user_id}, mode: {mode}")
+            return request_id
+        else:
+            # Use in-memory storage (existing logic)
+            # Check rate limiting
+            if not await self.can_create_request(user_id):
+                raise ValueError(
+                    f"User {user_id} has reached the maximum number of active requests"
+                )
+            
+            # Check global limits
             if len(self._requests) >= self.MAX_TOTAL_REQUESTS:
-                raise ValueError("System is at capacity, please try again later")
+                logger.error(f"Global request limit reached: {len(self._requests)} requests")
+                # Force immediate cleanup
+                self._cleanup_expired_requests()
+                if len(self._requests) >= self.MAX_TOTAL_REQUESTS:
+                    raise ValueError("System is at capacity, please try again later")
 
-        # Generate request ID
-        request_id = self.generate_request_id()
+            # Generate request ID
+            request_id = self.generate_request_id()
 
-        # Create SSE event queue for this request
-        sse_queue = SSEQueueManager(request_id)
+            # Create SSE event queue for this request
+            sse_queue = SSEQueueManager(request_id)
 
-        # Create request context
-        context = RequestContext(
-            request_id=request_id,
-            user_id=user_id,
-            timestamp=time.time(),
-            status=RequestStatus.PENDING,
-            mode=mode,
-            model=model,
-            prompt=prompt,
-            track_id=track_id,
-            context=context,
-            sse_queue=sse_queue,
-        )
+            # Create request context
+            request_context = RequestContext(
+                request_id=request_id,
+                user_id=user_id,
+                timestamp=time.time(),
+                status=RequestStatus.PENDING,
+                mode=mode,
+                model=model,
+                prompt=prompt,
+                track_id=track_id,
+                context=context,
+                sse_queue=sse_queue,
+            )
 
-        # Store request
-        self._requests[request_id] = context
+            # Store request
+            self._requests[request_id] = request_context
 
-        # Add to user requests
-        if user_id not in self._user_requests:
-            self._user_requests[user_id] = set()
-        
-        # Ensure cleanup task is running
-        self._ensure_cleanup_task()
-        
-        self._user_requests[user_id].add(request_id)
-        logger.info(
-            f"🔵 REQUEST_MANAGER - Created new user_requests entry for user: {user_id}"
-        )
+            # Add to user requests
+            if user_id not in self._user_requests:
+                self._user_requests[user_id] = set()
+            
+            # Ensure cleanup task is running
+            self._ensure_cleanup_task()
+            
+            self._user_requests[user_id].add(request_id)
+            logger.info(
+                f"🔵 REQUEST_MANAGER - Created new user_requests entry for user: {user_id}"
+            )
 
-        logger.info(
-            f"🔵 REQUEST_MANAGER (Instance: {id(self)}) - Created request {request_id} for user {user_id}, mode: {mode}"
-        )
-        logger.info(
-            f"🔵 REQUEST_MANAGER - Active requests for user {user_id}: {self._user_requests[user_id]}"
-        )
-        return request_id
+            logger.info(
+                f"🔵 REQUEST_MANAGER (Instance: {id(self)}) - Created request {request_id} for user {user_id}, mode: {mode}"
+            )
+            logger.info(
+                f"🔵 REQUEST_MANAGER - Active requests for user {user_id}: {self._user_requests[user_id]}"
+            )
+            return request_id
 
-    def get_request(self, request_id: str) -> Optional[RequestContext]:
+    async def get_request(self, request_id: str) -> Optional[RequestContext]:
         """Get request context by ID"""
-        return self._requests.get(request_id)
+        if self._use_distributed:
+            request_data = await self._distributed_service.get_request(request_id)
+            if not request_data:
+                return None
+            # Convert to RequestContext for compatibility
+            return RequestContext(
+                request_id=request_data["request_id"],
+                user_id=request_data["user_id"],
+                timestamp=request_data["created_at"].timestamp() if hasattr(request_data["created_at"], 'timestamp') else time.time(),
+                status=request_data["status"],
+                mode=request_data["mode"],
+                prompt=request_data["prompt"],
+                model=request_data["model"],
+                track_id=request_data.get("track_id"),
+                context=request_data.get("context"),
+                sse_queue=None,  # Will be handled separately for distributed mode
+                task_ref=None,
+                chat_session=None
+            )
+        else:
+            return self._requests.get(request_id)
 
-    def update_request_status(self, request_id: str, status: RequestStatus) -> bool:
+    async def update_request_status(self, request_id: str, status: RequestStatus) -> bool:
         """Update request status"""
-        request = self._requests.get(request_id)
-        if not request:
-            return False
+        if self._use_distributed:
+            return await self._distributed_service.update_request_status(request_id, status)
+        else:
+            request = self._requests.get(request_id)
+            if not request:
+                return False
 
-        request.status = status
-        return True
+            request.status = status
+            return True
 
     def set_task_reference(self, request_id: str, task_ref: Any) -> bool:
         """Set task reference for a request"""
@@ -290,46 +342,49 @@ class RequestManager:
 
         return request.sse_queue
 
-    def remove_request(
+    async def remove_request(
         self, request_id: str, status: RequestStatus = RequestStatus.COMPLETED
     ) -> bool:
         """Remove a request and update its status"""
-        request = self._requests.get(request_id)
-        if not request:
-            return False
+        if self._use_distributed:
+            return await self._distributed_service.remove_request(request_id, status)
+        else:
+            request = self._requests.get(request_id)
+            if not request:
+                return False
 
-        # Update status
-        request.status = status
+            # Update status
+            request.status = status
 
-        # Remove from user requests
-        user_id = request.user_id
-        if user_id in self._user_requests:
-            self._user_requests[user_id].discard(request_id)
-            if not self._user_requests[user_id]:
-                del self._user_requests[user_id]
+            # Remove from user requests
+            user_id = request.user_id
+            if user_id in self._user_requests:
+                self._user_requests[user_id].discard(request_id)
+                if not self._user_requests[user_id]:
+                    del self._user_requests[user_id]
 
-        # Cancel task if it exists
-        if request.task_ref and not request.task_ref.done():
-            request.task_ref.cancel()
+            # Cancel task if it exists
+            if request.task_ref and not request.task_ref.done():
+                request.task_ref.cancel()
 
-        # Cancel chat session if it exists and status is CANCELLED
-        if status == RequestStatus.CANCELLED and request.chat_session:
-            if hasattr(request.chat_session, 'cancel') and callable(request.chat_session.cancel):
-                try:
-                    logger.info(f"Calling .cancel() on chat session for request {request_id}")
-                    request.chat_session.cancel()
-                except Exception as e:
-                    logger.error(f"Error calling .cancel() on chat session for {request_id}: {e}")
-            else:
-                logger.warning(f"chat_session for request {request_id} does not have a callable 'cancel' method.")
+            # Cancel chat session if it exists and status is CANCELLED
+            if status == RequestStatus.CANCELLED and request.chat_session:
+                if hasattr(request.chat_session, 'cancel') and callable(request.chat_session.cancel):
+                    try:
+                        logger.info(f"Calling .cancel() on chat session for request {request_id}")
+                        request.chat_session.cancel()
+                    except Exception as e:
+                        logger.error(f"Error calling .cancel() on chat session for {request_id}: {e}")
+                else:
+                    logger.warning(f"chat_session for request {request_id} does not have a callable 'cancel' method.")
 
-        # Remove from requests
-        del self._requests[request_id]
+            # Remove from requests
+            del self._requests[request_id]
 
-        logger.info(f"Removed request {request_id} with status {status}")
-        return True
+            logger.info(f"Removed request {request_id} with status {status}")
+            return True
 
-    def validate_request_id(
+    async def validate_request_id(
         self, request_id: str, user_id: Optional[str] = None
     ) -> bool:
         """
@@ -342,25 +397,31 @@ class RequestManager:
         Returns:
             True if valid, False otherwise
         """
-        # Check if request exists
-        request = self._requests.get(request_id)
-        if not request:
-            logger.error(f"Request {request_id} not found in RequestManager (Instance: {id(self)})")
-            return False
-
-        # Check user if provided
-        if user_id and request.user_id != user_id:
-            logger.error(f"Request {request_id} not found for user {user_id} in RequestManager (Instance: {id(self)})")
-            return False
-
-        return True
-
-    def get_active_requests_count(self, user_id: Optional[str] = None) -> int:
-        """Get count of active requests, optionally filtered by user"""
-        if user_id:
-            return len(self._user_requests.get(user_id, set()))
+        if self._use_distributed:
+            return await self._distributed_service.validate_request_id(request_id, user_id)
         else:
-            return len(self._requests)
+            # Check if request exists
+            request = self._requests.get(request_id)
+            if not request:
+                logger.error(f"Request {request_id} not found in RequestManager (Instance: {id(self)})")
+                return False
+
+            # Check user if provided
+            if user_id and request.user_id != user_id:
+                logger.error(f"Request {request_id} not found for user {user_id} in RequestManager (Instance: {id(self)})")
+                return False
+
+            return True
+
+    async def get_active_requests_count(self, user_id: Optional[str] = None) -> int:
+        """Get count of active requests, optionally filtered by user"""
+        if self._use_distributed:
+            return await self._distributed_service.get_active_requests_count(user_id)
+        else:
+            if user_id:
+                return len(self._user_requests.get(user_id, set()))
+            else:
+                return len(self._requests)
 
     async def shutdown(self):
         """Clean up resources on shutdown"""

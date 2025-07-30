@@ -1,5 +1,8 @@
+import logging
 from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Any, Dict, Union, get_origin, Sequence, get_args
+
+logger = logging.getLogger(__name__)
 
 # --- Base Model for Coercion ---
 class BaseCoerceModel(BaseModel):
@@ -23,7 +26,6 @@ class BaseCoerceModel(BaseModel):
                 )
                 
                 if not is_field_expecting_list_like:
-                    # print(f"Coercing field '{key}' (list unwrap): from {current_value} to {current_value[0]} because field annotation '{expected_annotation_for_list_check}' is not list-like.")
                     current_value = current_value[0] # Update current_value with the unwrapped item
             
             # Step 2: Scalar type coercion (if applicable, using the potentially unwrapped current_value)
@@ -61,9 +63,9 @@ class BaseCoerceModel(BaseModel):
                             current_value = float(current_value)
                         
                         if current_value != original_value_for_log: # Log only if a change happened
-                           print(f"Coercing field '{key}' (type cast): from {original_value_for_log} (type {type(original_value_for_log).__name__}) to {current_value} (expected {target_scalar_type.__name__}).")
+                           logger.debug(f"Coercing field '{key}' (type cast): from {original_value_for_log} (type {type(original_value_for_log).__name__}) to {current_value} (expected {target_scalar_type.__name__}).")
                     except (ValueError, TypeError) as e:
-                        print(f"Warning: Could not cast field '{key}' value '{original_value_for_log}' to {target_scalar_type.__name__}: {e}. Leaving as is for Pydantic validation.")
+                        logger.warning(f"Could not cast field '{key}' value '{original_value_for_log}' to {target_scalar_type.__name__}: {e}. Leaving as is for Pydantic validation.")
                         current_value = original_value_for_log
             
             processed_data[key] = current_value
