@@ -561,8 +561,13 @@ const NoteWithDrag: React.FC<{
     
     // Not near any edge
     setHoveredEdge(null);
-    // Only set cursor to move if not using eraser
-    stage.container().style.cursor = 'move';
+    // Set cursor based on selected tool
+    if (selectedTool === 'eraser') {
+      // Use eraser cursor
+      stage.container().style.cursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white' stroke='none' transform='scale(1,-1)'%3E%3Cpath d='M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3'/%3E%3Cpath d='M18 13.3l-6.3 -6.3'/%3E%3C/svg%3E") 0 0, auto`;
+    } else {
+      stage.container().style.cursor = 'move';
+    }
   };
   
   // Determine the fill color based on selection state
@@ -770,7 +775,7 @@ const NoteWithDrag: React.FC<{
           }
           
           const stage = e.target.getStage();
-          if (stage) stage.container().style.cursor = 'default';
+          if (stage) stage.container().style.cursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white' stroke='none' transform='scale(1,-1)'%3E%3Cpath d='M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3'/%3E%3Cpath d='M18 13.3l-6.3 -6.3'/%3E%3C/svg%3E") 0 0, auto`;
           return;
         }
         
@@ -782,9 +787,9 @@ const NoteWithDrag: React.FC<{
         setHoveredEdge(null);
         const stage = e.target.getStage();
         if (stage) {
-          // If using eraser, keep default cursor
+          // If using eraser, keep eraser cursor
           if (selectedTool === 'eraser') {
-            stage.container().style.cursor = 'default';
+            stage.container().style.cursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white' stroke='none' transform='scale(1,-1)'%3E%3Cpath d='M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3'/%3E%3Cpath d='M18 13.3l-6.3 -6.3'/%3E%3C/svg%3E") 0 0, auto`;
           } else {
             stage.container().style.cursor = 'default';
           }
@@ -2963,10 +2968,10 @@ export const PianoRoll: FC<PianoRollProps> = ({
                     height={dimensions.height - 28 - 16} 
                     onMouseDown={handleStageMouseDown}
                     onMouseMove={(e) => {
-                      // For eraser tool, always keep default cursor
+                      // For eraser tool, always keep eraser cursor
                       if (selectedTool === 'eraser') {
                         const stage = e.target.getStage();
-                        if (stage) stage.container().style.cursor = 'default';
+                        if (stage) stage.container().style.cursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white' stroke='none' transform='scale(1,-1)'%3E%3Cpath d='M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3'/%3E%3Cpath d='M18 13.3l-6.3 -6.3'/%3E%3C/svg%3E") 0 0, auto`;
                       }
                       
                       // Handle move events (for selection and eraser)
@@ -2981,10 +2986,10 @@ export const PianoRoll: FC<PianoRollProps> = ({
                     onMouseUp={handleStageMouseUp}
                     onMouseLeave={handleStageMouseLeave}
                     onMouseEnter={(e) => {
-                      // For eraser tool, set cursor to default on enter
+                      // For eraser tool, set cursor to eraser on enter
                       if (selectedTool === 'eraser') {
                         const stage = e.target.getStage();
-                        if (stage) stage.container().style.cursor = 'default';
+                        if (stage) stage.container().style.cursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white' stroke='none' transform='scale(1,-1)'%3E%3Cpath d='M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3'/%3E%3Cpath d='M18 13.3l-6.3 -6.3'/%3E%3C/svg%3E") 0 0, auto`;
                       }
                     }}
                     style={{ pointerEvents: "auto" }}
