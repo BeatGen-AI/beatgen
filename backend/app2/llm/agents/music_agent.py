@@ -5,7 +5,7 @@ import traceback
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict, Type, Union
 import uuid
-from sqlmodel import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from dataclasses import dataclass
 
 
@@ -100,7 +100,7 @@ class MusicGenerationContext:
     queue: Optional[SSEQueueManager] = None
     
     # Database and user context
-    session: Optional[Session] = None
+    session: Optional[AsyncSession] = None
     user_id: Optional[str] = None
     generation_type: str = "midi"
     request_context: Optional[Dict[str, Any]] = None
@@ -186,7 +186,7 @@ class MusicGenerationAgent:
                 logger.error(f"Failed to emit error event: {emit_error}")
             raise
         
-    async def _init_real_data(self, session: Session):
+    async def _init_real_data(self, session: AsyncSession):
         _drum_file_repository = get_drum_sample_public_repository(session)
         _file_repository = get_file_repository(session)
         drum_sample_service = get_drum_sample_service(_drum_file_repository)
@@ -1789,8 +1789,8 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             
             # Save to database
             session.add(audio_track)
-            session.commit()
-            session.refresh(audio_track)
+            await session.commit()
+            await session.refresh(audio_track)
             
             # Convert to read model for the response
             from app2.models.track_models.audio_track import AudioTrackRead
@@ -1821,7 +1821,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         return key, mode.lower() if mode else "major"
 
     # --- Main Orchestration Method (Parallel Execution) ---
-    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: Session, user_id: str = None, generation_type: str = "midi", request_context: Dict[str, Any] = None):
+    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: AsyncSession, user_id: str = None, generation_type: str = "midi", request_context: Dict[str, Any] = None):
         """
         Main execution flow for the music generation agent with parallel execution.
         Processes the request through various stages, using LLM calls for decisions
