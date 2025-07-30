@@ -33,6 +33,7 @@ import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
 import ChatModelMenu from './ChatModelMenu';
 import AudioGenerationModelMenu from './AudioGenerationModelMenu';
+import { getAudioModelInfo, getAvailableAudioModels } from '../../config/audioModels';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { createDefaultInstance } from '../../utils/instanceHelpers';
 
@@ -61,8 +62,8 @@ interface ChatWindowProps {
 // Define available AI models (placeholder)
 const AVAILABLE_MODELS = ["Gemini Pro 2.5", "Gemini Flash 2.5", "Deepseek R1", "Deepseek V3", "Claude 4 Sonnet", "Claude 4 Opus", "Claude 3.7 Sonnet",  "GPT-4.1", "GPT-4o", "o3", "o3-mini", "Llama 4 Maverick", "Llama 4 Scout"];
 
-// Define available audio generation models (matching AudioGenerationPanel)
-const AVAILABLE_AUDIO_MODELS = ['vertex-ai/lyria2', 'stability/stable-audio-2'];
+// Get available audio generation models from config
+const AVAILABLE_AUDIO_MODELS = getAvailableAudioModels();
 
 // UI Constants
 const CHAT_WINDOW_WIDTH = 350;
@@ -1143,7 +1144,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
                 />
                 {mode === 'Compose' && generationType === 'audio' && (
                   <AudioGenerationModelMenu
-                    triggerLabel={selectedAudioModel === 'vertex-ai/lyria2' ? 'Lyria 2' : 'Stable Audio 2'}
+                    triggerLabel={getAudioModelInfo(selectedAudioModel).description}
                     onSelect={handleAudioModelSelect}
                     models={AVAILABLE_AUDIO_MODELS}
                     selectedModel={selectedAudioModel}

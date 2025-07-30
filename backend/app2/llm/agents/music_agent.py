@@ -1631,10 +1631,32 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             audio_service = get_audio_generation_service(model=audio_generation_model)
             
             # Generate and download audio
-            audio_data, generation_result = await audio_service.generate_and_download_audio(
-                prompt=enhanced_prompt,
-                negative_prompt=negative_prompt
-            )
+            try:
+                await self.context.queue.stage(
+                    name="generating_audio",
+                    description=f"Generating audio with {audio_generation_model or 'default model'}..."
+                )
+                
+                audio_data, generation_result = await audio_service.generate_and_download_audio(
+                    prompt=enhanced_prompt,
+                    negative_prompt=negative_prompt
+                )
+                
+                if not audio_data or not generation_result:
+                    raise ValueError("Audio generation returned empty results")
+                    
+            except Exception as e:
+                logger.error(f"Audio generation failed: {e}")
+                await self.context.queue.error(
+                    message="Failed to generate audio",
+                    error_data={
+                        "error": "audio_generation_failed",
+                        "model": audio_generation_model or "default",
+                        "prompt": enhanced_prompt[:100],
+                        "details": str(e)
+                    }
+                )
+                raise
             
             await self.context.queue.stage(
                 name="processing_diffusion_audio",
