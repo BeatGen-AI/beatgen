@@ -137,6 +137,18 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
 
   return (
     <div className={`space-y-3 ${className}`}>
+      {/* Custom styles for generating placeholder */}
+      {isGenerating && useStudioTheme && (
+        <style>
+          {`
+            .generating-placeholder::placeholder {
+              color: ${currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'} !important;
+              opacity: 1 !important;
+            }
+          `}
+        </style>
+      )}
+      
       {/* Top component */}
       {topComponent && (
         <div>
@@ -156,13 +168,15 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
             textareaBottomLeftComponent || textareaBottomRightComponent ? 'pb-8' : 'pb-2'
           } ${
             textareaTopLeftComponent || textareaTopRightComponent ? `pt-${textareaTopPadding}` : 'pt-2'
-          } ${'pl-3'}`
+          } ${'pl-3'} ${isGenerating ? 'generating-placeholder' : ''}`
         }
-          style={useStudioTheme ? {
-            backgroundColor: currentTheme === 'dark' ? '#1a1a1a' : '#ffffff',
-            color: currentTheme === 'dark' ? '#ffffff' : '#000000',
-            borderColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'
-          } : {}}
+          style={{
+            ...(useStudioTheme ? {
+              backgroundColor: currentTheme === 'dark' ? '#1a1a1a' : '#ffffff',
+              color: currentTheme === 'dark' ? '#ffffff' : '#000000',
+              borderColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'
+            } : {})
+          } as React.CSSProperties}
         />
         
         <div className={`absolute top-2 text-xs text-muted-foreground ${
