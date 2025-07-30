@@ -562,7 +562,7 @@ const NoteWithDrag: React.FC<{
     // Not near any edge
     setHoveredEdge(null);
     // Set cursor based on selected tool
-    if (selectedTool === 'eraser') {
+    if ((selectedTool as 'select' | 'pen' | 'highlighter' | 'eraser') === 'eraser') {
       // Use eraser cursor
       stage.container().style.cursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white' stroke='none' transform='scale(1,-1)'%3E%3Cpath d='M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3'/%3E%3Cpath d='M18 13.3l-6.3 -6.3'/%3E%3C/svg%3E") 0 0, auto`;
     } else {
