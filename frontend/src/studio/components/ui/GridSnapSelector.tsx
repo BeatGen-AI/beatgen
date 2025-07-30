@@ -7,6 +7,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from '../../../components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../../../components/ui/tooltip';
 import { GridSnapOption, getGridSnapOptionName } from '../piano-roll2/gridConstants';
 import { Grid3X3 } from 'lucide-react';
 
@@ -49,65 +50,86 @@ export const GridSnapSelector: React.FC<GridSnapSelectorProps> = ({
 
   const renderTrigger = () => {
     if (variant === 'piano-roll') {
-      // Piano roll specific styling with SVG icon
+      // Piano roll specific styling with Grid3X3
       return (
-        <img 
-          src="/icons/grid-on.svg"
-          alt="Grid snap"
-          onMouseDown={(e) => {
-            e.stopPropagation();
-          }}
-          style={{ 
-            width: `${iconSize}px`,
-            height: `${iconSize}px`,
-            opacity: enabled ? 1 : 0.5,
-            cursor: "pointer",
-            filter: "brightness(0) invert(1)", // Make icon white
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            if (!enabled) e.currentTarget.style.opacity = "0.8";
-            e.currentTarget.style.transform = "scale(1.1)";
-          }}
-          onMouseLeave={(e) => {
-            if (!enabled) e.currentTarget.style.opacity = "0.5";
-            e.currentTarget.style.transform = "scale(1)";
-          }}
-        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+              }}
+              style={{ 
+                width: `${iconSize}px`,
+                height: `${iconSize}px`,
+                opacity: enabled ? 1 : 0.5,
+                cursor: "pointer",
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => {
+                if (!enabled) e.currentTarget.style.opacity = "0.8";
+                e.currentTarget.style.transform = "scale(1.1)";
+              }}
+              onMouseLeave={(e) => {
+                if (!enabled) e.currentTarget.style.opacity = "0.5";
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+            >
+              <Grid3X3 
+                size={iconSize}
+                style={{ 
+                  color: '#ffffff'
+                }} 
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Snap to grid</p>
+          </TooltipContent>
+        </Tooltip>
       );
     }
 
     // Control bar styling with Lucide icon
     return (
-      <button
-        className="h-8 w-8 p-0 rounded-lg transition-colors"
-        style={{
-          color: theme === 'dark' ? '#ffffff' : '#000000',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-        onMouseEnter={(e) => {
-          if (!enabled) {
-            e.currentTarget.style.backgroundColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!enabled) {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }
-        }}
-      >
-        <Grid3X3 
-          size={iconSize} 
-          style={{ 
-            opacity: enabled ? 1 : 0.5,
-            color: theme === 'dark' ? '#ffffff' : '#000000'
-          }} 
-        />
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            className="h-8 w-8 p-0 rounded-lg transition-colors"
+            style={{
+              color: theme === 'dark' ? '#ffffff' : '#000000',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => {
+              if (!enabled) {
+                e.currentTarget.style.backgroundColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!enabled) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }
+            }}
+          >
+            <Grid3X3 
+              size={iconSize} 
+              style={{ 
+                opacity: enabled ? 1 : 0.5,
+                color: theme === 'dark' ? '#ffffff' : '#000000'
+              }} 
+            />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Snap to grid</p>
+        </TooltipContent>
+      </Tooltip>
     );
   };
 
@@ -266,11 +288,13 @@ export const GridSnapSelector: React.FC<GridSnapSelectorProps> = ({
   };
 
   return (
-    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <DropdownMenuTrigger asChild>
-        {renderTrigger()}
-      </DropdownMenuTrigger>
-      {renderContent()}
-    </DropdownMenu>
+    <TooltipProvider>
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+        <DropdownMenuTrigger asChild>
+          {renderTrigger()}
+        </DropdownMenuTrigger>
+        {renderContent()}
+      </DropdownMenu>
+    </TooltipProvider>
   );
 };

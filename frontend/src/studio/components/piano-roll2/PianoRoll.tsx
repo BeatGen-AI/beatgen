@@ -24,6 +24,10 @@ import {
 // Import GridSnapSelector component
 import { GridSnapSelector } from '../ui/GridSnapSelector';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
+// Import tabler icons
+import { IconPencil, IconBrush, IconEraser } from '@tabler/icons-react';
+// Import tooltip components
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../../../components/ui/tooltip';
 
 // Define a constant grid size to use throughout the component
 const GRID_SIZE = 48; // pixels
@@ -2367,17 +2371,20 @@ export const PianoRoll: FC<PianoRollProps> = ({
     return `${noteName}${octave}`;
   };
 
-  // Define cursors for each tool
+  // Define cursors for each tool using SVG data URLs (flipped with scaleY(-1))
   const getToolCursor = () => {
     switch (selectedTool) {
       case 'select':
         return `url('/icons/crop.svg') 0 0, auto`;
       case 'pen':
-        return `url('/icons/pen.svg') 0 0, auto`;
+        // IconPencil SVG flipped vertically (filled)
+        return `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white' stroke='none' stroke-width='2' transform='scale(1,-1)'%3E%3Cpath d='M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4'/%3E%3Cpath d='M13.5 6.5l4 4'/%3E%3C/svg%3E") 0 0, auto`;
       case 'highlighter':
-        return `url('/icons/highlighter.svg') 0 0, auto`;
+        // IconBrush SVG flipped vertically (filled)
+        return `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white' stroke='none' stroke-width='2' transform='scale(1,-1)'%3E%3Cpath d='M3 21v-4a4 4 0 1 1 4 4h-4'/%3E%3Cpath d='M21 3a16 16 0 0 0 -12.8 10.2'/%3E%3Cpath d='M21 3a16 16 0 0 1 -10.2 12.8'/%3E%3Cpath d='M10.6 9a9 9 0 0 1 4.4 4.4'/%3E%3C/svg%3E") 0 0, auto`;
       case 'eraser':
-        return `url('/icons/eraser.svg') 0 0, auto`;
+        // IconEraser SVG flipped vertically
+        return `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' transform='scale(1,-1)'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3'/%3E%3Cpath d='M18 13.3l-6.3 -6.3'/%3E%3C/svg%3E") 0 0, auto`;
       default:
         return 'default';
     }
@@ -2626,14 +2633,15 @@ export const PianoRoll: FC<PianoRollProps> = ({
           {/* Right section with controls */}
           <div style={{ display: "flex", alignItems: "center" }}>
             {/* Tool Icons */}
-            <div style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              marginRight: "12px",
-              paddingRight: "12px",
-              position: "relative",
-              height: "100%"
-            }}>
+            <TooltipProvider>
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                marginRight: "12px",
+                paddingRight: "12px",
+                position: "relative",
+                height: "100%"
+              }}>
               {/* Divider on the right */}
               <div style={{ 
                 position: "absolute", 
@@ -2666,65 +2674,114 @@ export const PianoRoll: FC<PianoRollProps> = ({
               />
               
               {/* Pen tool */}
-              <img 
-                src="/icons/pen.svg"
-                alt="Pen tool"
-                style={{ 
-                  width: "18px",
-                  height: "18px",
-                  cursor: "pointer",
-                  marginRight: "8px",
-                  opacity: selectedTool === 'pen' ? 1 : 0.8,
-                  background: selectedTool === 'pen' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                  padding: '2px',
-                  borderRadius: '2px',
-                  transition: 'all 0.2s ease',
-                }}
-                onClick={() => handleToolSelect('pen')}
-                onMouseEnter={selectedTool !== 'pen' ? iconHoverStyle : undefined}
-                onMouseLeave={selectedTool !== 'pen' ? iconLeaveStyle : undefined}
-              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    style={{ 
+                      width: "22px",
+                      height: "20px",
+                      cursor: "pointer",
+                      marginRight: "8px",
+                      opacity: selectedTool === 'pen' ? 1 : 0.8,
+                      background: selectedTool === 'pen' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                      padding: '2px',
+                      borderRadius: '2px',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onClick={() => handleToolSelect('pen')}
+                    onMouseEnter={selectedTool !== 'pen' ? iconHoverStyle : undefined}
+                    onMouseLeave={selectedTool !== 'pen' ? iconLeaveStyle : undefined}
+                  >
+                    <IconPencil 
+                      size={18}
+                      style={{ 
+                        transform: 'scaleY(-1)',
+                        color: '#ffffff'
+                      }} 
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Draw</p>
+                </TooltipContent>
+              </Tooltip>
               
               {/* Highlighter tool */}
-              <img 
-                src="/icons/highlighter.svg"
-                alt="Highlighter tool"
-                style={{ 
-                  width: "18px",
-                  height: "18px",
-                  cursor: "pointer",
-                  marginRight: "8px",
-                  opacity: selectedTool === 'highlighter' ? 1 : 0.8,
-                  background: selectedTool === 'highlighter' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                  padding: '2px',
-                  borderRadius: '2px',
-                  transition: 'all 0.2s ease',
-                }}
-                onClick={() => handleToolSelect('highlighter')}
-                onMouseEnter={selectedTool !== 'highlighter' ? iconHoverStyle : undefined}
-                onMouseLeave={selectedTool !== 'highlighter' ? iconLeaveStyle : undefined}
-              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    style={{ 
+                      width: "22px",
+                      height: "20px",
+                      cursor: "pointer",
+                      marginRight: "8px",
+                      opacity: selectedTool === 'highlighter' ? 1 : 0.8,
+                      background: selectedTool === 'highlighter' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                      padding: '2px',
+                      borderRadius: '2px',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onClick={() => handleToolSelect('highlighter')}
+                    onMouseEnter={selectedTool !== 'highlighter' ? iconHoverStyle : undefined}
+                    onMouseLeave={selectedTool !== 'highlighter' ? iconLeaveStyle : undefined}
+                  >
+                    <IconBrush 
+                      size={18}
+                      style={{ 
+                        transform: 'scaleY(-1)',
+                        color: '#ffffff'
+                      }} 
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Paint</p>
+                </TooltipContent>
+              </Tooltip>
               
               {/* Eraser tool */}
-              <img 
-                src="/icons/eraser.svg"
-                alt="Eraser tool"
-                style={{ 
-                  width: "18px",
-                  height: "18px",
-                  cursor: "pointer",
-                  marginRight: "0px",
-                  opacity: selectedTool === 'eraser' ? 1 : 0.8,
-                  background: selectedTool === 'eraser' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                  padding: '2px',
-                  borderRadius: '2px',
-                  transition: 'all 0.2s ease',
-                }}
-                onClick={() => handleToolSelect('eraser')}
-                onMouseEnter={selectedTool !== 'eraser' ? iconHoverStyle : undefined}
-                onMouseLeave={selectedTool !== 'eraser' ? iconLeaveStyle : undefined}
-              />
-            </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    style={{ 
+                      width: "22px",
+                      height: "20px",
+                      cursor: "pointer",
+                      marginRight: "0px",
+                      opacity: selectedTool === 'eraser' ? 1 : 0.8,
+                      background: selectedTool === 'eraser' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                      padding: '2px',
+                      borderRadius: '2px',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onClick={() => handleToolSelect('eraser')}
+                    onMouseEnter={selectedTool !== 'eraser' ? iconHoverStyle : undefined}
+                    onMouseLeave={selectedTool !== 'eraser' ? iconLeaveStyle : undefined}
+                  >
+                    <IconEraser 
+                      size={18}
+                      style={{ 
+                        transform: 'scaleY(-1)',
+                        color: '#ffffff'
+                      }} 
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Erase</p>
+                </TooltipContent>
+              </Tooltip>
+              </div>
+            </TooltipProvider>
             
             {/* Grid Snap Controls */}
             <div style={{ 
