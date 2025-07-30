@@ -61,8 +61,8 @@ class SSEQueueManager:
         
         if self._use_distributed:
             # Import here to avoid circular imports
-            from app2.services.distributed_requests_service import DistributedRequestsService
-            self._distributed_service = DistributedRequestsService()
+            from app2.sse.redis_sse_queue import RedisSSEQueue
+            self._redis_queue = RedisSSEQueue(request_id)
 
         logger.debug(
             f"Created SSEEventQueue for request {request_id} with message {self.message_id} (distributed: {self._use_distributed})"
@@ -70,26 +70,22 @@ class SSEQueueManager:
 
     async def _put_event(self, event_type: str, event_data: Dict[str, Any]):
         """
-        Put an event in both local queue and distributed storage if enabled
+        Put an event in either local queue OR Redis, depending on distributed mode
         
         Args:
             event_type: Type of event
             event_data: Event data
         """
-        # Always put in local queue for immediate processing
-        await self.queue.put((event_type, event_data))
-        
-        # Also store in distributed storage if enabled
         if self._use_distributed:
             try:
-                await self._distributed_service.add_queue_event(
-                    request_id=self.request_id,
-                    event_type=event_type,
-                    event_data=event_data
-                )
+                # In distributed mode, ONLY publish to Redis
+                await self._redis_queue.publish_event(event_type, event_data)
             except Exception as e:
-                logger.error(f"Failed to store event in distributed storage: {str(e)}")
-                # Continue processing - local queue event was already added
+                logger.error(f"Failed to publish event to Redis: {str(e)}")
+                raise
+        else:
+            # In local mode, use local queue
+            await self.queue.put((event_type, event_data))
 
     async def start_stream(self, additional_data: Optional[Dict[str, Any]] = None):
         """
@@ -293,3 +289,28 @@ class SSEQueueManager:
     def get_chunk_count(self) -> int:
         """Get the number of chunks sent so far"""
         return self.chunk_index
+
+    async def get_distributed_events(self, mark_processed: bool = True):
+        """
+        Get unprocessed events from distributed storage and add them to local queue
+        
+        Args:
+            mark_processed: Whether to mark retrieved events as processed
+        """
+        if not self._use_distributed:
+            return
+            
+        try:
+            events = await self._distributed_service.get_queue_events(
+                request_id=self.request_id,
+                mark_processed=mark_processed
+            )
+            
+            for event in events:
+                await self.queue.put((event["event_type"], event["event_data"]))
+                
+            if events:
+                logger.debug(f"Retrieved {len(events)} distributed events for request {self.request_id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to retrieve distributed events: {str(e)}")

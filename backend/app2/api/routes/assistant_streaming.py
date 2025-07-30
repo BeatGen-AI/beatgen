@@ -106,7 +106,7 @@ async def create_assistant_request(
     """
     try:
         # Check rate limits
-        if not request_manager.can_create_request(user.get("id")):
+        if not await request_manager.can_create_request(user.get("id")):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Maximum concurrent requests reached ({request_manager.MAX_REQUESTS_PER_USER})",
@@ -116,7 +116,7 @@ async def create_assistant_request(
         logger.info(
             f"📝 CREATE REQUEST - Creating request with user_id={user.get('id')}"
         )
-        request_id = request_manager.create_request(
+        request_id = await request_manager.create_request(
             user_id=user.get(
                 "id"
             ),  # This should match what we use in the stream endpoint
@@ -129,7 +129,7 @@ async def create_assistant_request(
         logger.info(f"📝 CREATE REQUEST - Request created with ID: {request_id}")
 
         # Update request status to processing
-        request_manager.update_request_status(request_id, RequestStatus.PROCESSING)
+        await request_manager.update_request_status(request_id, RequestStatus.PROCESSING)
 
         # Start processing in background
         background_tasks.add_task(process_assistant_request, request_id=request_id)
@@ -187,7 +187,7 @@ async def stream_assistant_response(
     logger.info(
         f"🔄 STREAM REQUEST - Validating request ID: {request_id} for user: {user.get('id')}"
     )
-    is_valid = request_manager.validate_request_id(request_id, user.get("id"))
+    is_valid = await request_manager.validate_request_id(request_id, user.get("id"))
     logger.info(f"🔄 STREAM REQUEST - Validation result: {is_valid}")
 
     if not is_valid:
@@ -201,7 +201,7 @@ async def stream_assistant_response(
 
     # Get the queue for this request with detailed logging
     logger.info(f"🔄 STREAM REQUEST - Getting queue for request ID: {request_id}")
-    queue = request_manager.get_queue(request_id)
+    queue = await request_manager.get_queue(request_id)
     logger.info(f"🔄 STREAM REQUEST - Queue retrieved: {queue is not None}")
 
     if not queue:
@@ -233,20 +233,20 @@ async def cancel_assistant_request(
 ):
     """Cancel an ongoing assistant request"""
     # Validate request ID
-    if not request_manager.validate_request_id(request_id, user.get("id")):
+    if not await request_manager.validate_request_id(request_id, user.get("id")):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Request ID not found: {request_id}",
         )
 
     # Get the SSE queue
-    sse_queue = request_manager.get_sse_queue(request_id)
+    sse_queue = await request_manager.get_sse_queue(request_id)
     if sse_queue:
         # Send cancelled event
         await sse_queue.cancelled()
 
     # Remove request
-    if request_manager.remove_request(request_id, RequestStatus.CANCELLED):
+    if await request_manager.remove_request(request_id, RequestStatus.CANCELLED):
         return JSONResponse(
             content={"message": f"Request {request_id} cancelled successfully"}
         )
@@ -265,13 +265,13 @@ async def process_assistant_request(request_id: str):
     and sends SSE events through the queue.
     """
     # Get request context
-    context = request_manager.get_request(request_id)
+    context = await request_manager.get_request(request_id)
     if not context:
         logger.error(f"Request context not found for ID: {request_id}")
         return
 
     # Get the SSE queue for sending events
-    sse_queue = context.sse_queue
+    sse_queue = context.sse_queue if context.sse_queue else await request_manager.get_sse_queue(request_id)
     if not sse_queue:
         logger.error(f"SSE queue not found for request: {request_id}")
         return
@@ -310,7 +310,7 @@ async def process_assistant_request(request_id: str):
                 await process_chat_request(request_id, context, sse_queue)
 
             # Mark request as completed
-            request_manager.update_request_status(request_id, RequestStatus.COMPLETED)
+            await request_manager.update_request_status(request_id, RequestStatus.COMPLETED)
 
     except asyncio.CancelledError:
         # Task was cancelled - no need to do anything as request_manager handles cleanup
@@ -333,7 +333,7 @@ async def process_assistant_request(request_id: str):
             logger.error(f"Send error traceback: {traceback.format_exc()}")
 
         # Mark request as failed
-        request_manager.update_request_status(request_id, RequestStatus.FAILED)
+        await request_manager.update_request_status(request_id, RequestStatus.FAILED)
 
     finally:
         # Clean up request after a short delay to allow events to be consumed
@@ -346,7 +346,7 @@ async def process_assistant_request(request_id: str):
 async def delayed_request_cleanup(request_id: str, delay_seconds: int = 10):
     """Cleanup request after a delay to ensure events are consumed"""
     await asyncio.sleep(delay_seconds)
-    request_manager.remove_request(request_id)
+    await request_manager.remove_request(request_id)
 
 
 # TODO: Project auto-creation will be implemented in a separate PR
