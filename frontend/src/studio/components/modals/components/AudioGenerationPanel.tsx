@@ -202,7 +202,7 @@ const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
           }
           textareaBottomLeftComponent={
             <AudioGenerationModelMenu
-              triggerLabel={selectedModel === 'vertex-ai/lyria2' ? 'Lyria 2 (Vertex AI)' : 'Stable Audio 2.0'}
+              triggerLabel={selectedModel === 'vertex-ai/lyria2' ? 'Lyria 2' : 'Stable Audio 2'}
               onSelect={setSelectedModel}
               models={['vertex-ai/lyria2', 'stability/stable-audio-2']}
               selectedModel={selectedModel}

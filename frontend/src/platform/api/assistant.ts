@@ -22,6 +22,8 @@ interface BaseContext {
   key_signature?: string;
   project_title?: string;
   generation_type?: 'midi' | 'audio';
+  // Audio generation model for Compose + Audio Melody mode
+  audio_generation_model?: string;
   tracks?: Array<{
     id: string;
     name: string;
