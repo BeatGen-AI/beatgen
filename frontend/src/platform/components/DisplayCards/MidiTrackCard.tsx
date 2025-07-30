@@ -6,6 +6,7 @@ import { formatTime } from '../../../studio/utils/audioProcessing';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
 import { convertJsonToNotes } from '../../../types/note';
 import BaseTrackCard from './BaseTrackCard';
+import { formatDate } from '../../utils/dateFormat';
 
 interface MidiTrackCardProps {
   track: MidiTrackRead;
@@ -88,8 +89,9 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
     </div>
   );
 
-  const footerLeft = `Instrument: ${track.instrument_file?.display_name || 'Unknown'}`;
-  const footerRight = `${noteCount} notes${isPlaying ? ` ${formatTime(currentTime, false)} / ${formatTime(duration, false)}` : ''}`;
+  const footerLeft = formatDate(track.created_at);
+  const footerCenter = `${track.instrument_file?.display_name || 'Unknown'}`;
+  const footerRight = `${noteCount} notes`;
 
   return (
     <BaseTrackCard
@@ -99,6 +101,7 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
       headerActions={headerActions}
       previewContent={previewContent}
       footerLeft={footerLeft}
+      footerCenter={footerCenter}
       footerRight={footerRight}
       className="midi-track-card"
       isSelectable={isSelectable}

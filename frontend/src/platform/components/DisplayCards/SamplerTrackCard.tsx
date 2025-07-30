@@ -8,6 +8,7 @@ import AudioPreview from '../../../studio/components/shared/AudioPreview';
 import MidiNotesPreview from '../../../studio/components/piano-roll/components/MidiNotesPreview';
 import { convertJsonToNotes } from '../../../types/note';
 import BaseTrackCard from './BaseTrackCard';
+import { formatDate } from '../../utils/dateFormat';
 
 interface SamplerTrackCardProps {
   track: SamplerTrackRead;
@@ -111,9 +112,9 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
     </div>
   );
 
-  const footerLeft = `${formatMidiNote(track.base_midi_note)} • ${formatTime(track.audio_file_duration, false)}`;
-  
-  const footerRight = `${noteCount} notes${isPlaying ? ` ${formatTime(currentTime, false)} / ${formatTime(duration, false)}` : ''}`;
+  const footerLeft = formatDate(track.created_at);
+  const footerCenter = `${formatMidiNote(track.base_midi_note)} • ${formatTime(track.audio_file_duration, false)}`;
+  const footerRight = `${noteCount} notes`;
 
   return (
     <BaseTrackCard
@@ -123,6 +124,7 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
       headerActions={headerActions}
       previewContent={previewContent}
       footerLeft={footerLeft}
+      footerCenter={footerCenter}
       footerRight={footerRight}
       className="sampler-track-card"
       isSelectable={isSelectable}

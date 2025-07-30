@@ -7,6 +7,7 @@ import AudioPlayer from '../../../studio/components/shared/AudioPlayer';
 import BaseTrackCard from './BaseTrackCard';
 import { downloadAudioTrackFile } from '../../api/sounds';
 import { useState, useEffect } from 'react';
+import { formatDate } from '../../utils/dateFormat';
 
 interface AudioTrackCardProps {
   sound: Sound;
@@ -81,6 +82,7 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
     </div>
   );
 
+  const footerLeft = formatDate(sound.created_at);
   const footerRight = formatTime(sound.audio_file_duration, false);
 
   return (
@@ -90,6 +92,7 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
       sectionColor={sectionColor}
       headerActions={headerActions}
       previewContent={previewContent}
+      footerLeft={footerLeft}
       footerRight={footerRight}
       className="audio-track-card"
       isSelectable={isSelectable}

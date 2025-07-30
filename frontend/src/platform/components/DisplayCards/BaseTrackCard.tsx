@@ -15,6 +15,7 @@ interface BaseTrackCardProps {
   headerActions: React.ReactNode;
   previewContent: React.ReactNode;
   footerLeft?: React.ReactNode;
+  footerCenter?: React.ReactNode;
   footerRight?: React.ReactNode;
   className?: string;
   isSelectable?: boolean;
@@ -29,6 +30,7 @@ const BaseTrackCard: React.FC<BaseTrackCardProps> = ({
   headerActions,
   previewContent,
   footerLeft,
+  footerCenter,
   footerRight,
   className,
   isSelectable = false,
@@ -84,11 +86,16 @@ const BaseTrackCard: React.FC<BaseTrackCardProps> = ({
       </div>
       
       {/* Fixed height footer */}
-      <CardFooter className="p-2 h-[40px] flex justify-between items-center flex-shrink-0 overflow-hidden">
+      <CardFooter className="p-2 h-[40px] flex items-center flex-shrink-0 overflow-hidden">
         <div className="text-xs text-muted-foreground truncate flex-1 overflow-hidden">
           {footerLeft}
         </div>
-        <div className="text-xs text-muted-foreground text-right flex-shrink-0 ml-2 overflow-hidden truncate max-w-[50%]">
+        {footerCenter && (
+          <div className="text-xs text-muted-foreground mx-2 flex-shrink-0">
+            {footerCenter}
+          </div>
+        )}
+        <div className="text-xs text-muted-foreground text-right flex-shrink-0 ml-auto overflow-hidden truncate">
           {footerRight}
         </div>
       </CardFooter>

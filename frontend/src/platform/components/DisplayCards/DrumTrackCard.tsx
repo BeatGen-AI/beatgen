@@ -5,6 +5,7 @@ import { Drum } from 'lucide-react';
 import { DrumTrackRead } from '../../../platform/types/dto/track_models/drum_track';
 import { Badge } from "../../../components/ui/badge";
 import BaseTrackCard from './BaseTrackCard';
+import { formatDate } from '../../utils/dateFormat';
 
 interface DrumTrackCardProps {
   track: DrumTrackRead;
@@ -85,6 +86,7 @@ const DrumTrackCard: React.FC<DrumTrackCardProps> = ({
     </div>
   );
 
+  const footerLeft = formatDate(track.created_at);
   const footerRight = `${samplerCount} ${samplerCount === 1 ? 'sample' : 'samples'}`;
 
   return (
@@ -94,6 +96,7 @@ const DrumTrackCard: React.FC<DrumTrackCardProps> = ({
       sectionColor={sectionColor}
       headerActions={headerActions}
       previewContent={previewContent}
+      footerLeft={footerLeft}
       footerRight={footerRight}
       className="drum-track-card"
       isSelectable={isSelectable}
