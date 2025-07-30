@@ -90,9 +90,6 @@ class AnthropicAdapter(ProviderAdapter):
         """
         Sends messages to the Anthropic LLM and gets a response.
         """
-        print(f"DEBUG ADAPTER: self.agent id: {id(self.agent)}")
-        print(f"DEBUG ADAPTER: self.agent type: {type(self.agent)}")
-
         if not self.agent:
             raise RuntimeError("Agent not initialized. Call _initialize_agent first.")
 

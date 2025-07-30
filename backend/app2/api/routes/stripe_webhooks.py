@@ -23,8 +23,6 @@ async def stripe_webhook(
     stripe_signature: Optional[str] = Header(None)
 ):
     """Handle Stripe webhook events"""
-    print(f"=== WEBHOOK RECEIVED ===")
-    print(f"Signature header present: {stripe_signature is not None}")
     logger.info(f"Webhook endpoint hit with signature: {stripe_signature[:20] if stripe_signature else 'None'}...")
     
     if not stripe_signature:
