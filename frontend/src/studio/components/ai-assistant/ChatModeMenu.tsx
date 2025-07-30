@@ -4,36 +4,46 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { ChevronRight } from 'lucide-react';
 import { useAppTheme } from '../../../lib/theme-provider';
 
 interface ChatModeMenuProps {
   triggerLabel: string;
-  onSelect: (mode: string) => void;
+  onSelect: (mode: string, generationType?: 'audio' | 'midi') => void;
   selectedMode?: string;
+  selectedGenerationType?: 'audio' | 'midi';
 }
 
-const ChatModeMenu: React.FC<ChatModeMenuProps> = ({ triggerLabel, onSelect, selectedMode }) => {
+const ChatModeMenu: React.FC<ChatModeMenuProps> = ({ triggerLabel, onSelect, selectedMode, selectedGenerationType }) => {
   const { studioMode } = useAppTheme();
 
   const modes = [
-    { id: 'generate', label: 'Generate' },
-    { id: 'edit', label: 'Edit' },
-    { id: 'generate-audio', label: 'Generate Audio' }
+    { id: 'generate', label: 'Compose', hasSubmenu: true },
+    { id: 'generate-audio', label: 'Add Track' },
+    { id: 'edit', label: 'Edit & Mix' }
   ];
 
-  const handleSelect = (mode: string) => {
-    onSelect(mode);
+  const composeSubmodes = [
+    { id: 'audio', label: 'Audio Melody' },
+    { id: 'midi', label: 'MIDI Melody' }
+  ];
+
+  const handleSelect = (mode: string, generationType?: 'audio' | 'midi') => {
+    onSelect(mode, generationType);
   };
 
   const getDropdownClassName = () => {
     if (studioMode === 'dark') {
       // Match Material-UI menu styling for dark mode
-      return "w-44 z-[9999] p-1 bg-[rgb(48,48,48)] border-0 shadow-lg rounded-lg focus:outline-none";
+      return "w-32 z-[9999] p-1 bg-[rgb(48,48,48)] border-0 shadow-lg rounded-lg focus:outline-none";
     }
     // Light mode styling
-    return "w-44 z-[9999] p-1 bg-white border border-gray-200 shadow-lg rounded-lg focus:outline-none";
+    return "w-32 z-[9999] p-1 bg-white border border-gray-200 shadow-lg rounded-lg focus:outline-none";
   };
 
   const getItemClassName = (isSelected: boolean) => {
@@ -81,6 +91,35 @@ const ChatModeMenu: React.FC<ChatModeMenuProps> = ({ triggerLabel, onSelect, sel
       >
         {modes.map((mode) => {
           const isSelected = selectedMode === mode.id;
+          
+          if (mode.hasSubmenu) {
+            return (
+              <DropdownMenuSub key={mode.id}>
+                <DropdownMenuSubTrigger className={getItemClassName(isSelected)}>
+                  <span className="text-xs font-medium">{mode.label}</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent 
+                  className={getDropdownClassName()}
+                  sideOffset={2}
+                  alignOffset={-5}
+                >
+                  {composeSubmodes.map((submode) => {
+                    const isSubmodeSelected = selectedMode === mode.id && selectedGenerationType === submode.id;
+                    
+                    return (
+                      <DropdownMenuItem
+                        key={submode.id}
+                        onClick={() => handleSelect(mode.id, submode.id as 'audio' | 'midi')}
+                        className={getItemClassName(isSubmodeSelected)}
+                      >
+                        <span className="text-xs font-medium">{submode.label}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            );
+          }
           
           return (
             <DropdownMenuItem

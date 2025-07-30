@@ -206,7 +206,7 @@ const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
               onSelect={setSelectedModel}
               models={['vertex-ai/lyria2', 'stability/stable-audio-2']}
               selectedModel={selectedModel}
-              themeMode={useUiMode ? undefined : 'dark'}
+              themeMode={effectiveMode}
             />
           }
         />

@@ -32,6 +32,7 @@ import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_tr
 import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
 import ChatModelMenu from './ChatModelMenu';
+import AudioGenerationModelMenu from './AudioGenerationModelMenu';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { createDefaultInstance } from '../../utils/instanceHelpers';
 
@@ -59,6 +60,9 @@ interface ChatWindowProps {
 
 // Define available AI models (placeholder)
 const AVAILABLE_MODELS = ["Gemini Pro 2.5", "Gemini Flash 2.5", "Deepseek R1", "Deepseek V3", "Claude 4 Sonnet", "Claude 4 Opus", "Claude 3.7 Sonnet",  "GPT-4.1", "GPT-4o", "o3", "o3-mini", "Llama 4 Maverick", "Llama 4 Scout"];
+
+// Define available audio generation models (matching AudioGenerationPanel)
+const AVAILABLE_AUDIO_MODELS = ['vertex-ai/lyria2', 'stability/stable-audio-2'];
 
 // UI Constants
 const CHAT_WINDOW_WIDTH = 350;
@@ -137,12 +141,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   const [isLoading, setIsLoading] = useState(false);
   const [animatedDots, setAnimatedDots] = useState(''); // New state for animated dots
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [mode, setMode] = useState('Generate');
+  const [mode, setMode] = useState('Compose');
   const [cursorPosition, setCursorPosition] = useState<number>(0);
   const [selectedTrack, setSelectedTrack] = useState<CombinedTrack | null>(null);
   
   // State for AI model selection
   const [selectedModel, setSelectedModel] = useState<string>(AVAILABLE_MODELS[0]); // Default to the first model
+  
+  // State for generation type (audio/midi) for Compose mode
+  const [generationType, setGenerationType] = useState<'audio' | 'midi'>('midi');
+  const [selectedAudioModel, setSelectedAudioModel] = useState<string>('vertex-ai/lyria2');
   
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
@@ -522,8 +530,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     try {
       // Determine the appropriate mode (lowercase for API)
       let apiMode: 'generate' | 'edit' | 'chat' | 'generate-audio';
-      if (mode === 'Generate Audio') {
+      if (mode === 'Add Track') {
         apiMode = 'generate-audio';
+      } else if (mode === 'Compose') {
+        apiMode = 'generate';
+      } else if (mode === 'Edit & Mix') {
+        apiMode = 'edit';
       } else {
         apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat' | 'generate-audio';
       }
@@ -621,8 +633,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       return;
     }
     
-    // Check if this is Generate mode and we need to show choice buttons
-    if (mode === 'Generate' && !selectedGenerationType) {
+    // Check if this is Compose mode and we need to show choice buttons
+    if (mode === 'Compose' && !selectedGenerationType) {
       // Add user message to chat with current mode and selected track
       const userMessage: Message = { 
         type: 'user',
@@ -1007,12 +1019,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   
   
 
-  const handleModeSelect = (newMode: string) => {
-    // Handle special case for "generate-audio" to display as "Generate Audio"
-    if (newMode.toLowerCase() === 'generate-audio') {
-      setMode('Generate Audio');
-    } else {
-      setMode(newMode.charAt(0).toUpperCase() + newMode.slice(1).toLowerCase());
+  const handleModeSelect = (newMode: string, newGenerationType?: 'audio' | 'midi') => {
+    // Map mode IDs to display labels
+    const modeDisplayMap: Record<string, string> = {
+      'generate': 'Compose',
+      'generate-audio': 'Add Track',
+      'edit': 'Edit & Mix'
+    };
+    
+    setMode(modeDisplayMap[newMode] || newMode);
+    
+    // Update generation type if provided (for Compose mode)
+    if (newGenerationType) {
+      setGenerationType(newGenerationType);
     }
   };
 
@@ -1043,6 +1062,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   // Handler for AI Model selection
   const handleModelSelect = (newModel: string) => {
     setSelectedModel(newModel);
+  };
+
+  // Handler for Audio Generation Model selection
+  const handleAudioModelSelect = (newModel: string) => {
+    setSelectedAudioModel(newModel);
   };
 
   return (
@@ -1203,16 +1227,33 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
               <ChatModeMenu
                 triggerLabel={mode}
                 onSelect={handleModeSelect}
-                selectedMode={mode.toLowerCase().replace(' ', '-')}
+                selectedMode={
+                  mode === 'Compose' ? 'generate' :
+                  mode === 'Add Track' ? 'generate-audio' :
+                  mode === 'Edit & Mix' ? 'edit' :
+                  mode.toLowerCase().replace(' ', '-').replace('&', '')
+                }
+                selectedGenerationType={generationType}
               />
             }
             textareaBottomLeftComponent={
-              <ChatModelMenu
-                triggerLabel={selectedModel}
-                onSelect={handleModelSelect}
-                models={AVAILABLE_MODELS}
-                selectedModel={selectedModel}
-              />
+              <div className="flex gap-2">
+                <ChatModelMenu
+                  triggerLabel={selectedModel}
+                  onSelect={handleModelSelect}
+                  models={AVAILABLE_MODELS}
+                  selectedModel={selectedModel}
+                />
+                {mode === 'Compose' && generationType === 'audio' && (
+                  <AudioGenerationModelMenu
+                    triggerLabel={selectedAudioModel === 'vertex-ai/lyria2' ? 'Lyria 2 (Vertex AI)' : 'Stable Audio 2.0'}
+                    onSelect={handleAudioModelSelect}
+                    models={AVAILABLE_AUDIO_MODELS}
+                    selectedModel={selectedAudioModel}
+                    themeMode={studioMode}
+                  />
+                )}
+              </div>
             }
             textareaBottomRightComponent={
               isLoading ? (
