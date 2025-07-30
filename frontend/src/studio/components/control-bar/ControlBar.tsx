@@ -13,7 +13,7 @@ import { SaveStatusIndicator } from '../ui/SaveStatusIndicator';
 import { useStudioStore } from '../../stores/studioStore';
 import { IconPlayerPlayFilled, IconPlayerSkipBackFilled, IconPlayerPauseFilled, IconArrowForwardUp, IconArrowBackUp, IconZoomIn, IconZoomOut, IconInputAi, IconChevronsRight, IconArrowLeft, IconFileExport } from '@tabler/icons-react';
 import { IconSettings } from '@tabler/icons-react';
-import { MousePointer2, Edit, Highlighter, Eraser, Grid3X3, Check } from 'lucide-react';
+import { MousePointer2, Edit, Highlighter, Eraser, Check, Grid3X3 } from 'lucide-react';
 import { Tool } from '../../shared/interactions';
 import { GridSnapOption, getGridSnapOptionName } from '../piano-roll2/gridConstants';
 import { GridSnapSelector } from '../ui/GridSnapSelector';
