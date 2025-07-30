@@ -85,8 +85,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   const [selectedModel, setSelectedModel] = useState<string>(AVAILABLE_MODELS[0]); // Default to the first model
   
   // State for generation type (audio/midi) for Compose mode
-  const [generationType, setGenerationType] = useState<'audio' | 'midi'>('midi');
-  const [selectedAudioModel, setSelectedAudioModel] = useState<string>('vertex-ai/lyria2');
+  const [generationType, setGenerationType] = useState<'audio' | 'midi'>('audio');
+  const [selectedAudioModel, setSelectedAudioModel] = useState<string>('stability/stable-audio-2');
   
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
