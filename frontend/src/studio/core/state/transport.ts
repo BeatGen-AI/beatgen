@@ -28,6 +28,7 @@ export class TransportController implements Transport {
     private isStarting: boolean = false;
     private maxPosition: number = 3600;  // Default to 1 hour (3600 seconds) as safety
     private static FADE_TIME = 0.01; // 10ms fade
+    private getTracksCallback: (() => CombinedTrack[]) | null = null;
 
     constructor(initialBpm: number = 120) {
         this.audioEngine = AudioFilePlayer.getInstance();
@@ -41,6 +42,10 @@ export class TransportController implements Transport {
     
     setMidiManager(midiManager: MidiManager): void {
         this.midiManager = midiManager;
+    }
+
+    setGetTracksCallback(callback: () => CombinedTrack[]): void {
+        this.getTracksCallback = callback;
     }
 
     get position(): number {
@@ -507,8 +512,11 @@ export class TransportController implements Transport {
             // Get current BPM for timing calculations
             const bpm = Tone.Transport.bpm.value;
             
-            // Seek the sampler controller
-            this.getSamplerController().seek(position, bpm);
+            // Get tracks from callback if available
+            const tracks = this.getTracksCallback ? this.getTracksCallback() : undefined;
+            
+            // Seek the sampler controller with tracks and midiManager
+            this.getSamplerController().seek(position, bpm, tracks, this.midiManager);
         } catch (error) {
             console.error('Failed to seek sampler tracks:', error);
         }
@@ -550,7 +558,9 @@ export class TransportController implements Transport {
             // This is a crucial step to ensure reliable seeking
             setTimeout(() => {
                 console.log(`Restarting playback from position: ${Tone.getTransport().seconds}s`);
-                this.play(); 
+                // Get tracks from callback if available
+                const tracks = this.getTracksCallback ? this.getTracksCallback() : undefined;
+                this.play(tracks); 
             }, 30); // 30ms is a good compromise
         }
     }
@@ -564,7 +574,9 @@ export class TransportController implements Transport {
         // Update BPM for sampler tracks if they are playing
         if (this.isPlaying) {
             const currentPosition = this.position;
-            this.samplerController.seek(currentPosition, validBpm);
+            // Get tracks from callback if available
+            const tracks = this.getTracksCallback ? this.getTracksCallback() : undefined;
+            this.samplerController.seek(currentPosition, validBpm, tracks, this.midiManager);
         }
     }
 
