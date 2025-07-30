@@ -480,6 +480,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         setIsLoading(false);
         setIsStreaming(false);
         
+        // Mark current step as failed if in step mode
+        if (isStepMode) {
+          stepManager.markCurrentStepAsFailed(error.message || 'Unknown error');
+        }
+        
         // Add error message
         setMessages(prev => [
           ...prev, 

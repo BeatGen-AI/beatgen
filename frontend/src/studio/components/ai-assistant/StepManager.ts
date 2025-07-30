@@ -21,7 +21,7 @@ export interface StepEvent {
 export interface Step {
   id: number;
   name: string;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
   events: StepEvent[];
   startTime?: number;
   endTime?: number;
@@ -104,9 +104,14 @@ export class StepManager {
       if (event.type === 'stage' && step.status === 'pending') {
         step.status = 'in_progress';
         step.startTime = event.timestamp;
-      } else if (event.type === 'status' && event.content?.includes('completed')) {
-        step.status = 'completed';
-        step.endTime = event.timestamp;
+      } else if (event.type === 'status') {
+        if (event.content?.includes('completed')) {
+          step.status = 'completed';
+          step.endTime = event.timestamp;
+        } else if (event.content?.toLowerCase().includes('error') || event.content?.toLowerCase().includes('failed')) {
+          step.status = 'failed';
+          step.endTime = event.timestamp;
+        }
       }
     }
 
@@ -182,12 +187,14 @@ export class StepManager {
     const completed = steps.filter(s => s.status === 'completed').length;
     const inProgress = steps.filter(s => s.status === 'in_progress').length;
     const pending = steps.filter(s => s.status === 'pending').length;
+    const failed = steps.filter(s => s.status === 'failed').length;
 
     return {
       total: steps.length,
       completed,
       inProgress,
       pending,
+      failed,
       totalEvents: this.events.length
     };
   }
@@ -278,6 +285,41 @@ export class StepManager {
    */
   get hasActiveStream(): boolean {
     return this.streamingEvent !== null;
+  }
+
+  /**
+   * Mark the current active step as failed
+   */
+  markCurrentStepAsFailed(errorMessage?: string) {
+    const activeStep = this.getActiveStep();
+    if (!activeStep) {
+      console.warn('StepManager: No active step to mark as failed');
+      return;
+    }
+
+    // Update step status
+    activeStep.status = 'failed';
+    activeStep.endTime = Date.now();
+
+    // Add an error event if message provided
+    if (errorMessage) {
+      const errorEvent: StepEvent = {
+        id: `${activeStep.id}-error-${Date.now()}`,
+        stepId: activeStep.id,
+        stepName: activeStep.name,
+        type: 'status',
+        timestamp: Date.now(),
+        content: `Error: ${errorMessage}`
+      };
+      
+      activeStep.events.push(errorEvent);
+      this.events.push(errorEvent);
+    }
+
+    console.log(`StepManager: Marked step ${activeStep.id} (${activeStep.name}) as failed`);
+    
+    // Notify listeners
+    this.notifyListeners();
   }
 
   /**
