@@ -152,12 +152,12 @@ class InstrumentFileBase(FileBase):
     category: str
     is_public: bool
     description: Optional[str] = None
-    description_generated: Optional[str] = None
-    description_confidence: Optional[float] = None
-    description_model: Optional[str] = None
-    description_candidates: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+    # description_generated: Optional[str] = None
+    # description_confidence: Optional[float] = None
+    # description_model: Optional[str] = None
+    # description_candidates: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
     description_embedding: Optional[List[float]] = Field(default=None, sa_column=Column(JSONB))
-    description_generated_at: Optional[datetime] = Field(default=None, sa_type=TIMESTAMP(timezone=True))
+    # description_generated_at: Optional[datetime] = Field(default=None, sa_type=TIMESTAMP(timezone=True))
 
 
 class DrumSamplePublicBase(FileBase):
