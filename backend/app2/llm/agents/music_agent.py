@@ -3,9 +3,9 @@ import json
 import re
 import traceback
 from pydantic import BaseModel
-from typing import List, Optional, Any, Dict, Type
+from typing import List, Optional, Any, Dict, Type, Union
 import uuid
-from sqlmodel import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from dataclasses import dataclass
 
 
@@ -17,6 +17,7 @@ from app2.llm.music_gen_service.llm_schemas import (
     IntervalMelodyOutput,
     LLMDeterminedMusicalParameters, 
     SelectInstruments, 
+    SelectInstrumentsAndDescribeMelody,
     InstrumentSelectionItem,
     MelodyData, 
     Note, 
@@ -91,7 +92,7 @@ class MusicGenerationContext:
     
     # Generated parameters
     musical_params: Optional[FullMusicalParameters] = None
-    selected_instruments: Optional[SelectInstruments] = None
+    selected_instruments: Optional[Union[SelectInstruments, SelectInstrumentsAndDescribeMelody]] = None
     selected_drums: Optional[SelectDrumSounds] = None
     
     # Model configuration
@@ -99,8 +100,9 @@ class MusicGenerationContext:
     queue: Optional[SSEQueueManager] = None
     
     # Database and user context
-    session: Optional[Session] = None
+    session: Optional[AsyncSession] = None
     user_id: Optional[str] = None
+    generation_type: str = "midi"
     request_context: Optional[Dict[str, Any]] = None
 
 
@@ -184,7 +186,7 @@ class MusicGenerationAgent:
                 logger.error(f"Failed to emit error event: {emit_error}")
             raise
         
-    async def _init_real_data(self, session: Session):
+    async def _init_real_data(self, session: AsyncSession):
         _drum_file_repository = get_drum_sample_public_repository(session)
         _file_repository = get_file_repository(session)
         drum_sample_service = get_drum_sample_service(_drum_file_repository)
@@ -540,7 +542,7 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
         logger.info(f"Step 'determine_musical_parameters' returning: {full_params.model_dump_json(indent=2)}")
         return full_params
 
-    async def select_instruments(self, determined_params: FullMusicalParameters) -> SelectInstruments:
+    async def select_instruments(self, determined_params: FullMusicalParameters) -> Union[SelectInstruments, SelectInstrumentsAndDescribeMelody]:
         """Streams explanation, then selects specific instruments via LLM call."""
         logger.info(f"Step 'select_instruments' called for song: {determined_params.song_title if determined_params.song_title else 'Untitled'}")
         
@@ -595,9 +597,35 @@ Do NOT output JSON in this step, just your conversational reasoning."""
         await self.context.queue.add_chunk("\n\n")
         await self.context.queue.add_chunk("---")
         await self.context.queue.add_chunk("\n\n")
-        # 2. Get JSON Data (Focused Call)
+        # 2. Get JSON Data (Focused Call) - Use different schema based on generation type
         logger.info("Requesting JSON for instrument selection...")
-        focused_prompt = f"""
+        
+        # Determine which schema to use based on generation type
+        is_audio_generation = self.context and self.context.generation_type == "audio"
+        schema_class = SelectInstrumentsAndDescribeMelody if is_audio_generation else SelectInstruments
+        
+        if is_audio_generation:
+            focused_prompt = f"""
+Musical Context: Title: '{determined_params.song_title}', Key: {determined_params.key} {determined_params.mode}, Tempo: {determined_params.tempo} BPM.
+User prompt: '{determined_params.original_user_prompt}'. Duration: {determined_params.duration_bars} bars.
+Suggested Melody Instrument Type: {determined_params.melody_instrument_suggestion}
+Suggested Chords Instrument Type: {determined_params.chords_instrument_suggestion}
+Available Soundfonts (choose from this list only): {json.dumps(soundfont_names_list)}
+
+Based on our prior discussion and reasoning, select specific soundfonts for 'chords' role and any supporting instruments like 'bass' if appropriate. 
+For the melody, since we're using audio generation, DO NOT select a soundfont instrument. Instead, create a detailed description of what you want the melody to sound like.
+
+The melody_description should be very detailed and include:
+- The specific instrument or sound you want (e.g., "acoustic guitar", "violin", "piano")
+- The playing style (e.g., "fingerpicked", "strummed", "legato", "staccato")
+- The mood and character (e.g., "warm and intimate", "bright and energetic", "melancholic")
+- Any specific techniques or qualities (e.g., "with slight reverb", "clean tone", "with vibrato")
+
+Provide your response *only* in the 'SelectInstrumentsAndDescribeMelody' JSON structure.
+Example of desired JSON structure: {json.dumps(SelectInstrumentsAndDescribeMelody.model_json_schema(), indent=2)}
+Output only the JSON object."""
+        else:
+            focused_prompt = f"""
 Musical Context: Title: '{determined_params.song_title}', Key: {determined_params.key} {determined_params.mode}, Tempo: {determined_params.tempo} BPM.
 User prompt: '{determined_params.original_user_prompt}'. Duration: {determined_params.duration_bars} bars.
 Suggested Melody Instrument Type: {determined_params.melody_instrument_suggestion}
@@ -612,15 +640,26 @@ Output only the JSON object."""
         
         instrument_selections_raw = await self._focused_llm_call(
             focused_prompt, 
-            SelectInstruments,
+            schema_class,
             chat_session=chat_session  # Pass existing session for context continuity
         )
         
-        # 3. Process JSON Data (existing logic)
+        # 3. Process JSON Data - Handle both schema types
+        melody_description = None
         instrument_selections = SelectInstruments(instrument_selections=[]) 
+        
         if hasattr(instrument_selections_raw, 'instrument_selections') and instrument_selections_raw.instrument_selections is not None:
             instrument_selections = SelectInstruments(instrument_selections=instrument_selections_raw.instrument_selections)
+            
+            # Extract melody description if using SelectInstrumentsAndDescribeMelody
+            if is_audio_generation and hasattr(instrument_selections_raw, 'melody_description'):
+                melody_description = instrument_selections_raw.melody_description
+                logger.info(f"Extracted melody description for audio generation: {melody_description}")
+        
         logger.info(f"LLM selected instruments JSON: {instrument_selections.model_dump_json()}")
+        if melody_description:
+            logger.info(f"Melody description: {melody_description}")
+        
         validated_selections = []
         if instrument_selections.instrument_selections: 
             for item in instrument_selections.instrument_selections:
@@ -631,9 +670,11 @@ Output only the JSON object."""
         else:
             logger.info("Warning: No instrument selections returned or in unexpected format from focused LLM call.")
         
-        # Fallback logic if crucial roles are missing (melody, chords)
+        # Fallback logic - different for audio vs MIDI generation
         selected_roles = {sel.role.lower() for sel in validated_selections}
-        if 'melody' not in selected_roles and self._available_soundfonts:
+        
+        # For audio generation, we don't need a melody instrument fallback since we have the description
+        if not is_audio_generation and 'melody' not in selected_roles and self._available_soundfonts:
             logger.warning("No melody instrument selected by LLM, attempting fallback.")
             # Simple fallback: pick the first available soundfont not used for chords
             first_available_melody = next((sf for sf in self._available_soundfonts if sf.display_name not in [s.instrument_name for s in validated_selections if s.role.lower() == 'chords']), self._available_soundfonts[0])
@@ -654,11 +695,24 @@ Output only the JSON object."""
         # Track stage tokens (already using full session cost)
         self._track_stage_tokens("select_instruments", chat_session.get_token_usage())
         
-        # Update context with selected instruments
-        if self.context:
-            self.context.selected_instruments = SelectInstruments(instrument_selections=validated_selections)
+        # Create the appropriate return object based on generation type
+        if is_audio_generation:
+            result = SelectInstrumentsAndDescribeMelody(
+                instrument_selections=validated_selections,
+                melody_description=melody_description
+            )
+            # Update context with the full result
+            if self.context:
+                self.context.selected_instruments = result
+                # Store melody description separately for easy access
+                self.context.melody_description = melody_description
+        else:
+            result = SelectInstruments(instrument_selections=validated_selections)
+            # Update context with selected instruments
+            if self.context:
+                self.context.selected_instruments = result
             
-        return SelectInstruments(instrument_selections=validated_selections)
+        return result
 
     async def _generate_chords_and_send_sse(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
         """Finds chord instrument, generates notes, and sends add_midi_track SSE action."""
@@ -1530,7 +1584,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             logger.info(f"Using fallback user-style prompt: '{fallback_prompt}'")
             return fallback_prompt
 
-    async def generate_diffusion_melody_and_send_sse(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
+    async def generate_diffusion_melody_and_send_sse(self, params: FullMusicalParameters, selected_instruments: Union[SelectInstruments, SelectInstrumentsAndDescribeMelody]):
         """
         Generate audio using FAL-AI diffusion model and send as audio track SSE action.
         
@@ -1539,26 +1593,39 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         
         Args:
             params: Musical parameters including key, tempo, chord progression
-            selected_instruments: Selected instruments (melody instrument will be used for prompt)
+            selected_instruments: Selected instruments (for audio generation, includes melody_description)
             queue: SSE queue for sending progress updates and final audio track
         """
         logger.info("Starting diffusion-based melody generation with FAL-AI...")
         
-        # Generate a natural user-style prompt using LLM
-        await self.context.queue.stage(
-            name="generating_user_prompt",
-            description="Creating natural user-style prompt for audio generation..."
-        )
+        # Check if we have a melody description from SelectInstrumentsAndDescribeMelody
+        has_melody_description = isinstance(selected_instruments, SelectInstrumentsAndDescribeMelody) and selected_instruments.melody_description
         
-        # Get the original user prompt from context
-        original_user_prompt = self.context.user_prompt if self.context and self.context.user_prompt else "Create a melody"
-        
-        # Generate user-style prompt using LLM
-        user_style_prompt = await self.generate_user_style_prompt(
-            params, 
-            selected_instruments, 
-            original_user_prompt
-        )
+        if has_melody_description:
+            # Use the detailed melody description directly
+            user_style_prompt = selected_instruments.melody_description
+            logger.info(f"Using melody description directly: {user_style_prompt}")
+            
+            await self.context.queue.stage(
+                name="using_melody_description",
+                description=f"Using detailed melody description: {user_style_prompt[:100]}..."
+            )
+        else:
+            # Fallback to LLM-generated user-style prompt
+            await self.context.queue.stage(
+                name="generating_user_prompt",
+                description="Creating natural user-style prompt for audio generation..."
+            )
+            
+            # Get the original user prompt from context
+            original_user_prompt = self.context.user_prompt if self.context and self.context.user_prompt else "Create a melody"
+            
+            # Generate user-style prompt using LLM
+            user_style_prompt = await self.generate_user_style_prompt(
+                params, 
+                selected_instruments, 
+                original_user_prompt
+            )
         
         # Now enhance it with the same flow as the existing generate-audio mode
         # This is the same logic from assistant_streaming.py process_generate_audio_request
@@ -1568,29 +1635,23 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         key_signature = f"{params.key} {params.mode}" if params.key and params.mode else "C Major"
         time_signature = {'numerator': 4, 'denominator': 4}  # Default to 4/4
         
-        # Match the exact successful format from the API docs example with simplicity emphasis
-        enhanced_prompt = f"{user_style_prompt} solo, simple, minimalist, no accompaniment, no drums, no bass, acoustic"
+        # For Stable Audio, include key and BPM in the prompt for musical context
+        enhanced_prompt = f"{user_style_prompt}, {key_signature}, {bpm} BPM"
         
-        # Add key signature
-        if key_signature:
-            enhanced_prompt += f", key {key_signature}"
-        
-        # Add BPM and quality specs exactly like the working example
-        enhanced_prompt += f", {bpm}bpm, studio, 48kHz Stereo"
-        
-        # Enhanced negative prompt to avoid complexity and ensure solo focus
-        negative_prompt = "accompaniment, drums, background instruments, complex, layered, arrangement"
+        # Stable Audio doesn't use negative prompts
+        negative_prompt = None
         
         await self.context.queue.stage(
             name="generating_diffusion_audio",
             description=f"Generating audio using AI diffusion model..."
         )
         
-        logger.info(f"=== DIFFUSION PROMPT COMPARISON ===")
-        logger.info(f"LLM Generated user-style prompt: '{user_style_prompt}'")
-        logger.info(f"Final enhanced prompt: '{enhanced_prompt}'")
-        logger.info(f"Negative prompt: '{negative_prompt}'")
-        logger.info(f"=== END PROMPT COMPARISON ===")
+        logger.info(f"=== DIFFUSION GENERATION PARAMETERS ===")
+        logger.info(f"User-style prompt: '{user_style_prompt}'")
+        logger.info(f"Enhanced prompt: '{enhanced_prompt}'")
+        logger.info(f"Negative prompt: '{negative_prompt if negative_prompt else 'None'}'")
+        logger.info(f"Musical params - BPM: {bpm}, Key: {key_signature}")
+        logger.info(f"=== END PARAMETERS ===")
         
         try:
             # Import audio generation service
@@ -1630,17 +1691,42 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             
             audio_service = get_audio_generation_service(model=audio_generation_model)
             
+            # Calculate duration for 4 bars based on BPM
+            # Formula: (bars * beats_per_bar * 60) / BPM
+            bars = 4  # Fixed to 4 bars as specified
+            beats_per_bar = 4  # 4/4 time signature
+            duration_seconds = (bars * beats_per_bar * 60) / bpm
+            # Round up to nearest second as requested
+            import math
+            duration_seconds = math.ceil(duration_seconds)
+            
+            logger.info(f"Calculated duration: {duration_seconds} seconds for {bars} bars at {bpm} BPM")
+            
             # Generate and download audio
             try:
                 await self.context.queue.stage(
                     name="generating_audio",
-                    description=f"Generating audio with {audio_generation_model or 'default model'}..."
+                    description=f"Generating {duration_seconds}s audio with {audio_generation_model or 'default model'}..."
                 )
                 
-                audio_data, generation_result = await audio_service.generate_and_download_audio(
-                    prompt=enhanced_prompt,
-                    negative_prompt=negative_prompt
-                )
+                # Check if this is Stability AI service (supports additional parameters)
+                if audio_generation_model == 'stability/stable-audio-2':
+                    logger.info(f"🎵 Stable Audio generation with: duration={duration_seconds}s, bpm={bpm}, bars={bars}, key={key_signature}")
+                    # Stable Audio doesn't use negative prompts
+                    audio_data, generation_result = await audio_service.generate_and_download_audio(
+                        prompt=enhanced_prompt,
+                        duration=duration_seconds,
+                        bpm=bpm,
+                        bars=bars,
+                        key=key_signature
+                    )
+                else:
+                    logger.info(f"🎵 {audio_generation_model or 'Default'} audio generation (basic parameters only)")
+                    # Other services (VertexAI, FAL AI) support negative prompts
+                    audio_data, generation_result = await audio_service.generate_and_download_audio(
+                        prompt=enhanced_prompt,
+                        negative_prompt="drums, percussion"  # Only for non-Stable Audio services
+                    )
                 
                 if not audio_data or not generation_result:
                     raise ValueError("Audio generation returned empty results")
@@ -1703,8 +1789,8 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             
             # Save to database
             session.add(audio_track)
-            session.commit()
-            session.refresh(audio_track)
+            await session.commit()
+            await session.refresh(audio_track)
             
             # Convert to read model for the response
             from app2.models.track_models.audio_track import AudioTrackRead
@@ -1735,7 +1821,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         return key, mode.lower() if mode else "major"
 
     # --- Main Orchestration Method (Parallel Execution) ---
-    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: Session, user_id: str = None, generation_type: str = "midi", request_context: Dict[str, Any] = None):
+    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: AsyncSession, user_id: str = None, generation_type: str = "midi", request_context: Dict[str, Any] = None):
         """
         Main execution flow for the music generation agent with parallel execution.
         Processes the request through various stages, using LLM calls for decisions
@@ -1768,6 +1854,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             queue=queue,
             session=db_session,
             user_id=user_id,
+            generation_type=generation_type,
             request_context=request_context
         )
         
