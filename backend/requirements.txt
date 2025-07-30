@@ -33,4 +33,4 @@ google-auth-oauthlib==1.2.2
 mutagen==1.47.0
 pydub==0.25.1
 sentry-sdk==2.33.0
-redis==5.0.8
+redis==6.2.0
