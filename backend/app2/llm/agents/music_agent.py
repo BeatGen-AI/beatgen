@@ -773,116 +773,114 @@ Output only the JSON object."""
         else:
             logger.info("Warning: No instrument with role 'chords' selected. Skipping chord generation.")
 
-    async def _stream_melody_explanation(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
-        """Streams melody explanation separately to ensure proper ordering"""
-        logger.info("Starting melody explanation...")
-        
-        melody_instrument_selection = next((
-            item for item in selected_instruments.instrument_selections
-            if item.role.lower() == "melody"
-        ), None)
-        
-        if not melody_instrument_selection:
-            logger.info("Warning: No instrument with role 'melody' selected. Skipping melody explanation.")
-            return
-        
-        melody_instrument_name = melody_instrument_selection.instrument_name
-        if melody_instrument_name not in self._soundfont_map:
-            logger.info(f"Warning: Selected melody instrument '{melody_instrument_name}' not found in soundfont map. Skipping melody explanation.")
-            return
-        
-        # Stream Explanation for Melody
-        melody_explanation_prompt = f"""You are an AI music composer creating a melody.
+    # COMMENTED OUT: Melody explanation step removed per user request
+    # async def _stream_melody_explanation(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
+    #     """Streams melody explanation separately to ensure proper ordering"""
+    #     logger.info("Starting melody explanation...")
+    #     
+    #     melody_instrument_selection = next((
+    #         item for item in selected_instruments.instrument_selections
+    #         if item.role.lower() == "melody"
+    #     ), None)
+    #     
+    #     if not melody_instrument_selection:
+    #         logger.info("Warning: No instrument with role 'melody' selected. Skipping melody explanation.")
+    #         return
+    #     
+    #     melody_instrument_name = melody_instrument_selection.instrument_name
+    #     if melody_instrument_name not in self._soundfont_map:
+    #         logger.info(f"Warning: Selected melody instrument '{melody_instrument_name}' not found in soundfont map. Skipping melody explanation.")
+    #         return
+    #     
+    #     # Stream Explanation for Melody
+    #     melody_explanation_prompt = f"""You are an AI music composer creating a melody.
 
-Current composition:
-- Key: {params.key} {params.mode}
-- Tempo: {params.tempo} BPM
-- Chord Progression: {params.chord_progression}
-- Melody Instrument: {melody_instrument_name}
+    # Current composition:
+    # - Key: {params.key} {params.mode}
+    # - Tempo: {params.tempo} BPM
+    # - Chord Progression: {params.chord_progression}
+    # - Melody Instrument: {melody_instrument_name}
 
-Your task: Describe the style, mood, and characteristics of the melody you are about to compose."""
-        
-        explanation_session = self._create_fresh_chat_session(melody_explanation_prompt)
-        
-        explanation_prompt_melody = f"""Now I'm going to create a melody.
-Based on the key of {params.key} {params.mode}, tempo {params.tempo} BPM, the chord progression '{params.chord_progression}', and using the '{melody_instrument_name}' for the melody, describe the style, mood, and characteristics of the melody you are about to compose.
+    # Your task: Describe the style, mood, and characteristics of the melody you are about to compose."""
+    #     
+    #     explanation_session = self._create_fresh_chat_session(melody_explanation_prompt)
+    #     
+    #     explanation_prompt_melody = f"""Now I'm going to create a melody.
+    # Based on the key of {params.key} {params.mode}, tempo {params.tempo} BPM, the chord progression '{params.chord_progression}', and using the '{melody_instrument_name}' for the melody, describe the style, mood, and characteristics of the melody you are about to compose.
 
-Keep it concise and conversational. Do NOT generate the actual musical notes or JSON in this step."""
+    # Keep it concise and conversational. Do NOT generate the actual musical notes or JSON in this step."""
 
-        logger.info("Streaming explanation for melody...")
-        try:
-            async for text_chunk in await explanation_session.send_message_async(
-                user_prompt_content=explanation_prompt_melody,
-                stream=True
-            ):
-                if isinstance(text_chunk, str):
-                    logger.debug(f"MELODY EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
-                    await self.context.queue.add_chunk(text_chunk)
-            logger.info("Finished streaming melody explanation.")
-            # Track tokens for the explanation phase
-            self._track_stage_tokens("generate_melody_explanation", explanation_session.get_token_usage())
-        except Exception as e:
-            logger.error(f"Error streaming melody explanation: {e}")
-            await self.context.queue.error("Failed to stream melody explanation.")
-            return
+    #     logger.info("Streaming explanation for melody...")
+    #     try:
+    #         async for text_chunk in await explanation_session.send_message_async(
+    #             user_prompt_content=explanation_prompt_melody,
+    #             stream=True
+    #         ):
+    #             if isinstance(text_chunk, str):
+    #                 logger.debug(f"MELODY EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
+    #                 await self.context.queue.add_chunk(text_chunk)
+    #         logger.info("Finished streaming melody explanation.")
+    #         # Track tokens for the explanation phase
+    #         self._track_stage_tokens("generate_melody_explanation", explanation_session.get_token_usage())
+    #     except Exception as e:
+    #         logger.error(f"Error streaming melody explanation: {e}")
+    #         await self.context.queue.error("Failed to stream melody explanation.")
+    #         return
 
-        await self.context.queue.add_chunk("\n\n")
-        await self.context.queue.add_chunk("---")
-        await self.context.queue.add_chunk("\n\n")
+    #     await self.context.queue.add_chunk("\n\n")
+    #     await self.context.queue.add_chunk("---")
+    #     await self.context.queue.add_chunk("\n\n")
     
-    async def _stream_melody_explanation_standalone(self, params: FullMusicalParameters):
-        """Streams melody explanation as a standalone step without dependencies"""
-        logger.info("Starting standalone melody explanation...")
-        
-        # Create a general melody explanation based on musical parameters
-        melody_explanation_prompt = f"""You are an AI music composer creating a melody.
+    # COMMENTED OUT: Melody explanation step removed per user request  
+    # async def _stream_melody_explanation_standalone(self, params: FullMusicalParameters):
+    #     """Streams melody explanation as a standalone step without dependencies"""
+    #     logger.info("Starting standalone melody explanation...")
+    #     
+    #     # Create a general melody explanation based on musical parameters
+    #     melody_explanation_prompt = f"""You are an AI music composer creating a melody.
 
-Current composition:
-- Key: {params.key} {params.mode}
-- Tempo: {params.tempo} BPM
-- Chord Progression: {params.chord_progression}
-- User Request: {params.original_user_prompt}
+    # Current composition:
+    # - Key: {params.key} {params.mode}
+    # - Tempo: {params.tempo} BPM
+    # - Chord Progression: {params.chord_progression}
+    # - User Request: {params.original_user_prompt}
 
-Your task: Describe the style, mood, and characteristics of the melody you are about to compose."""
-        
-        explanation_session = self._create_fresh_chat_session(melody_explanation_prompt)
-        
-        explanation_prompt_melody = f"""Now I'm going to create a melody.
-Based on the key of {params.key} {params.mode}, tempo {params.tempo} BPM, the chord progression '{params.chord_progression}', and the user's request for '{params.original_user_prompt}', describe the style, mood, and characteristics of the melody you are about to compose.
+    # Your task: Describe the style, mood, and characteristics of the melody you are about to compose."""
+    #     
+    #     explanation_session = self._create_fresh_chat_session(melody_explanation_prompt)
+    #     
+    #     explanation_prompt_melody = f"""Now I'm going to create a melody.
+    # Based on the key of {params.key} {params.mode}, tempo {params.tempo} BPM, the chord progression '{params.chord_progression}', and the user's request for '{params.original_user_prompt}', describe the style, mood, and characteristics of the melody you are about to compose.
 
-Keep it concise and conversational. Do NOT generate the actual musical notes or JSON in this step."""
+    # Keep it concise and conversational. Do NOT generate the actual musical notes or JSON in this step."""
 
-        logger.info("Streaming standalone melody explanation...")
-        
-        # Capture the full explanation for step event emission
-        explanation_text = ""
-        try:
-            async for text_chunk in await explanation_session.send_message_async(
-                user_prompt_content=explanation_prompt_melody,
-                stream=True
-            ):
-                if isinstance(text_chunk, str):
-                    logger.debug(f"STANDALONE MELODY EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
-                    explanation_text += text_chunk
-            
-            # Emit the complete explanation as a step event
-            await self.context.queue.step_event(
-                6, "Melody Explanation", "explanation", 
-                content=explanation_text, title="Melody Explanation"
-            )
-            logger.info("Finished streaming standalone melody explanation.")
-            # Track tokens for the explanation phase
-            self._track_stage_tokens("generate_melody_explanation_standalone", explanation_session.get_token_usage())
-        except Exception as e:
-            logger.error(f"Error streaming standalone melody explanation: {e}")
-            await self.context.queue.step_event(
-                6, "Melody Explanation", "status", f"Error: {str(e)}"
-            )
-            return
-
-        await self.context.queue.add_chunk("\n\n")
-        await self.context.queue.add_chunk("---")
-        await self.context.queue.add_chunk("\n\n")
+    #     logger.info("Streaming standalone melody explanation...")
+    #     
+    #     # Capture the full explanation for step event emission
+    #     explanation_text = ""
+    #     try:
+    #         async for text_chunk in await explanation_session.send_message_async(
+    #             user_prompt_content=explanation_prompt_melody,
+    #             stream=True
+    #         ):
+    #             if isinstance(text_chunk, str):
+    #                 logger.debug(f"STANDALONE MELODY EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
+    #                 explanation_text += text_chunk
+    #         
+    #         # Emit the complete explanation as a step event
+    #         await self.context.queue.step_event(
+    #             6, "Melody Explanation", "explanation", 
+    #             content=explanation_text, title="Melody Explanation"
+    #         )
+    #         logger.info("Finished streaming standalone melody explanation.")
+    #         # Track tokens for the explanation phase
+    #         self._track_stage_tokens("generate_melody_explanation_standalone", explanation_session.get_token_usage())
+    #     except Exception as e:
+    #         logger.error(f"Error streaming standalone melody explanation: {e}")
+    #         await self.context.queue.step_event(
+    #             6, "Melody Explanation", "status", f"Error: {str(e)}"
+    #         )
+    #         return
     
     async def _generate_melody_notes_and_send_sse(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
         """Generates melody notes and sends SSE action (no explanation)"""
@@ -1939,36 +1937,27 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             # Start background completion handler
             drum_completion_task = asyncio.create_task(handle_drum_completion())
             
-            # Steps 5-6: Chord Generation and Melody Explanation (parallel)
+            # Step 5: Chord Generation
             chord_task = self._emit_step_events(
                 5, "Chord Generation", self._generate_chords_and_send_sse, params, selected_instruments
             )
-            melody_explanation_task = self._emit_step_events(
-                6, "Melody Explanation", self._stream_melody_explanation_standalone, params
-            )
             
-            # Wait for chord generation and melody explanation to complete
-            chord_data, _ = await asyncio.gather(
-                chord_task, melody_explanation_task,
-                return_exceptions=True
-            )
+            # Wait for chord generation to complete
+            chord_data = await chord_task
             
-            # Handle exceptions from chord/melody explanation phase
+            # Handle exceptions from chord generation phase
             if isinstance(chord_data, Exception):
                 logger.error(f"Chord generation failed: {chord_data}")
                 raise chord_data
-            if isinstance(_, Exception):
-                logger.error(f"Melody explanation failed: {_}")
-                raise _
             
-            # Step 7: Melody Generation (MIDI or Audio based on generation_type)
+            # Step 6: Melody Generation (MIDI or Audio based on generation_type) - moved from step 7
             if generation_type == "audio":
                 melody_task = self._emit_step_events(
-                    7, "Melody Generation", self.generate_diffusion_melody_and_send_sse, params, selected_instruments
+                    6, "Melody Generation", self.generate_diffusion_melody_and_send_sse, params, selected_instruments
                 )
             else:  # default to midi
                 melody_task = self._emit_step_events(
-                    7, "Melody Generation", self._generate_melody_notes_and_send_sse, params, selected_instruments
+                    6, "Melody Generation", self._generate_melody_notes_and_send_sse, params, selected_instruments
                 )
             
             # Wait for melody generation and drum completion task

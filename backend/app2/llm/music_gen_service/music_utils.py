@@ -1,8 +1,11 @@
+import logging
 from music21 import scale, pitch, note, harmony
 from typing import List, Optional
 
 # Import MelodyData for type hinting in the new validation function
 from app2.llm.music_gen_service.llm_schemas import MelodyData
+
+logger = logging.getLogger(__name__)
 
 
 def get_mode_intervals(mode_name: str) -> list[str]:
@@ -154,7 +157,7 @@ def get_scale_pitch_classes(key_name: str, mode_name: str) -> set[int]:
 
     if not octave_pitches:
         # If the specific octave range failed, try getting all default pitches from the scale object
-        print(f"Warning: sc.getPitches for an octave failed for {key_name} {mode_name}. Trying default getPitches(). Scale type: {type(sc)}")
+        logger.warning(f"sc.getPitches for an octave failed for {key_name} {mode_name}. Trying default getPitches(). Scale type: {type(sc)}")
         octave_pitches = sc.getPitches() # Get all available default pitches
         if not octave_pitches:
             raise ValueError(f"Could not retrieve any pitches for scale {key_name} {mode_name} using {type(sc)}.")
@@ -195,7 +198,7 @@ def validate_melody_in_key(melody_data: MelodyData, key_name: str, mode_name: st
         ValueError: If any note is found to be out of key.
     """
     allowed_pitch_classes = get_complete_scale_pitch_classes(key_name, mode_name)
-    print(f"Validating melody for {key_name} {mode_name}. Allowed pitch classes: {sorted(list(allowed_pitch_classes))}")
+    logger.debug(f"Validating melody for {key_name} {mode_name}. Allowed pitch classes: {sorted(list(allowed_pitch_classes))}")
 
     for bar_index, bar in enumerate(melody_data.bars):
         for note_index, note_event in enumerate(bar.notes):
@@ -265,6 +268,6 @@ def get_complete_scale_pitch_classes(key_name: str, mode_name: str) -> set[int]:
     allowed_pitch_classes = {(tonic_pc + degree) % 12 for degree in scale_degrees}
     
     # Debug output
-    print(f"Complete scale pitch classes for {key_name} {mode_name}: {sorted(list(allowed_pitch_classes))}")
+    logger.debug(f"Complete scale pitch classes for {key_name} {mode_name}: {sorted(list(allowed_pitch_classes))}")
     
     return allowed_pitch_classes

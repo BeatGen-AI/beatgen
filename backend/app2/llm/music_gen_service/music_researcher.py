@@ -29,10 +29,7 @@ if not logger.handlers:
 # This ensures our log settings aren't overridden
 logger.propagate = False  # Uncommenting this is critical!
 
-# Force a direct print to ensure visibility
-print("[RESEARCH MODULE] MusicResearcher module initialized, stdout handler added")
-
-# Log through logger too
+# Log through logger
 logger.info("MusicResearcher module initialized with custom handler")
 load_dotenv()
 
@@ -101,7 +98,6 @@ class MusicResearcher:
     async def _research_music(self, description: str) -> str:
         """Research musical characteristics using Perplexity."""
         logger.debug(f"Beginning _research_music for: {description[:50]}...")
-        print(f"[DIRECT PRINT] Beginning _research_music for: {description[:50]}...")
         messages = [
             {
                 "role": "system",
