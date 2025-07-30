@@ -151,6 +151,7 @@ class JWTVerifier:
                 'role': payload.get('role'),
                 'exp': payload.get('exp'),
                 'iat': payload.get('iat'),
+                'user_metadata': payload.get('user_metadata', {}),  # Include user metadata
             }
             
         except jwt.ExpiredSignatureError:
