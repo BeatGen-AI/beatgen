@@ -1087,21 +1087,6 @@
 #         for data in response:
 #             if tool_use_started:
 #                 tool_use_data.append(data)
-#             if hasattr(data, "delta") and hasattr(data.delta, "text"):
-#                 chunk_text = data.delta.text
-#                 print(chunk_text)
-#                 if chunk_text:
-#                     content_text += chunk_text
-#                     logger.info(f"Received {len(content_text)} characters so far...")
-#             if data.type == "content_block_start":
-#                 if data.content_block.type == "tool_use":
-#                     tool_use_started = True
-#                     print(data.content_block)
-#             if data.type == "content_block_end":
-#                 tool_use_started = False
-#         print("TOOL USE DATA:", tool_use_data)
-#         tool_use_json = MusicGenService._parse_tool_use_data(tool_use_data)
-#         print("TOOL USE JSON:", tool_use_json)
 #         return content_text, tool_use_json
 
 #     @staticmethod

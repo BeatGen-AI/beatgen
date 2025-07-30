@@ -55,7 +55,7 @@ class AnthropicAdapter(ProviderAdapter):
         if not effective_api_key:
             # Pydantic AI might also pick up ANTHROPIC_API_KEY from env by default if provider is not given key
             # but being explicit is better.
-            pass # print("Warning: Anthropic API key not found. Agent might fail.")
+            pass
 
         anthropic_provider_args = {}
         if effective_api_key:

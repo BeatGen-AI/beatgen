@@ -49,18 +49,18 @@ def get_mode_intervals(mode_name: str) -> list[str]:
         # For other modes (dorian, phrygian, etc.)
         sc = scale.ConcreteScale(tonic=pitch.Pitch("C"), mode=mode_name)
 
-    print("scale:", sc)
+    logger.debug(f"scale: {sc}")
     # Get scale pitches
     scale_pitches = sc.getPitches()
     if not scale_pitches:
         return []
 
-    print("scale_pitches:", scale_pitches)
+    logger.debug(f"scale_pitches: {scale_pitches}")
     # Calculate intervals between all scale pitches
     intervals = []
 
     root = scale_pitches[0]
-    print("root:", root)
+    logger.debug(f"root: {root}")
 
     for p1 in scale_pitches:
         # Calculate semitone difference
@@ -99,7 +99,7 @@ def get_root_note_midi(key: str) -> int:
     """
     # Create a scale using C as the reference tonic
     key_note = note.Note(key + "3") if key >= "C" else note.Note(key + "3")
-    print("KEY NOTE:", key_note)
+    logger.debug(f"KEY NOTE: {key_note}")
     return key_note.pitch.midi
 
 
@@ -212,7 +212,7 @@ def validate_melody_in_key(melody_data: MelodyData, key_name: str, mode_name: st
             #         f"is not in the scale of {key_name} {mode_name}. "
             #         f"Allowed pitch classes: {sorted(list(allowed_pitch_classes))}."
             #     )
-    print("Melody successfully validated: all notes are in key.")
+    logger.debug("Melody successfully validated: all notes are in key.")
     return True
 
 

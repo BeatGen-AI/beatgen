@@ -122,7 +122,7 @@ def correct_notes_in_key(
             original_pitch_class = original_pitch % 12
 
             if original_pitch_class not in allowed_pitch_classes:
-                logger.info(f"Correction: Note {original_pitch} (class {original_pitch_class}) at beat {note.start_beat} in bar {bar_item.bar} is out of key.")
+                logger.debug(f"Correction: Note {original_pitch} (class {original_pitch_class}) at beat {note.start_beat} in bar {bar_item.bar} is out of key.")
 
                 current_note_absolute_beat = current_bar_start_beat + note.start_beat
                 chord_segment_index = int(current_note_absolute_beat / beats_per_chord_segment)
@@ -262,15 +262,15 @@ def correct_notes_in_key(
                     best_corrected_pitch = closest_candidates[0]["pitch"]
 
                     if best_corrected_pitch != original_pitch:
-                        logger.info(f"Correction: Corrected to {best_corrected_pitch} (class {best_corrected_pitch % 12}). Original: {original_pitch}. Chord: {current_chord_name}. Details: {closest_candidates[0]}")
+                        logger.debug(f"Correction: Corrected to {best_corrected_pitch} (class {best_corrected_pitch % 12}). Original: {original_pitch}. Chord: {current_chord_name}. Details: {closest_candidates[0]}")
                         new_notes_for_bar.append(note.model_copy(update={'pitch': best_corrected_pitch}))
                     else:
                         # This case means the original note was already the best choice among in-key notes, 
                         # which contradicts it being out-of-key initially. This path should ideally not be taken if a note is truly out of key.
-                        logger.info(f"Correction: Note {original_pitch} deemed best fit or no better in-key correction found. Keeping. (Check logic if note was initially out-of-key)")
+                        logger.debug(f"Correction: Note {original_pitch} deemed best fit or no better in-key correction found. Keeping. (Check logic if note was initially out-of-key)")
                         new_notes_for_bar.append(note)
                 else:
-                    logger.info(f"Correction: Could not find any in-key correction for {original_pitch} in search window. Keeping original.")
+                    logger.debug(f"Correction: Could not find any in-key correction for {original_pitch} in search window. Keeping original.")
                     new_notes_for_bar.append(note)
             else:
                 new_notes_for_bar.append(note)
@@ -413,9 +413,9 @@ def transform_bars_to_instrument_format(
         Formatted data in the expected output structure
     """
 
-    print("INSTRUMENT:", instrument)
+    logger.debug(f"INSTRUMENT: {instrument}")
     root_note_midi = get_root_note_midi(key)
-    print("ROOT NOTE MIDI:", root_note_midi)
+    logger.debug(f"ROOT NOTE MIDI: {root_note_midi}")
     # Extract bars data
     data.get("starting_octave", 4)
     bars = data.get("bars", [])
@@ -483,7 +483,7 @@ def transform_bars_to_instrument_format(
 
     # Create the full result structure
 
-    print("INSTRUMENT:", instrument)
+    logger.debug(f"INSTRUMENT: {instrument}")
 
     # Map from the instrument object to the correct field names
     # Handle both possible formats for compatibility
@@ -494,7 +494,7 @@ def transform_bars_to_instrument_format(
         "notes": {"notes": midi_notes},
     }
 
-    print("RESULT:", result)
+    logger.debug(f"RESULT: {result}")
 
     return result
 
@@ -513,11 +513,11 @@ def transform_chord_progression_to_instrument_format(
     Returns:
         Dictionary with formatted instrument data including MIDI notes
     """
-    print("CHORD PROGRESSION:", chord_progression)
-    print("INSTRUMENT:", instrument)
-    print("KEY:", key)
+    logger.debug(f"CHORD PROGRESSION: {chord_progression}")
+    logger.debug(f"INSTRUMENT: {instrument}")
+    logger.debug(f"KEY: {key}")
     chord_progression_list = list(filter(None, chord_progression.split("-")))
-    print("CHORD PROGRESSION LIST:", chord_progression_list)
+    logger.debug(f"CHORD PROGRESSION LIST: {chord_progression_list}")
     if len(chord_progression_list) == 0:
         return []
     if len(chord_progression_list) == 1:

@@ -30,13 +30,11 @@ class PerplexityClient:
 
     # Define the function to run in the executor
     def call_perplexity(self, messages: list[dict]):
-        print("[DIRECT PRINT] Inside executor: Making Perplexity API call")
         logger.debug("Inside executor: Making Perplexity API call")
         try:
             return self.client.chat.completions.create(
                 model="sonar-pro", messages=messages, temperature=0.1, max_tokens=1000
             )
         except Exception as e:
-            print(f"[DIRECT PRINT] Error inside executor: {str(e)}")
             logger.error(f"Error inside executor: {str(e)}")
             raise
