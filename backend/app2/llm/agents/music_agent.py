@@ -101,6 +101,7 @@ class MusicGenerationContext:
     # Database and user context
     session: Optional[Session] = None
     user_id: Optional[str] = None
+    request_context: Optional[Dict[str, Any]] = None
 
 
 # --- Parallel Execution Support (Simplified) ---
@@ -1616,13 +1617,46 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             file_service = FileService(file_repository)
             
             # Create audio generation service instance
-            audio_service = get_audio_generation_service()
+            # Get audio generation model from context if available (for Compose mode)
+            audio_generation_model = None
+            if self.context.request_context:
+                audio_generation_model = self.context.request_context.get('audio_generation_model')
+            
+            # Log the audio model selection
+            if audio_generation_model:
+                logger.info(f"🎵 Using audio generation model from context: {audio_generation_model}")
+            else:
+                logger.info("🎵 No audio generation model specified, using default")
+            
+            audio_service = get_audio_generation_service(model=audio_generation_model)
             
             # Generate and download audio
-            audio_data, generation_result = await audio_service.generate_and_download_audio(
-                prompt=enhanced_prompt,
-                negative_prompt=negative_prompt
-            )
+            try:
+                await self.context.queue.stage(
+                    name="generating_audio",
+                    description=f"Generating audio with {audio_generation_model or 'default model'}..."
+                )
+                
+                audio_data, generation_result = await audio_service.generate_and_download_audio(
+                    prompt=enhanced_prompt,
+                    negative_prompt=negative_prompt
+                )
+                
+                if not audio_data or not generation_result:
+                    raise ValueError("Audio generation returned empty results")
+                    
+            except Exception as e:
+                logger.error(f"Audio generation failed: {e}")
+                await self.context.queue.error(
+                    message="Failed to generate audio",
+                    error_data={
+                        "error": "audio_generation_failed",
+                        "model": audio_generation_model or "default",
+                        "prompt": enhanced_prompt[:100],
+                        "details": str(e)
+                    }
+                )
+                raise
             
             await self.context.queue.stage(
                 name="processing_diffusion_audio",
@@ -1701,7 +1735,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         return key, mode.lower() if mode else "major"
 
     # --- Main Orchestration Method (Parallel Execution) ---
-    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: Session, user_id: str = None, generation_type: str = "midi"):
+    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: Session, user_id: str = None, generation_type: str = "midi", request_context: Dict[str, Any] = None):
         """
         Main execution flow for the music generation agent with parallel execution.
         Processes the request through various stages, using LLM calls for decisions
@@ -1733,7 +1767,8 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             model_info=model_info,
             queue=queue,
             session=db_session,
-            user_id=user_id
+            user_id=user_id,
+            request_context=request_context
         )
         
         # Step 0: Research Musical Context

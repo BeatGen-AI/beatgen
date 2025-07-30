@@ -32,6 +32,8 @@ import { SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_tr
 import { DrumTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 import { AudioTrackRead } from 'src/platform/types/dto/track_models/audio_track';
 import ChatModelMenu from './ChatModelMenu';
+import AudioGenerationModelMenu from './AudioGenerationModelMenu';
+import { getAudioModelInfo, getAvailableAudioModels } from '../../config/audioModels';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { createDefaultInstance } from '../../utils/instanceHelpers';
 
@@ -60,75 +62,14 @@ interface ChatWindowProps {
 // Define available AI models (placeholder)
 const AVAILABLE_MODELS = ["Gemini Pro 2.5", "Gemini Flash 2.5", "Deepseek R1", "Deepseek V3", "Claude 4 Sonnet", "Claude 4 Opus", "Claude 3.7 Sonnet",  "GPT-4.1", "GPT-4o", "o3", "o3-mini", "Llama 4 Maverick", "Llama 4 Scout"];
 
+// Get available audio generation models from config
+const AVAILABLE_AUDIO_MODELS = getAvailableAudioModels();
+
 // UI Constants
 const CHAT_WINDOW_WIDTH = 350;
 const ANIMATION_DURATION = 225; // ms
 const DOT_ANIMATION_INTERVAL = 500; // ms
 
-// Generation choice buttons component
-interface GenerationChoiceButtonsProps {
-  onMidiChoice: () => void;
-  onAudioChoice: () => void;
-}
-
-const GenerationChoiceButtons: React.FC<GenerationChoiceButtonsProps> = ({ onMidiChoice, onAudioChoice }) => {
-  const { studioMode } = useAppTheme();
-  
-  return (
-    <div 
-      className="p-4 mb-2 rounded-lg"
-      style={{
-        backgroundColor: studioMode === 'dark' ? '#0f0f0f' : '#e2e8f0',
-        border: `1px solid ${studioMode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
-      }}
-    >
-      <p 
-        className="text-sm mb-4"
-        style={{ color: studioMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)' }}
-      >
-        Choose your generation method:
-      </p>
-      <div className="flex flex-col gap-2">
-        <button
-          onClick={onMidiChoice}
-          className="px-4 py-2 rounded transition-colors"
-          style={{
-            backgroundColor: studioMode === 'dark' ? '#2563eb' : '#3b82f6',
-            color: '#ffffff',
-            border: 'none',
-            cursor: 'pointer'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1d4ed8' : '#2563eb';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2563eb' : '#3b82f6';
-          }}
-        >
-          Generate Midi Melody
-        </button>
-        <button
-          onClick={onAudioChoice}
-          className="px-4 py-2 rounded transition-colors"
-          style={{
-            backgroundColor: studioMode === 'dark' ? '#2563eb' : '#3b82f6',
-            color: '#ffffff',
-            border: 'none',
-            cursor: 'pointer'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#1d4ed8' : '#2563eb';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = studioMode === 'dark' ? '#2563eb' : '#3b82f6';
-          }}
-        >
-          Generate Audio Melody
-        </button>
-      </div>
-    </div>
-  );
-};
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeight = 50 }) => {
   const { studioMode } = useAppTheme();
@@ -137,12 +78,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   const [isLoading, setIsLoading] = useState(false);
   const [animatedDots, setAnimatedDots] = useState(''); // New state for animated dots
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [mode, setMode] = useState('Generate');
+  const [mode, setMode] = useState('Compose');
   const [cursorPosition, setCursorPosition] = useState<number>(0);
   const [selectedTrack, setSelectedTrack] = useState<CombinedTrack | null>(null);
   
   // State for AI model selection
   const [selectedModel, setSelectedModel] = useState<string>(AVAILABLE_MODELS[0]); // Default to the first model
+  
+  // State for generation type (audio/midi) for Compose mode
+  const [generationType, setGenerationType] = useState<'audio' | 'midi'>('audio');
+  const [selectedAudioModel, setSelectedAudioModel] = useState<string>('stability/stable-audio-2');
   
   // Streaming state
   const [isStreaming, setIsStreaming] = useState(false);
@@ -158,11 +103,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   const [currentStepMessageId, setCurrentStepMessageId] = useState<string | null>(null);
   const currentStepMessageIdRef = useRef<string | null>(null);
   
-  // Generation choice state
-  const [showGenerationChoiceButtons, setShowGenerationChoiceButtons] = useState(false);
-  const [pendingPrompt, setPendingPrompt] = useState('');
-  const [pendingUserMessage, setPendingUserMessage] = useState<Message | null>(null);
-  const [selectedGenerationType, setSelectedGenerationType] = useState<'midi' | 'audio' | null>(null);
   
   
   // Access the store for executing actions and project context
@@ -522,8 +462,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     try {
       // Determine the appropriate mode (lowercase for API)
       let apiMode: 'generate' | 'edit' | 'chat' | 'generate-audio';
-      if (mode === 'Generate Audio') {
+      if (mode === 'Add Track') {
         apiMode = 'generate-audio';
+      } else if (mode === 'Compose') {
+        apiMode = 'generate';
+      } else if (mode === 'Edit & Mix') {
+        apiMode = 'edit';
       } else {
         apiMode = mode.toLowerCase() as 'generate' | 'edit' | 'chat' | 'generate-audio';
       }
@@ -556,34 +500,49 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       // Get track ID if selected
       const trackId = selectedTrack ? selectedTrack.id : undefined;
       
+      // Prepare context with proper model selection
+      const context: any = {
+        model: selectedModel,
+        track_id: trackId,
+        bpm: bpm,
+        time_signature: {
+          numerator: timeSignature[0],
+          denominator: timeSignature[1]
+        },
+        key_signature: keySignature,
+        project_title: projectTitle,
+        generation_type: generationType || 'midi',
+        tracks: tracks.map(track => ({
+          id: track.id,
+          name: track.name,
+          type: track.track_type,
+          volume: track.volume,
+          pan: track.pan,
+          muted: track.mute,
+          soloed: track.soloed,
+          instrument: (track.track as MidiTrackRead)?.instrument_file?.display_name || track.name
+        }))
+      };
+
+      // Add audio generation model for Compose + Audio Melody mode
+      if (mode === 'Compose' && generationType === 'audio') {
+        context.audio_generation_model = selectedAudioModel;
+        console.log('🎵 Audio generation request:', {
+          mode: apiMode,
+          chatModel: selectedModel,
+          audioModel: selectedAudioModel,
+          generationType,
+          contextAudioModel: context.audio_generation_model
+        });
+      }
+
       // Use the new POST-then-SSE pattern with interactWithAssistant
       const { requestId, close } = await interactWithAssistant(
         {
           prompt: promptText,
           mode: apiMode,
           model: selectedModel,
-          context: { // Pass musical context for better AI generation
-            model: selectedModel,
-            track_id: trackId,
-            bpm: bpm,
-            time_signature: {
-              numerator: timeSignature[0],
-              denominator: timeSignature[1]
-            },
-            key_signature: keySignature,
-            project_title: projectTitle,
-            generation_type: generationType || 'midi',
-            tracks: tracks.map(track => ({
-              id: track.id,
-              name: track.name,
-              type: track.track_type,
-              volume: track.volume,
-              pan: track.pan,
-              muted: track.mute,
-              soloed: track.soloed,
-              instrument: (track.track as MidiTrackRead)?.instrument_file?.display_name || track.name
-            }))
-          }
+          context
         },
         setupStreamCallbacks()
       );
@@ -621,65 +580,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       return;
     }
     
-    // Check if this is Generate mode and we need to show choice buttons
-    if (mode === 'Generate' && !selectedGenerationType) {
-      // Add user message to chat with current mode and selected track
-      const userMessage: Message = { 
-        type: 'user',
-        text: prompt, 
-        mode: mode,
-        selectedTrack: selectedTrack
-      };
-      setMessages(prev => [...prev, userMessage]);
-      
-      // Store pending data and show choice buttons
-      setPendingPrompt(prompt);
-      setPendingUserMessage(userMessage);
-      setShowGenerationChoiceButtons(true);
-      setPrompt(''); // Clear input
-      return;
-    }
+    // No longer need generation choice buttons since we have submenu
     
-    // For non-Generate mode or when generation type is already selected, proceed normally
+    // Add user message and start interaction
     const userMessage: Message = { 
       type: 'user',
-      text: selectedGenerationType ? pendingPrompt : prompt, 
+      text: prompt, 
       mode: mode,
       selectedTrack: selectedTrack
     };
     
-    // Only add user message if we haven't already (for choice flow)
-    if (!selectedGenerationType) {
-      setMessages(prev => [...prev, userMessage]);
-    }
+    setMessages(prev => [...prev, userMessage]);
     
     // Clear input and start interaction
     setPrompt('');
-    await startAssistantInteraction(
-      selectedGenerationType ? pendingPrompt : prompt,
-      selectedGenerationType || undefined
-    );
-    
-    // Reset choice state after completion or error
-    setShowGenerationChoiceButtons(false);
-    setSelectedGenerationType(null);
-    setPendingPrompt('');
-    setPendingUserMessage(null);
+    await startAssistantInteraction(prompt, generationType);
   };
   
-  // Handle generation choice selection
-  const handleGenerationChoice = async (generationType: 'midi' | 'audio') => {
-    setSelectedGenerationType(generationType);
-    setShowGenerationChoiceButtons(false);
-    
-    // Start the assistant interaction directly
-    await startAssistantInteraction(pendingPrompt, generationType);
-    
-    // Reset choice state after starting generation
-    setSelectedGenerationType(null);
-    setPendingPrompt('');
-    setPendingUserMessage(null);
-  };
   
   // Helper function to create a CombinedTrack with instance metadata
   const createCombinedTrack = (
@@ -1007,12 +924,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   
   
 
-  const handleModeSelect = (newMode: string) => {
-    // Handle special case for "generate-audio" to display as "Generate Audio"
-    if (newMode.toLowerCase() === 'generate-audio') {
-      setMode('Generate Audio');
-    } else {
-      setMode(newMode.charAt(0).toUpperCase() + newMode.slice(1).toLowerCase());
+  const handleModeSelect = (newMode: string, newGenerationType?: 'audio' | 'midi') => {
+    // Map mode IDs to display labels
+    const modeDisplayMap: Record<string, string> = {
+      'generate': 'Compose',
+      'generate-audio': 'Add Track',
+      'edit': 'Edit & Mix'
+    };
+    
+    setMode(modeDisplayMap[newMode] || newMode);
+    
+    // Update generation type if provided (for Compose mode)
+    if (newGenerationType) {
+      setGenerationType(newGenerationType);
     }
   };
 
@@ -1043,6 +967,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   // Handler for AI Model selection
   const handleModelSelect = (newModel: string) => {
     setSelectedModel(newModel);
+  };
+
+  // Handler for Audio Generation Model selection
+  const handleAudioModelSelect = (newModel: string) => {
+    setSelectedAudioModel(newModel);
   };
 
   return (
@@ -1148,13 +1077,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
             return null;
           })}
           
-          {/* Generation choice buttons */}
-          {showGenerationChoiceButtons && (
-            <GenerationChoiceButtons 
-              onMidiChoice={() => handleGenerationChoice('midi')}
-              onAudioChoice={() => handleGenerationChoice('audio')}
-            />
-          )}
           
           <div ref={messagesEndRef} />
         </div>
@@ -1203,16 +1125,33 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
               <ChatModeMenu
                 triggerLabel={mode}
                 onSelect={handleModeSelect}
-                selectedMode={mode.toLowerCase().replace(' ', '-')}
+                selectedMode={
+                  mode === 'Compose' ? 'generate' :
+                  mode === 'Add Track' ? 'generate-audio' :
+                  mode === 'Edit & Mix' ? 'edit' :
+                  mode.toLowerCase().replace(' ', '-').replace('&', '')
+                }
+                selectedGenerationType={generationType}
               />
             }
             textareaBottomLeftComponent={
-              <ChatModelMenu
-                triggerLabel={selectedModel}
-                onSelect={handleModelSelect}
-                models={AVAILABLE_MODELS}
-                selectedModel={selectedModel}
-              />
+              <div className="flex gap-2">
+                <ChatModelMenu
+                  triggerLabel={selectedModel}
+                  onSelect={handleModelSelect}
+                  models={AVAILABLE_MODELS}
+                  selectedModel={selectedModel}
+                />
+                {mode === 'Compose' && generationType === 'audio' && (
+                  <AudioGenerationModelMenu
+                    triggerLabel={getAudioModelInfo(selectedAudioModel).description}
+                    onSelect={handleAudioModelSelect}
+                    models={AVAILABLE_AUDIO_MODELS}
+                    selectedModel={selectedAudioModel}
+                    themeMode={studioMode}
+                  />
+                )}
+              </div>
             }
             textareaBottomRightComponent={
               isLoading ? (

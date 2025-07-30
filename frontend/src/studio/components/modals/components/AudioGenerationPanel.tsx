@@ -9,7 +9,7 @@ import AudioGenerationModelMenu from '../../ai-assistant/AudioGenerationModelMen
 import KeySelectorMenu from '../../ai-assistant/KeySelectorMenu';
 import BPMSelector from '../../ai-assistant/BPMSelector';
 import BarSelector from '../../ai-assistant/BarSelector';
-import { getAudioModelInfo } from '../../../config/audioModels';
+import { getAudioModelInfo, getAvailableAudioModels } from '../../../config/audioModels';
 
 interface AudioGenerationPanelProps {
   // Generation state
@@ -202,11 +202,11 @@ const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
           }
           textareaBottomLeftComponent={
             <AudioGenerationModelMenu
-              triggerLabel={selectedModel === 'vertex-ai/lyria2' ? 'Lyria 2 (Vertex AI)' : 'Stable Audio 2.0'}
+              triggerLabel={getAudioModelInfo(selectedModel).description}
               onSelect={setSelectedModel}
-              models={['vertex-ai/lyria2', 'stability/stable-audio-2']}
+              models={getAvailableAudioModels()}
               selectedModel={selectedModel}
-              themeMode={useUiMode ? undefined : 'dark'}
+              themeMode={effectiveMode}
             />
           }
         />
