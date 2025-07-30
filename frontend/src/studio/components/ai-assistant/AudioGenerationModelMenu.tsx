@@ -22,6 +22,7 @@ interface AudioGenerationModelMenuProps {
   models: string[];
   selectedModel?: string;
   disabled?: boolean;
+  themeMode?: 'light' | 'dark'; // Override theme mode, falls back to studioMode
 }
 
 const AudioGenerationModelMenu: React.FC<AudioGenerationModelMenuProps> = ({ 
@@ -29,9 +30,11 @@ const AudioGenerationModelMenu: React.FC<AudioGenerationModelMenuProps> = ({
   onSelect, 
   models, 
   selectedModel, 
-  disabled = false
+  disabled = false,
+  themeMode
 }) => {
   const { studioMode } = useAppTheme();
+  const effectiveTheme = themeMode || studioMode;
   
   const handleSelect = (model: string) => {
     onSelect(model);
@@ -42,7 +45,7 @@ const AudioGenerationModelMenu: React.FC<AudioGenerationModelMenuProps> = ({
       <DropdownMenuTrigger asChild>
         <Badge 
           variant="secondary"
-          className={getBadgeClassName(studioMode, disabled)}
+          className={getBadgeClassName(effectiveTheme, disabled)}
           style={{
             borderRadius: '5px',
             fontSize: '0.7rem'
@@ -54,7 +57,7 @@ const AudioGenerationModelMenu: React.FC<AudioGenerationModelMenuProps> = ({
       <DropdownMenuContent
         align="start"
         side="top"
-        className={getDropdownClassName(studioMode, 'w-52')}
+        className={getDropdownClassName(effectiveTheme, 'w-52')}
         sideOffset={4}
       >
         {models.map((model) => {
@@ -65,10 +68,10 @@ const AudioGenerationModelMenu: React.FC<AudioGenerationModelMenuProps> = ({
             <DropdownMenuItem
               key={model}
               onClick={() => handleSelect(model)}
-              className={getMenuItemClassName(studioMode, isSelected, 'sm')}
+              className={getMenuItemClassName(effectiveTheme, isSelected, 'sm')}
             >
               <span className="text-xs font-medium truncate">{modelInfo.description}</span>
-              <div className={`text-[10px] font-medium ml-2 shrink-0 flex items-center gap-0.5 ${getTextColor(studioMode, 'muted')}`}>
+              <div className={`text-[10px] font-medium ml-2 shrink-0 flex items-center gap-0.5 ${getTextColor(effectiveTheme, 'muted')}`}>
                 {modelInfo.duration}
                 <Clock className="w-3 h-3" />
               </div>

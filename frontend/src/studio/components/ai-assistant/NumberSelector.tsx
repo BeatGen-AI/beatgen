@@ -27,6 +27,7 @@ interface NumberSelectorProps {
   placeholder: string; // e.g., "Enter BPM", "Enter number of bars"
   unit?: string; // e.g., "BPM", "bars"
   icon: React.ReactNode;
+  themeMode?: 'light' | 'dark'; // Override theme mode, falls back to studioMode
 }
 
 const NumberSelector: React.FC<NumberSelectorProps> = ({ 
@@ -39,9 +40,11 @@ const NumberSelector: React.FC<NumberSelectorProps> = ({
   label,
   placeholder,
   unit,
-  icon
+  icon,
+  themeMode
 }) => {
   const { studioMode } = useAppTheme();
+  const effectiveTheme = themeMode || studioMode;
   const [inputValue, setInputValue] = useState(selectedValue.toString());
   const [isOpen, setIsOpen] = useState(false);
 
@@ -87,7 +90,7 @@ const NumberSelector: React.FC<NumberSelectorProps> = ({
       <DropdownMenuTrigger asChild>
         <Badge 
           variant="secondary"
-          className={getBadgeClassName(studioMode, disabled)}
+          className={getBadgeClassName(effectiveTheme, disabled)}
           style={{
             borderRadius: '5px',
             fontSize: '0.7rem'
@@ -100,12 +103,12 @@ const NumberSelector: React.FC<NumberSelectorProps> = ({
       <DropdownMenuContent
         align="start"
         side="top"
-        className={`${getDropdownClassName(studioMode, 'w-48')} p-3`}
+        className={`${getDropdownClassName(effectiveTheme, 'w-48')} p-3`}
         sideOffset={4}
       >
         <div className="space-y-3">
           <div>
-            <label className={`block text-sm font-medium mb-2 ${getTextColor(studioMode)}`}>
+            <label className={`block text-sm font-medium mb-2 ${getTextColor(effectiveTheme)}`}>
               {label} ({min}-{max})
             </label>
             <Input
@@ -115,7 +118,7 @@ const NumberSelector: React.FC<NumberSelectorProps> = ({
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyPress}
-              className={getInputClassName(studioMode)}
+              className={getInputClassName(effectiveTheme)}
               placeholder={placeholder}
               autoFocus
             />
@@ -124,7 +127,7 @@ const NumberSelector: React.FC<NumberSelectorProps> = ({
             <Button
               size="sm"
               onClick={handleInputSubmit}
-              className={`flex-1 text-xs ${getButtonClassName(studioMode, 'primary')}`}
+              className={`flex-1 text-xs ${getButtonClassName(effectiveTheme, 'primary')}`}
             >
               Apply
             </Button>
@@ -132,7 +135,7 @@ const NumberSelector: React.FC<NumberSelectorProps> = ({
               size="sm"
               variant="outline"
               onClick={() => setIsOpen(false)}
-              className={`flex-1 text-xs ${getButtonClassName(studioMode, 'outline')}`}
+              className={`flex-1 text-xs ${getButtonClassName(effectiveTheme, 'outline')}`}
             >
               Cancel
             </Button>

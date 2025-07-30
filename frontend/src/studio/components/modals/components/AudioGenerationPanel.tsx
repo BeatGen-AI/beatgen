@@ -40,6 +40,7 @@ interface AudioGenerationPanelProps {
   
   // UI props
   useUiMode?: boolean;
+  effectiveMode?: 'light' | 'dark';
 }
 
 const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
@@ -63,10 +64,11 @@ const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
   onCancelGeneration,
   onUseAudio,
   onResetGeneration,
-  useUiMode = false
+  useUiMode = false,
+  effectiveMode
 }) => {
   return (
-    <div className="h-full overflow-y-auto p-6">
+    <div className="h-full overflow-y-auto p-6 flex flex-col">
       {/* Header and Tips - Top Section */}
       <div className="flex-shrink-0 space-y-6 mb-6">
         <div className="text-center">
@@ -151,6 +153,13 @@ const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
       {/* Flexible space to push textarea to bottom */}
       <div className="flex-grow"></div>
 
+      {/* Generation Error */}
+      {generationError && (
+        <Alert variant="destructive">
+          {generationError}
+        </Alert>
+      )}
+
       {/* Textarea and Controls - Bottom Section */}
       <div className="flex-shrink-0 space-y-4">
         <GenerationPromptControl
@@ -171,6 +180,7 @@ const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
                 triggerLabel={keySignature}
                 onSelect={setKeySignature}
                 selectedKey={keySignature}
+                themeMode={effectiveMode}
               />
               <BPMSelector
                 triggerLabel={`${bpm} BPM`}
@@ -178,6 +188,7 @@ const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
                 selectedBPM={bpm}
                 min={60}
                 max={200}
+                themeMode={effectiveMode}
               />
               <BarSelector
                 triggerLabel={`${bars} bars`}
@@ -185,6 +196,7 @@ const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
                 selectedBars={bars}
                 min={1}
                 max={getAudioModelInfo(selectedModel).maxBars || 8}
+                themeMode={effectiveMode}
               />
             </div>
           }
@@ -194,16 +206,11 @@ const AudioGenerationPanel: React.FC<AudioGenerationPanelProps> = ({
               onSelect={setSelectedModel}
               models={['vertex-ai/lyria2', 'stability/stable-audio-2']}
               selectedModel={selectedModel}
+              themeMode={useUiMode ? undefined : 'dark'}
             />
           }
         />
 
-        {/* Generation Error */}
-        {generationError && (
-          <Alert variant="destructive">
-            {generationError}
-          </Alert>
-        )}
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ interface BPMSelectorProps {
   disabled?: boolean;
   min?: number;
   max?: number;
+  themeMode?: 'light' | 'dark'; // Override theme mode, falls back to studioMode
 }
 
 const BPMSelector: React.FC<BPMSelectorProps> = ({ 
@@ -17,7 +18,8 @@ const BPMSelector: React.FC<BPMSelectorProps> = ({
   selectedBPM,
   disabled = false,
   min = 60,
-  max = 200
+  max = 200,
+  themeMode
 }) => {
   return (
     <NumberSelector
@@ -31,6 +33,7 @@ const BPMSelector: React.FC<BPMSelectorProps> = ({
       placeholder="Enter BPM"
       unit="BPM"
       icon={<Metronome className="w-3 h-3 mr-1" />}
+      themeMode={themeMode}
     />
   );
 };
