@@ -166,16 +166,17 @@ const GenerationPromptControl: React.FC<GenerationPromptControlProps> = ({
           onKeyDown={handleKeyDown}
           className={`pr-16 min-h-[120px] resize-none ${
             textareaBottomLeftComponent || textareaBottomRightComponent ? 'pb-8' : 'pb-2'
-          } ${
-            textareaTopLeftComponent || textareaTopRightComponent ? `pt-${textareaTopPadding}` : 'pt-2'
-          } ${'pl-3'} ${isGenerating ? 'generating-placeholder' : ''}`
+          } pl-3 ${isGenerating ? 'generating-placeholder' : ''}`
         }
           style={{
             ...(useStudioTheme ? {
               backgroundColor: currentTheme === 'dark' ? '#1a1a1a' : '#ffffff',
               color: currentTheme === 'dark' ? '#ffffff' : '#000000',
               borderColor: currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'
-            } : {})
+            } : {}),
+            paddingTop: textareaTopLeftComponent || textareaTopRightComponent 
+              ? `${textareaTopPadding * 4}px` 
+              : '8px'
           } as React.CSSProperties}
         />
         
