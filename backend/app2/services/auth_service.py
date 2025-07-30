@@ -20,9 +20,9 @@ from app2.core.config import settings
 
 logger = get_service_logger("auth")
 
-# Global token cache with automatic expiration and size limit
+# Legacy cache - TODO: Remove after JWT metadata migration is complete
 CACHE_EXPIRY_SECONDS = 300  # 5 minutes
-_token_cache = TTLCache(maxsize=1000, ttl=CACHE_EXPIRY_SECONDS)
+_token_cache = TTLCache(maxsize=100, ttl=CACHE_EXPIRY_SECONDS)  # Reduced size since it's legacy
 
 
 class AuthService:
@@ -67,10 +67,17 @@ class AuthService:
         """
         logger.info(f"Creating new user with email: {email}")
         try:
-            # Register user with Supabase Auth
-            auth_response = supabase.client.auth.sign_up(
-                {"email": email, "password": password}
-            )
+            # Create a new user profile ID first (we'll need it for the JWT)
+            new_user_id = uuid.uuid4()
+            
+            # Register user with Supabase Auth, including user profile ID in metadata
+            auth_response = supabase.client.auth.sign_up({
+                "email": email, 
+                "password": password,
+                "options": {
+                    "data": {"user_profile_id": str(new_user_id)}
+                }
+            })
 
             if not auth_response.user:
                 logger.error("No user returned from Supabase sign_up")
@@ -83,8 +90,7 @@ class AuthService:
             try:
                 if self.auth_identity_repository:
                     # Use the new identity-aware flow
-                    # Create a new user profile with its own ID
-                    new_user_id = uuid.uuid4()
+                    # Create user profile using the pre-generated ID (already in JWT)
                     user_profile = await self.user_repository.create_profile(
                         user_id=new_user_id,
                         email=email,
@@ -304,7 +310,7 @@ class AuthService:
 
     async def get_current_user(self, token: str) -> Dict[str, Any]:
         """
-        Get the current user from a token with caching
+        Get the current user from a token (stateless)
 
         Args:
             token: The JWT token
@@ -315,48 +321,35 @@ class AuthService:
         Raises:
             UnauthorizedException: If the token is invalid
         """
-        # Generate secure cache key using full hash to prevent collisions
-        cache_key = f"user_{hashlib.sha256(token.encode()).hexdigest()}"
-        
-        # Check TTL cache first (automatically handles expiration)
-        logger.info(f"🔍 CACHE CHECK: Looking for cache_key: {cache_key}, cache size: {len(_token_cache)}")
-        if cache_key in _token_cache:
-            logger.info(f"✅ CACHE HIT: Returning cached user info for token: {token[:10]}...")
-            return _token_cache[cache_key]
-        
-        logger.info(f"❌ CACHE MISS: Getting current user from token: {token[:10]}... (cache_key: {cache_key})")
+        # Verify the JWT token and get user info
         user_info = await self.verify_token(token)
         
-        # If we have auth identity mapping, get the canonical user ID (with caching)
-        if self.auth_identity_repository and "id" in user_info:
-            auth_provider_id = user_info["id"]
-            
-            # Check cache for identity mapping
-            identity_cache_key = f"identity_{auth_provider_id}"
-            if identity_cache_key in _token_cache:
-                identity = _token_cache[identity_cache_key]
-                logger.debug(f"✅ IDENTITY CACHE HIT for {auth_provider_id}")
-            else:
+        # Check if user_profile_id is in the JWT user metadata (for new users)
+        user_metadata = user_info.get("user_metadata", {})
+        user_profile_id = user_metadata.get("user_profile_id")
+        
+        if user_profile_id:
+            # New flow: Use user_profile_id from JWT metadata (stateless)
+            logger.info(f"Using user_profile_id from JWT metadata: {user_profile_id}")
+            user_info["id"] = user_profile_id
+            user_info["canonical_user_id"] = user_profile_id
+            user_info["auth_provider_id"] = user_info.get("id")  # Original Supabase ID
+        else:
+            # Legacy flow: Fall back to database lookup for existing users
+            # TODO: Remove this once all users have been migrated
+            if self.auth_identity_repository and "id" in user_info:
+                auth_provider_id = user_info["id"]
                 identity = await self.auth_identity_repository.find_by_auth_provider_id(
                     uuid.UUID(auth_provider_id)
                 )
-                # Cache identity mapping for 10 minutes (longer than token cache)
+                
                 if identity:
-                    _token_cache[identity_cache_key] = identity
-                logger.debug(f"❌ IDENTITY CACHE MISS for {auth_provider_id}")
-            
-            if identity:
-                # Replace the auth provider ID with the canonical user profile ID
-                user_info["id"] = str(identity.user_profile_id)
-                user_info["canonical_user_id"] = str(identity.user_profile_id)
-                user_info["auth_provider_id"] = auth_provider_id
-                logger.info(
-                    f"Mapped auth ID {auth_provider_id} to user profile ID {identity.user_profile_id}"
-                )
-        
-        # Cache the result (TTL handled automatically)
-        _token_cache[cache_key] = user_info
-        logger.info(f"💾 CACHED: Stored user info for cache_key: {cache_key}, cache size: {len(_token_cache)}")
+                    user_info["id"] = str(identity.user_profile_id)
+                    user_info["canonical_user_id"] = str(identity.user_profile_id)
+                    user_info["auth_provider_id"] = auth_provider_id
+                    logger.info(
+                        f"Legacy lookup: Mapped auth ID {auth_provider_id} to user profile ID {identity.user_profile_id}"
+                    )
         
         return user_info
 
