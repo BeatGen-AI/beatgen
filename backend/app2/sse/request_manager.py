@@ -7,6 +7,8 @@ import uuid
 import time
 import logging
 import asyncio
+import os
+import json
 from enum import Enum
 from typing import Dict, Any, Optional, Set
 from pydantic import BaseModel
@@ -19,12 +21,12 @@ logger = logging.getLogger("beatgen.request_manager")
 class RequestStatus(str, Enum):
     """Status of an assistant request"""
 
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    TIMED_OUT = "timed_out"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    TIMED_OUT = "TIMED_OUT"
 
 
 class RequestContext(BaseModel):
@@ -50,7 +52,7 @@ class RequestContext(BaseModel):
 class RequestManager:
     """
     Manager for assistant request IDs and tracking active requests.
-    Uses an in-memory store with TTL for request tracking.
+    Can use either in-memory storage or distributed database storage based on configuration.
     """
 
     # Singleton instance
@@ -78,6 +80,10 @@ class RequestManager:
         if self._initialized:
             return
 
+        # Check if we should use distributed storage
+        self._use_distributed = os.getenv("USE_DISTRIBUTED_REQUESTS", "false").lower() == "true"
+        
+        # Always initialize local storage for request management
         # Active requests by request_id
         self._requests: Dict[str, RequestContext] = {}
 
@@ -86,9 +92,17 @@ class RequestManager:
 
         # Initialize cleanup task as None - will be started when needed
         self._cleanup_task = None
+        
+        if self._use_distributed:
+            # Import Redis client for storing request data
+            from app2.infrastructure.redis_client import redis_client
+            self._redis = redis_client.get_client()
+            logger.info("Request manager initialized with Redis storage + Redis pub/sub")
+        else:
+            # Traditional in-memory storage only
+            logger.info("Request manager initialized with in-memory storage only")
 
         self._initialized = True
-        logger.info("Request manager initialized")
 
     async def _cleanup_loop(self):
         """Background task to clean up expired requests"""
@@ -151,12 +165,18 @@ class RequestManager:
         request_id = f"{timestamp}-{unique_id}"
         return request_id
 
-    def can_create_request(self, user_id: str) -> bool:
+    async def can_create_request(self, user_id: str) -> bool:
         """Check if a user can create a new request (rate limiting)"""
-        user_requests = self._user_requests.get(user_id, set())
-        return len(user_requests) < self.MAX_REQUESTS_PER_USER
+        if self._use_distributed:
+            # Get user's active requests from Redis
+            user_requests_key = f"user_requests:{user_id}"
+            user_request_count = await self._redis.scard(user_requests_key)
+            return user_request_count < self.MAX_REQUESTS_PER_USER
+        else:
+            user_requests = self._user_requests.get(user_id, set())
+            return len(user_requests) < self.MAX_REQUESTS_PER_USER
 
-    def create_request(
+    async def create_request(
         self,
         user_id: str,
         mode: str,
@@ -184,11 +204,49 @@ class RequestManager:
         Raises:
             ValueError: If user has too many active requests
         """
-        # Check rate limiting
-        if not self.can_create_request(user_id):
-            raise ValueError(
-                f"User {user_id} has reached the maximum number of active requests"
-            )
+        
+        if self._use_distributed:
+            # Store request data in Redis
+            # Check rate limiting first
+            if not await self.can_create_request(user_id):
+                raise ValueError(
+                    f"User {user_id} has reached the maximum number of active requests"
+                )
+
+            # Generate request ID
+            request_id = self.generate_request_id()
+
+            # Store request data in Redis
+            request_data = {
+                "request_id": request_id,
+                "user_id": user_id,
+                "status": RequestStatus.PENDING.value,
+                "mode": mode,
+                "prompt": prompt,
+                "model": model,
+                "track_id": track_id or "",
+                "context": json.dumps(context) if context else "{}",
+                "timestamp": time.time()
+            }
+
+            # Store in Redis with expiration (5 minutes)
+            request_key = f"request:{request_id}"
+            await self._redis.hset(request_key, mapping=request_data)
+            await self._redis.expire(request_key, self.REQUEST_TIMEOUT_SECONDS)
+
+            # Add to user's request set
+            user_requests_key = f"user_requests:{user_id}"
+            await self._redis.sadd(user_requests_key, request_id)
+            await self._redis.expire(user_requests_key, self.REQUEST_TIMEOUT_SECONDS)
+
+            logger.info(f"🔵 REQUEST_MANAGER - Created Redis request {request_id} for user {user_id}, mode: {mode}")
+            return request_id
+        else:
+            # Use local storage - check rate limiting
+            if not await self.can_create_request(user_id):
+                raise ValueError(
+                    f"User {user_id} has reached the maximum number of active requests"
+                )
         
         # Check global limits
         if len(self._requests) >= self.MAX_TOTAL_REQUESTS:
@@ -205,7 +263,7 @@ class RequestManager:
         sse_queue = SSEQueueManager(request_id)
 
         # Create request context
-        context = RequestContext(
+        request_context = RequestContext(
             request_id=request_id,
             user_id=user_id,
             timestamp=time.time(),
@@ -219,7 +277,7 @@ class RequestManager:
         )
 
         # Store request
-        self._requests[request_id] = context
+        self._requests[request_id] = request_context
 
         # Add to user requests
         if user_id not in self._user_requests:
@@ -241,95 +299,178 @@ class RequestManager:
         )
         return request_id
 
-    def get_request(self, request_id: str) -> Optional[RequestContext]:
+    async def get_request(self, request_id: str) -> Optional[RequestContext]:
         """Get request context by ID"""
-        return self._requests.get(request_id)
+        if self._use_distributed:
+            # Get request data from Redis
+            request_key = f"request:{request_id}"
+            request_data = await self._redis.hgetall(request_key)
+            
+            if not request_data:
+                return None
+                
+            # Parse context JSON
+            try:
+                context = json.loads(request_data.get('context', '{}'))
+            except:
+                context = {}
+                
+            # Convert to RequestContext for compatibility
+            return RequestContext(
+                request_id=request_data["request_id"],
+                user_id=request_data["user_id"],
+                timestamp=float(request_data.get("timestamp", time.time())),
+                status=RequestStatus(request_data["status"]),
+                mode=request_data["mode"],
+                prompt=request_data["prompt"],
+                model=request_data["model"],
+                track_id=request_data.get("track_id") if request_data.get("track_id") else None,
+                context=context,
+                sse_queue=None,  # Will be handled separately for distributed mode
+                task_ref=None,
+                chat_session=None
+            )
+        else:
+            return self._requests.get(request_id)
 
-    def update_request_status(self, request_id: str, status: RequestStatus) -> bool:
+    async def update_request_status(self, request_id: str, status: RequestStatus) -> bool:
         """Update request status"""
-        request = self._requests.get(request_id)
-        if not request:
-            return False
+        if self._use_distributed:
+            # Update status in Redis
+            request_key = f"request:{request_id}"
+            result = await self._redis.hset(request_key, "status", status.value)
+            return result is not None
+        else:
+            request = self._requests.get(request_id)
+            if not request:
+                return False
 
-        request.status = status
-        return True
+            request.status = status
+            return True
 
     def set_task_reference(self, request_id: str, task_ref: Any) -> bool:
         """Set task reference for a request"""
-        request = self._requests.get(request_id)
-        if not request:
-            return False
+        if self._use_distributed:
+            # In distributed mode, task references are not stored in Redis
+            # They are handled locally by each server instance
+            logger.info(f"Task reference set locally for distributed request {request_id}")
+            return True
+        else:
+            request = self._requests.get(request_id)
+            if not request:
+                return False
 
-        request.task_ref = task_ref
-        return True
+            request.task_ref = task_ref
+            return True
 
     def set_chat_session(self, request_id: str, chat_session: Any) -> bool:
         """Set ChatSession reference for a request"""
-        request = self._requests.get(request_id)
-        if not request:
-            logger.warning(f"Attempted to set chat session for non-existent request: {request_id}")
-            return False
-        
-        request.chat_session = chat_session
-        logger.info(f"Chat session set for request {request_id}")
-        return True
+        if self._use_distributed:
+            # In distributed mode, chat sessions are not stored in Redis
+            # They are handled locally by each server instance
+            logger.info(f"Chat session set locally for distributed request {request_id}")
+            return True
+        else:
+            request = self._requests.get(request_id)
+            if not request:
+                logger.warning(f"Attempted to set chat session for non-existent request: {request_id}")
+                return False
+            
+            request.chat_session = chat_session
+            logger.info(f"Chat session set for request {request_id}")
+            return True
 
-    def get_queue(self, request_id: str) -> Optional[asyncio.Queue]:
+    async def get_queue(self, request_id: str) -> Optional[asyncio.Queue]:
         """Get the queue for a request"""
-        request = self._requests.get(request_id)
-        if not request or not request.sse_queue:
-            return None
+        if self._use_distributed:
+            # In distributed mode, create a Redis-based queue that subscribes to events
+            from app2.sse.redis_sse_queue import RedisSSEQueue
+            redis_queue = RedisSSEQueue(request_id)
+            return await redis_queue.create_queue_from_subscription()
+        else:
+            request = self._requests.get(request_id)
+            if not request or not request.sse_queue:
+                return None
 
-        return request.sse_queue.get_queue()
+            return request.sse_queue.get_queue()
 
-    def get_sse_queue(self, request_id: str) -> Optional[SSEQueueManager]:
+    async def get_sse_queue(self, request_id: str) -> Optional[SSEQueueManager]:
         """Get the SSE event queue for a request"""
-        request = self._requests.get(request_id)
-        if not request:
-            return None
+        if self._use_distributed:
+            # In distributed mode, create a new SSE queue for this request
+            # This will be used for sending new events to the distributed storage
+            return SSEQueueManager(request_id)
+        else:
+            request = self._requests.get(request_id)
+            if not request:
+                return None
 
-        return request.sse_queue
+            return request.sse_queue
 
-    def remove_request(
+    async def remove_request(
         self, request_id: str, status: RequestStatus = RequestStatus.COMPLETED
     ) -> bool:
         """Remove a request and update its status"""
-        request = self._requests.get(request_id)
-        if not request:
-            return False
+        if self._use_distributed:
+            # Get request data from Redis first
+            request_key = f"request:{request_id}"
+            request_data = await self._redis.hgetall(request_key)
+            
+            if not request_data:
+                return False
 
-        # Update status
-        request.status = status
+            user_id = request_data.get("user_id")
+            
+            # Update status first
+            await self._redis.hset(request_key, "status", status.value)
+            
+            # Remove from user's request set
+            if user_id:
+                user_requests_key = f"user_requests:{user_id}"
+                await self._redis.srem(user_requests_key, request_id)
+            
+            # Remove the request data from Redis
+            await self._redis.delete(request_key)
+            
+            logger.info(f"Removed Redis request {request_id} with status {status}")
+            return True
+        else:
+            request = self._requests.get(request_id)
+            if not request:
+                return False
 
-        # Remove from user requests
-        user_id = request.user_id
-        if user_id in self._user_requests:
-            self._user_requests[user_id].discard(request_id)
-            if not self._user_requests[user_id]:
-                del self._user_requests[user_id]
+            # Update status
+            request.status = status
 
-        # Cancel task if it exists
-        if request.task_ref and not request.task_ref.done():
-            request.task_ref.cancel()
+            # Remove from user requests
+            user_id = request.user_id
+            if user_id in self._user_requests:
+                self._user_requests[user_id].discard(request_id)
+                if not self._user_requests[user_id]:
+                    del self._user_requests[user_id]
 
-        # Cancel chat session if it exists and status is CANCELLED
-        if status == RequestStatus.CANCELLED and request.chat_session:
-            if hasattr(request.chat_session, 'cancel') and callable(request.chat_session.cancel):
-                try:
-                    logger.info(f"Calling .cancel() on chat session for request {request_id}")
-                    request.chat_session.cancel()
-                except Exception as e:
-                    logger.error(f"Error calling .cancel() on chat session for {request_id}: {e}")
-            else:
-                logger.warning(f"chat_session for request {request_id} does not have a callable 'cancel' method.")
+            # Cancel task if it exists
+            if request.task_ref and not request.task_ref.done():
+                request.task_ref.cancel()
 
-        # Remove from requests
-        del self._requests[request_id]
+            # Cancel chat session if it exists and status is CANCELLED
+            if status == RequestStatus.CANCELLED and request.chat_session:
+                if hasattr(request.chat_session, 'cancel') and callable(request.chat_session.cancel):
+                    try:
+                        logger.info(f"Calling .cancel() on chat session for request {request_id}")
+                        request.chat_session.cancel()
+                    except Exception as e:
+                        logger.error(f"Error calling .cancel() on chat session for {request_id}: {e}")
+                else:
+                    logger.warning(f"chat_session for request {request_id} does not have a callable 'cancel' method.")
 
-        logger.info(f"Removed request {request_id} with status {status}")
-        return True
+            # Remove from requests
+            del self._requests[request_id]
 
-    def validate_request_id(
+            logger.info(f"Removed request {request_id} with status {status}")
+            return True
+
+    async def validate_request_id(
         self, request_id: str, user_id: Optional[str] = None
     ) -> bool:
         """
@@ -342,25 +483,51 @@ class RequestManager:
         Returns:
             True if valid, False otherwise
         """
-        # Check if request exists
-        request = self._requests.get(request_id)
-        if not request:
-            logger.error(f"Request {request_id} not found in RequestManager (Instance: {id(self)})")
-            return False
+        if self._use_distributed:
+            # Check if request exists in Redis
+            request_key = f"request:{request_id}"
+            request_data = await self._redis.hgetall(request_key)
+            
+            if not request_data:
+                logger.error(f"Request {request_id} not found in Redis")
+                return False
 
-        # Check user if provided
-        if user_id and request.user_id != user_id:
-            logger.error(f"Request {request_id} not found for user {user_id} in RequestManager (Instance: {id(self)})")
-            return False
+            # Check user if provided
+            if user_id and request_data.get("user_id") != user_id:
+                logger.error(f"Request {request_id} not found for user {user_id} in Redis")
+                return False
 
-        return True
-
-    def get_active_requests_count(self, user_id: Optional[str] = None) -> int:
-        """Get count of active requests, optionally filtered by user"""
-        if user_id:
-            return len(self._user_requests.get(user_id, set()))
+            return True
         else:
-            return len(self._requests)
+            # Check if request exists
+            request = self._requests.get(request_id)
+            if not request:
+                logger.error(f"Request {request_id} not found in RequestManager (Instance: {id(self)})")
+                return False
+
+            # Check user if provided
+            if user_id and request.user_id != user_id:
+                logger.error(f"Request {request_id} not found for user {user_id} in RequestManager (Instance: {id(self)})")
+                return False
+
+            return True
+
+    async def get_active_requests_count(self, user_id: Optional[str] = None) -> int:
+        """Get count of active requests, optionally filtered by user"""
+        if self._use_distributed:
+            if user_id:
+                # Get user's active requests from Redis
+                user_requests_key = f"user_requests:{user_id}"
+                return await self._redis.scard(user_requests_key)
+            else:
+                # Count all request keys in Redis
+                request_keys = await self._redis.keys("request:*")
+                return len(request_keys)
+        else:
+            if user_id:
+                return len(self._user_requests.get(user_id, set()))
+            else:
+                return len(self._requests)
 
     async def shutdown(self):
         """Clean up resources on shutdown"""

@@ -147,7 +147,7 @@ class ChatSession:
     
     def cancel(self) -> None:
         """Sets the cancellation flag to stop ongoing streaming."""
-        print(f"ChatSession received cancel signal for provider {self.current_provider_name}, model {self.current_model_name}")
+        logger.info(f"ChatSession received cancel signal for provider {self.current_provider_name}, model {self.current_model_name}")
         self.is_cancelled = True
     
     async def send_message_async(
@@ -400,7 +400,7 @@ class ChatSession:
             new_base_url: Optional base URL for the new provider.
             **new_provider_kwargs: Additional keyword arguments for the new provider adapter.
         """
-        print(f"Switching provider to {new_provider_name} with model {new_model_name}")
+        logger.info(f"Switching provider to {new_provider_name} with model {new_model_name}")
 
         # Update current provider details
         self.current_provider_name = new_provider_name
@@ -429,7 +429,7 @@ class ChatSession:
         )
 
         # The existing self.message_history is preserved and will be used by the new adapter.
-        print(f"Provider switched successfully to {self.current_provider_name}.")
+        logger.info(f"Provider switched successfully to {self.current_provider_name}.")
 
     def get_token_usage(self) -> Dict[str, int]:
         """Get the accumulated token usage for this session."""

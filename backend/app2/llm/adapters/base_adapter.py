@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Any, AsyncGenerator, Dict, Optional, Sequence, Union, Tuple
 
@@ -14,6 +15,8 @@ from pydantic_ai.messages import (
 )
 
 from app2.llm.history import ChatMessage, ToolResponseMessageContent
+
+logger = logging.getLogger(__name__)
 
 class ProviderAdapter(ABC):
     """
@@ -119,7 +122,7 @@ class ProviderAdapter(ABC):
                 # pydantic_ai_history.append(ModelRequest(parts=[SystemPromptPart(content=str(msg.content))]))
                 # For now, we'll skip adding system messages directly to the formatted history 
                 # as they are usually set on the agent itself.
-                print(f"Warning: System role in ChatMessage history is usually handled by agent's system_prompt/instructions, not direct history. Skipping: {msg.content}")
+                logger.warning(f"System role in ChatMessage history is usually handled by agent's system_prompt/instructions, not direct history. Skipping: {msg.content}")
                 pass
             elif msg.role == "tool":
                 if isinstance(msg.content, ToolResponseMessageContent):
@@ -133,9 +136,9 @@ class ProviderAdapter(ABC):
                         ])
                     )
                 else:
-                    print(f"Warning: Tool role in ChatMessage history does not have ToolResponseMessageContent. Skipping: {msg.content}")
+                    logger.warning(f"Tool role in ChatMessage history does not have ToolResponseMessageContent. Skipping: {msg.content}")
             else:
-                print(f"Warning: Unknown role '{msg.role}' in ChatMessage history. Skipping: {msg.content}")
+                logger.warning(f"Unknown role '{msg.role}' in ChatMessage history. Skipping: {msg.content}")
         
         return pydantic_ai_history
 

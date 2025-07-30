@@ -8,6 +8,7 @@ creation and management of SSE events for streaming responses.
 import asyncio
 import time
 import logging
+import os
 from typing import Dict, Any, Optional
 
 from app2.types.assistant_actions import AssistantAction
@@ -55,9 +56,36 @@ class SSEQueueManager:
         self.is_started = False
         self.is_ended = False
 
+        # Check if we should use distributed storage
+        self._use_distributed = os.getenv("USE_DISTRIBUTED_REQUESTS", "false").lower() == "true"
+        
+        if self._use_distributed:
+            # Import here to avoid circular imports
+            from app2.sse.redis_sse_queue import RedisSSEQueue
+            self._redis_queue = RedisSSEQueue(request_id)
+
         logger.debug(
-            f"Created SSEEventQueue for request {request_id} with message {self.message_id}"
+            f"Created SSEEventQueue for request {request_id} with message {self.message_id} (distributed: {self._use_distributed})"
         )
+
+    async def _put_event(self, event_type: str, event_data: Dict[str, Any]):
+        """
+        Put an event in either local queue OR Redis, depending on distributed mode
+        
+        Args:
+            event_type: Type of event
+            event_data: Event data
+        """
+        if self._use_distributed:
+            try:
+                # In distributed mode, ONLY publish to Redis
+                await self._redis_queue.publish_event(event_type, event_data)
+            except Exception as e:
+                logger.error(f"Failed to publish event to Redis: {str(e)}")
+                raise
+        else:
+            # In local mode, use local queue
+            await self.queue.put((event_type, event_data))
 
     async def start_stream(self, additional_data: Optional[Dict[str, Any]] = None):
         """
@@ -75,7 +103,7 @@ class SSEQueueManager:
         if additional_data:
             data.update(additional_data)
 
-        await self.queue.put(("response_start", data))
+        await self._put_event("response_start", data)
         self.is_started = True
         logger.debug(f"Started stream for message {self.message_id}")
 
@@ -87,7 +115,7 @@ class SSEQueueManager:
             name: Stage name (e.g., "processing", "generating")
             description: Human-readable description of the stage
         """
-        await self.queue.put(("stage", {"name": name, "description": description}))
+        await self._put_event("stage", {"name": name, "description": description})
         logger.debug(f"Sent stage event: {name}")
 
     async def status(self, message: str, details: Optional[str] = None):
@@ -102,7 +130,7 @@ class SSEQueueManager:
         if details:
             data["details"] = details
 
-        await self.queue.put(("status", data))
+        await self._put_event("status", data)
         logger.debug(f"Sent status event: {message}")
 
     async def add_chunk(self, text: str):
@@ -124,15 +152,13 @@ class SSEQueueManager:
             )
             return
 
-        await self.queue.put(
-            (
-                "response_chunk",
-                {
-                    "message_id": self.message_id,
-                    "chunk": text,
-                    "chunk_index": self.chunk_index,
-                },
-            )
+        await self._put_event(
+            "response_chunk",
+            {
+                "message_id": self.message_id,
+                "chunk": text,
+                "chunk_index": self.chunk_index,
+            }
         )
 
         self.chunk_index += 1
@@ -152,8 +178,8 @@ class SSEQueueManager:
             )
             await self.start_stream()
 
-        await self.queue.put(
-            ("response_end", {"message_id": self.message_id, "is_complete": True})
+        await self._put_event(
+            "response_end", {"message_id": self.message_id, "is_complete": True}
         )
 
         self.is_ended = True
@@ -168,8 +194,8 @@ class SSEQueueManager:
         Args:
             action: An AssistantAction instance that defines the action type and its associated data
         """
-        await self.queue.put(
-            ("action", {"type": action.action_type, "data": action.data.model_dump()})
+        await self._put_event(
+            "action", {"type": action.action_type, "data": action.data.model_dump()}
         )
         #logger.info(f"Sent action event: {action}")
 
@@ -180,7 +206,7 @@ class SSEQueueManager:
         Args:
             data: Complete response data
         """
-        await self.queue.put(("complete", data))
+        await self._put_event("complete", data)
         logger.info(f"Sent complete event for request {self.request_id}")
 
     async def error(self, message: str, error_data: Optional[Dict[str, Any]] = None):
@@ -195,14 +221,14 @@ class SSEQueueManager:
         if error_data:
             data.update(error_data)
 
-        await self.queue.put(("error", data))
+        await self._put_event("error", data)
         logger.error(f"Sent error event: {message}")
 
     async def cancelled(self):
         """
         Send a cancelled event.
         """
-        await self.queue.put(("cancelled", {"message": "Request cancelled"}))
+        await self._put_event("cancelled", {"message": "Request cancelled"})
         logger.info(f"Sent cancelled event for request {self.request_id}")
 
     async def step_event(self, step_id: int, step_name: str, event_type: str, 
@@ -233,14 +259,14 @@ class SSEQueueManager:
             "timestamp": datetime.now().isoformat()
         }
         
-        await self.queue.put(("step_event", event_data))
+        await self._put_event("step_event", event_data)
         logger.info(f"Sent step event: step_id={step_id}, type={event_type}, step_name={step_name}")
 
     async def heartbeat(self):
         """
         Send a heartbeat event to keep the connection alive.
         """
-        await self.queue.put(("heartbeat", {"timestamp": time.time()}))
+        await self._put_event("heartbeat", {"timestamp": time.time()})
         logger.debug(f"Sent heartbeat for request {self.request_id}")
 
     def get_queue(self) -> asyncio.Queue:
@@ -263,3 +289,28 @@ class SSEQueueManager:
     def get_chunk_count(self) -> int:
         """Get the number of chunks sent so far"""
         return self.chunk_index
+
+    async def get_distributed_events(self, mark_processed: bool = True):
+        """
+        Get unprocessed events from distributed storage and add them to local queue
+        
+        Args:
+            mark_processed: Whether to mark retrieved events as processed
+        """
+        if not self._use_distributed:
+            return
+            
+        try:
+            events = await self._distributed_service.get_queue_events(
+                request_id=self.request_id,
+                mark_processed=mark_processed
+            )
+            
+            for event in events:
+                await self.queue.put((event["event_type"], event["event_data"]))
+                
+            if events:
+                logger.debug(f"Retrieved {len(events)} distributed events for request {self.request_id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to retrieve distributed events: {str(e)}")

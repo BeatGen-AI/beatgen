@@ -62,7 +62,6 @@ class VertexAIService:
         # Handle development environment with local credentials
         if app_env == "dev":
             local_creds = os.getenv("LOCAL_GOOGLE_APPLICATION_CREDENTIALS")
-            print(f"Local credentials: {local_creds}")
             if local_creds and os.path.exists(local_creds):
                 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = local_creds
                 logger.info(f"Development mode: Using local credentials from: {local_creds}")

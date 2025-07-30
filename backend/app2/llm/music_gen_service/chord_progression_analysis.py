@@ -1,5 +1,8 @@
+import logging
 from decimal import Decimal
 from music21 import pitch, key, harmony, roman
+
+logger = logging.getLogger(__name__)
 
 
 def analyze_chord_progression(chord_progression, key_str):
@@ -553,20 +556,21 @@ if __name__ == "__main__":
 
     analysis = analyze_chord_progression(chord_progression, key_str)
 
-    # Print results
+    # Log results for debugging
+    logger.debug("Chord progression analysis results:")
     for chord_data in analysis:
-        print(f"\nChord: {chord_data['chord_name']} ({chord_data['roman_numeral']})")
-        print(f"Chord Notes: {chord_data['chord_notes']}")
-        print(f"Extended Chord Notes: {chord_data['extended_chord_notes']}")
-        print(f"Key Notes: {chord_data['key_notes']}")
-        print(f"Tension Notes: {chord_data['tension_notes']}")
+        logger.debug(f"Chord: {chord_data['chord_name']} ({chord_data['roman_numeral']})")
+        logger.debug(f"Chord Notes: {chord_data['chord_notes']}")
+        logger.debug(f"Extended Chord Notes: {chord_data['extended_chord_notes']}")
+        logger.debug(f"Key Notes: {chord_data['key_notes']}")
+        logger.debug(f"Tension Notes: {chord_data['tension_notes']}")
 
-        # Print top notes by weight
+        # Log top notes by weight
         sorted_notes = sorted(
             chord_data["note_weights"].items(), key=lambda x: x[1], reverse=True
         )
-        print("\nTop melody notes for this chord (with weights):")
+        logger.debug("Top melody notes for this chord (with weights):")
         for note_name, weight in sorted_notes[:5]:
-            print(f"{note_name}: {weight:.2f}")
+            logger.debug(f"{note_name}: {weight:.2f}")
 
-    print(analysis)
+    logger.debug(f"Full analysis structure: {analysis}")

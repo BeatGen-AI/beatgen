@@ -29,10 +29,7 @@ if not logger.handlers:
 # This ensures our log settings aren't overridden
 logger.propagate = False  # Uncommenting this is critical!
 
-# Force a direct print to ensure visibility
-print("[RESEARCH MODULE] MusicResearcher module initialized, stdout handler added")
-
-# Log through logger too
+# Log through logger
 logger.info("MusicResearcher module initialized with custom handler")
 load_dotenv()
 
@@ -65,9 +62,6 @@ class MusicResearcher:
 
         try:
             # Research the music style
-            print(
-                f"[DIRECT PRINT] Researching musical context for: {description[:40]}..."
-            )
             logger.info(f"Researching musical context for: {description[:40]}...")
             research_content = await self._research_music(description)
 
@@ -88,9 +82,6 @@ class MusicResearcher:
     async def research_chord_progression(self, description: str) -> str:
         """Research chord progression using Perplexity."""
         logger.debug(f"Beginning research_chord_progression for: {description[:50]}...")
-        print(
-            f"[DIRECT PRINT] Beginning research_chord_progression for: {description[:50]}..."
-        )
         return await self._research_chord_progression(description)
 
     async def research_drum_sounds(self, description: str) -> str:
@@ -101,7 +92,6 @@ class MusicResearcher:
     async def _research_music(self, description: str) -> str:
         """Research musical characteristics using Perplexity."""
         logger.debug(f"Beginning _research_music for: {description[:50]}...")
-        print(f"[DIRECT PRINT] Beginning _research_music for: {description[:50]}...")
         messages = [
             {
                 "role": "system",
@@ -127,9 +117,6 @@ class MusicResearcher:
 
         try:
             # Using asyncio to run the synchronous code in a non-blocking way
-            print(
-                "[DIRECT PRINT] Inside _research_music: Setting up async execution for Perplexity API call"
-            )
             logger.debug("Setting up async execution for Perplexity API call")
 
             # Run the synchronous function in the default executor
@@ -150,12 +137,7 @@ class MusicResearcher:
 
     async def _research_chord_progression(self, description: str) -> str:
         """Research chord progression using Perplexity."""
-        logger.debug(
-            f"Beginning _research_chord_progression for: {description[:50]}..."
-        )
-        print(
-            f"[DIRECT PRINT] Beginning _research_chord_progression for: {description[:50]}..."
-        )
+        logger.debug(f"Beginning _research_chord_progression for: {description[:50]}...")
 
         messages = [
             {
@@ -180,9 +162,6 @@ class MusicResearcher:
 
         try:
             # Using asyncio to run the synchronous code in a non-blocking way
-            print(
-                "[DIRECT PRINT] Inside _research_chord_progression: Setting up async execution for Perplexity API call"
-            )
             logger.debug("Setting up async execution for Perplexity API call")
 
             # Run the synchronous function in the default executor
