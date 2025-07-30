@@ -16,6 +16,9 @@ interface MidiTrackCardProps {
   handleDeleteTrack: (trackId: string) => void;
   handleEditTrack?: (trackId: string) => void;
   sectionColor: string;
+  isSelectable?: boolean;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
@@ -27,6 +30,9 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
   handleDeleteTrack,
   handleEditTrack,
   sectionColor,
+  isSelectable = false,
+  isSelected = false,
+  onSelect,
 }) => {
   const isPlaying = playingId === track.id;
   
@@ -95,6 +101,9 @@ const MidiTrackCard: React.FC<MidiTrackCardProps> = ({
       footerLeft={footerLeft}
       footerRight={footerRight}
       className="midi-track-card"
+      isSelectable={isSelectable}
+      isSelected={isSelected}
+      onSelect={onSelect}
     />
   );
 };

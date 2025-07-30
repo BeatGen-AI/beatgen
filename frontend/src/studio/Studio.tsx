@@ -29,16 +29,19 @@ import { useAppTheme } from '../lib/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconChevronLeftPipe, IconChevronRightPipe } from '@tabler/icons-react';
 import { GridSnapOption } from './components/piano-roll2/gridConstants';
+import { getSound, getMidiTrack, getSamplerTrack, getDrumTrack } from '../platform/api/sounds';
 
 // Studio Component Props
 interface StudioProps {
   projectId?: string;
+  selectedTracks?: string;
+  trackTypes?: string;
 }
 
 const COLLAPSED_SIDEBAR_WIDTH = '40px'; // Width of the sidebar when collapsed
 
 // Main Studio Component
-function Studio({ projectId }: StudioProps) {
+function Studio({ projectId, selectedTracks, trackTypes }: StudioProps) {
   // Initialize DB session management
   useStudioDBSession();
   
@@ -326,6 +329,63 @@ function Studio({ projectId }: StudioProps) {
       delete (window as any).storeInstance;
     };
   }, [initializeAudio, loadProject]);
+  
+  // Handle loading selected tracks from homepage
+  useEffect(() => {
+    if (selectedTracks && trackTypes && isInitialized && projectId) {
+      const trackIds = selectedTracks.split(',');
+      const types = trackTypes.split(',');
+      
+      console.log('Loading selected tracks from homepage:', { trackIds, types });
+      
+      // Load each selected track
+      trackIds.forEach(async (trackId, index) => {
+        const trackType = types[index];
+        
+        try {
+          switch (trackType) {
+            case 'AUDIO':
+              // Fetch the audio track data
+              const audioTrackData = await getSound(trackId);
+              await handleAddTrack('AUDIO', {
+                audioTrackData,
+              } as any);
+              break;
+              
+            case 'MIDI':
+              // Fetch the MIDI track data
+              const midiTrackData = await getMidiTrack(trackId);
+              // TODO: Implement MIDI track loading with proper payload
+              console.log('MIDI track loading not yet implemented:', midiTrackData);
+              // await handleAddTrack('MIDI', {
+              //   instrumentId: midiTrackData.instrument_id,
+              //   instrumentName: midiTrackData.instrument_file?.display_name || 'Unknown',
+              //   instrumentStorageKey: midiTrackData.instrument_file?.storage_key || '',
+              //   midiNotes: midiTrackData.midi_notes_json
+              // } as any);
+              break;
+              
+            case 'SAMPLER':
+              // Fetch the sampler track data
+              const samplerTrackData = await getSamplerTrack(trackId);
+              // TODO: Implement sampler track loading
+              console.log('Sampler track loading not yet implemented:', samplerTrackData);
+              break;
+              
+            case 'DRUM':
+              // Fetch the drum track data
+              const drumTrackData = await getDrumTrack(trackId);
+              await handleAddTrack('DRUM', {
+                samples: drumTrackData.sampler_tracks || []
+              } as any);
+              break;
+          }
+        } catch (error) {
+          console.error(`Failed to load track ${trackId}:`, error);
+        }
+      });
+    }
+  }, [selectedTracks, trackTypes, isInitialized, projectId, handleAddTrack]);
   
   // Handlers
   const handleBpmChange = (event: React.ChangeEvent<HTMLInputElement>) => {

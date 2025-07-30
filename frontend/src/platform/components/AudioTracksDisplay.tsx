@@ -13,6 +13,7 @@ interface AudioTracksDisplayProps {
   onReloadSounds: () => void;
   sectionColor: string;
   useUiMode?: boolean; // When true, use UI mode; when false, use studio mode
+  enableSelection?: boolean;
   // If SoundUploader becomes active, we'll need more props:
   // showSoundUploader: boolean;
   // onToggleSoundUploader: () => void; // Or separate setShow for true/false
@@ -25,6 +26,7 @@ const AudioTracksDisplay: React.FC<AudioTracksDisplayProps> = ({
   onReloadSounds,
   sectionColor,
   useUiMode = true, // Default to UI mode for homepage
+  enableSelection = false,
   // showSoundUploader,
   // onToggleSoundUploader,
   // onSoundUploaded,
@@ -94,7 +96,7 @@ const AudioTracksDisplay: React.FC<AudioTracksDisplayProps> = ({
         </Button>
       </div>
       
-      <SoundLibrary onReload={onReloadSounds} sectionColor={sectionColor} />
+      <SoundLibrary onReload={onReloadSounds} sectionColor={sectionColor} enableSelection={enableSelection} />
       
       <AudioTracksModal
         open={isAudioTracksModalOpen}

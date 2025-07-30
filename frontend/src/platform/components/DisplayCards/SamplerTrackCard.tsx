@@ -19,6 +19,9 @@ interface SamplerTrackCardProps {
   handleEditTrack?: (trackId: string) => void;
   handleSeek?: (trackId: string, position: number) => void;
   sectionColor: string;
+  isSelectable?: boolean;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
@@ -31,6 +34,9 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
   handleEditTrack,
   handleSeek,
   sectionColor,
+  isSelectable = false,
+  isSelected = false,
+  onSelect,
 }) => {
   const isPlaying = playingId === track.id;
   
@@ -119,6 +125,9 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
       footerLeft={footerLeft}
       footerRight={footerRight}
       className="sampler-track-card"
+      isSelectable={isSelectable}
+      isSelected={isSelected}
+      onSelect={onSelect}
     />
   );
 };

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { useTrackSelection } from '../context/TrackSelectionContext';
 
 // Shared components and hooks
 import { useSamplerTracksPagination } from '../hooks/usePagination';
@@ -17,10 +18,12 @@ import SamplerTrackCard from './DisplayCards/SamplerTrackCard';
 interface SamplerLibraryProps {
   onReload?: () => void;
   sectionColor: string;
+  enableSelection?: boolean;
 }
 
-export default function SamplerLibrary({ onReload, sectionColor }: SamplerLibraryProps) {
+export default function SamplerLibrary({ onReload, sectionColor, enableSelection = false }: SamplerLibraryProps) {
   const queryClient = useQueryClient();
+  const { toggleTrackSelection, isTrackSelected } = useTrackSelection();
   
   // Audio playback state
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -185,6 +188,9 @@ export default function SamplerLibrary({ onReload, sectionColor }: SamplerLibrar
                 handleDeleteTrack={handleDeleteTrack}
                 handleSeek={handleSeek}
                 sectionColor={sectionColor}
+                isSelectable={enableSelection}
+                isSelected={isTrackSelected(track.id)}
+                onSelect={() => toggleTrackSelection(track, 'SAMPLER')}
               />
             </div>
           ))}

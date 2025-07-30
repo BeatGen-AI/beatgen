@@ -12,12 +12,18 @@ interface AudioTrackCardProps {
   sound: Sound;
   handleDeleteSound: (soundId: string) => void;
   sectionColor: string;
+  isSelectable?: boolean;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
   sound,
   handleDeleteSound,
   sectionColor,
+  isSelectable = false,
+  isSelected = false,
+  onSelect,
 }) => {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isLoadingBlob, setIsLoadingBlob] = useState(false);
@@ -86,6 +92,9 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
       previewContent={previewContent}
       footerRight={footerRight}
       className="audio-track-card"
+      isSelectable={isSelectable}
+      isSelected={isSelected}
+      onSelect={onSelect}
     />
   );
 };

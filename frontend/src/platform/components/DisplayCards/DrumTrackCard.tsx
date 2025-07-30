@@ -13,6 +13,9 @@ interface DrumTrackCardProps {
   handleDeleteTrack: (trackId: string) => void;
   handleEditTrack?: (trackId: string) => void;
   sectionColor: string;
+  isSelectable?: boolean;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 const DrumTrackCard: React.FC<DrumTrackCardProps> = ({
@@ -21,7 +24,10 @@ const DrumTrackCard: React.FC<DrumTrackCardProps> = ({
   handlePlayTrack,
   handleDeleteTrack,
   handleEditTrack,
-  sectionColor
+  sectionColor,
+  isSelectable = false,
+  isSelected = false,
+  onSelect
 }) => {
   const isPlaying = playingId === track.id;
   const samplerCount = track.sampler_tracks?.length || 0;
@@ -90,6 +96,9 @@ const DrumTrackCard: React.FC<DrumTrackCardProps> = ({
       previewContent={previewContent}
       footerRight={footerRight}
       className="drum-track-card"
+      isSelectable={isSelectable}
+      isSelected={isSelected}
+      onSelect={onSelect}
     />
   );
 };
