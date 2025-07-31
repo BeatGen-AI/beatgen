@@ -7,6 +7,7 @@ import {
   UserProfile,
   signInWithGoogle
 } from '../api/auth';
+import { supabase } from '../../lib/supabase';
 
 interface User {
   id: string;
@@ -34,14 +35,7 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Helper function to decode JWT token
-function parseJwt(token: string) {
-  try {
-    return JSON.parse(atob(token.split('.')[1]));
-  } catch (e) {
-    return null;
-  }
-}
+// JWT parsing no longer needed - Supabase handles session management
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -61,99 +55,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Check for existing token on load or token in URL fragment
+  // Initialize auth with Supabase session management
   useEffect(() => {
-    const processToken = async (token: string) => {
-      console.log('Processing token...');
-      localStorage.setItem('access_token', token);
-      const decodedToken = parseJwt(token);
-      console.log('Decoded token:', decodedToken ? 'Valid JSON' : 'Invalid token format');
-
-      if (decodedToken && decodedToken.exp * 1000 > Date.now()) {
-        console.log('Token is valid and not expired');
-        setUser({
-          id: decodedToken.sub || 'unknown',
-          email: decodedToken.email || decodedToken.sub || '',
-        });
-        const userProfile = await fetchProfile(); // Use the new fetchProfile function and get the profile
-        
-        // Check if profile needs completion (OAuth users without username)
-        if (userProfile && !userProfile.username && window.location.pathname !== '/complete-profile') {
-          // Profile incomplete, redirect to complete-profile
-          console.log('Profile incomplete, redirecting to complete-profile');
-          window.location.href = '/complete-profile';
-        }
-      } else {
-        console.warn('Token is expired or invalid, removing');
-        localStorage.removeItem('access_token');
-        setUser(null);
-        setProfile(null);
-      }
-      setLoading(false); // Ensure loading is set to false after processing
-    };
-
     const initializeAuth = async () => {
-      setLoading(true); // Start loading
+      setLoading(true);
+      
       try {
-        // 1. Check URL Fragment for OAuth Token
-        if (window.location.hash.includes('#access_token=')) {
-          console.log('Access token found in URL fragment.');
-          const hash = window.location.hash.substring(1); // Remove #
-          const params = new URLSearchParams(hash);
-          const accessToken = params.get('access_token');
-          const type = params.get('type');
-
-          // Skip processing if this is a recovery token (password reset)
-          if (type === 'recovery') {
-            console.log('Recovery token detected, skipping auth processing');
-            setLoading(false);
-            return;
-          }
-
-          if (accessToken) {
-            await processToken(accessToken);
-            // Clean the URL fragment
-            window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            console.log('URL fragment cleaned.');
-            return; // Exit early, token processed
-          } else {
-            console.warn('Found #access_token= but failed to parse token from fragment.');
-            // Clean the URL fragment even if parsing failed
-            window.history.replaceState(null, '', window.location.pathname + window.location.search);
-          }
-        } else {
-           console.log('No access token found in URL fragment.');
+        // Get initial session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          setLoading(false);
+          return;
         }
 
-        // 2. Check Local Storage (if no token in fragment)
-        console.log('Checking for authentication token in local storage...');
-        const token = localStorage.getItem('access_token');
-        if (token) {
-          console.log('Token found in local storage, validating...');
-          await processToken(token); // Use the same processing logic
-        } else {
-          console.log('No authentication token found in local storage.');
-          setLoading(false); // No token anywhere, stop loading
-        }
+        if (session?.user) {
+          console.log('Found existing session for user:', session.user.email);
+          
+          // Store token for API calls
+          localStorage.setItem('access_token', session.access_token);
+          
+          // Set user state
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+          });
 
+          // Load user profile
+          const userProfile = await fetchProfile();
+          
+          // Check if profile needs completion (OAuth users without username)
+          if (userProfile && !userProfile.username && window.location.pathname !== '/complete-profile') {
+            console.log('Profile incomplete, redirecting to complete-profile');
+            window.location.href = '/complete-profile';
+          }
+        } else {
+          console.log('No active session found');
+        }
       } catch (error) {
         console.error('Error during auth initialization:', error);
-        localStorage.removeItem('access_token'); // Clear token on error
         setUser(null);
         setProfile(null);
-        setLoading(false); // Stop loading on error
+      } finally {
+        setLoading(false);
       }
     };
 
     initializeAuth();
 
-    // // Original local storage saving logic (commented out as it's handled by the sign-in flow now)
-    // if (typeof window !== 'undefined') {
-    //   const saveRedirectPath = () => { ... };
-    //   document.addEventListener('click', (e) => { ... });
-    // }
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.email);
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Store token for API calls
+        localStorage.setItem('access_token', session.access_token);
+        
+        // Set user state
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+        });
 
-  }, []); // Run only once on mount
+        // Load user profile
+        const userProfile = await fetchProfile();
+        
+        // Check if profile needs completion (OAuth users without username)
+        if (userProfile && !userProfile.username && window.location.pathname !== '/complete-profile') {
+          console.log('Profile incomplete, redirecting to complete-profile');
+          window.location.href = '/complete-profile';
+        }
+      } else if (event === 'SIGNED_OUT') {
+        localStorage.removeItem('access_token');
+        setUser(null);
+        setProfile(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleAuthResponse = (response: LoginResponse): User | null => {
     console.log('Processing auth response:', response);
@@ -313,9 +296,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    localStorage.removeItem('access_token');
-    setUser(null);
-    setProfile(null);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Sign out error:', error);
+    }
+    // The onAuthStateChange listener will handle clearing the state
   };
 
   const googleSignIn = async () => {

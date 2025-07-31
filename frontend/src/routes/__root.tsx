@@ -2,7 +2,7 @@ import { createRootRoute, Outlet, useRouter, useLocation } from '@tanstack/react
 import React, { useEffect, useState } from 'react'
 // import Navbar from '../platform/components/Navbar'
 import { useAuth } from '../platform/auth/auth-context'
-import { handleOAuthCallback } from '../platform/api/auth'
+// OAuth callback now handled automatically by Supabase
 import SimpleSidebar from '../platform/components/SimpleSidebar'
 import MobileTopNav from '../platform/components/MobileTopNav'
 import MobileBottomNav from '../platform/components/MobileBottomNav'
@@ -84,48 +84,16 @@ function RootLayout() {
     };
   }, [isStudioRoute, studioMode]);
   
-  // Handle OAuth callbacks and password reset tokens
+  // Handle password reset tokens (OAuth is now handled by Supabase automatically)
   useEffect(() => {
-    const handleAuthCallbacks = async () => {
-      // Check if this is an OAuth callback
-      if (typeof window !== 'undefined') {
-        // Check for password reset token in hash
-        const hash = window.location.hash;
-        if (hash && hash.includes('type=recovery') && location.pathname !== '/reset-password') {
-          // Redirect to reset-password page with the hash intact
-          window.location.href = `/reset-password${hash}`;
-          return;
-        }
-        
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-        const isGoogleCallback = window.location.pathname.includes('/api/auth/callback/google');
-        
-        if (code && isGoogleCallback) {
-          try {
-            console.log('Processing Google OAuth callback');
-            const result = await handleOAuthCallback('google', code);
-            
-            if (result.access_token) {
-              // Store the token
-              localStorage.setItem('access_token', result.access_token);
-              console.log('OAuth authentication successful, token stored');
-              
-              // Redirect to home or requested page
-              const redirectTo = localStorage.getItem('auth_redirect') || '/';
-              localStorage.removeItem('auth_redirect'); // Clear redirect
-              window.location.href = redirectTo;
-            }
-          } catch (error) {
-            console.error('OAuth callback processing failed:', error);
-            // Redirect to login page on error
-            window.location.href = '/login?error=oauth_failed';
-          }
-        }
+    if (typeof window !== 'undefined') {
+      // Check for password reset token in hash
+      const hash = window.location.hash;
+      if (hash && hash.includes('type=recovery') && location.pathname !== '/reset-password') {
+        // Redirect to reset-password page with the hash intact
+        window.location.href = `/reset-password${hash}`;
       }
-    };
-    
-    handleAuthCallbacks();
+    }
   }, [location.pathname]);
   
   if (loading) {

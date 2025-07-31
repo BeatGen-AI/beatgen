@@ -86,14 +86,20 @@ export const changePassword = async (currentPassword: string, newPassword: strin
 };
 
 export const signInWithGoogle = async (): Promise<void> => {
-  const response = await apiClient.get<OAuthRedirectResponse>('/auth/login/google');
-  window.location.href = response.data.url;
+  const { supabase } = await import('../../lib/supabase');
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`
+    }
+  });
+  
+  if (error) {
+    throw new Error(`Google sign-in failed: ${error.message}`);
+  }
 };
 
-export const handleOAuthCallback = async (provider: string, code: string): Promise<LoginResponse> => {
-  const response = await apiClient.get<LoginResponse>(`/auth/callback/${provider}?code=${code}`);
-  return response.data;
-};
+// OAuth callback is now handled automatically by Supabase client-side
 
 // Password management for OAuth users
 export const addPassword = async (password: string): Promise<{ message: string }> => {

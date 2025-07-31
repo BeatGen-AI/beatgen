@@ -244,123 +244,22 @@ async def reset_password(
         ) from e
 
 
-@router.get("/login/google", response_model=OAuthURLResponse)
-async def login_google(
-    request: Request,
-    response: Response,
-    auth_service: AuthService = Depends(get_auth_service),
-) -> Any:
-    """
-    Get Google OAuth URL for the frontend to redirect to
-    """
-    logger.info(f"[API] Received GET /auth/login/google from {request.client.host}")
-    logger.info(f"[DIAGNOSTIC] APP_ENV={settings.app.APP_ENV}, BASE_URL={settings.app.BASE_URL}, FRONTEND_BASE_URL={settings.app.FRONTEND_BASE_URL}")
-    logger.info("Starting Google OAuth flow")
-    try:
-        redirect_url = await auth_service.get_google_auth_url(response)
-        logger.info(f"[API] Google auth URL generated: {redirect_url}")
-        return {"url": redirect_url}
-    except Exception as e:
-        logger.error(f"Failed to generate Google auth URL: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OAuth error: {str(e)}",
-        )
+# Google OAuth is now handled client-side by Supabase
+# @router.get("/login/google", response_model=OAuthURLResponse)
+# async def login_google(...):
+#     """
+#     DEPRECATED: Google OAuth URL generation - now handled client-side
+#     """
+#     pass
 
 
-@router.get("/callback/google")
-async def callback_google(
-    request: Request,
-    response: Response,
-    code: Optional[str] = Query(None),
-    error: Optional[str] = Query(None),
-    error_description: Optional[str] = Query(None),
-    auth_service: AuthService = Depends(get_auth_service),
-) -> Any:
-    """
-    Handle Google OAuth callback
-    """
-    logger.info(
-        f"[API] Received GET /auth/callback/google from {request.client.host}"
-    )
-
-    # Log all query parameters received
-    params = dict(request.query_params)
-    logger.info(f"[API] Received callback query params: {params}")
-
-    # Check if Google returned an error
-    if error:
-        logger.error(
-            f"Google returned an error during OAuth callback: {error} - {error_description}"
-        )
-        # Redirect to frontend with error information
-        error_redirect_url = f"{settings.app.FRONTEND_BASE_URL}?error=google_auth_failed&error_description={error_description or error}"
-        logger.info(f"Redirecting to frontend with error: {error_redirect_url}")
-        return RedirectResponse(error_redirect_url)
-
-    # Check for the code parameter
-    if not code:
-        logger.error("[API] No code parameter found in successful callback request")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing required 'code' parameter in callback",
-        )
-
-    logger.info(f"[API] Code received: {code[:10]}... Attempting to handle callback.")
-    try:
-        # Call the service to exchange code and get user info
-        result = await auth_service.handle_google_callback(code, request, response)
-
-        user_id = result.get("user_id")
-        access_token = result.get("access_token")
-        logger.info(
-            f"[API] Service handle_google_callback successful for user: {user_id}"
-        )
-
-        if not access_token:
-            logger.error(
-                "[API] Service handle_google_callback did not return an access token."
-            )
-            # Redirect to frontend with an error
-            error_desc = urllib.parse.quote("Failed to retrieve access token after Google login")
-            error_redirect_url = f"{settings.app.FRONTEND_BASE_URL}?error=token_missing&error_description={error_desc}"
-            logger.info(f"Redirecting to frontend with error: {error_redirect_url}")
-            return RedirectResponse(error_redirect_url)
-
-        # Determine the final redirect URL for the frontend
-        frontend_redirect_url = settings.app.FRONTEND_BASE_URL or "/"
-        
-        # Append access_token to the fragment
-        redirect_url_with_token = f"{frontend_redirect_url}#access_token={access_token}"
-        # Optionally, you might want to include token_type or expires_in if your frontend expects them in the hash
-        # redirect_url_with_token += f"&token_type=bearer" 
-
-        logger.info(f"[API] Preparing redirect to frontend with token in hash: {redirect_url_with_token}")
-        return RedirectResponse(redirect_url_with_token)
-
-    except (UnauthorizedException, ServiceException) as e:
-        if isinstance(e, ServiceException) and str(e).startswith("PKCE_REDIRECT::"):
-            redirect_url = str(e).split("::", 1)[1]
-            logger.warning(f"[API] PKCE verifier missing, redirecting to: {redirect_url}")
-            return RedirectResponse(redirect_url)
-        
-        logger.error(
-            f"[API] Google OAuth callback processing failed: {str(e)}", exc_info=True
-        )
-        # Redirect to frontend with error information
-        error_desc = urllib.parse.quote(str(e))
-        error_redirect_url = f"{settings.app.FRONTEND_BASE_URL}?error=google_auth_failed&error_description={error_desc}"
-        logger.info(f"Redirecting to frontend with error: {error_redirect_url}")
-        return RedirectResponse(error_redirect_url)
-    except Exception as e:
-        logger.error(
-            f"[API] Unexpected error during Google OAuth callback: {str(e)}",
-            exc_info=True,
-        )
-        error_desc = urllib.parse.quote("An unexpected error occurred during login.")
-        error_redirect_url = f"{settings.app.FRONTEND_BASE_URL}?error=unexpected&error_description={error_desc}"
-        logger.info(f"Redirecting to frontend with error: {error_redirect_url}")
-        return RedirectResponse(error_redirect_url)
+# Google OAuth callback is now handled client-side by Supabase
+# @router.get("/callback/google")
+# async def callback_google(...):
+#     """
+#     DEPRECATED: Google OAuth callback - now handled client-side
+#     """
+#     pass
 
 
 @router.post("/check-username", response_model=UsernameCheckResponse)

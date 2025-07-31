@@ -316,58 +316,11 @@ class AuthService:
             logger.error(traceback.format_exc())
             raise ServiceException(f"Failed to create user profile: {str(e)}")
 
-    async def get_google_auth_url(self, response: Response) -> str:
-        """
-        Generate the Google OAuth URL (using PKCE flow managed by the client library).
-
-        Args:
-            response: The outgoing FastAPI response object (no longer used for cookies here)
-
-        Returns:
-            The URL to redirect the user to for Google authentication
-
-        Raises:
-            ServiceException: If the URL cannot be generated
-        """
-        try:
-            logger.info("Generating Google OAuth URL (PKCE handled by library)")
-
-            # Define the backend callback URL where Google will send the code
-            backend_callback_url = f"{settings.app.BASE_URL}/auth/callback/google"
-            logger.info(
-                f"[Service] Using callback URL: {backend_callback_url} (from settings.app.BASE_URL: {settings.app.BASE_URL})"
-            )
-
-            # Let Supabase handle PKCE entirely - no custom implementation needed
-            logger.info("Using Supabase's built-in PKCE handling")
-
-            # Use Supabase client to get the OAuth URL.
-            auth_response = supabase.client.auth.sign_in_with_oauth(
-                {
-                    "provider": "google",
-                    "options": {
-                        "redirect_to": backend_callback_url,
-                        "scopes": "openid email profile",  # Request standard scopes
-                    },
-                }
-            )
-
-            if not auth_response or not auth_response.url:
-                logger.error("Supabase sign_in_with_oauth did not return a valid URL.")
-                raise ServiceException(
-                    "Failed to generate Google OAuth URL from Supabase."
-                )
-
-            # No need to store PKCE verifier - Supabase handles this internally
-
-            generated_url = auth_response.url
-            logger.info(f"Generated OAuth URL: {generated_url[:30]}...")
-            return generated_url
-
-        except Exception as e:
-            logger.error(f"Failed to generate Google OAuth URL: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to generate Google OAuth URL: {str(e)}")
+    # Google OAuth is now handled client-side by Supabase
+    # The following methods are deprecated:
+    # - get_google_auth_url()
+    # - handle_google_callback()
+    # OAuth flow is handled entirely in the frontend using supabase.auth.signInWithOAuth()
 
     async def check_username_availability(self, username: str) -> bool:
         """
@@ -538,100 +491,5 @@ class AuthService:
             raise ServiceException(f"Failed to update password: {str(e)}")
 
 
-    async def handle_google_callback(
-        self, code: str, request: Request, response: Response
-    ) -> Dict[str, Any]:
-        """
-        Handle the callback from Google OAuth (PKCE handled by library).
-
-        Args:
-            code: The authorization code from Google
-            request: The incoming FastAPI request object (no longer used for cookies here)
-            response: The outgoing FastAPI response object (no longer used for cookies here)
-
-        Returns:
-            Dict with access_token, token_type, and user_id
-
-        Raises:
-            ServiceException: If the authentication fails
-        """
-        logger.info(f"Handling Google OAuth callback with code: {code[:10]}...")
-
-        try:
-            logger.info("Handling Google OAuth callback (PKCE handled by library)")
-
-            # Use Supabase's built-in session exchange (no custom PKCE needed)
-            logger.info("Exchanging code for session using Supabase's built-in flow...")
-            auth_response = supabase.client.auth.exchange_code_for_session( # type: ignore
-                {"auth_code": code}
-            )
-            logger.info("Code exchanged successfully.")
-
-            # No cookie cleanup needed - Supabase handles PKCE internally
-
-
-            if not auth_response.user: # type: ignore
-                logger.error("No user returned from Google OAuth after code exchange.")
-                raise UnauthorizedException(
-                    "Google authentication failed: Could not retrieve user session."
-                )
-
-            session_user_id = (
-                auth_response.user.id
-            )  # The Supabase Auth ID for this session
-            email = auth_response.user.email or ""
-            logger.info(
-                f"Successfully exchanged code. Supabase Auth ID: {session_user_id}, Email: {email}"
-            )
-
-            logger.info(f"Ensuring profile exists for User ID: {session_user_id}")
-            try:
-                user_metadata = auth_response.user.user_metadata
-                full_name = ""
-                if isinstance(user_metadata, dict):
-                    full_name = user_metadata.get("full_name", "")
-                elif user_metadata:
-                    logger.warning(
-                        f"Unexpected type for user_metadata for user {session_user_id}: {type(user_metadata)}. Value: {user_metadata}"
-                    )
-                
-                # With native Supabase auth, check if user profile already exists
-                # If not, create it using the Supabase auth ID directly
-                try:
-                    existing_user = await self.user_repository.get_profile(session_user_id)
-                    logger.info(f"Profile already exists for User ID: {session_user_id}")
-                except NotFoundException:
-                    # Create new user profile - convert string ID to UUID
-                    await self.user_repository.create_profile(
-                        user_id=uuid.UUID(session_user_id),
-                        email=email,
-                        username=None,
-                        display_name=full_name
-                    )
-                    logger.info(f"Created new profile for User ID: {session_user_id}")
-                
-            except Exception as create_err:
-                logger.error(
-                    f"Failed to create/ensure profile for User ID {session_user_id}: {create_err}",
-                    exc_info=True,
-                )
-                raise ServiceException(f"Failed to save user profile: {create_err}")
-
-            # Return token and user info as dict
-            logger.info(
-                f"handle_google_callback successful for {session_user_id}. Returning token info."
-            )
-            return {
-                "access_token": auth_response.session.access_token,
-                "token_type": "bearer",
-                "user_id": session_user_id,  # Return the Supabase Auth ID
-            }
-
-        except Exception as e:
-            logger.error(f"Google authentication failed in service: {str(e)}")
-            logger.error(traceback.format_exc())
-            # Reraise to be caught by API layer
-            if isinstance(e, UnauthorizedException) or isinstance(e, ServiceException):
-                raise e
-            else:
-                raise ServiceException(f"Google authentication failed: {str(e)}")
+    # DEPRECATED: Google OAuth callback is now handled client-side
+    # The entire handle_google_callback method is no longer needed
