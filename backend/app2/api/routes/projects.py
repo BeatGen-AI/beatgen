@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Request
 from typing import Any, List, Dict
 from uuid import UUID
 
@@ -19,10 +19,15 @@ from app2.dto.projects_dto import Page, PageParams
 router = APIRouter()
 logger = get_api_logger("projects")
 
+# Track active requests to detect concurrent calls
+_active_requests = {}
+_request_lock = None
+
 
 @router.get("", response_model=Page[ProjectRead])
 @router.get("/", response_model=Page[ProjectRead])
 async def get_projects(
+    request: Request,
     current_user: Dict[str, Any] = Depends(get_current_user),
     project_service: ProjectService = Depends(get_project_service),
     page_params: PageParams = Depends(),
@@ -30,18 +35,49 @@ async def get_projects(
     """
     Get all projects for the current user
     """
-    logger.info(f"Getting projects for user ID: {current_user['id']}")
+    import time
+    import threading
+    import asyncio
+    
+    # Create unique request ID
+    request_id = f"{current_user['id']}_{page_params.page}_{page_params.size}_{int(time.time() * 1000)}"
+    user_key = f"{current_user['id']}_{page_params.page}_{page_params.size}"
+    
+    # Log request with client info
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    # Check for concurrent requests
+    if user_key in _active_requests:
+        active_since = time.time() - _active_requests[user_key]
+        logger.warning(f"⚠️ CONCURRENT REQUEST DETECTED [{request_id}] - Same user/page already processing for {active_since:.2f}s")
+    else:
+        _active_requests[user_key] = time.time()
+    
+    logger.info(f"🔍 GET /projects REQUEST [{request_id}] - User: {current_user['id']}, Page: {page_params.page}, Size: {page_params.size}")
+    logger.info(f"🔍 CLIENT INFO [{request_id}] - IP: {client_ip}, User-Agent: {user_agent[:100]}...")
+    logger.info(f"🔍 THREAD INFO [{request_id}] - Thread: {threading.current_thread().name}")
+    logger.info(f"🔍 ACTIVE REQUESTS: {len(_active_requests)} concurrent GET /projects calls")
+    
     try:
-        return await project_service.get_user_projects(
+        start_time = time.time()
+        result = await project_service.get_user_projects(
             UUID(current_user["id"]),
             page_params
         )
+        total_time = time.time() - start_time
+        
+        logger.info(f"✅ GET /projects SUCCESS [{request_id}] - Total time: {total_time * 1000:.2f}ms, Projects: {len(result.items)}")
+        return result
     except Exception as e:
-        logger.error(f"Error getting projects: {str(e)}")
+        logger.error(f"❌ GET /projects ERROR [{request_id}] - {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get projects: {str(e)}",
         )
+    finally:
+        # Clean up tracking
+        _active_requests.pop(user_key, None)
 
 
 @router.post("", response_model=ProjectWithTracks, status_code=status.HTTP_201_CREATED)

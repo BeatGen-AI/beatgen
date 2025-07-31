@@ -418,129 +418,128 @@ class ProjectService:
             f"Updating tracks for project with ID: {project_id}, {len(tracks_data)} tracks"
         )
         
-        async with self.session.begin():
-            try:
-                # Get existing tracks to identify what to remove
-                existing_tracks = await self.project_track_repository.get_by_project_id(project_id)
-                existing_track_ids = {str(track.track_id) for track in existing_tracks}
-                logger.info(f"Existing tracks in project: {existing_track_ids}")
+        try:
+            # Get existing tracks to identify what to remove
+            existing_tracks = await self.project_track_repository.get_by_project_id(project_id)
+            existing_track_ids = {str(track.track_id) for track in existing_tracks}
+            logger.info(f"Existing tracks in project: {existing_track_ids}")
+            
+            # Track IDs that will be in the updated project
+            new_track_ids = set()
+            
+            # Use existing repositories that already share the same session
+            midi_repo = self.track_service.midi_repository
+            audio_repo = self.track_service.audio_repository
+            sampler_repo = self.track_service.sampler_repository
+            drum_repo = self.track_service.drum_repository
+            
+            # Process each track using upsert pattern
+            for track_idx, track_data in enumerate(tracks_data):
+                logger.info(f"Processing track {track_idx}: {track_data}")
                 
-                # Track IDs that will be in the updated project
-                new_track_ids = set()
+                if not isinstance(track_data, dict) or "id" not in track_data:
+                    logger.warning(f"Invalid track data format: {track_data}")
+                    continue
                 
-                # Use existing repositories that already share the same session
-                midi_repo = self.track_service.midi_repository
-                audio_repo = self.track_service.audio_repository
-                sampler_repo = self.track_service.sampler_repository
-                drum_repo = self.track_service.drum_repository
+                # Support both 'type' and 'track_type' fields
+                type_field = track_data.get("track_type") or track_data.get("type")
+                if not type_field:
+                    logger.warning(f"No track type found in track data: {track_data}")
+                    continue
                 
-                # Process each track using upsert pattern
-                for track_idx, track_data in enumerate(tracks_data):
-                    logger.info(f"Processing track {track_idx}: {track_data}")
-                    
-                    if not isinstance(track_data, dict) or "id" not in track_data:
-                        logger.warning(f"Invalid track data format: {track_data}")
-                        continue
-                    
-                    # Support both 'type' and 'track_type' fields
-                    type_field = track_data.get("track_type") or track_data.get("type")
-                    if not type_field:
-                        logger.warning(f"No track type found in track data: {track_data}")
-                        continue
-                        
-                    track_type = TrackType(type_field)
-                    track_id = uuid.UUID(track_data["id"])
-                    new_track_ids.add(str(track_id))
-                    
-                    logger.info(f"Processing {track_type.value} track with ID: {track_id}")
-                    
-                    # Log instance_metadata for debugging
-                    instance_metadata = track_data.get("instance_metadata")
-                    logger.info(f"Track {track_id} instance_metadata: {instance_metadata}")
-                    
-                    # Prepare project-track settings
-                    project_track_settings = {
-                        "project_id": project_id,
-                        "track_id": track_id,
-                        "track_type": track_type,
-                        "name": track_data.get("name", "Unnamed Track"),
-                        "volume": track_data.get("volume", 1.0),
-                        "pan": track_data.get("pan", 0.0),
-                        "mute": track_data.get("mute", False),
-                        "duration_ticks": track_data.get("duration_ticks", 0),
-                        "track_number": track_idx,
-                        "instance_metadata": instance_metadata,
-                    }
-                    
-                    logger.info(f"About to upsert project-track settings: {project_track_settings}")
-                    
-                    # Use upsert to safely create or update the project-track association
+                track_type = TrackType(type_field)
+                track_id = uuid.UUID(track_data["id"])
+                new_track_ids.add(str(track_id))
+                
+                logger.info(f"Processing {track_type.value} track with ID: {track_id}")
+                
+                # Log instance_metadata for debugging
+                instance_metadata = track_data.get("instance_metadata")
+                logger.info(f"Track {track_id} instance_metadata: {instance_metadata}")
+                
+                # Prepare project-track settings
+                project_track_settings = {
+                    "project_id": project_id,
+                    "track_id": track_id,
+                    "track_type": track_type,
+                    "name": track_data.get("name", "Unnamed Track"),
+                    "volume": track_data.get("volume", 1.0),
+                    "pan": track_data.get("pan", 0.0),
+                    "mute": track_data.get("mute", False),
+                    "duration_ticks": track_data.get("duration_ticks", 0),
+                    "track_number": track_idx,
+                    "instance_metadata": instance_metadata,
+                }
+                
+                logger.info(f"About to upsert project-track settings: {project_track_settings}")
+                
+                # Use upsert to safely create or update the project-track association
+                try:
+                    upserted_track = await self.project_track_repository.upsert(project_track_settings)
+                    logger.info(f"Successfully upserted track {track_id} to project {project_id}, result: {upserted_track}")
+                except Exception as upsert_error:
+                    logger.error(f"FAILED to upsert track {track_id}: {str(upsert_error)}")
+                    logger.error(traceback.format_exc())
+                    raise
+                
+                # Separate track-specific data from project-track settings
+                project_track_fields = [
+                    "name", "volume", "pan", "mute", "x_position", "y_position",
+                    "trim_start_ticks", "trim_end_ticks", "duration_ticks", 
+                    "track_number", "instance_metadata", "project_id"
+                ]
+                
+                # Extract track-specific data (everything except project-track fields)
+                track_specific_data = {
+                    k: v for k, v in track_data.items() 
+                    if k not in project_track_fields and k not in ["id", "track_type", "type"]
+                }
+                
+                # Update the actual track data if there's track-specific data
+                if track_specific_data:
+                    logger.info(f"Updating track {track_id} with specific data: {list(track_specific_data.keys())}")
                     try:
-                        upserted_track = await self.project_track_repository.upsert(project_track_settings)
-                        logger.info(f"Successfully upserted track {track_id} to project {project_id}, result: {upserted_track}")
-                    except Exception as upsert_error:
-                        logger.error(f"FAILED to upsert track {track_id}: {str(upsert_error)}")
-                        logger.error(traceback.format_exc())
-                        raise
-                    
-                    # Separate track-specific data from project-track settings
-                    project_track_fields = [
-                        "name", "volume", "pan", "mute", "x_position", "y_position",
-                        "trim_start_ticks", "trim_end_ticks", "duration_ticks", 
-                        "track_number", "instance_metadata", "project_id"
-                    ]
-                    
-                    # Extract track-specific data (everything except project-track fields)
-                    track_specific_data = {
-                        k: v for k, v in track_data.items() 
-                        if k not in project_track_fields and k not in ["id", "track_type", "type"]
-                    }
-                    
-                    # Update the actual track data if there's track-specific data
-                    if track_specific_data:
-                        logger.info(f"Updating track {track_id} with specific data: {list(track_specific_data.keys())}")
-                        try:
-                            # Update track data using the same session repositories
-                            if track_type == TrackType.MIDI:
-                                # Remove any stale 'notes' field if it exists, only use midi_notes_json
-                                midi_data = track_specific_data.copy()
-                                if 'notes' in midi_data:
-                                    logger.info("Removing stale 'notes' field, using only 'midi_notes_json'")
-                                    midi_data.pop('notes')
-                                await midi_repo.update(track_id, midi_data)
-                            elif track_type == TrackType.AUDIO:
-                                await audio_repo.update(track_id, track_specific_data)
-                            elif track_type == TrackType.SAMPLER:
-                                await sampler_repo.update(track_id, track_specific_data)
-                            elif track_type == TrackType.DRUM:
-                                await drum_repo.update(track_id, track_specific_data)
-                            
-                            logger.info(f"Successfully updated track {track_id} data")
-                        except Exception as track_update_error:
-                            logger.error(f"Failed to update track {track_id} data: {str(track_update_error)}")
-                            logger.error(traceback.format_exc())
-                            # Don't re-raise here as we want to continue with other tracks
-                
-                logger.info(f"Completed upserting all tracks. New track IDs: {new_track_ids}")
-                
-                # Verify the tracks were actually saved
-                verification_tracks = await self.project_track_repository.get_by_project_id(project_id)
-                verification_track_ids = {str(track.track_id) for track in verification_tracks}
-                logger.info(f"Verification: tracks now in project: {verification_track_ids}")
-                
-                # # Remove tracks that are no longer in the project
-                # tracks_to_remove = existing_track_ids - new_track_ids
-                # if tracks_to_remove:
-                #     track_ids_to_remove = [uuid.UUID(track_id) for track_id in tracks_to_remove]
-                #     deleted_count = await self.project_track_repository.delete_by_track_ids(
-                #         project_id, track_ids_to_remove
-                #     )
-                #     logger.info(f"Removed {deleted_count} tracks from project {project_id}")
+                        # Update track data using the same session repositories
+                        if track_type == TrackType.MIDI:
+                            # Remove any stale 'notes' field if it exists, only use midi_notes_json
+                            midi_data = track_specific_data.copy()
+                            if 'notes' in midi_data:
+                                logger.info("Removing stale 'notes' field, using only 'midi_notes_json'")
+                                midi_data.pop('notes')
+                            await midi_repo.update(track_id, midi_data)
+                        elif track_type == TrackType.AUDIO:
+                            await audio_repo.update(track_id, track_specific_data)
+                        elif track_type == TrackType.SAMPLER:
+                            await sampler_repo.update(track_id, track_specific_data)
+                        elif track_type == TrackType.DRUM:
+                            await drum_repo.update(track_id, track_specific_data)
                         
-            except Exception as e:
-                logger.error(f"Error updating project tracks: {str(e)}")
-                logger.error(traceback.format_exc())
-                raise ServiceException(f"Failed to update project tracks: {str(e)}")
+                        logger.info(f"Successfully updated track {track_id} data")
+                    except Exception as track_update_error:
+                        logger.error(f"Failed to update track {track_id} data: {str(track_update_error)}")
+                        logger.error(traceback.format_exc())
+                        # Don't re-raise here as we want to continue with other tracks
+            
+            logger.info(f"Completed upserting all tracks. New track IDs: {new_track_ids}")
+            
+            # Verify the tracks were actually saved
+            verification_tracks = await self.project_track_repository.get_by_project_id(project_id)
+            verification_track_ids = {str(track.track_id) for track in verification_tracks}
+            logger.info(f"Verification: tracks now in project: {verification_track_ids}")
+            
+            # # Remove tracks that are no longer in the project
+            # tracks_to_remove = existing_track_ids - new_track_ids
+            # if tracks_to_remove:
+            #     track_ids_to_remove = [uuid.UUID(track_id) for track_id in tracks_to_remove]
+            #     deleted_count = await self.project_track_repository.delete_by_track_ids(
+            #         project_id, track_ids_to_remove
+            #     )
+            #     logger.info(f"Removed {deleted_count} tracks from project {project_id}")
+                    
+        except Exception as e:
+            logger.error(f"Error updating project tracks: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise ServiceException(f"Failed to update project tracks: {str(e)}")
 
     async def delete_project(self, project_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         """

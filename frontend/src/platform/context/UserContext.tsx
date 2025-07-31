@@ -39,12 +39,12 @@ const UserContext = createContext<UserContextState | undefined>(undefined);
 
 interface UserProviderProps {
   children: ReactNode;
-  autoRefreshInterval?: number; // in milliseconds, default 30 seconds
+  autoRefreshInterval?: number; // in milliseconds, default 2 minutes (less frequent)
 }
 
 export const UserProvider: React.FC<UserProviderProps> = ({ 
   children, 
-  autoRefreshInterval = 30000 
+  autoRefreshInterval = 120000 // 2 minutes instead of 30 seconds
 }) => {
   const { user, loading: authLoading } = useAuth();
   
@@ -187,15 +187,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({
     }
   }, [profile]);
 
-  // Refresh all data
+  // Refresh essential data only - no auto-credits fetching
   const refreshAll = useCallback(async (): Promise<void> => {
-    console.log('Refreshing all user data...');
+    console.log('Refreshing essential user data...');
+    // Only refresh profile and subscription automatically
     await Promise.all([
       refreshProfile(),
-      refreshCredits(),
       refreshSubscription()
     ]);
-  }, [refreshProfile, refreshCredits, refreshSubscription]);
+    // Credits will be fetched manually when needed via refreshCredits()
+  }, [refreshProfile, refreshSubscription]);
 
   // Reset state when user logs out
   useEffect(() => {
@@ -222,17 +223,18 @@ export const UserProvider: React.FC<UserProviderProps> = ({
     }
   }, [user, authLoading, refreshAll]);
 
-  // Auto-refresh logic - only when user is authenticated
-  useEffect(() => {
-    if (autoRefreshInterval > 0 && user && !authLoading) {
-      const interval = setInterval(() => {
-        console.log('Auto-refreshing user data...');
-        refreshAll();
-      }, autoRefreshInterval);
-
-      return () => clearInterval(interval);
-    }
-  }, [autoRefreshInterval, user, authLoading, refreshAll]);
+  // Auto-refresh logic - disabled for now to reduce DB load
+  // Credits should be fetched manually when needed
+  // Subscription can be fetched on-demand as well
+  // useEffect(() => {
+  //   if (autoRefreshInterval > 0 && user && !authLoading) {
+  //     const interval = setInterval(() => {
+  //       console.log('Auto-refreshing subscription data...');
+  //       refreshSubscription();
+  //     }, autoRefreshInterval);
+  //     return () => clearInterval(interval);
+  //   }
+  // }, [autoRefreshInterval, user, authLoading, refreshSubscription]);
 
   const value: UserContextState = {
     // User profile
