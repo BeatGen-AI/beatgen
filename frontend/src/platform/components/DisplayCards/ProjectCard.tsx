@@ -5,6 +5,12 @@ import {
   CardHeader, 
   CardTitle
 } from "../../../components/ui/card";
+import {
+  FadeCard,
+  FadeCardFooter,
+  FadeCardHeader,
+  FadeCardTitle
+} from "../../../components/ui/fade-card";
 import { Button } from "../../../components/ui/button";
 import { Separator } from "../../../components/ui/separator";
 import { FolderOpen } from 'lucide-react';
@@ -13,6 +19,7 @@ import { Project } from '../../types/project';
 import { cn } from "../../../lib/utils";
 import PrefetchStatus from '../PrefetchStatus';
 import { PrefetchStatus as PrefetchStatusType } from '../../hooks/useProjectPrefetch';
+import { CARD_HEIGHTS } from "../../constants/cardDimensions";
 
 interface ProjectCardProps {
   project: Project;
@@ -32,28 +39,35 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   getPrefetchStatus,
 }) => {
   return (
-    <Card 
-      className={cn(
-        "project-card w-full h-[200px] flex flex-col rounded-lg hover-shadow-card"
-      )}
-      style={{ '--hover-shadow-color': sectionColor } as React.CSSProperties}
+    <FadeCard 
+      className="project-card w-full flex flex-col rounded-lg hover-shadow-card"
+      style={{ 
+        '--hover-shadow-color': sectionColor,
+        height: `${CARD_HEIGHTS.DISPLAY_CARD}px`
+      } as React.CSSProperties}
     >
       {/* Fixed height header */}
-      <CardHeader className="flex flex-row items-center justify-between p-2 h-[40px] flex-shrink-0">
+      <FadeCardHeader 
+        className="flex flex-row items-center justify-between p-2 flex-shrink-0"
+        style={{ height: `${CARD_HEIGHTS.DISPLAY_CARD_HEADER}px` }}
+      >
         <div className="flex items-center min-w-0 flex-1">
           <FolderOpen className="text-primary mr-2" size={18} />
-          <CardTitle className="text-sm font-medium truncate">{project.name}</CardTitle>
+          <FadeCardTitle className="text-sm font-medium truncate">{project.name}</FadeCardTitle>
         </div>
         {project.id && getPrefetchStatus && (
           <div className="ml-2">
             <PrefetchStatus projectId={project.id} getPrefetchStatus={getPrefetchStatus} />
           </div>
         )}
-      </CardHeader>
+      </FadeCardHeader>
       
       {/* Fixed height preview area */}
       <div className="flex-1 flex items-center justify-center px-3 py-1 overflow-hidden">
-        <div className="w-full h-full max-h-[80px] flex flex-col items-center justify-center">
+        <div className={cn(
+          "w-full h-full flex flex-col items-center justify-center",
+          `max-h-[${CARD_HEIGHTS.DISPLAY_CARD_CONTENT}px]`
+        )}>
           <Separator className="w-full mb-2" />
           <div className="project-metadata flex justify-between items-center text-sm text-muted-foreground w-full px-4">
             <p>BPM: {project.bpm}</p>
@@ -64,7 +78,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       </div>
       
       {/* Fixed height footer */}
-      <CardFooter className="p-2 h-[40px] flex items-center gap-2 flex-shrink-0">
+      <FadeCardFooter 
+        className="p-2 flex items-center gap-2 flex-shrink-0"
+        style={{ height: `${CARD_HEIGHTS.DISPLAY_CARD_FOOTER}px` }}
+      >
         <Button
           size="sm"
           onClick={() => onOpenProject(project.id!)}
@@ -82,8 +99,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         >
           <IconTrashFilled size={18} />
         </Button>
-      </CardFooter>
-    </Card>
+      </FadeCardFooter>
+    </FadeCard>
   );
 };
 

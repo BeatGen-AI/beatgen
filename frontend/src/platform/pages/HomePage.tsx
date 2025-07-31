@@ -359,7 +359,7 @@ export default function HomePage() {
                     Generate Song
                   </Button> */}
                   <Button
-                    variant="default"
+                    variant="outline"
                     className="flex items-center gap-2"
                     onClick={handleCreateProject}
                   >
