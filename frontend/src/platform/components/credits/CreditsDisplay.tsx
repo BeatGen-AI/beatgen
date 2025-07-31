@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Coins, Infinity } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUser } from '../../context/UserContext';
@@ -8,7 +8,15 @@ interface CreditsDisplayProps {
 }
 
 export const CreditsDisplay: React.FC<CreditsDisplayProps> = ({ isExpanded = true }) => {
-  const { credits, creditsLoading: isLoading } = useUser();
+  const { credits, creditsLoading: isLoading, refreshCredits } = useUser();
+
+  // Fetch credits when the component mounts (since we don't auto-fetch anymore)
+  useEffect(() => {
+    if (!credits && !isLoading) {
+      console.log('CreditsDisplay: fetching credits data...');
+      refreshCredits();
+    }
+  }, [credits, isLoading, refreshCredits]);
 
   if (isLoading) {
     return (

@@ -4,6 +4,7 @@ import { Loader2, Crown, AlertCircle, ExternalLink, Coins } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FadeCard, FadeCardContent, FadeCardDescription, FadeCardHeader, FadeCardTitle } from '@/components/ui/fade-card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useNavigate } from '@tanstack/react-router';
@@ -83,11 +84,11 @@ export const SubscriptionStatus: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
+      <FadeCard>
+        <FadeCardContent className="flex items-center justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
+        </FadeCardContent>
+      </FadeCard>
     );
   }
 
@@ -102,19 +103,19 @@ export const SubscriptionStatus: React.FC = () => {
 
   if (!status || status.status === 'inactive') {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>No Active Subscription</CardTitle>
-          <CardDescription>
+      <FadeCard>
+        <FadeCardHeader>
+          <FadeCardTitle>No Active Subscription</FadeCardTitle>
+          <FadeCardDescription>
             Upgrade to a paid plan to unlock premium features
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </FadeCardDescription>
+        </FadeCardHeader>
+        <FadeCardContent>
           <Button onClick={() => window.location.href = '/pricing'}>
             View Plans
           </Button>
-        </CardContent>
-      </Card>
+        </FadeCardContent>
+      </FadeCard>
     );
   }
 
@@ -135,20 +136,20 @@ export const SubscriptionStatus: React.FC = () => {
 
   return (
     <>
-    <Card>
-      <CardHeader>
+    <FadeCard>
+      <FadeCardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Crown className="h-5 w-5 text-yellow-500" />
-            <CardTitle>{currentPlan?.name || 'Subscription'}</CardTitle>
+            <FadeCardTitle>{currentPlan?.name || 'Subscription'}</FadeCardTitle>
           </div>
           {getStatusBadge()}
         </div>
-        <CardDescription>
+        <FadeCardDescription>
           {currentPlan?.tier && `${currentPlan.tier.charAt(0).toUpperCase() + currentPlan.tier.slice(1)} Plan`}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </FadeCardDescription>
+      </FadeCardHeader>
+      <FadeCardContent className="space-y-4">
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Price</span>
@@ -283,8 +284,8 @@ export const SubscriptionStatus: React.FC = () => {
             <AlertDescription>{cancelError}</AlertDescription>
           </Alert>
         )}
-      </CardContent>
-    </Card>
+      </FadeCardContent>
+    </FadeCard>
 
     <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
       <AlertDialogContent>

@@ -67,22 +67,49 @@ class BaseRepository(Generic[T]):
             NotFoundException: If the record is not found
             DatabaseException: If the query fails
         """
+        import time
+        start_time = time.time()
         self.logger.info(f"Finding {self.model_class.__name__} with ID {id}")
         try:
+            # Log the SQL query being generated
             statement = select(self.model_class).where(self.model_class.id == id)
-            result = await self.session.execute(statement)
+            self.logger.info(f"SQL Query: {statement}")
+            
+            query_start = time.time()
+            self.logger.info(f"Executing database query...")
+            
+            # Add timeout to prevent hanging
+            import asyncio
+            try:
+                result = await asyncio.wait_for(
+                    self.session.execute(statement), 
+                    timeout=10.0  # 10 second timeout
+                )
+                query_time = time.time() - query_start
+                self.logger.info(f"Query execution took {query_time:.3f}s")
+            except asyncio.TimeoutError:
+                query_time = time.time() - query_start
+                self.logger.error(f"Database query timed out after {query_time:.3f}s")
+                raise DatabaseException(f"Database query timed out after {query_time:.3f}s")
+            
+            fetch_start = time.time()
             model_instance = result.scalars().first()
+            fetch_time = time.time() - fetch_start
+            self.logger.info(f"Result fetching took {fetch_time:.3f}s")
 
             if model_instance is None:
-                self.logger.error(f"{self.model_class.__name__} with ID {id} not found")
+                total_time = time.time() - start_time
+                self.logger.error(f"{self.model_class.__name__} with ID {id} not found (total time: {total_time:.3f}s)")
                 raise NotFoundException(self.model_class.__name__, id)
 
-            self.logger.info(f"Found {self.model_class.__name__} with ID {id}")
+            total_time = time.time() - start_time
+            self.logger.info(f"Found {self.model_class.__name__} with ID {id} (total time: {total_time:.3f}s)")
             return model_instance
         except Exception as e:
+            total_time = time.time() - start_time
             if isinstance(e, NotFoundException):
                 raise
-            self.logger.error(f"Error finding record by ID: {str(e)}")
+            self.logger.error(f"Error finding record by ID after {total_time:.3f}s: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to find record: {str(e)}")
 

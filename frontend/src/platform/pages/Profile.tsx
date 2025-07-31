@@ -5,11 +5,12 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Loader2, AlertCircle, UserCircle, Save, ArrowLeft, UploadCloud, CreditCard } from 'lucide-react';
-import { getUserIdentities, addPassword, UserProfile } from '../api/auth';
+import { addPassword, UserProfile } from '../api/auth';
 import { useNavigate } from '@tanstack/react-router';
 import { SubscriptionStatus } from '../components/subscription';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { useUser } from '../context/UserContext';
+import { FadeCard, FadeCardHeader, FadeCardTitle, FadeCardDescription, FadeCardContent } from '../../components/ui/fade-card';
 
 const ProfilePage: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -25,7 +26,6 @@ const ProfilePage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Add password functionality
-  const [hasPasswordAuth, setHasPasswordAuth] = useState<boolean | null>(null);
   const [showAddPassword, setShowAddPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -40,23 +40,6 @@ const ProfilePage: React.FC = () => {
     }
   }, [profile]);
 
-  useEffect(() => {
-    // Check if user has password auth
-    const checkAuthMethods = async () => {
-      try {
-        const identities = await getUserIdentities();
-        const hasEmail = identities.identities.some(id => id.provider === 'email');
-        setHasPasswordAuth(hasEmail);
-      } catch (err) {
-        console.error('Failed to check auth methods:', err);
-        setHasPasswordAuth(null);
-      }
-    };
-
-    if (user) {
-      checkAuthMethods();
-    }
-  }, [user]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -91,7 +74,6 @@ const ProfilePage: React.FC = () => {
       setPassword('');
       setConfirmPassword('');
       setPasswordDialogError(null);
-      setHasPasswordAuth(true);
     } catch (err: any) {
       setPasswordDialogError(err.response?.data?.detail || 'Failed to add password');
     } finally {
@@ -206,40 +188,41 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 px-4 sm:px-6 lg:px-8">
+    <div className="container mx-auto max-w-4xl py-12 px-4 sm:px-6 lg:px-8">
       <div className="grid gap-6 md:grid-cols-2">
         {/* Profile Section */}
-        <div className="bg-card text-card-foreground p-6 sm:p-8 rounded-xl shadow-xl">
-        <div className="flex flex-col items-center space-y-4 mb-6">
-          <input 
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/png, image/jpeg, image/gif"
-            className="hidden"
-          />
-          <div 
-            className="relative w-32 h-32 rounded-full cursor-pointer group ring-2 ring-offset-2 ring-primary ring-offset-background"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {previewUrl ? (
-              <img 
-                src={previewUrl} 
-                alt="Profile" 
-                className="w-full h-full rounded-full object-cover"
+        <FadeCard className="p-6 sm:p-8">
+          <FadeCardHeader>
+            <div className="flex flex-col items-center space-y-4">
+              <input 
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/png, image/jpeg, image/gif"
+                className="hidden"
               />
-            ) : (
-              <UserCircle className="w-full h-full text-muted-foreground" />
-            )}
-            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-              <UploadCloud className="w-8 h-8 text-white" />
+              <div 
+                className="relative w-32 h-32 rounded-full cursor-pointer group ring-2 ring-offset-2 ring-primary ring-offset-background"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {previewUrl ? (
+                  <img 
+                    src={previewUrl} 
+                    alt="Profile" 
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <UserCircle className="w-full h-full text-muted-foreground" />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                  <UploadCloud className="w-8 h-8 text-white" />
+                </div>
+              </div>
             </div>
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-center">User Profile</h1>
-            <p className="text-muted-foreground text-center">Manage your account settings.</p>
-          </div>
-        </div>
+            <FadeCardTitle className="text-center">User Profile</FadeCardTitle>
+            <FadeCardDescription className="text-center">Manage your account settings.</FadeCardDescription>
+          </FadeCardHeader>
+          <FadeCardContent>
 
         {error && (
           <Alert variant="destructive" className="mb-4">
@@ -294,22 +277,20 @@ const ProfilePage: React.FC = () => {
             />
           </div>
 
-          {/* Add Password button - only show if user doesn't have password auth */}
-          {hasPasswordAuth === false && (
-            <div className="pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowAddPassword(true)}
-                className="w-full"
-              >
-                Add Password Authentication
-              </Button>
-              <p className="text-xs text-muted-foreground mt-2">
-                Add a password to sign in with your email address
-              </p>
-            </div>
-          )}
+          {/* Add Password button */}
+          <div className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowAddPassword(true)}
+              className="w-full"
+            >
+              Add Password Authentication
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2">
+              Add a password to sign in with your email address (if you don't already have one)
+            </p>
+          </div>
           
           <div className="flex justify-between items-center pt-4">
             <Button 
@@ -321,13 +302,13 @@ const ProfilePage: React.FC = () => {
               Back
             </Button>
             <div className="flex space-x-3">
-              <Button 
+              {/* <Button 
                   variant="outline" 
                   onClick={handleLogout} 
                   disabled={isLoading}
                 >
                   Logout
-                </Button>
+                </Button> */}
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? (
                   <>
@@ -344,84 +325,85 @@ const ProfilePage: React.FC = () => {
             </div>
           </div>
         </form>
-      </div>
+          </FadeCardContent>
+        </FadeCard>
 
-      {/* Subscription Section */}
-      <div className="h-fit">
-        <SubscriptionStatus />
-      </div>
-    </div>
-
-    {/* Add Password Dialog */}
-    <Dialog open={showAddPassword} onOpenChange={(open) => {
-      setShowAddPassword(open);
-      if (!open) {
-        // Clear form and errors when dialog closes
-        setPassword('');
-        setConfirmPassword('');
-        setPasswordDialogError(null);
-      }
-    }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add Password Authentication</DialogTitle>
-          <DialogDescription>
-            Set a password to sign in with your email address
-          </DialogDescription>
-        </DialogHeader>
-        {passwordDialogError && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{passwordDialogError}</AlertDescription>
-          </Alert>
-        )}
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="new-password">Password</Label>
-            <Input
-              id="new-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter a secure password"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm Password</Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm your password"
-            />
-          </div>
+        {/* Subscription Section */}
+        <div className="h-fit">
+          <SubscriptionStatus />
         </div>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setShowAddPassword(false)}
-            disabled={addingPassword}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleAddPassword}
-            disabled={addingPassword || !password || !confirmPassword}
-          >
-            {addingPassword ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Adding...
-              </>
-            ) : (
-              'Add Password'
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+
+      {/* Add Password Dialog */}
+      <Dialog open={showAddPassword} onOpenChange={(open) => {
+        setShowAddPassword(open);
+        if (!open) {
+          // Clear form and errors when dialog closes
+          setPassword('');
+          setConfirmPassword('');
+          setPasswordDialogError(null);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Password Authentication</DialogTitle>
+            <DialogDescription>
+              Set a password to sign in with your email address
+            </DialogDescription>
+          </DialogHeader>
+          {passwordDialogError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{passwordDialogError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter a secure password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm your password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAddPassword(false)}
+              disabled={addingPassword}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddPassword}
+              disabled={addingPassword || !password || !confirmPassword}
+            >
+              {addingPassword ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Password'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

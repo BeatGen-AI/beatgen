@@ -24,16 +24,59 @@ class JWTVerifier:
     """JWT verifier that fetches and caches Supabase asymmetric signing keys"""
     
     def __init__(self):
-        # Cache signing keys for 24 hours (as recommended in the blog post)
-        self._keys_cache = TTLCache(maxsize=10, ttl=86400)  # 24 hours
+        # Cache signing keys for 1 hour (more aggressive caching)
+        self._keys_cache = TTLCache(maxsize=10, ttl=3600)  # 1 hour
         self._fetch_lock = asyncio.Lock()
+        self._warmed_up = False
+        self._cache_hits = 0
+        self._cache_misses = 0
+        logger.info(f"🔧 JWT Verifier initialized with cache TTL: 3600s (1 hour)")
+    
+    async def warm_cache(self):
+        """Pre-warm the cache with JWT signing keys on startup"""
+        if not self._warmed_up:
+            try:
+                logger.info("🔥 Warming up JWT key cache...")
+                await self.get_signing_keys()
+                self._warmed_up = True
+                logger.info("✅ JWT key cache warmed up successfully")
+                
+                # Start background refresh task
+                asyncio.create_task(self._background_refresh())
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to warm JWT key cache: {e}")
+                # Don't fail startup if cache warming fails
+    
+    async def _background_refresh(self):
+        """Background task to refresh cache before expiration"""
+        while True:
+            try:
+                # Refresh every 50 minutes (10 minutes before 1-hour expiration)
+                await asyncio.sleep(3000)  # 50 minutes
+                logger.info("🔄 Background refresh of JWT keys...")
+                
+                # Force refresh by temporarily clearing cache
+                if 'jwks' in self._keys_cache:
+                    del self._keys_cache['jwks']
+                await self.get_signing_keys()
+                logger.info("✅ Background JWT key refresh completed")
+                
+            except Exception as e:
+                logger.error(f"❌ Background JWT key refresh failed: {e}")
+                # Continue the loop even if refresh fails
+                await asyncio.sleep(300)  # Wait 5 minutes before retrying
         
     async def get_signing_keys(self) -> Dict[str, Any]:
         """Fetch Supabase JWT signing keys with caching"""
         
+        # Debug cache state
+        cache_size = len(self._keys_cache)
+        logger.debug(f"🔍 Cache debug: size={cache_size}, has_jwks={'jwks' in self._keys_cache}")
+        
         # Check cache first
         if 'jwks' in self._keys_cache:
-            logger.info("📦 Using cached JWT signing keys (fast)")
+            self._cache_hits += 1
+            logger.info(f"📦 Using cached JWT signing keys (fast) - Cache hits: {self._cache_hits}")
             return self._keys_cache['jwks']
         
         # Use lock to prevent multiple concurrent fetches
@@ -52,7 +95,8 @@ class JWTVerifier:
                     response.raise_for_status()
                     
                 jwks_data = response.json()
-                logger.info(f"📥 Successfully fetched {len(jwks_data.get('keys', []))} JWT signing keys from Supabase")
+                self._cache_misses += 1
+                logger.info(f"📥 Successfully fetched {len(jwks_data.get('keys', []))} JWT signing keys from Supabase - Cache misses: {self._cache_misses}")
                 
                 # Cache the keys
                 self._keys_cache['jwks'] = jwks_data
@@ -164,5 +208,16 @@ class JWTVerifier:
             logger.error(f"JWT verification error: {str(e)}")
             raise UnauthorizedException(f"Token verification failed: {str(e)}")
 
-# Global instance
-jwt_verifier = JWTVerifier()
+# Global singleton instance - ensure only one instance exists per process
+_jwt_verifier_instance = None
+
+def get_jwt_verifier() -> JWTVerifier:
+    """Get the global JWT verifier instance (singleton pattern)"""
+    global _jwt_verifier_instance
+    if _jwt_verifier_instance is None:
+        logger.info("🚀 Creating global JWT verifier instance")
+        _jwt_verifier_instance = JWTVerifier()
+    return _jwt_verifier_instance
+
+# For backward compatibility
+jwt_verifier = get_jwt_verifier()

@@ -24,9 +24,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
+import { FadeCard, FadeCardHeader, FadeCardTitle, FadeCardDescription, FadeCardContent } from '../../components/ui/fade-card';
 
 // Import shared pagination constants
 import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
+
+const logoColors = [
+  '#e539a9', // Bright Pink
+  '#c63ba6', // Magenta
+  '#a93fbf', // Dark Violet
+  '#8247d8', // Purple
+  '#6050e0', // Indigo
+  '#4160e2', // Blue
+];
 
 // Use standardized constants
 const { INITIAL_DISPLAY_COUNT, DISPLAY_INCREMENT, API_PAGE_SIZE: PROJECTS_PER_PAGE_API } = TRACK_PAGINATION_CONFIG.PROJECTS;
@@ -34,6 +44,8 @@ const { INITIAL_DISPLAY_COUNT, DISPLAY_INCREMENT, API_PAGE_SIZE: PROJECTS_PER_PA
 export default function Projects() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  
+  const projectsColor = logoColors[0]; // Bright Pink
 
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
   const [currentPageApi, setCurrentPageApi] = useState<number>(1);
@@ -159,33 +171,48 @@ export default function Projects() {
   };
 
   return (
-    <div className="p-4 md:p-8">
-        <div className="max-w-4xl mx-auto pt-0 mt-0">
-          {projectsError && !projectsData && (
-            <Alert variant="destructive" className="mb-2">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                {projectsError.message || 'Failed to load projects. Please try again later.'}
-              </AlertDescription>
-            </Alert>
-          )}
-          <ProjectsDisplay
-            allFetchedProjects={allFetchedProjects}
-            displayedProjectsCount={displayedProjectsCount}
-            totalProjectsOnServer={totalProjectsOnServer}
-            loading={loadingProjects && currentPageApi === 1}
-            loadingMore={isFetchingProjects && currentPageApi > 1}
-            error={projectsError ? projectsError.message : null}
-            onCreateNewProject={handleCreateProject}
-            onOpenProject={openProject}
-            onEditProject={navigateToEditProject}
-            onDeleteProject={handleDeleteProject}
-            onShowMore={handleShowMore}
-            snackbarOpen={snackbar.open}
-            snackbarMessage={snackbar.message}
-            snackbarSeverity={snackbar.severity}
-            onCloseSnackbar={handleCloseSnackbar} 
-            sectionColor={''}          />
+    <div className="p-8">
+      <div className="container mx-auto max-w-5xl">
+        {projectsError && !projectsData && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              {projectsError.message || 'Failed to load projects. Please try again later.'}
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {/* Projects Component */}
+        <FadeCard>
+          <FadeCardHeader>
+            <FadeCardTitle style={{ color: projectsColor }}>
+              Projects
+            </FadeCardTitle>
+            <FadeCardDescription>
+              Manage your music projects. Create new projects or continue working on existing ones.
+            </FadeCardDescription>
+          </FadeCardHeader>
+          <FadeCardContent>
+            <ProjectsDisplay
+              allFetchedProjects={allFetchedProjects}
+              displayedProjectsCount={displayedProjectsCount}
+              totalProjectsOnServer={totalProjectsOnServer}
+              loading={loadingProjects && currentPageApi === 1}
+              loadingMore={isFetchingProjects && currentPageApi > 1}
+              error={projectsError ? projectsError.message : null}
+              onCreateNewProject={handleCreateProject}
+              onOpenProject={openProject}
+              onEditProject={navigateToEditProject}
+              onDeleteProject={handleDeleteProject}
+              onShowMore={handleShowMore}
+              snackbarOpen={snackbar.open}
+              snackbarMessage={snackbar.message}
+              snackbarSeverity={snackbar.severity}
+              onCloseSnackbar={handleCloseSnackbar} 
+              sectionColor={projectsColor}
+            />
+          </FadeCardContent>
+        </FadeCard>
       </div>
 
       {/* Delete Confirmation Dialog */}

@@ -7,6 +7,17 @@ This implementation uses a request manager to track active requests and
 provides streaming responses with proper resource management.
 """
 
+import asyncio
+import json
+import math
+import re
+import time
+import traceback
+import uuid
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+from typing import Dict, Any, Optional, Literal
+
 from dotenv import load_dotenv
 from fastapi import (
     APIRouter,
@@ -17,15 +28,20 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
-import asyncio
-import json
-import re
-import time
-from typing import Dict, Any, Optional, Literal
-import traceback
+from pydantic import BaseModel
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app2.api.dependencies import get_current_user
-from app2.models.user import User
+from app2.constants.credits import get_operation_cost, get_model_credit_cost
+from app2.core.logging import get_api_logger
+from app2.infrastructure.database.sqlmodel_client import get_async_session
+from app2.llm import available_models
+from app2.llm.agents.music_agent import SongRequest, music_agent
+from app2.llm.available_models import ModelInfo
+from app2.llm.chat_session_manager import chat_session_manager
+from app2.llm.streaming import TextDeltaEvent
+from app2.llm.tools.edit_tools import get_tool_actions, clear_tool_actions
 from app2.models.assistant import (
     AssistantRequest,
     AssistantResponse,
@@ -34,18 +50,18 @@ from app2.models.assistant import (
     AssistantAction,
     TrackData,
 )
+from app2.models.subscription import SubscriptionPlan, BillingPeriod
+from app2.models.track_models.audio_track import AudioTrack, AudioTrackCreate, AudioTrackRead
+from app2.models.user import User
+from app2.repositories.audio_track_repository import AudioTrackRepository
+from app2.repositories.file_repository import FileRepository
+from app2.services.audio_generation_service import get_audio_generation_service
+from app2.services.credits_service import credits_service
+from app2.services.file_service import FileService
 from app2.sse.request_manager import request_manager, RequestStatus
 from app2.sse.sse import SSEManager
 from app2.sse.sse_queue_manager import SSEQueueManager
-from app2.core.logging import get_api_logger
-from app2.llm.available_models import ModelInfo
-from app2.llm import available_models
-from app2.llm.agents.music_agent import SongRequest, music_agent
-from pydantic import BaseModel
-from app2.infrastructure.database.sqlmodel_client import get_async_session
-from sqlmodel import Session
-from app2.services.credits_service import credits_service
-from app2.constants.credits import get_operation_cost, get_model_credit_cost
+from app2.types.assistant_actions import AudioTrackData
 
 # Set up logger
 logger = get_api_logger("assistant_streaming")
@@ -350,12 +366,12 @@ async def delayed_request_cleanup(request_id: str, delay_seconds: int = 10):
 
 
 # TODO: Project auto-creation will be implemented in a separate PR
-# async def _create_project_for_generation(context, session: Session, user_id: str) -> Optional[str]:
+# async def _create_project_for_generation(context, session: AsyncSession, user_id: str) -> Optional[str]:
 #     [Implementation temporarily removed - will be added back when project saving is fixed]
 
 
 async def process_generate_request(
-    request_id: str, context, sse_queue: SSEQueueManager, session: Session
+    request_id: str, context, sse_queue: SSEQueueManager, session: AsyncSession
 ):
     """Process a generate mode request"""
 
@@ -379,7 +395,6 @@ async def process_generate_request(
         user_credits_info = await credits_service.get_user_credits(user_id)
         if not user_credits_info:
             # Initialize credits if not found
-            from app2.models.user import User
             user = await session.get(User, user_id)
             if user:
                 await credits_service.initialize_user_credits(user)
@@ -539,10 +554,6 @@ async def process_edit_request(request_id: str, context, sse_queue: SSEQueueMana
             description="Analyzing your edit request"
         )
 
-        # Import edit tools and chat session manager
-        from app2.llm.tools.edit_tools import get_tool_actions, clear_tool_actions
-        from app2.llm.chat_session_manager import chat_session_manager
-
         # Clear any previous tool actions
         clear_tool_actions()
 
@@ -580,9 +591,6 @@ async def process_edit_request(request_id: str, context, sse_queue: SSEQueueMana
             description="Determining the best way to make your requested changes"
         )
 
-        # Import streaming events for proper handling
-        from app2.llm.streaming import TextDeltaEvent
-        
         # Use ChatSession to process the edit request with streaming
         logger.info("Streaming edit request response...")
         full_response_text = ""
@@ -701,7 +709,7 @@ async def process_chat_request(request_id: str, context, sse_queue: SSEQueueMana
 
 
 async def process_generate_audio_request(
-    request_id: str, context, sse_queue: SSEQueueManager, session: Session
+    request_id: str, context, sse_queue: SSEQueueManager, session: AsyncSession
 ):
     """
     Process a generate-audio mode request using FAL-AI Lyria2 model
@@ -716,14 +724,6 @@ async def process_generate_audio_request(
         session: Database session for track creation and credit management
     """
     try:
-        # Import services we need
-        from app2.services.audio_generation_service import get_audio_generation_service
-        from app2.services.file_service import FileService
-        from app2.repositories.file_repository import FileRepository
-        from app2.models.track_models.audio_track import AudioTrack, AudioTrackCreate, AudioTrackRead
-        from app2.repositories.audio_track_repository import AudioTrackRepository
-        import uuid
-        
         # Create file service instance
         file_repository = FileRepository(session)
         file_service = FileService(file_repository)
@@ -742,7 +742,6 @@ async def process_generate_audio_request(
         # Check credits (same as generate mode)
         user_credits_info = await credits_service.get_user_credits(user_id)
         if not user_credits_info:
-            from app2.models.user import User
             user = await session.get(User, user_id)
             if user:
                 await credits_service.initialize_user_credits(user)
@@ -879,9 +878,6 @@ async def process_generate_audio_request(
             name="completing",
             description="Finalizing audio track..."
         )
-        
-        # Create action to add the audio track to the frontend
-        from app2.types.assistant_actions import AudioTrackData
         
         # Use mode='json' to ensure proper serialization of UUIDs and datetimes
         action = AssistantAction(

@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import React from 'react'
 import MidiLibrary from '../platform/components/MidiLibrary'
 import { requireAuth } from '../platform/auth/auth-utils'
+import { FadeCard, FadeCardHeader, FadeCardTitle, FadeCardDescription, FadeCardContent } from '../components/ui/fade-card'
 
 const logoColors = [
   '#e539a9', // Bright Pink
@@ -24,22 +25,20 @@ function MidiTracksPage() {
   return (
     <div className="p-8">
       <div className="container mx-auto max-w-5xl">
-        <h1 
-          className="text-3xl font-bold mb-6"
-          style={{ 
-            color: midiTracksColor, 
-          }}
-        >
-          MIDI Tracks
-        </h1>
-        <p className="text-muted-foreground mb-6">
-          Manage your MIDI tracks. Upload new MIDI files or use existing tracks in your projects.
-        </p>
-        
         {/* MIDI Library Component */}
-        <div className="bg-card rounded-lg p-4 shadow-md">
-          <MidiLibrary sectionColor={midiTracksColor} />
-        </div>
+        <FadeCard>
+          <FadeCardHeader>
+            <FadeCardTitle style={{ color: midiTracksColor }}>
+              MIDI Tracks
+            </FadeCardTitle>
+            <FadeCardDescription>
+              Manage your MIDI tracks. Upload new MIDI files or use existing tracks in your projects.
+            </FadeCardDescription>
+          </FadeCardHeader>
+          <FadeCardContent>
+            <MidiLibrary sectionColor={midiTracksColor} />
+          </FadeCardContent>
+        </FadeCard>
       </div>
     </div>
   )

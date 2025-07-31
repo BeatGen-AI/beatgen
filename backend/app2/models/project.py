@@ -4,6 +4,7 @@ Project models for SQL database
 
 from typing import Optional, List, TYPE_CHECKING, Union
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Index
 import uuid
 
 from app2.models.base import ProjectBase, ProjectTrackBase
@@ -25,6 +26,11 @@ class Project(ProjectBase, table=True):
     """Project model for the database"""
 
     __tablename__ = "projects"
+    __table_args__ = (
+        # Composite index for efficient user projects query with ordering
+        Index("idx_projects_user_created", "user_id", "created_at"),
+    )
+    
     # Relationships
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     user: Optional["User"] = Relationship(back_populates="projects")

@@ -10,12 +10,14 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 import asyncio
 import traceback
+import json
 from datetime import datetime, timezone
 import uuid
 
 from app2.core.exceptions import DatabaseException, NotFoundException
 from app2.core.logging import get_repository_logger
 from app2.models.project import Project
+from app2.infrastructure.redis_client import redis_client
 
 
 class ProjectRepository:
@@ -30,6 +32,82 @@ class ProjectRepository:
         """
         self.session = session
         self.logger = get_repository_logger("project")
+        self.redis = redis_client.get_client()
+        self.projects_cache_ttl = 60  # 1 minute cache for projects list
+    
+    def _serialize_project(self, project: Project) -> dict:
+        """Serialize project object to dict for Redis storage"""
+        project_dict = project.model_dump()
+        # Convert datetime objects to ISO strings for JSON serialization
+        for field in ['created_at', 'updated_at']:
+            if project_dict.get(field):
+                project_dict[field] = project_dict[field].isoformat()
+        # Convert UUID objects to strings for JSON serialization
+        for field in ['id', 'user_id']:
+            if project_dict.get(field):
+                project_dict[field] = str(project_dict[field])
+        return project_dict
+    
+    def _deserialize_project(self, project_data: dict) -> Project:
+        """Deserialize dict from Redis back to Project object"""
+        # Convert ISO strings back to datetime objects
+        for field in ['created_at', 'updated_at']:
+            if project_data.get(field) and isinstance(project_data[field], str):
+                project_data[field] = datetime.fromisoformat(project_data[field].replace('Z', '+00:00'))
+        # Convert string UUIDs back to UUID objects
+        for field in ['id', 'user_id']:
+            if project_data.get(field) and isinstance(project_data[field], str):
+                project_data[field] = uuid.UUID(project_data[field])
+        return Project(**project_data)
+    
+    async def _get_projects_from_db(self, user_id: uuid.UUID, page: int, size: int) -> tuple[List[Project], int]:
+        """Fallback method to get projects directly from database"""
+        offset = (page - 1) * size
+        
+        # Query for items on the current page
+        items_statement = (
+            select(Project)
+            .where(Project.user_id == user_id)
+            .offset(offset)
+            .limit(size)
+            .order_by(Project.created_at.desc())
+        )
+        items_result_exec = await self.session.execute(items_statement)
+        items_result = items_result_exec.scalars().all()
+
+        # Query for total count
+        count_statement = (
+            select(func.count())
+            .select_from(Project)
+            .where(Project.user_id == user_id)
+        )
+        total_items_result_exec = await self.session.execute(count_statement)
+        total_items_result = total_items_result_exec.scalar()
+        
+        return items_result, total_items_result
+    
+    async def _invalidate_user_projects_cache(self, user_id: uuid.UUID) -> None:
+        """Invalidate all cached projects data for a user"""
+        try:
+            # Delete count cache
+            count_cache_key = f"projects:user:{user_id}:count"
+            await self.redis.delete(count_cache_key)
+            
+            # Delete all pagination cache keys for this user
+            # Use Redis SCAN to find all matching keys
+            pattern = f"projects:user:{user_id}:page:*"
+            keys_to_delete = []
+            async for key in self.redis.scan_iter(match=pattern):
+                keys_to_delete.append(key)
+            
+            if keys_to_delete:
+                await self.redis.delete(*keys_to_delete)
+                self.logger.info(f"🗑️ Invalidated {len(keys_to_delete)} project cache entries for user {user_id}")
+            else:
+                self.logger.debug(f"No project cache entries found for user {user_id}")
+                
+        except Exception as e:
+            self.logger.warning(f"⚠️ Failed to invalidate project cache for user {user_id}: {e}")
 
     async def get_by_id(self, project_id: uuid.UUID) -> Project:
         """
@@ -211,7 +289,7 @@ class ProjectRepository:
         self, user_id: uuid.UUID, page: int, size: int
     ) -> tuple[List[Project], int]:
         """
-        Get projects for a user with pagination.
+        Get projects for a user with pagination and Redis caching.
 
         Args:
             user_id: The ID of the user.
@@ -227,7 +305,19 @@ class ProjectRepository:
         self.logger.info(
             f"Getting projects for user: {user_id}, page: {page}, size: {size}"
         )
+        
+        # Redis cache key for this specific pagination request
+        cache_key = f"projects:user:{user_id}:page:{page}:size:{size}"
+        count_cache_key = f"projects:user:{user_id}:count"
+        
         try:
+            # TEMPORARILY DISABLE REDIS - DEBUG MODE
+            # Let's see what the actual database query is doing
+            self.logger.info(f"🔍 DEBUG: Bypassing Redis cache to analyze database query performance")
+            
+            import time
+            start_time = time.time()
+            
             offset = (page - 1) * size
 
             # Query for items on the current page
@@ -238,8 +328,17 @@ class ProjectRepository:
                 .limit(size)
                 .order_by(Project.created_at.desc())
             )
+            
+            # Log the actual SQL query
+            self.logger.info(f"🔍 SQL Query: {items_statement.compile(compile_kwargs={'literal_binds': True})}")
+            
+            query_start = time.time()
             items_result_exec = await self.session.execute(items_statement)
             items_result = items_result_exec.scalars().all()
+            query_end = time.time()
+            
+            self.logger.info(f"⏱️ Items query took: {(query_end - query_start) * 1000:.2f}ms")
+            self.logger.info(f"📊 Found {len(items_result)} projects")
 
             # Query for total count
             count_statement = (
@@ -247,15 +346,33 @@ class ProjectRepository:
                 .select_from(Project)
                 .where(Project.user_id == user_id)
             )
+            
+            self.logger.info(f"🔍 Count SQL Query: {count_statement.compile(compile_kwargs={'literal_binds': True})}")
+            
+            count_query_start = time.time()
             total_items_result_exec = await self.session.execute(count_statement)
             total_items_result = total_items_result_exec.scalar()
-
-            self.logger.info(
-                f"Found {len(items_result)} projects (total: {total_items_result}) for user: {user_id}"
-            )
+            count_query_end = time.time()
+            
+            self.logger.info(f"⏱️ Count query took: {(count_query_end - count_query_start) * 1000:.2f}ms")
+            
+            total_time = time.time() - start_time
+            self.logger.info(f"⏱️ Total database operation took: {total_time * 1000:.2f}ms")
+            
             return items_result, total_items_result
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"⚠️ Invalid JSON in Redis cache for projects, fetching from DB: {e}")
+            # Remove invalid cache entries
+            await self.redis.delete(cache_key)
+            await self.redis.delete(count_cache_key)
+            # Retry without cache
+            return await self._get_projects_from_db(user_id, page, size)
         except Exception as e:
             self.logger.error(f"Error getting paginated projects for user: {str(e)}")
+            # If Redis fails, fallback to database
+            if "redis" in str(e).lower():
+                self.logger.warning(f"⚠️ Redis error, falling back to database for projects")
+                return await self._get_projects_from_db(user_id, page, size)
             self.logger.error(traceback.format_exc())
             raise DatabaseException(
                 f"Failed to get paginated projects for user: {str(e)}"
@@ -332,6 +449,9 @@ class ProjectRepository:
             await self.session.commit()
             await self.session.refresh(project)
 
+            # Invalidate user's projects cache after creation
+            await self._invalidate_user_projects_cache(project.user_id)
+            
             self.logger.info(f"Created project with ID: {project.id}")
             return project
         except Exception as e:
@@ -393,6 +513,9 @@ class ProjectRepository:
             await self.session.commit()
             await self.session.refresh(project)
 
+            # Invalidate user's projects cache after update
+            await self._invalidate_user_projects_cache(project.user_id)
+            
             self.logger.info(f"Updated project with ID: {project_id}, new version: {project.version}")
             return project
         except Exception as e:
@@ -427,6 +550,9 @@ class ProjectRepository:
             self.session.delete(project)
             await self.session.commit()
 
+            # Invalidate user's projects cache after deletion
+            await self._invalidate_user_projects_cache(project.user_id)
+            
             self.logger.info(f"Deleted project with ID: {project_id}")
             return True
         except Exception as e:
