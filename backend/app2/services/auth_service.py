@@ -6,42 +6,33 @@ import hashlib
 import os
 
 from fastapi import Request, Response
-from cachetools import TTLCache
 
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import UnauthorizedException, ServiceException, ValidationException, NotFoundException
 from app2.infrastructure.database.supabase_client import supabase
 from app2.infrastructure.jwt_verifier import jwt_verifier
 from app2.repositories.user_repository import UserRepository
-from app2.repositories.auth_identity_repository import AuthIdentityRepository
 from app2.models.user import User
-from app2.models.auth_identity import AuthProvider
 from app2.core.config import settings
 
 logger = get_service_logger("auth")
-
-# Global token cache with automatic expiration and size limit
-CACHE_EXPIRY_SECONDS = 300  # 5 minutes
-_token_cache = TTLCache(maxsize=1000, ttl=CACHE_EXPIRY_SECONDS)
 
 
 class AuthService:
     """Service for authentication operations"""
 
-    def __init__(
-        self, 
-        user_repository: UserRepository,
-        auth_identity_repository: Optional[AuthIdentityRepository] = None
-    ):
+    def __init__(self, user_repository: UserRepository):
         """
         Initialize the service with repositories
 
         Args:
             user_repository: The repository for user operations
-            auth_identity_repository: The repository for auth identity operations
         """
         self.user_repository = user_repository
-        self.auth_identity_repository = auth_identity_repository
+        
+        logger.info("🔐 AUTH SYSTEM: Native Supabase auth enabled")
+        logger.info("   ✅ Using public.users.id = auth.users.id")
+        logger.info("   🚀 Suitable for multi-server deployment")
 
     async def create_user(
         self,
@@ -68,9 +59,10 @@ class AuthService:
         logger.info(f"Creating new user with email: {email}")
         try:
             # Register user with Supabase Auth
-            auth_response = supabase.client.auth.sign_up(
-                {"email": email, "password": password}
-            )
+            auth_response = supabase.client.auth.sign_up({
+                "email": email, 
+                "password": password
+            })
 
             if not auth_response.user:
                 logger.error("No user returned from Supabase sign_up")
@@ -79,41 +71,17 @@ class AuthService:
             user_id = auth_response.user.id
             logger.info(f"User created with Supabase Auth ID: {user_id}")
 
-            # Create user profile with auth identity mapping
+            # Create user profile using the Supabase Auth ID directly
             try:
-                if self.auth_identity_repository:
-                    # Use the new identity-aware flow
-                    # Create a new user profile with its own ID
-                    new_user_id = uuid.uuid4()
-                    user_profile = await self.user_repository.create_profile(
-                        user_id=new_user_id,
-                        email=email,
-                        username=username,
-                        display_name=display_name,
-                    )
-                    
-                    # Create auth identity mapping
-                    await self.auth_identity_repository.create_identity(
-                        user_profile_id=user_profile.id,
-                        auth_provider_id=user_id,  # Supabase Auth ID
-                        provider=AuthProvider.EMAIL,
-                        email=email
-                    )
-                    
-                    logger.info(
-                        f"Created user profile {user_profile.id} with email identity {user_id}"
-                    )
-                else:
-                    # Legacy flow - use Supabase ID as profile ID
-                    await self.user_repository.create_profile(
-                        user_id=user_id,
-                        email=email,
-                        username=username,
-                        display_name=display_name,
-                    )
-                    logger.info(
-                        f"User profile created in public table for User ID: {user_id}"
-                    )
+                await self.user_repository.create_profile(
+                    user_id=user_id,
+                    email=email,
+                    username=username,
+                    display_name=display_name,
+                )
+                logger.info(
+                    f"User profile created in public table for User ID: {user_id}"
+                )
             except Exception as repo_err:
                 logger.error(
                     f"Failed to create profile for User ID {user_id}: {repo_err}",
@@ -191,20 +159,6 @@ class AuthService:
             user_id = auth_response.user.id
             email = auth_response.user.email
             logger.info(f"User authenticated with ID: {user_id}")
-
-            # Ensure user profile exists with auth identity mapping
-            if self.auth_identity_repository and email:
-                try:
-                    user_profile = await self._ensure_user_profile_with_identity(
-                        auth_provider_id=user_id,
-                        email=email,
-                        provider=AuthProvider.EMAIL,
-                        display_name=None
-                    )
-                    logger.info(f"Ensured profile exists for user {user_profile.id}")
-                except Exception as e:
-                    logger.error(f"Failed to ensure user profile: {str(e)}")
-                    # Don't fail login if profile creation fails, but log it
             
             # Return token and user info
             return {
@@ -304,7 +258,7 @@ class AuthService:
 
     async def get_current_user(self, token: str) -> Dict[str, Any]:
         """
-        Get the current user from a token with caching
+        Get the current user from a token
 
         Args:
             token: The JWT token
@@ -315,48 +269,16 @@ class AuthService:
         Raises:
             UnauthorizedException: If the token is invalid
         """
-        # Generate secure cache key using full hash to prevent collisions
-        cache_key = f"user_{hashlib.sha256(token.encode()).hexdigest()}"
-        
-        # Check TTL cache first (automatically handles expiration)
-        logger.info(f"🔍 CACHE CHECK: Looking for cache_key: {cache_key}, cache size: {len(_token_cache)}")
-        if cache_key in _token_cache:
-            logger.info(f"✅ CACHE HIT: Returning cached user info for token: {token[:10]}...")
-            return _token_cache[cache_key]
-        
-        logger.info(f"❌ CACHE MISS: Getting current user from token: {token[:10]}... (cache_key: {cache_key})")
+        # Verify the JWT token and get user info
         user_info = await self.verify_token(token)
         
-        # If we have auth identity mapping, get the canonical user ID (with caching)
-        if self.auth_identity_repository and "id" in user_info:
-            auth_provider_id = user_info["id"]
-            
-            # Check cache for identity mapping
-            identity_cache_key = f"identity_{auth_provider_id}"
-            if identity_cache_key in _token_cache:
-                identity = _token_cache[identity_cache_key]
-                logger.debug(f"✅ IDENTITY CACHE HIT for {auth_provider_id}")
-            else:
-                identity = await self.auth_identity_repository.find_by_auth_provider_id(
-                    uuid.UUID(auth_provider_id)
-                )
-                # Cache identity mapping for 10 minutes (longer than token cache)
-                if identity:
-                    _token_cache[identity_cache_key] = identity
-                logger.debug(f"❌ IDENTITY CACHE MISS for {auth_provider_id}")
-            
-            if identity:
-                # Replace the auth provider ID with the canonical user profile ID
-                user_info["id"] = str(identity.user_profile_id)
-                user_info["canonical_user_id"] = str(identity.user_profile_id)
-                user_info["auth_provider_id"] = auth_provider_id
-                logger.info(
-                    f"Mapped auth ID {auth_provider_id} to user profile ID {identity.user_profile_id}"
-                )
+        # With native Supabase auth, the auth.users.id = public.users.id
+        # So we can use the auth ID directly as the canonical user ID
+        auth_id = user_info.get("id")
+        user_email = user_info.get("email", "unknown")
+        logger.info(f"🚀 NATIVE AUTH: User {user_email} (id: {auth_id}) using native Supabase auth")
         
-        # Cache the result (TTL handled automatically)
-        _token_cache[cache_key] = user_info
-        logger.info(f"💾 CACHED: Stored user info for cache_key: {cache_key}, cache size: {len(_token_cache)}")
+        user_info["canonical_user_id"] = auth_id
         
         return user_info
 
@@ -504,96 +426,6 @@ class AuthService:
             logger.error(f"Error completing profile: {str(e)}")
             raise ServiceException(f"Failed to complete profile: {str(e)}")
 
-    async def _ensure_user_profile_with_identity(
-        self,
-        auth_provider_id: uuid.UUID,
-        email: str,
-        provider: AuthProvider,
-        display_name: Optional[str] = None
-    ) -> User:
-        """
-        Ensure user profile exists with proper auth identity mapping.
-        
-        This method handles the complexity of multiple auth providers for the same user.
-        
-        Args:
-            auth_provider_id: The ID from the auth provider (e.g., Google OAuth ID)
-            email: User's email
-            provider: The auth provider type
-            display_name: Optional display name from provider
-            
-        Returns:
-            The user profile
-        """
-        # If auth identity repository is not available, fall back to old behavior
-        if not self.auth_identity_repository:
-            logger.warning("Auth identity repository not available, using legacy flow")
-            return await self.user_repository.create_profile(
-                user_id=auth_provider_id,
-                email=email,
-                username=None,
-                display_name=display_name
-            )
-        
-        # Check if we have an existing identity mapping
-        existing_identity = await self.auth_identity_repository.find_by_auth_provider_id(
-            auth_provider_id
-        )
-        
-        if existing_identity:
-            # Update last used timestamp
-            await self.auth_identity_repository.update_last_used(existing_identity.id)
-            
-            # Get the user profile
-            user = await self.user_repository.get_profile(existing_identity.user_profile_id)
-            logger.info(
-                f"Found existing user {user.id} for {provider} auth ID {auth_provider_id}"
-            )
-            return user
-        
-        # No existing identity - check if user exists with this email
-        existing_user = await self.user_repository.find_by_email(email)
-        
-        if existing_user:
-            # User exists with this email - create identity mapping
-            logger.info(
-                f"Found existing user {existing_user.id} by email {email}, "
-                f"creating {provider} identity mapping"
-            )
-            
-            await self.auth_identity_repository.create_identity(
-                user_profile_id=existing_user.id,
-                auth_provider_id=auth_provider_id,
-                provider=provider,
-                email=email
-            )
-            
-            return existing_user
-        
-        # New user - create profile and identity mapping
-        logger.info(f"Creating new user for {email} with {provider} auth")
-        
-        # Create user profile with a new UUID (not the auth provider ID)
-        new_user_id = uuid.uuid4()
-        new_user = await self.user_repository.create_profile(
-            user_id=new_user_id,
-            email=email,
-            username=None,
-            display_name=display_name
-        )
-        
-        # Create identity mapping
-        await self.auth_identity_repository.create_identity(
-            user_profile_id=new_user.id,
-            auth_provider_id=auth_provider_id,
-            provider=provider,
-            email=email
-        )
-        
-        logger.info(
-            f"Created new user {new_user.id} with {provider} identity {auth_provider_id}"
-        )
-        return new_user
 
     async def check_profile_complete(self, user_id: uuid.UUID) -> bool:
         """
@@ -716,6 +548,34 @@ class AuthService:
                 raise
             raise ServiceException(f"Failed to unlink identity: {str(e)}")
     
+    async def updateUser(self, password: str) -> bool:
+        """
+        Update user with password (standard Supabase pattern)
+        
+        This is the standard Supabase method for adding email/password authentication 
+        to an OAuth account: updateUser({ password: 'validpassword' })
+        
+        Args:
+            password: The password to set
+            
+        Returns:
+            True if successful
+        """
+        try:
+            logger.info("Updating user with password using Supabase updateUser method")
+            
+            # Use Supabase's native updateUser method
+            supabase.client.auth.update_user({
+                "password": password
+            })
+            
+            logger.info("Password updated successfully using updateUser method")
+            return True
+                
+        except Exception as e:
+            logger.error(f"Error in updateUser: {str(e)}")
+            raise ServiceException(f"Failed to update user: {str(e)}")
+    
     async def add_password_to_oauth_user(
         self, user_id: str, password: str, access_token: str
     ) -> bool:
@@ -737,70 +597,14 @@ class AuthService:
         try:
             logger.info(f"Adding password auth to user {user_id}")
             
-            # First, get the user's email from their current session
-            user_response = supabase.client.auth.get_user(access_token)
-            if not user_response or not user_response.user or not user_response.user.email:
-                raise ServiceException("Unable to get user email from session")
+            # Use Supabase's native updateUser method - more secure than HTTP calls
+            supabase.client.auth.update_user({
+                "password": password
+            })
             
-            user_email = user_response.user.email
-            logger.info(f"Adding password for email: {user_email}")
-            
-            # Update the user's password
-            # This allows them to sign in with email/password
-            url = f"{settings.supabase.URL}/auth/v1/user"
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "apikey": settings.supabase.KEY,
-                "Content-Type": "application/json"
-            }
-            data = {"password": password}
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.put(url, json=data, headers=headers)
+            logger.info("Password set successfully - user can now sign in with email/password")
+            return True
                 
-                if response.status_code != 200:
-                    error_msg = f"Failed to set password: {response.status_code} - {response.text}"
-                    logger.error(error_msg)
-                    raise ServiceException(error_msg)
-                
-                logger.info("Password set successfully - user can now sign in with email/password")
-                
-                # Update our internal auth_identities table to track this
-                if self.auth_identity_repository:
-                    try:
-                        # Check if we already have an email identity for this user
-                        existing_identity = await self.auth_identity_repository.find_by_email_and_provider(
-                            user_email, AuthProvider.EMAIL
-                        )
-                        
-                        if not existing_identity:
-                            # Get the user's profile ID from their existing identity
-                            existing_oauth_identity = await self.auth_identity_repository.find_by_auth_provider_id(
-                                uuid.UUID(user_id)
-                            )
-                            
-                            if existing_oauth_identity:
-                                # Create email identity with same user profile ID
-                                logger.info(f"Creating email identity record for user profile {existing_oauth_identity.user_profile_id}")
-                                await self.auth_identity_repository.create_identity(
-                                    user_profile_id=existing_oauth_identity.user_profile_id,
-                                    auth_provider_id=uuid.UUID(user_id),  # Same Supabase auth ID
-                                    provider=AuthProvider.EMAIL,
-                                    email=user_email
-                                )
-                                logger.info("Internal email identity record created")
-                            else:
-                                logger.warning(f"No existing OAuth identity found for user {user_id}")
-                    except Exception as e:
-                        logger.error(f"Failed to create internal email identity record: {str(e)}")
-                        # Don't fail the whole operation if our internal record fails
-                        # The password is already set in Supabase
-                
-                return True
-                
-        except httpx.RequestError as e:
-            logger.error(f"Request error adding password auth: {str(e)}")
-            raise ServiceException(f"Failed to add password: {str(e)}")
         except Exception as e:
             logger.error(f"Error adding password auth: {str(e)}")
             raise ServiceException(f"Failed to add password: {str(e)}")
@@ -822,45 +626,19 @@ class AuthService:
         try:
             logger.info(f"Updating password for user {user_id} with recovery token")
             
-            # Update the user's password using the recovery token
-            url = f"{settings.supabase.URL}/auth/v1/user"
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "apikey": settings.supabase.KEY,
-                "Content-Type": "application/json"
-            }
-            data = {"password": password}
+            # Use Supabase's native updateUser method with recovery token
+            # The recovery token should be set as the session token
+            supabase.client.auth.update_user({
+                "password": password
+            })
             
-            async with httpx.AsyncClient() as client:
-                response = await client.put(url, json=data, headers=headers)
+            logger.info("Password updated successfully")
+            return True
                 
-                if response.status_code != 200:
-                    error_msg = f"Failed to update password: {response.status_code} - {response.text}"
-                    logger.error(error_msg)
-                    
-                    # Try to parse the error response for a user-friendly message
-                    try:
-                        error_data = response.json()
-                        if 'msg' in error_data:
-                            raise ServiceException(error_data['msg'])
-                        elif 'message' in error_data:
-                            raise ServiceException(error_data['message'])
-                        elif 'error' in error_data:
-                            raise ServiceException(error_data['error'])
-                    except:
-                        pass
-                    
-                    raise ServiceException(error_msg)
-                
-                logger.info("Password updated successfully")
-                return True
-                
-        except httpx.RequestError as e:
-            logger.error(f"Request error updating password: {str(e)}")
-            raise ServiceException(f"Failed to update password: {str(e)}")
         except Exception as e:
             logger.error(f"Error updating password: {str(e)}")
             raise ServiceException(f"Failed to update password: {str(e)}")
+
 
     async def handle_google_callback(
         self, code: str, request: Request, response: Response
@@ -919,26 +697,21 @@ class AuthService:
                         f"Unexpected type for user_metadata for user {session_user_id}: {type(user_metadata)}. Value: {user_metadata}"
                     )
                 
-                # Check if this is a linked identity by examining the user's identities
-                identities = auth_response.user.identities if hasattr(auth_response.user, 'identities') else []
-                logger.info(f"User has {len(identities)} identities")
+                # With native Supabase auth, check if user profile already exists
+                # If not, create it using the Supabase auth ID directly
+                try:
+                    existing_user = await self.user_repository.get_profile(session_user_id)
+                    logger.info(f"Profile already exists for User ID: {session_user_id}")
+                except NotFoundException:
+                    # Create new user profile
+                    await self.user_repository.create_profile(
+                        user_id=session_user_id,
+                        email=email,
+                        username=None,
+                        display_name=full_name
+                    )
+                    logger.info(f"Created new profile for User ID: {session_user_id}")
                 
-                # The session_user_id might be the same as an existing email auth user
-                # if Supabase automatically linked them. We need to handle both cases:
-                # 1. New Google user (creates new Supabase auth user)
-                # 2. Existing email user adding Google (Supabase links to same auth user)
-                
-                # Handle auth identity mapping
-                # For OAuth, we use the Supabase auth ID directly
-                # This is different from the user profile ID and ensures uniqueness
-                
-                user_profile = await self._ensure_user_profile_with_identity(
-                    auth_provider_id=session_user_id,
-                    email=email,
-                    provider=AuthProvider.GOOGLE,
-                    display_name=full_name
-                )
-                logger.info(f"Profile ensured for User ID: {user_profile.id}")
             except Exception as create_err:
                 logger.error(
                     f"Failed to create/ensure profile for User ID {session_user_id}: {create_err}",

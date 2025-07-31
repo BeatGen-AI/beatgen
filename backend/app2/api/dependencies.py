@@ -11,7 +11,6 @@ from app2.infrastructure.database.sqlmodel_client import get_session
 
 
 from app2.repositories.user_repository import UserRepository
-from app2.repositories.auth_identity_repository import AuthIdentityRepository
 from app2.repositories.project_repository import ProjectRepository
 from app2.repositories.project_track_repository import ProjectTrackRepository
 from app2.repositories.file_repository import FileRepository
@@ -43,9 +42,6 @@ def get_user_repository(session: SessionDep) -> UserRepository:
     return UserRepository(session)
 
 
-def get_auth_identity_repository(session: SessionDep) -> AuthIdentityRepository:
-    """Get the auth identity repository instance"""
-    return AuthIdentityRepository(session)
 
 
 def get_project_repository(session: SessionDep) -> ProjectRepository:
@@ -93,12 +89,9 @@ def get_drum_sample_public_repository(
 # Service instances
 def get_auth_service(
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
-    auth_identity_repository: Annotated[
-        AuthIdentityRepository, Depends(get_auth_identity_repository)
-    ],
 ) -> AuthService:
     """Get the auth service instance"""
-    return AuthService(user_repository, auth_identity_repository)
+    return AuthService(user_repository)
 
 
 def get_user_service(
@@ -175,7 +168,8 @@ async def get_current_user(
         UnauthorizedException: If the token is invalid
     """
     # Check if user info is already cached in this request
-    cache_key = f"current_user_{hashlib.sha256(token.encode()).hexdigest()[:16]}"
+    # Use full hash to avoid collision risk
+    cache_key = f"current_user_{hashlib.sha256(token.encode()).hexdigest()}"
     if hasattr(request.state, cache_key):
         logger.debug("Returning cached user info")
         return getattr(request.state, cache_key)
