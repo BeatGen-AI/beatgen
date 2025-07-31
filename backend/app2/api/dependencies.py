@@ -168,7 +168,8 @@ async def get_current_user(
         UnauthorizedException: If the token is invalid
     """
     # Check if user info is already cached in this request
-    cache_key = f"current_user_{hashlib.sha256(token.encode()).hexdigest()[:16]}"
+    # Use full hash to avoid collision risk
+    cache_key = f"current_user_{hashlib.sha256(token.encode()).hexdigest()}"
     if hasattr(request.state, cache_key):
         logger.debug("Returning cached user info")
         return getattr(request.state, cache_key)

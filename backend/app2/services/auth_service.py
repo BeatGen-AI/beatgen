@@ -597,16 +597,7 @@ class AuthService:
         try:
             logger.info(f"Adding password auth to user {user_id}")
             
-            # First, get the user's email from their current session
-            user_response = supabase.client.auth.get_user(access_token)
-            if not user_response or not user_response.user or not user_response.user.email:
-                raise ServiceException("Unable to get user email from session")
-            
-            user_email = user_response.user.email
-            logger.info(f"Adding password for email: {user_email}")
-            
-            # Update the user's password using Supabase's native updateUser method
-            # This allows them to sign in with email/password
+            # Use Supabase's native updateUser method - more secure than HTTP calls
             supabase.client.auth.update_user({
                 "password": password
             })
@@ -635,42 +626,15 @@ class AuthService:
         try:
             logger.info(f"Updating password for user {user_id} with recovery token")
             
-            # Update the user's password using the recovery token
-            url = f"{settings.supabase.URL}/auth/v1/user"
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "apikey": settings.supabase.KEY,
-                "Content-Type": "application/json"
-            }
-            data = {"password": password}
+            # Use Supabase's native updateUser method with recovery token
+            # The recovery token should be set as the session token
+            supabase.client.auth.update_user({
+                "password": password
+            })
             
-            async with httpx.AsyncClient() as client:
-                response = await client.put(url, json=data, headers=headers)
+            logger.info("Password updated successfully")
+            return True
                 
-                if response.status_code != 200:
-                    error_msg = f"Failed to update password: {response.status_code} - {response.text}"
-                    logger.error(error_msg)
-                    
-                    # Try to parse the error response for a user-friendly message
-                    try:
-                        error_data = response.json()
-                        if 'msg' in error_data:
-                            raise ServiceException(error_data['msg'])
-                        elif 'message' in error_data:
-                            raise ServiceException(error_data['message'])
-                        elif 'error' in error_data:
-                            raise ServiceException(error_data['error'])
-                    except:
-                        pass
-                    
-                    raise ServiceException(error_msg)
-                
-                logger.info("Password updated successfully")
-                return True
-                
-        except httpx.RequestError as e:
-            logger.error(f"Request error updating password: {str(e)}")
-            raise ServiceException(f"Failed to update password: {str(e)}")
         except Exception as e:
             logger.error(f"Error updating password: {str(e)}")
             raise ServiceException(f"Failed to update password: {str(e)}")
