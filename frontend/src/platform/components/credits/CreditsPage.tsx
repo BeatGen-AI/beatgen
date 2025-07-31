@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Coins, Calendar, RefreshCcw, Infinity } from 'lucide-react';
@@ -9,8 +9,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUser } from '../../context/UserContext';
 
 export const CreditsPage: React.FC = () => {
-  const { credits, creditsLoading: isLoading, subscription } = useUser();
+  const { credits, creditsLoading: isLoading, subscription, refreshCredits } = useUser();
   const currentPlan = subscription?.plan || null;
+
+  // Fetch credits when the page loads (since we don't auto-fetch anymore)
+  useEffect(() => {
+    if (!credits && !isLoading) {
+      console.log('Credits page: fetching credits data...');
+      refreshCredits();
+    }
+  }, [credits, isLoading, refreshCredits]);
 
   if (isLoading) {
     return (

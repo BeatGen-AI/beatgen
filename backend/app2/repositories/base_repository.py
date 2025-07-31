@@ -76,9 +76,21 @@ class BaseRepository(Generic[T]):
             self.logger.info(f"SQL Query: {statement}")
             
             query_start = time.time()
-            result = await self.session.execute(statement)
-            query_time = time.time() - query_start
-            self.logger.info(f"Query execution took {query_time:.3f}s")
+            self.logger.info(f"Executing database query...")
+            
+            # Add timeout to prevent hanging
+            import asyncio
+            try:
+                result = await asyncio.wait_for(
+                    self.session.execute(statement), 
+                    timeout=10.0  # 10 second timeout
+                )
+                query_time = time.time() - query_start
+                self.logger.info(f"Query execution took {query_time:.3f}s")
+            except asyncio.TimeoutError:
+                query_time = time.time() - query_start
+                self.logger.error(f"Database query timed out after {query_time:.3f}s")
+                raise DatabaseException(f"Database query timed out after {query_time:.3f}s")
             
             fetch_start = time.time()
             model_instance = result.scalars().first()
