@@ -71,7 +71,7 @@ class UserService:
         """
         logger.info(f"Getting profile for user ID: {user_id}")
         try:
-            profile = await self.user_repository.get_profile(user_id)
+            profile = await self.user_repository.get_profile(uuid.UUID(user_id))
             logger.info(f"Found profile for user ID: {user_id}")
             return profile
         except Exception as e:
@@ -107,7 +107,7 @@ class UserService:
                 if k not in ["id", "email", "created_at"]
             }
 
-            profile = await self.user_repository.update_profile(user_id, safe_data)
+            profile = await self.user_repository.update_profile(uuid.UUID(user_id), safe_data)
             logger.info(f"Updated profile for user ID: {user_id}")
             return profile
         except Exception as e:
