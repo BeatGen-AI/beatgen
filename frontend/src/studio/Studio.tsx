@@ -619,6 +619,7 @@ function Studio({ projectId }: StudioProps) {
                     onOpenChange={(open) => setAddMenuAnchor(open ? document.body : null)}
                     onAddTrack={handleAddTrack}
                     onFileUpload={uploadAudioFile}
+                    isAIAssistantOpen={isChatOpen}
                   >
                     <button
                       className="h-6 text-xs font-bold flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap rounded transition-all duration-200 px-2 flex items-center justify-center"
@@ -761,7 +762,6 @@ function Studio({ projectId }: StudioProps) {
           <ChatWindow 
             isOpen={isChatOpen}
             onClose={handleChatToggle}
-            controlBarHeight={controlBarHeight}
           />
           
           {/* Render the new piano roll windows directly in Studio */}
