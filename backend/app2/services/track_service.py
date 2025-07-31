@@ -5,6 +5,7 @@ Service for track operations with specialized track models
 from typing import Dict, Any, List, Union, Type
 import traceback
 import uuid
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import (
@@ -46,34 +47,23 @@ AnyTrackRead = Union[AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackR
 
 
 class TrackService:
-    """Service for track operations with specialized track models"""
+    """Service for track operations with request-scoped session management"""
 
-    def __init__(
-        self,
-        audio_repository: AudioTrackRepository,
-        midi_repository: MidiTrackRepository,
-        sampler_repository: SamplerTrackRepository,
-        drum_repository: DrumTrackRepository,
-        project_track_repository: ProjectTrackRepository,
-        file_repository: FileRepository,
-    ):
+    def __init__(self, session: AsyncSession):
         """
-        Initialize the service with repositories
+        Initialize the service with a database session
 
         Args:
-            audio_repository: Repository for audio tracks
-            midi_repository: Repository for MIDI tracks
-            sampler_repository: Repository for sampler tracks
-            drum_repository: Repository for drum tracks
-            project_track_repository: Repository for project-track associations
-            file_repository: Repository for file operations
+            session: The async database session for this request
         """
-        self.audio_repository = audio_repository
-        self.midi_repository = midi_repository
-        self.sampler_repository = sampler_repository
-        self.drum_repository = drum_repository
-        self.project_track_repository = project_track_repository
-        self.file_repository = file_repository
+        self.session = session
+        # Create repositories within request scope
+        self.audio_repository = AudioTrackRepository(session)
+        self.midi_repository = MidiTrackRepository(session)
+        self.sampler_repository = SamplerTrackRepository(session)
+        self.drum_repository = DrumTrackRepository(session)
+        self.project_track_repository = ProjectTrackRepository(session)
+        self.file_repository = FileRepository(session)
 
     async def get_user_tracks(
         self, user_id: uuid.UUID, requested_track_type: TrackType = None

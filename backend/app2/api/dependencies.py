@@ -14,17 +14,13 @@ from app2.repositories.user_repository import UserRepository
 from app2.repositories.project_repository import ProjectRepository
 from app2.repositories.project_track_repository import ProjectTrackRepository
 from app2.repositories.file_repository import FileRepository
-from app2.repositories.audio_track_repository import AudioTrackRepository
-from app2.repositories.midi_track_repository import MidiTrackRepository
-from app2.repositories.sampler_track_repository import SamplerTrackRepository
-from app2.repositories.drum_track_repository import DrumTrackRepository
+from app2.repositories.drum_sample_public_repository import DrumSamplePublicRepository
 
 from app2.services.auth_service import AuthService
 from app2.services.user_service import UserService
 from app2.services.project_service import ProjectService
 from app2.services.track_service import TrackService
 from app2.services.file_service import FileService
-from app2.repositories.drum_sample_public_repository import DrumSamplePublicRepository
 from app2.services.drum_sample_service import DrumSampleService
 
 logger = get_logger("beatgen.api.dependencies")
@@ -54,24 +50,6 @@ def get_file_repository(session: SessionDep) -> FileRepository:
     return FileRepository(session)
 
 
-def get_audio_track_repository(session: SessionDep) -> AudioTrackRepository:
-    """Get the audio track repository instance"""
-    return AudioTrackRepository(session)
-
-
-def get_midi_track_repository(session: SessionDep) -> MidiTrackRepository:
-    """Get the MIDI track repository instance"""
-    return MidiTrackRepository(session)
-
-
-def get_sampler_track_repository(session: SessionDep) -> SamplerTrackRepository:
-    """Get the sampler track repository instance"""
-    return SamplerTrackRepository(session)
-
-
-def get_drum_track_repository(session: SessionDep) -> DrumTrackRepository:
-    """Get the drum track repository instance"""
-    return DrumTrackRepository(session)
 
 
 def get_project_track_repository(session: SessionDep) -> ProjectTrackRepository:
@@ -102,33 +80,13 @@ def get_user_service(
 
 
 def get_track_service(session: SessionDep) -> TrackService:
-    """Get the track service instance with specialized track repositories"""
-    audio_repository = AudioTrackRepository(session)
-    midi_repository = MidiTrackRepository(session)
-    sampler_repository = SamplerTrackRepository(session)
-    drum_repository = DrumTrackRepository(session)
-    project_track_repository = ProjectTrackRepository(session)
-    file_repository = FileRepository(session)
-
-    return TrackService(
-        audio_repository=audio_repository,
-        midi_repository=midi_repository,
-        sampler_repository=sampler_repository,
-        drum_repository=drum_repository,
-        project_track_repository=project_track_repository,
-        file_repository=file_repository,
-    )
+    """Get the track service instance with request-scoped session"""
+    return TrackService(session)
 
 
-def get_project_service(
-    project_repository: Annotated[ProjectRepository, Depends(get_project_repository)],
-    project_track_repository: Annotated[
-        ProjectTrackRepository, Depends(get_project_track_repository)
-    ],
-    track_service: Annotated[TrackService, Depends(get_track_service)],
-) -> ProjectService:
-    """Get the project service instance"""
-    return ProjectService(project_repository, project_track_repository, track_service)
+def get_project_service(session: SessionDep) -> ProjectService:
+    """Get the project service instance with request-scoped session"""
+    return ProjectService(session)
 
 
 def get_file_service(

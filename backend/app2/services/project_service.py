@@ -7,6 +7,7 @@ import traceback
 from datetime import datetime, timezone
 import uuid
 from contextlib import asynccontextmanager
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import ServiceException, NotFoundException, ForbiddenException
@@ -20,59 +21,30 @@ from app2.models.project import ProjectWithTracks, ProjectRead, CombinedTrack
 from app2.types.track_types import TrackType
 from app2.services.track_service import TrackService
 from app2.dto.projects_dto import Page, PageParams
+from app2.models.track_models.audio_track import AudioTrackRead
+from app2.models.track_models.midi_track import MidiTrackRead
+from app2.models.track_models.sampler_track import SamplerTrackRead
+from app2.models.track_models.drum_track import DrumTrackRead
 
 logger = get_service_logger("project")
 
 
 class ProjectService:
-    """Service for project operations with the new track model structure"""
+    """Service for project operations with request-scoped session management"""
 
-    def __init__(
-        self,
-        project_repository: ProjectRepository,
-        project_track_repository: ProjectTrackRepository,
-        track_service: TrackService,
-    ):
+    def __init__(self, session: AsyncSession):
         """
-        Initialize the service with repositories and services
+        Initialize the service with a database session
 
         Args:
-            project_repository: The repository for project operations
-            project_track_repository: The repository for project-track relationship operations
-            track_service: The service for track operations
+            session: The async database session for this request
         """
-        self.project_repository = project_repository
-        self.project_track_repository = project_track_repository
-        self.track_service = track_service
+        self.session = session
+        # Create repositories within request scope
+        self.project_repository = ProjectRepository(session)
+        self.project_track_repository = ProjectTrackRepository(session)
+        self.track_service = TrackService(session)
 
-    @asynccontextmanager
-    async def transaction_context(self):
-        """
-        Provide transactional context for complex operations
-        
-        This ensures all operations within the context use the same database session
-        and are committed or rolled back together.
-        """
-        session = None
-        try:
-            # Get the session from project_track_repository (they should all use the same session)
-            session = self.project_track_repository.session
-            
-            # Check if we're already in a transaction
-            if session.in_transaction():
-                # Already in transaction, just yield the session
-                logger.info("Already in transaction, reusing existing transaction")
-                yield session
-            else:
-                # Start a new transaction
-                logger.info("Starting new transaction")
-                async with session.begin():
-                    yield session
-                
-        except Exception as e:
-            logger.error(f"Transaction failed: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise
 
     async def get_user_projects(
         self, user_id: uuid.UUID, page_params: PageParams
@@ -94,6 +66,9 @@ class ProjectService:
             f"Getting projects for user ID: {user_id} with params: {page_params}"
         )
         try:
+            import time
+            service_start = time.time()
+            
             # Assume project_repository.get_by_user_id_paginated exists
             # and returns (items, total_count)
             projects, total_items = (
@@ -101,13 +76,20 @@ class ProjectService:
                     user_id, page_params.page, page_params.size
                 )
             )
-            logger.info(
-                f"Found {len(projects)} projects (total: {total_items}) for user ID: {user_id}"
-            )
-
+            
+            repo_time = time.time() - service_start
+            logger.info(f"⏱️ Repository call took: {repo_time * 1000:.2f}ms")
+            
+            validation_start = time.time()
             project_reads = [
                 ProjectRead.model_validate(project) for project in projects
             ]
+            validation_time = time.time() - validation_start
+            logger.info(f"⏱️ Model validation took: {validation_time * 1000:.2f}ms")
+            
+            logger.info(
+                f"Found {len(projects)} projects (total: {total_items}) for user ID: {user_id}"
+            )
 
             return Page.create(
                 items=project_reads, total_items=total_items, params=page_params
@@ -436,7 +418,7 @@ class ProjectService:
             f"Updating tracks for project with ID: {project_id}, {len(tracks_data)} tracks"
         )
         
-        async with self.transaction_context() as session:
+        async with self.session.begin():
             try:
                 # Get existing tracks to identify what to remove
                 existing_tracks = await self.project_track_repository.get_by_project_id(project_id)
@@ -446,11 +428,11 @@ class ProjectService:
                 # Track IDs that will be in the updated project
                 new_track_ids = set()
                 
-                # Create track repositories using the same session
-                midi_repo = MidiTrackRepository(session)
-                audio_repo = AudioTrackRepository(session)
-                sampler_repo = SamplerTrackRepository(session)
-                drum_repo = DrumTrackRepository(session)
+                # Use existing repositories that already share the same session
+                midi_repo = self.track_service.midi_repository
+                audio_repo = self.track_service.audio_repository
+                sampler_repo = self.track_service.sampler_repository
+                drum_repo = self.track_service.drum_repository
                 
                 # Process each track using upsert pattern
                 for track_idx, track_data in enumerate(tracks_data):

@@ -63,12 +63,23 @@ async def init_db():
     """Initialize the database and create tables"""
     logger.info("Initializing database and creating tables...")
     try:
-        await create_db_and_tables()
+        #await create_db_and_tables()
         logger.info("Database initialization complete")
     except Exception as e:
         logger.error(f"Database initialization failed: {str(e)}")
         logger.error(traceback.format_exc())
         # Continue running even if database initialization fails
+
+@app.on_event("startup")
+async def warm_jwt_cache():
+    """Warm up JWT key cache on startup for better performance"""
+    logger.info("Warming up JWT key cache...")
+    try:
+        from app2.infrastructure.jwt_verifier import jwt_verifier
+        await jwt_verifier.warm_cache()
+    except Exception as e:
+        logger.warning(f"JWT cache warming failed: {str(e)}")
+        # Don't fail startup if cache warming fails
         # This allows the app to start and potentially use other features
 
 
