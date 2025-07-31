@@ -448,16 +448,8 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
 
             logger.info("Finished streaming explanation.")
             
-            # Emit the captured explanation as a step event
-            if explanation_text.strip():
-                await self.context.queue.step_event(
-                    step_id=1,
-                    step_name="Determine Musical Parameters",
-                    event_type="explanation",
-                    content=explanation_text.strip(),
-                    title="Musical Parameters Explanation"
-                )
-                logger.info("Emitted explanation event for musical parameters")
+            # Skip emitting step event to avoid duplication with streamed chunks
+            logger.info("Finished streaming musical parameters explanation")
                 
         except asyncio.CancelledError:
             logger.info("determine_musical_parameters: Streaming explanation task explicitly cancelled.")
