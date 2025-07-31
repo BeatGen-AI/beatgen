@@ -106,7 +106,7 @@
 #         self.drum_sounds: List[DrumSamplePublicRead] = []
 
 #     async def compose_music(
-#         self, prompt: str, queue: SSEQueueManager, session: Session
+#         self, prompt: str, queue: SSEQueueManager, session: AsyncSession
 #     ) -> Dict[str, Any]:
 #         _drum_file_repository = get_drum_sample_public_repository(session)
 #         drum_sample_service = get_drum_sample_service(_drum_file_repository)

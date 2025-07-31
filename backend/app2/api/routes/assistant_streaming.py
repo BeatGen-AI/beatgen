@@ -29,7 +29,8 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app2.api.dependencies import get_current_user
 from app2.constants.credits import get_operation_cost, get_model_credit_cost
@@ -365,12 +366,12 @@ async def delayed_request_cleanup(request_id: str, delay_seconds: int = 10):
 
 
 # TODO: Project auto-creation will be implemented in a separate PR
-# async def _create_project_for_generation(context, session: Session, user_id: str) -> Optional[str]:
+# async def _create_project_for_generation(context, session: AsyncSession, user_id: str) -> Optional[str]:
 #     [Implementation temporarily removed - will be added back when project saving is fixed]
 
 
 async def process_generate_request(
-    request_id: str, context, sse_queue: SSEQueueManager, session: Session
+    request_id: str, context, sse_queue: SSEQueueManager, session: AsyncSession
 ):
     """Process a generate mode request"""
 
@@ -708,7 +709,7 @@ async def process_chat_request(request_id: str, context, sse_queue: SSEQueueMana
 
 
 async def process_generate_audio_request(
-    request_id: str, context, sse_queue: SSEQueueManager, session: Session
+    request_id: str, context, sse_queue: SSEQueueManager, session: AsyncSession
 ):
     """
     Process a generate-audio mode request using FAL-AI Lyria2 model

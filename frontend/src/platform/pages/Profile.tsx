@@ -188,7 +188,7 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 px-4 sm:px-6 lg:px-8">
+    <div className="container mx-auto max-w-4xl py-12 px-4 sm:px-6 lg:px-8">
       <div className="grid gap-6 md:grid-cols-2">
         {/* Profile Section */}
         <FadeCard className="p-6 sm:p-8">
@@ -302,13 +302,13 @@ const ProfilePage: React.FC = () => {
               Back
             </Button>
             <div className="flex space-x-3">
-              <Button 
+              {/* <Button 
                   variant="outline" 
                   onClick={handleLogout} 
                   disabled={isLoading}
                 >
                   Logout
-                </Button>
+                </Button> */}
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? (
                   <>

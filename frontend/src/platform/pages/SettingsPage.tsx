@@ -7,6 +7,7 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import { FadeCard, FadeCardContent, FadeCardDescription, FadeCardFooter, FadeCardHeader, FadeCardTitle } from "@/components/ui/fade-card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -25,17 +26,17 @@ const SettingsPage: React.FC = () => {
     };
 
     return (
-        <div className="container mx-auto max-w-2xl py-4 px-4 md:px-8">
-            <Card className="relative">
-                <CardHeader>
+        <div className="container mx-auto max-w-2xl py-12 px-4 md:px-8">
+            <FadeCard className="relative">
+                <FadeCardHeader>
                     <div className="flex items-center mb-3">
                         <Button variant="ghost" size="icon" onClick={handleGoBack} aria-label="go back" className="mr-2">
                             <IconArrowLeft />
                         </Button>
-                        <CardTitle className="text-2xl">Application Settings</CardTitle>
+                        <FadeCardTitle className="text-2xl">Application Settings</FadeCardTitle>
                     </div>
-                </CardHeader>
-                <CardContent>
+                </FadeCardHeader>
+                <FadeCardContent>
                     {/* UI Theme Settings */}
                     <div className="mb-6">
                         <h3 className="text-lg font-semibold mb-2">UI Theme</h3>
@@ -76,8 +77,8 @@ const SettingsPage: React.FC = () => {
 
                     {/* Future settings can be added here */}
                     {/* e.g., Assistant Model, etc. */}
-                </CardContent>
-            </Card>
+                </FadeCardContent>
+            </FadeCard>
         </div>
     );
 };

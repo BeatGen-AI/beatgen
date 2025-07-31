@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FadeCard, FadeCardContent, FadeCardDescription, FadeCardHeader, FadeCardTitle } from '@/components/ui/fade-card';
 import { Loader2, TrendingUp, TrendingDown, Plus, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
@@ -40,21 +41,21 @@ export const CreditsHistory: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
+      <FadeCard>
+        <FadeCardContent className="flex items-center justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
+        </FadeCardContent>
+      </FadeCard>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Credit History</CardTitle>
-        <CardDescription>Your recent credit transactions</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <FadeCard>
+      <FadeCardHeader>
+        <FadeCardTitle>Credit History</FadeCardTitle>
+        <FadeCardDescription>Your recent credit transactions</FadeCardDescription>
+      </FadeCardHeader>
+      <FadeCardContent>
         {!history || history.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             No transactions yet
@@ -91,7 +92,7 @@ export const CreditsHistory: React.FC = () => {
             ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </FadeCardContent>
+    </FadeCard>
   );
 };
