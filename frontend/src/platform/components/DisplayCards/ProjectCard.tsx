@@ -41,6 +41,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   return (
     <FadeCard 
       className="project-card w-full flex flex-col rounded-lg hover-shadow-card"
+      reverseFade={true}
       style={{ 
         '--hover-shadow-color': sectionColor,
         height: `${CARD_HEIGHTS.DISPLAY_CARD}px`

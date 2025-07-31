@@ -1,10 +1,14 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
+interface FadeCardProps extends React.HTMLAttributes<HTMLDivElement> {
+  reverseFade?: boolean;
+}
+
 const FadeCard = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, children, ...props }, ref) => (
+  FadeCardProps
+>(({ className, children, reverseFade = false, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
@@ -33,12 +37,19 @@ const FadeCard = React.forwardRef<
       className="absolute inset-x-0 top-0 pointer-events-none hidden dark:block"
       style={{
         height: '512px',
-        background: `linear-gradient(to bottom, 
-          rgba(0, 0, 0, 0.8) 0px,
-          rgba(0, 0, 0, 0.4) 80px,
-          rgba(0, 0, 0, 0.1) 200px,
-          transparent 320px
-        )`
+        background: reverseFade 
+          ? `linear-gradient(to bottom, 
+              transparent 0px,
+              rgba(0, 0, 0, 0.1) 80px,
+              rgba(0, 0, 0, 0.4) 200px,
+              rgba(0, 0, 0, 0.8) 320px
+            )`
+          : `linear-gradient(to bottom, 
+              rgba(0, 0, 0, 0.8) 0px,
+              rgba(0, 0, 0, 0.4) 80px,
+              rgba(0, 0, 0, 0.1) 200px,
+              transparent 320px
+            )`
       }}
     />
     

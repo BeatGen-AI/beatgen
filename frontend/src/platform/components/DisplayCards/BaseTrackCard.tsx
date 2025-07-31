@@ -41,6 +41,7 @@ const BaseTrackCard: React.FC<BaseTrackCardProps> = ({
         "base-track-card w-full flex flex-col rounded-lg hover-shadow-card",
         className
       )}
+      reverseFade={true}
       style={{ 
         '--hover-shadow-color': sectionColor,
         height: `${CARD_HEIGHTS.DISPLAY_CARD}px`
