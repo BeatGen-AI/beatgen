@@ -24,6 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
+import { FadeCard, FadeCardHeader, FadeCardTitle, FadeCardDescription, FadeCardContent } from '../../components/ui/fade-card';
 
 // Import shared pagination constants
 import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
@@ -172,18 +173,6 @@ export default function Projects() {
   return (
     <div className="p-8">
       <div className="container mx-auto max-w-5xl">
-        <h1 
-          className="text-3xl font-bold mb-6"
-          style={{ 
-            color: projectsColor, 
-          }}
-        >
-          Projects
-        </h1>
-        <p className="text-muted-foreground mb-6">
-          Manage your music projects. Create new projects or continue working on existing ones.
-        </p>
-        
         {projectsError && !projectsData && (
           <Alert variant="destructive" className="mb-6">
             <AlertTitle>Error</AlertTitle>
@@ -194,26 +183,36 @@ export default function Projects() {
         )}
         
         {/* Projects Component */}
-        <div className="bg-card rounded-lg p-4 shadow-md">
-          <ProjectsDisplay
-            allFetchedProjects={allFetchedProjects}
-            displayedProjectsCount={displayedProjectsCount}
-            totalProjectsOnServer={totalProjectsOnServer}
-            loading={loadingProjects && currentPageApi === 1}
-            loadingMore={isFetchingProjects && currentPageApi > 1}
-            error={projectsError ? projectsError.message : null}
-            onCreateNewProject={handleCreateProject}
-            onOpenProject={openProject}
-            onEditProject={navigateToEditProject}
-            onDeleteProject={handleDeleteProject}
-            onShowMore={handleShowMore}
-            snackbarOpen={snackbar.open}
-            snackbarMessage={snackbar.message}
-            snackbarSeverity={snackbar.severity}
-            onCloseSnackbar={handleCloseSnackbar} 
-            sectionColor={projectsColor}
-          />
-        </div>
+        <FadeCard>
+          <FadeCardHeader>
+            <FadeCardTitle style={{ color: projectsColor }}>
+              Projects
+            </FadeCardTitle>
+            <FadeCardDescription>
+              Manage your music projects. Create new projects or continue working on existing ones.
+            </FadeCardDescription>
+          </FadeCardHeader>
+          <FadeCardContent>
+            <ProjectsDisplay
+              allFetchedProjects={allFetchedProjects}
+              displayedProjectsCount={displayedProjectsCount}
+              totalProjectsOnServer={totalProjectsOnServer}
+              loading={loadingProjects && currentPageApi === 1}
+              loadingMore={isFetchingProjects && currentPageApi > 1}
+              error={projectsError ? projectsError.message : null}
+              onCreateNewProject={handleCreateProject}
+              onOpenProject={openProject}
+              onEditProject={navigateToEditProject}
+              onDeleteProject={handleDeleteProject}
+              onShowMore={handleShowMore}
+              snackbarOpen={snackbar.open}
+              snackbarMessage={snackbar.message}
+              snackbarSeverity={snackbar.severity}
+              onCloseSnackbar={handleCloseSnackbar} 
+              sectionColor={projectsColor}
+            />
+          </FadeCardContent>
+        </FadeCard>
       </div>
 
       {/* Delete Confirmation Dialog */}
