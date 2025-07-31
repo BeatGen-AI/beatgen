@@ -369,6 +369,7 @@ export class SamplerController implements TrackPlayer {
     async play(startTime: number = 0, bpm: number = 120, tracks?: any[], midiManager?: any): Promise<void> {
         // If tracks and midiManager are provided, use instance-aware playback
         if (tracks && midiManager) {
+            // First, process regular sampler tracks
             for (const track of tracks) {
                 if (track.track_type === 'SAMPLER' && track.instances) {
                     const sampler = this.samplers.get(track.id);
@@ -406,6 +407,57 @@ export class SamplerController implements TrackPlayer {
                         sampler.setOffset(0);
                         sampler.setNotes(allNotes);
                         sampler.playMidi(bpm, startTime);
+                    }
+                }
+            }
+            
+            // Then, process drum tracks by finding their associated sampler tracks
+            for (const track of tracks) {
+                if (track.track_type === 'DRUM' && track.track) {
+                    // Get sampler track IDs associated with this drum track
+                    const samplerTrackIds = (track.track as any).sampler_track_ids || [];
+                    console.log(`Processing drum track ${track.id} with ${samplerTrackIds.length} sampler tracks`);
+                    
+                    // Play each associated sampler track
+                    for (const samplerTrackId of samplerTrackIds) {
+                        const sampler = this.samplers.get(samplerTrackId);
+                        if (!sampler) {
+                            console.warn(`Sampler ${samplerTrackId} not found for drum track ${track.id}`);
+                            continue;
+                        }
+                        
+                        // For drum sampler tracks, we need to handle their instances based on the drum track's instances
+                        if (track.instances) {
+                            const allNotes = [];
+                            
+                            for (const instance of track.instances) {
+                                try {
+                                    // Get notes for this sampler track with the drum track instance position
+                                    const instanceNotes = midiManager.getInstanceNotesForPlayback(
+                                        samplerTrackId,
+                                        instance.id,
+                                        instance.x_position,
+                                        instance.trim_start_ticks,
+                                        instance.trim_end_ticks
+                                    );
+                                    
+                                    if (instanceNotes.length > 0) {
+                                        console.log(`Drum sampler track ${samplerTrackId} instance ${instance.id}: ${instanceNotes.length} notes at x_position ${instance.x_position}`);
+                                        allNotes.push(...instanceNotes);
+                                    }
+                                } catch (error) {
+                                    console.error(`SamplerController: Error processing drum sampler instance ${instance.id} of track ${samplerTrackId}:`, error);
+                                }
+                            }
+                            
+                            // Play all collected notes
+                            if (allNotes.length > 0) {
+                                console.log(`Playing drum sampler track ${samplerTrackId} with ${allNotes.length} total notes`);
+                                sampler.setOffset(0);
+                                sampler.setNotes(allNotes);
+                                sampler.playMidi(bpm, startTime);
+                            }
+                        }
                     }
                 }
             }
@@ -465,8 +517,10 @@ export class SamplerController implements TrackPlayer {
      * Seek to a specific position. Stops current playback and restarts from the new position.
      * @param position Position in seconds.
      * @param bpm Current BPM for timing calculations.
+     * @param tracks Optional track information with instances
+     * @param midiManager Optional MidiManager for instance-aware playback
      */
-    async seek(position: number, bpm: number = 120): Promise<void> {
+    async seek(position: number, bpm: number = 120, tracks?: any[], midiManager?: any): Promise<void> {
         console.log(`SamplerController: Seeking to ${position}s`);
 
         // 1. Stop all current playback immediately
@@ -475,7 +529,7 @@ export class SamplerController implements TrackPlayer {
         // 2. Restart playback from the new position
         // Note: A small delay might be needed if stop() is asynchronous and needs time to fully release resources
         // await new Promise(resolve => setTimeout(resolve, 10)); // Optional small delay
-        await this.play(position, bpm);
+        await this.play(position, bpm, tracks, midiManager);
     }
     
     /**

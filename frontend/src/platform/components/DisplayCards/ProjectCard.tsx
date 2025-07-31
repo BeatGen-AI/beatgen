@@ -13,6 +13,7 @@ import { Project } from '../../types/project';
 import { cn } from "../../../lib/utils";
 import PrefetchStatus from '../PrefetchStatus';
 import { PrefetchStatus as PrefetchStatusType } from '../../hooks/useProjectPrefetch';
+import { formatDate } from '../../utils/dateFormat';
 
 interface ProjectCardProps {
   project: Project;
@@ -60,6 +61,9 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             <p>Key: {project.key_signature}</p>
           </div>
           <Separator className="w-full mt-2" />
+          <div className="text-xs text-muted-foreground mt-1">
+            {formatDate(project.created_at)}
+          </div>
         </div>
       </div>
       

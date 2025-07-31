@@ -125,6 +125,12 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
     ...createToolSlice(set, get),
   };
 
+  // Create the store instance
+  const storeInstance = new Store();
+  
+  // Set the callback to get tracks for the transport
+  storeInstance.getTransport().setGetTracksCallback(() => get().tracks);
+
   return {
     // Spread slices
     ...slices,
@@ -141,7 +147,7 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
     _withErrorHandling,
     
     // Initialize the store instance
-    store: new Store(), 
+    store: storeInstance, 
     // isInitialized might be part of CoreSlice now?
     isInitialized: false, 
   };

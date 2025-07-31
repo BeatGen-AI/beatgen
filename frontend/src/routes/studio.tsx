@@ -8,6 +8,8 @@ import { requireAuth, AuthErrorComponent } from '../platform/auth/auth-utils.tsx
 // Type definition for our search parameters
 interface StudioSearchParams {
   projectId?: string;
+  selectedTracks?: string;
+  trackTypes?: string;
 }
 
 // Removed darkTheme definition
@@ -15,9 +17,11 @@ interface StudioSearchParams {
 // Studio route - this will render at the path '/studio'
 export const Route = createFileRoute('/studio')({
   // Type-safe search parameters
-  validateSearch: (search: { projectId?: string }): StudioSearchParams => {
+  validateSearch: (search: { projectId?: string, selectedTracks?: string, trackTypes?: string }): StudioSearchParams => {
     return {
       projectId: search.projectId,
+      selectedTracks: search.selectedTracks,
+      trackTypes: search.trackTypes,
     };
   },
   
@@ -31,12 +35,20 @@ export const Route = createFileRoute('/studio')({
     // Safely access search params from location.search
     const searchParams = new URLSearchParams(location.search);
     const projectId = searchParams.get('projectId');
+    const selectedTracks = searchParams.get('selectedTracks');
+    const trackTypes = searchParams.get('trackTypes');
     
     if (projectId) {
       console.log(`Loading project data for: ${projectId}`);
+      if (selectedTracks && trackTypes) {
+        console.log(`With selected tracks: ${selectedTracks}`);
+        console.log(`Track types: ${trackTypes}`);
+      }
       // Return the projectId to the component
       return { 
         projectId,
+        selectedTracks,
+        trackTypes,
         projectLoaded: true
       };
     } else {
@@ -53,12 +65,16 @@ export const Route = createFileRoute('/studio')({
 })
 
 function StudioPage() {
-  // Manually get projectId from search params since validateSearch is commented out
-  const searchParams = useSearch({ from: Route.id }); // Get search params for this route
-  const projectId = (searchParams as StudioSearchParams)?.projectId;
+  // Get all search params for this route
+  const searchParams = useSearch({ from: Route.id }) as StudioSearchParams;
+  const { projectId, selectedTracks, trackTypes } = searchParams;
 
-  console.log("StudioPage rendering with projectId:", projectId);
+  console.log("StudioPage rendering with:", { projectId, selectedTracks, trackTypes });
 
   // Render StudioComponent directly - theme is handled by AppThemeProvider
-  return <StudioComponent projectId={projectId} />;
+  return <StudioComponent 
+    projectId={projectId} 
+    selectedTracks={selectedTracks}
+    trackTypes={trackTypes}
+  />;
 }

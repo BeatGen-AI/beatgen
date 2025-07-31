@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Step, StepEvent } from './StepManager';
 import { 
@@ -44,12 +44,14 @@ const StepCard: React.FC<StepCardProps> = ({ step, onActionClick }) => {
       switch (step.status) {
         case 'completed': return `${baseClass} bg-green-900/30 border-green-700 text-green-300`;
         case 'in_progress': return `${baseClass} bg-blue-900/30 border-blue-700 text-blue-300`;
+        case 'failed': return `${baseClass} bg-red-900/30 border-red-700 text-red-300`;
         default: return `${baseClass} bg-gray-800 border-gray-600 text-gray-300`;
       }
     } else {
       switch (step.status) {
         case 'completed': return `${baseClass} bg-green-100 border-green-300 text-green-800`;
         case 'in_progress': return `${baseClass} bg-blue-100 border-blue-300 text-blue-800`;
+        case 'failed': return `${baseClass} bg-red-100 border-red-300 text-red-800`;
         default: return `${baseClass} bg-gray-100 border-gray-300 text-gray-700`;
       }
     }
@@ -58,6 +60,8 @@ const StepCard: React.FC<StepCardProps> = ({ step, onActionClick }) => {
   const getStatusIcon = () => {
     if (step.status === 'in_progress') {
       return <Loader2 className="h-4 w-4 animate-spin" />;
+    } else if (step.status === 'failed') {
+      return <X className="h-4 w-4" />;
     }
     return null;
   };
@@ -67,12 +71,14 @@ const StepCard: React.FC<StepCardProps> = ({ step, onActionClick }) => {
       switch (step.status) {
         case 'completed': return 'bg-green-900/20';
         case 'in_progress': return 'bg-blue-900/20';
+        case 'failed': return 'bg-red-900/20';
         default: return 'bg-gray-800/30';
       }
     } else {
       switch (step.status) {
         case 'completed': return 'bg-green-50';
         case 'in_progress': return 'bg-blue-50';
+        case 'failed': return 'bg-red-50';
         default: return 'bg-gray-50';
       }
     }

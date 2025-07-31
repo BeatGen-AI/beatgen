@@ -7,17 +7,24 @@ import AudioPlayer from '../../../studio/components/shared/AudioPlayer';
 import BaseTrackCard from './BaseTrackCard';
 import { downloadAudioTrackFile } from '../../api/sounds';
 import { useState, useEffect } from 'react';
+import { formatDate } from '../../utils/dateFormat';
 
 interface AudioTrackCardProps {
   sound: Sound;
   handleDeleteSound: (soundId: string) => void;
   sectionColor: string;
+  isSelectable?: boolean;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
   sound,
   handleDeleteSound,
   sectionColor,
+  isSelectable = false,
+  isSelected = false,
+  onSelect,
 }) => {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isLoadingBlob, setIsLoadingBlob] = useState(false);
@@ -75,6 +82,7 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
     </div>
   );
 
+  const footerLeft = formatDate(sound.created_at);
   const footerRight = formatTime(sound.audio_file_duration, false);
 
   return (
@@ -84,8 +92,12 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
       sectionColor={sectionColor}
       headerActions={headerActions}
       previewContent={previewContent}
+      footerLeft={footerLeft}
       footerRight={footerRight}
       className="audio-track-card"
+      isSelectable={isSelectable}
+      isSelected={isSelected}
+      onSelect={onSelect}
     />
   );
 };

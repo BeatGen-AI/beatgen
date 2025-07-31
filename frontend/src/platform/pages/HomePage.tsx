@@ -9,8 +9,10 @@ import {
   Edit as EditIcon, 
   Music as MusicNoteIcon,
   ArrowLeft as ArrowBackIcon,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  FolderOpen
 } from 'lucide-react';
+import { TrackSelectionProvider, useTrackSelection } from '../context/TrackSelectionContext';
 import SoundUploader from '../components/SoundUploader';
 import SoundLibrary from '../components/SoundLibrary';
 import { useAuth } from '../auth/auth-context';
@@ -45,6 +47,7 @@ import { createProject } from '../api/projects';
 import { ProjectCreate } from '../types/project';
 import { isAuthenticated } from '../auth/auth-utils';
 import { useProjectPrefetch } from '../hooks/useProjectPrefetch';
+import { HomePageContent } from '../components/HomePageContent';
 
 // Import shared pagination constants
 import { TRACK_PAGINATION_CONFIG } from '../constants/pagination';
@@ -57,7 +60,7 @@ const FETCH_THRESHOLD = 10; // When to fetch more from API
 // const drawerWidth = 240; // No longer needed
 // const collapsedDrawerWidth = 60; // No longer needed
 
-export default function HomePage() {
+function HomePageInner() {
   // Apply homepage theme
   usePageTheme('homepage');
   
@@ -75,6 +78,7 @@ export default function HomePage() {
 
   const [showSoundUploader, setShowSoundUploader] = useState(false);
   const [showGenerateSongModal, setShowGenerateSongModal] = useState(false);
+  const [enableTrackSelection, setEnableTrackSelection] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -324,174 +328,27 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Main Content */}
-        <div className="max-w-6xl mx-auto projects-container px-2 py-2 md:px-4 md:py-4">
-
-          {projectsError && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                {projectsError.message || 'Failed to load projects. Please try again later.'}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <FadeCard className="p-6 mt-0">
-            <div className="mb-2">
-              {/* Desktop layout - side by side */}
-              <div className="hidden md:flex justify-between items-center">
-                <h2 
-                  className="text-2xl font-medium"
-                  style={{ 
-                    color: GRID_CONSTANTS.logoColors[1], // Projects
-                  }}
-                >
-                  Projects
-                </h2>
-                <div className="flex gap-2">
-                  {/* <Button
-                    variant="outline"
-                    className="flex items-center gap-2"
-                    onClick={() => setShowGenerateSongModal(true)}
-                  >
-                    <MusicNoteIcon fontSize="small" />
-                    Generate Song
-                  </Button> */}
-                  <Button
-                    variant="default"
-                    className="flex items-center gap-2"
-                    onClick={handleCreateProject}
-                  >
-                    <AddIcon fontSize="small" />
-                    New Project
-                  </Button>
-                </div>
-              </div>
-
-              {/* Mobile layout - stacked */}
-              <div className="flex md:hidden flex-col gap-4">
-                <h2 
-                  className="text-2xl font-medium"
-                  style={{ 
-                    color: GRID_CONSTANTS.logoColors[1], // Projects
-                  }}
-                >
-                  Projects
-                </h2>
-                <div className="flex flex-col gap-2">
-                  {/* <Button
-                    variant="outline"
-                    className="flex items-center gap-2 justify-center"
-                    onClick={() => setShowGenerateSongModal(true)}
-                  >
-                    <MusicNoteIcon fontSize="small" />
-                    Generate Song
-                  </Button> */}
-                  <Button
-                    variant="default"
-                    className="flex items-center gap-2 justify-center"
-                    onClick={handleCreateProject}
-                  >
-                    <AddIcon fontSize="small" />
-                    New Project
-                  </Button>
-                </div>
-              </div>
-            </div>
-            <ProjectsDisplay
-              allFetchedProjects={allFetchedProjects}
-              displayedProjectsCount={displayedProjectsCount}
-              totalProjectsOnServer={totalProjectsOnServer}
-              loading={loadingProjects}
-              loadingMore={isFetchingProjects && currentPageApi > 1}
-              error={projectsError ? projectsError.message : null}
-              onCreateNewProject={handleCreateProject}
-              onOpenProject={openListedProject}
-              onEditProject={handleEditListedProject}
-              onDeleteProject={handleDeleteListedProject}
-              onShowMore={handleShowMoreProjects}
-              snackbarOpen={snackbar.open}
-              snackbarMessage={snackbar.message}
-              snackbarSeverity={snackbar.severity}
-              onCloseSnackbar={handleCloseSnackbar}
-              sectionColor={GRID_CONSTANTS.logoColors[1]}
-              getPrefetchStatus={getPrefetchStatus}
-            />
-          </FadeCard>
-
-          {/* My Sounds Section is now replaced by AudioTracksDisplay */}
-          <FadeCard className="p-6 mt-8">
-            <div className="mb-2">
-              <h2 
-                className="text-2xl font-medium"
-                style={{
-                  color: GRID_CONSTANTS.logoColors[2], // Audio Tracks
-                }}
-              >
-                Audio Tracks
-              </h2>
-            </div>
-            <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={GRID_CONSTANTS.logoColors[2]} useUiMode={true} />
-          </FadeCard>
-
-          {/* Midi Tracks Section */}
-          <FadeCard className="p-6 mt-8">
-            <div className="mb-2">
-              <h2 
-                className="text-2xl font-medium"
-                style={{
-                  color: GRID_CONSTANTS.logoColors[3], // MIDI Tracks
-                }}
-              >
-                MIDI Tracks
-              </h2>
-            </div>
-            <MidiLibrary sectionColor={GRID_CONSTANTS.logoColors[3]} />
-          </FadeCard>
-
-          {/* Sampler Tracks Section */}
-          <FadeCard className="p-6 mt-8">
-            <div className="mb-2">
-              <h2 
-                className="text-2xl font-medium"
-                style={{
-                  color: GRID_CONSTANTS.logoColors[4], // Sampler Tracks
-                }}
-              >
-                Sampler Tracks
-              </h2>
-            </div>
-            <SamplerLibrary sectionColor={GRID_CONSTANTS.logoColors[4]} />
-          </FadeCard>
-
-          {/* Drum Tracks Section */}
-          <FadeCard className="p-6 mt-8 mb-8">
-            <div className="mb-2">
-              <h2 
-                className="text-2xl font-medium"
-                style={{
-                  color: GRID_CONSTANTS.logoColors[5], // Drum Tracks
-                }}
-              >
-                Drum Tracks
-              </h2>
-            </div>
-            <DrumLibrary sectionColor={GRID_CONSTANTS.logoColors[5]} />
-          </FadeCard>
-
-          {/* Toast-like notifications using Alert */}
-          {snackbar.open && !loadingProjects && (
-            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
-              <Alert 
-                variant={snackbar.severity === 'error' ? 'destructive' : 'default'}
-                className={`${snackbar.severity === 'success' ? 'border-green-500 text-green-700 bg-green-50' : ''}`}
-              >
-                <AlertDescription>{snackbar.message}</AlertDescription>
-              </Alert>
-            </div>
-          )}
-      </div>
+    <>
+      <HomePageContent
+        allFetchedProjects={allFetchedProjects}
+        displayedProjectsCount={displayedProjectsCount}
+        totalProjectsOnServer={totalProjectsOnServer}
+        loadingProjects={loadingProjects}
+        isFetchingProjects={isFetchingProjects}
+        projectsError={projectsError}
+        currentPageApi={currentPageApi}
+        handleCreateProject={handleCreateProject}
+        openListedProject={openListedProject}
+        handleEditListedProject={handleEditListedProject}
+        handleDeleteListedProject={handleDeleteListedProject}
+        handleShowMoreProjects={handleShowMoreProjects}
+        snackbar={snackbar}
+        handleCloseSnackbar={handleCloseSnackbar}
+        fetchSounds={fetchSounds}
+        getPrefetchStatus={getPrefetchStatus}
+        enableTrackSelection={enableTrackSelection}
+        setEnableTrackSelection={setEnableTrackSelection}
+      />
 
       {/* Generate Song Modal */}
       <GenerateSongModal
@@ -517,6 +374,14 @@ export default function HomePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <TrackSelectionProvider>
+      <HomePageInner />
+    </TrackSelectionProvider>
   );
 }

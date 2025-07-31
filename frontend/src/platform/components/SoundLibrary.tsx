@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { useTrackSelection } from '../context/TrackSelectionContext';
 
 // Shared components and hooks
 import { useAudioTracksPagination } from '../hooks/usePagination';
@@ -17,10 +18,12 @@ import AudioTrackCard from './DisplayCards/AudioTrackCard';
 interface SoundLibraryProps {
   onReload?: () => void;
   sectionColor: string;
+  enableSelection?: boolean;
 }
 
-export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryProps) {
+export default function SoundLibrary({ onReload, sectionColor, enableSelection = false }: SoundLibraryProps) {
   const queryClient = useQueryClient();
+  const { toggleTrackSelection, isTrackSelected } = useTrackSelection();
   
   // Audio playback state
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -199,6 +202,9 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
                 sound={sound}
                 handleDeleteSound={handleDeleteSound}
                 sectionColor={sectionColor}
+                isSelectable={enableSelection}
+                isSelected={isTrackSelected(sound.id)}
+                onSelect={() => toggleTrackSelection(sound, 'AUDIO')}
               />
             </div>
           ))}

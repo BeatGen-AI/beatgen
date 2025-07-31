@@ -6,6 +6,7 @@ import {
   CardTitle
 } from "../../../components/ui/card";
 import { cn } from "../../../lib/utils";
+import { Check } from 'lucide-react';
 
 interface BaseTrackCardProps {
   title: string;
@@ -14,8 +15,12 @@ interface BaseTrackCardProps {
   headerActions: React.ReactNode;
   previewContent: React.ReactNode;
   footerLeft?: React.ReactNode;
+  footerCenter?: React.ReactNode;
   footerRight?: React.ReactNode;
   className?: string;
+  isSelectable?: boolean;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 const BaseTrackCard: React.FC<BaseTrackCardProps> = ({
@@ -25,20 +30,46 @@ const BaseTrackCard: React.FC<BaseTrackCardProps> = ({
   headerActions,
   previewContent,
   footerLeft,
+  footerCenter,
   footerRight,
-  className
+  className,
+  isSelectable = false,
+  isSelected = false,
+  onSelect
 }) => {
+  const handleClick = (e: React.MouseEvent) => {
+    if (isSelectable && onSelect) {
+      // Prevent selection when clicking on buttons or interactive elements
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('input') || target.closest('.audio-player')) {
+        return;
+      }
+      onSelect();
+    }
+  };
+
   return (
     <Card 
       className={cn(
         "base-track-card w-full h-[200px] flex flex-col rounded-lg hover-shadow-card",
+        isSelectable && "cursor-pointer",
+        isSelected && "ring-2 ring-primary ring-offset-2",
         className
       )}
       style={{ '--hover-shadow-color': sectionColor } as React.CSSProperties}
+      onClick={handleClick}
     >
       {/* Fixed height header */}
       <CardHeader className="flex flex-row items-center justify-between p-2 h-[40px] flex-shrink-0">
         <div className="flex items-center min-w-0 flex-1">
+          {isSelectable && (
+            <div className={cn(
+              "w-4 h-4 rounded border-2 mr-2 flex items-center justify-center transition-colors",
+              isSelected ? "bg-primary border-primary" : "border-muted-foreground"
+            )}>
+              {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+            </div>
+          )}
           {icon}
           <CardTitle className="text-sm font-medium truncate ml-2">{title}</CardTitle>
         </div>
@@ -55,11 +86,16 @@ const BaseTrackCard: React.FC<BaseTrackCardProps> = ({
       </div>
       
       {/* Fixed height footer */}
-      <CardFooter className="p-2 h-[40px] flex justify-between items-center flex-shrink-0 overflow-hidden">
+      <CardFooter className="p-2 h-[40px] flex items-center flex-shrink-0 overflow-hidden">
         <div className="text-xs text-muted-foreground truncate flex-1 overflow-hidden">
           {footerLeft}
         </div>
-        <div className="text-xs text-muted-foreground text-right flex-shrink-0 ml-2 overflow-hidden truncate max-w-[50%]">
+        {footerCenter && (
+          <div className="text-xs text-muted-foreground mx-2 flex-shrink-0">
+            {footerCenter}
+          </div>
+        )}
+        <div className="text-xs text-muted-foreground text-right flex-shrink-0 ml-auto overflow-hidden truncate">
           {footerRight}
         </div>
       </CardFooter>

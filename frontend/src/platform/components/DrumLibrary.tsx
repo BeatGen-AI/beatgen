@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { useTrackSelection } from '../context/TrackSelectionContext';
 
 // Shared components and hooks
 import { useDrumTracksPagination } from '../hooks/usePagination';
@@ -17,10 +18,12 @@ import DrumTrackCard from './DisplayCards/DrumTrackCard';
 interface DrumLibraryProps {
   onReload?: () => void;
   sectionColor: string;
+  enableSelection?: boolean;
 }
 
-export default function DrumLibrary({ onReload, sectionColor }: DrumLibraryProps) {
+export default function DrumLibrary({ onReload, sectionColor, enableSelection = false }: DrumLibraryProps) {
   const queryClient = useQueryClient();
+  const { toggleTrackSelection, isTrackSelected } = useTrackSelection();
   
   // Drum playback state
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -129,6 +132,9 @@ export default function DrumLibrary({ onReload, sectionColor }: DrumLibraryProps
                 handleDeleteTrack={handleDeleteTrack}
                 handleEditTrack={handleEditTrack}
                 sectionColor={sectionColor}
+                isSelectable={enableSelection}
+                isSelected={isTrackSelected(track.id)}
+                onSelect={() => toggleTrackSelection(track, 'DRUM')}
               />
             </div>
           ))}

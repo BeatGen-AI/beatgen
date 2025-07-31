@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { useTrackSelection } from '../context/TrackSelectionContext';
 
 // Shared components and hooks
 import { useMidiTracksPagination } from '../hooks/usePagination';
@@ -17,10 +18,12 @@ import MidiTrackCard from './DisplayCards/MidiTrackCard';
 interface MidiLibraryProps {
   onReload?: () => void;
   sectionColor: string;
+  enableSelection?: boolean;
 }
 
-export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps) {
+export default function MidiLibrary({ onReload, sectionColor, enableSelection = false }: MidiLibraryProps) {
   const queryClient = useQueryClient();
+  const { toggleTrackSelection, isTrackSelected } = useTrackSelection();
   
   // MIDI playback state
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -161,6 +164,9 @@ export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps
                 handlePlayTrack={handlePlayTrack}
                 handleDeleteTrack={handleDeleteTrack}
                 sectionColor={sectionColor}
+                isSelectable={enableSelection}
+                isSelected={isTrackSelected(track.id)}
+                onSelect={() => toggleTrackSelection(track, 'MIDI')}
               />
             </div>
           ))}
