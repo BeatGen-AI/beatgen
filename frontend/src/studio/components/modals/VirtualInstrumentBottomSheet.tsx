@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { X, Play, Piano, Music, Guitar, ChevronUp, ChevronDown, ChevronRight, Heart, Search, VolumeX, Plus } from 'lucide-react';
@@ -503,6 +503,16 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isMin
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const cleanupRef = useRef<(() => void) | null>(null);
+  
+  // Cleanup event listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+      }
+    };
+  }, []);
   
   // Handle resize functionality
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -524,6 +534,7 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isMin
       setIsResizing(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      cleanupRef.current = null;
       
       // Auto-collapse if dragged down to minimum height
       if (currentHeight <= 60) {
@@ -535,25 +546,50 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isMin
     
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+    
+    // Store cleanup function
+    cleanupRef.current = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
   };
 
-  // Handle search mode
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      setIsSearching(true);
-      setSelectedCategory('search-results');
-      setSelectedSubCategory('');
-      setIsSubCategoriesExpanded(false);
-    } else {
-      setIsSearching(false);
-      // Return to default category when search is cleared
-      if (selectedCategory === 'search-results') {
-        setSelectedCategory('keyboards');
-        setSelectedSubCategory('grand-pianos');
-        setIsSubCategoriesExpanded(true);
-      }
+  // Debounced search to prevent race conditions
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const debouncedSearch = useCallback((query: string) => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
     }
-  }, [searchQuery, selectedCategory]);
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      if (query.trim()) {
+        setIsSearching(true);
+        setSelectedCategory('search-results');
+        setSelectedSubCategory('');
+        setIsSubCategoriesExpanded(false);
+      } else {
+        setIsSearching(false);
+        // Return to default category when search is cleared
+        if (selectedCategory === 'search-results') {
+          setSelectedCategory('keyboards');
+          setSelectedSubCategory('grand-pianos');
+          setIsSubCategoriesExpanded(true);
+        }
+      }
+    }, 300); // 300ms debounce
+  }, [selectedCategory]);
+  
+  // Handle search mode with debouncing
+  useEffect(() => {
+    debouncedSearch(searchQuery);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, debouncedSearch]);
 
   const handleInstrumentSelect = async (instrument: InstrumentFileRead) => {
     try {
@@ -592,16 +628,20 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isMin
       // If it's a real soundfont from the API
       if (instrument.storage_key) {
         const soundfontManager = SoundfontManager.getInstance(db);
-        const isCached = await soundfontManager.isSoundfontCached(instrument.id);
         
-        if (!isCached) {
-          const displayName = getInstrumentDisplayName(instrument);
-          await soundfontManager.getSoundfont(instrument.id);
-        } else {
-          const displayName = getInstrumentDisplayName(instrument);
+        try {
+          const isCached = await soundfontManager.isSoundfontCached(instrument.id);
+          
+          if (!isCached) {
+            await soundfontManager.getSoundfont(instrument.id);
+          }
+          
+          onSelect(instrument.id, getInstrumentDisplayName(instrument), instrument.storage_key);
+        } catch (soundfontError: unknown) {
+          console.error('Error loading soundfont:', soundfontError);
+          // Still allow selection even if soundfont loading fails
+          onSelect(instrument.id, getInstrumentDisplayName(instrument), instrument.storage_key);
         }
-        
-        onSelect(instrument.id, getInstrumentDisplayName(instrument), instrument.storage_key);
       } else {
         // Mock instrument selection
         onSelect(instrument.id, getInstrumentDisplayName(instrument));
@@ -609,7 +649,8 @@ export const VirtualInstrumentsBottomSheet = ({ isOpen, onClose, onSelect, isMin
       
       // Don't close the modal after selection - keep it open for more selections
     } catch (err: unknown) {
-      console.error('Error processing soundfont:', err);
+      console.error('Error processing instrument selection:', err);
+      // Show user-friendly error message or toast notification here
     } finally {
       setDownloading(null);
     }
