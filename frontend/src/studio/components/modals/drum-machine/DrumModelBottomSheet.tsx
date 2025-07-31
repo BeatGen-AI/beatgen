@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
@@ -522,6 +522,9 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
   };
 
 
+  // Convert Set to array once to prevent re-renders from Set identity changes
+  const favoritesArray = useMemo(() => Array.from(favorites), [favorites]);
+  
   const getCurrentSamples = useMemo(() => {
 
     // If we're in search mode, return all matching samples
@@ -579,7 +582,7 @@ export const DrumMachineBottomSheet = ({ isOpen, onClose, onConfirmSelection, is
 
     
     return filteredSamples;
-  }, [drumSamples, selectedGenre, selectedType, selectedDrumType, favorites, searchQuery, isSearching]);
+  }, [drumSamples, selectedGenre, selectedType, selectedDrumType, favoritesArray, searchQuery]);
 
   // Responsive grid columns based on AI Assistant state and item count
   const gridColumns = useMemo(() => {

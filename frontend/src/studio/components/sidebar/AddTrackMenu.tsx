@@ -89,8 +89,9 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
     }
   };
   
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, isSampler: boolean = false) => {
-    const files = event.target.files;
+  const handleFileUpload = (event: Event | React.ChangeEvent<HTMLInputElement>, isSampler: boolean = false) => {
+    const target = event.target as HTMLInputElement;
+    const files = target?.files;
     if (files && files.length > 0) {
       const file = files[0];
       // Decide if we want to consolidate file uploads into onAddTrack or keep separate
@@ -154,7 +155,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
               const input = document.createElement('input');
               input.type = 'file';
               input.accept = 'audio/*';
-              input.onchange = (e) => handleFileUpload(e as any, false);
+              input.onchange = (e: Event) => handleFileUpload(e, false);
               input.click();
             }}
             className="text-sm py-2 cursor-pointer"
@@ -167,7 +168,7 @@ export const AddTrackMenu: React.FC<AddTrackMenuProps> = ({
               const input = document.createElement('input');
               input.type = 'file';
               input.accept = 'audio/*';
-              input.onchange = (e) => handleFileUpload(e as any, true);
+              input.onchange = (e: Event) => handleFileUpload(e, true);
               input.click();
             }}
             className="text-sm py-2 cursor-pointer"
