@@ -580,6 +580,7 @@ Do NOT output JSON in this step, just your conversational reasoning."""
                 if isinstance(text_chunk, str):
                     logger.debug(f"INSTRUMENT EXPLANATION STREAMING TEXT CHUNK: '{text_chunk}'") 
                     explanation_text += text_chunk
+                    await self.context.queue.add_chunk(text_chunk)
             
             # Emit the complete explanation as a step event
             await self.context.queue.step_event(
@@ -1193,6 +1194,7 @@ Do NOT output JSON in this step, just your conversational reasoning."""
                 if isinstance(text_chunk, str):
                     logger.debug(f"Drum explanation chunk: '{text_chunk}'") 
                     explanation_text += text_chunk
+                    await self.context.queue.add_chunk(text_chunk)
             
             # Emit the complete explanation as a step event
             await self.context.queue.step_event(
@@ -1766,7 +1768,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
                 if item.role.lower() == "melody"
             ), None)
             
-            track_name = "AI Generated Melody"
+            track_name = f"AI Generated Melody: {enhanced_prompt}"
             if melody_instrument_selection:
                 track_name = f"AI {melody_instrument_selection.instrument_name} Melody"
             
