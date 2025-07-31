@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FadeCard, FadeCardContent, FadeCardDescription, FadeCardHeader, FadeCardTitle } from '@/components/ui/fade-card';
 import { Progress } from '@/components/ui/progress';
 import { Coins, Calendar, RefreshCcw, Infinity } from 'lucide-react';
 import { format } from 'date-fns';
@@ -56,20 +57,20 @@ export const CreditsPage: React.FC = () => {
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Current Balance Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <FadeCard>
+          <FadeCardHeader>
+            <FadeCardTitle className="flex items-center gap-2">
               <Coins className="h-5 w-5" />
               Current Balance
-            </CardTitle>
-            <CardDescription>
+            </FadeCardTitle>
+            <FadeCardDescription>
               {credits.subscription_tier ? 
                 `${credits.subscription_tier.charAt(0).toUpperCase() + credits.subscription_tier.slice(1)} Plan` :
                 'Loading...'
               }
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </FadeCardDescription>
+          </FadeCardHeader>
+          <FadeCardContent>
             <div className="space-y-4">
               <div className="text-center">
                 {credits.is_unlimited ? (
@@ -105,21 +106,21 @@ export const CreditsPage: React.FC = () => {
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </FadeCardContent>
+        </FadeCard>
 
         {/* Next Allocation Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <FadeCard>
+          <FadeCardHeader>
+            <FadeCardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
               Next Allocation
-            </CardTitle>
-            <CardDescription>
+            </FadeCardTitle>
+            <FadeCardDescription>
               Monthly credit refresh
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </FadeCardDescription>
+          </FadeCardHeader>
+          <FadeCardContent>
             <div className="space-y-4">
               {credits.is_unlimited ? (
                 <div className="text-center py-8">
@@ -151,8 +152,8 @@ export const CreditsPage: React.FC = () => {
                 </>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </FadeCardContent>
+        </FadeCard>
       </div>
 
       {/* Plan Information */}
