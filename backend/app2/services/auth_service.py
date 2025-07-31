@@ -74,7 +74,7 @@ class AuthService:
             # Create user profile using the Supabase Auth ID directly
             try:
                 await self.user_repository.create_profile(
-                    user_id=user_id,
+                    user_id=uuid.UUID(user_id),
                     email=email,
                     username=username,
                     display_name=display_name,
@@ -307,7 +307,7 @@ class AuthService:
         logger.info(f"Creating user profile for user ID: {user_id}")
         try:
             profile = await self.user_repository.create_profile(
-                user_id, email, username, display_name
+                uuid.UUID(user_id), email, username, display_name
             )
             logger.info(f"Created user profile for user ID: {user_id}")
             return profile
@@ -703,9 +703,9 @@ class AuthService:
                     existing_user = await self.user_repository.get_profile(session_user_id)
                     logger.info(f"Profile already exists for User ID: {session_user_id}")
                 except NotFoundException:
-                    # Create new user profile
+                    # Create new user profile - convert string ID to UUID
                     await self.user_repository.create_profile(
-                        user_id=session_user_id,
+                        user_id=uuid.UUID(session_user_id),
                         email=email,
                         username=None,
                         display_name=full_name

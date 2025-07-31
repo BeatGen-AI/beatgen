@@ -15,6 +15,7 @@ import time
 
 # Import all models to ensure they're registered with SQLModel metadata
 # This is necessary for create_all to create all tables
+import app2.models  # This imports all models from __init__.py
 
 logger = get_logger("beatgen.database.sqlmodel")
 
@@ -101,7 +102,7 @@ if is_transaction_mode:
     # Transaction mode: Use NullPool, let Supabase handle all pooling
     engine = create_async_engine(
         ASYNC_DATABASE_URL,
-        echo=False,
+        echo=True,
         poolclass=NullPool,  # CRITICAL: No SQLAlchemy pooling in transaction mode
         connect_args=get_connect_args(),
         pool_pre_ping=True,  # Still useful for connection health checks
@@ -110,7 +111,7 @@ else:
     # Session/direct mode: Use SQLAlchemy pooling to reuse Supavisor connections
     engine = create_async_engine(
         ASYNC_DATABASE_URL,
-        echo=False,
+        echo=True,
         pool_size=10,
         max_overflow=10,
         pool_recycle=1800,
