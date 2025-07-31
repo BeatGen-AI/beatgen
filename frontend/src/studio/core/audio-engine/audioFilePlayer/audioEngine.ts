@@ -33,19 +33,94 @@ class AudioFilePlayer implements TrackPlayer {
     throw new Error('Method not implemented.');
   }
   setTrackTrimStartTicks(id: string, start: number): Promise<void> {
-    throw new Error('Method not implemented.');
+    const track = this.tracks.get(id);
+    if (!track) return Promise.resolve();
+
+    this.setTrackTrim(id, start, track.trimEndTicks ?? Infinity);
+    return Promise.resolve();
   }
+
   setTrackTrimEndTicks(id: string, end: number): Promise<void> {
-    throw new Error('Method not implemented.');
+    const track = this.tracks.get(id);
+    if (!track) return Promise.resolve();
+
+    this.setTrackTrim(id, track.trimStartTicks ?? 0, end);
+    return Promise.resolve();
   }
-  play(position: number): Promise<void> {
-    throw new Error('Method not implemented.');
+
+  async play(position: number): Promise<void> {
+  console.log("AudioFilePlayer.play() called with position:", position);
+
+  if (Tone.getContext().state !== "running") {
+    await Tone.start();
   }
-  pause(): Promise<void> {
-    throw new Error('Method not implemented.');
+
+  const ticksPerSecond = Tone.Transport.bpm.value * Tone.Transport.PPQ / 60;
+  const now = Tone.now();
+
+  this.tracks.forEach((track) => {
+    if (!track.player) return;
+
+    track.player.stop();
+    track.player.unsync();
+
+    const clipStartSeconds = (track.position?.x ?? 0) / ticksPerSecond;
+
+    const trim = (track.player as any)._trimSettings || {};
+    const trimStartSeconds = trim.trimStartSeconds ?? 0;
+    const trimEndSeconds = trim.trimEndSeconds ?? (track.player.buffer?.duration ?? 0);
+
+    const duration = Math.max(0, trimEndSeconds - trimStartSeconds);
+    const absoluteTrimmedStart = clipStartSeconds + trimStartSeconds;
+    const absoluteTrimmedEnd = clipStartSeconds + trimEndSeconds;
+
+    // Debug logs
+    console.log("Track ID:", track.id);
+    console.log("Timeline position:", position);
+    console.log("clipStartSeconds:", clipStartSeconds);
+    console.log("trimStartSeconds:", trimStartSeconds);
+    console.log("trimEndSeconds:", trimEndSeconds);
+    console.log("absoluteTrimmedStart:", absoluteTrimmedStart);
+    console.log("absoluteTrimmedEnd:", absoluteTrimmedEnd);
+
+    if (position >= absoluteTrimmedEnd) {
+      console.log("Position is after trimmed clip — skipping playback");
+      return;
+    }
+
+    if (position >= absoluteTrimmedStart) {
+      const offset = trimStartSeconds + (position - absoluteTrimmedStart);
+      const remainingDuration = Math.max(0, trimEndSeconds - offset);
+
+      console.log("Starting immediately at offset:", offset, "for duration:", remainingDuration);
+      track.player.start(now, offset, remainingDuration);
+    } else {
+      const delay = absoluteTrimmedStart - position;
+
+      console.log("Scheduling playback with delay:", delay, "at trimStartSeconds:", trimStartSeconds);
+      track.player.start(now + delay, trimStartSeconds, duration);
+    }
+  });
+}
+
+
+  async pause(): Promise<void> {
+    // Pause the global transport — synced players will pause with it
+    Tone.Transport.pause();
+    // Do NOT unsync or stop players, so resume works correctly
   }
-  stop(): Promise<void> {
-    throw new Error('Method not implemented.');
+
+  async stop(): Promise<void> {
+    // Stop the transport and reset timeline
+    Tone.Transport.stop();
+    Tone.Transport.seconds = 0;
+
+    // Stop all players immediately
+    this.tracks.forEach((track) => {
+      if (track.player) {
+        track.player.stop();
+      }
+    });
   }
 
   public static getInstance(): AudioFilePlayer {
@@ -259,44 +334,30 @@ class AudioFilePlayer implements TrackPlayer {
     track.trimEndTicks = trimEndTicks;
 
     if (track.player instanceof Tone.Player) {
-      // Use Tone.Transport.PPQ to convert ticks to seconds
-      const ppq = Tone.Transport.PPQ || 192; // default PPQ
-      const bpm = Tone.Transport.bpm.value;
-      const secondsPerBeat = 60 / bpm;
-
       const ticksPerSecond = Tone.Transport.bpm.value * Tone.Transport.PPQ / 60;
       const trimStartSeconds = trimStartTicks / ticksPerSecond;
       const trimEndSeconds = trimEndTicks / ticksPerSecond;
 
-
-      console.log(`Setting track trim for ${trackId}:`, {
-        trimStartTicks,
-        trimEndTicks,
-        trimStartSeconds,
-        trimEndSeconds,
-        playerDuration: track.player.buffer?.duration || 0
-      });
+      console.log(`Updating trim for ${trackId}: start=${trimStartSeconds}s, end=${trimEndSeconds}s`);
 
       if (track.player.buffer) {
         const bufferDuration = track.player.buffer.duration;
+
         const startSec = Math.min(Math.max(0, trimStartSeconds), bufferDuration);
         const endSec = Math.min(Math.max(startSec, trimEndSeconds), bufferDuration);
-
-        track.player.loopStart = startSec;
-        track.player.loopEnd = endSec;
 
         (track.player as any)._trimSettings = {
           trimStartSeconds: startSec,
           trimEndSeconds: endSec,
-          trimEnabled: true
+          trimEnabled: true,
         };
-
-        console.log(`Set player trim for ${trackId}: ${startSec}s to ${endSec}s`);
       } else {
         console.warn(`Cannot set trim for ${trackId}: player has no buffer`);
       }
     }
   }
+
+
 
 
   public updateTrack(trackId: string, updatedTrack: AudioTrack): void {
@@ -320,6 +381,7 @@ class AudioFilePlayer implements TrackPlayer {
       this.setTrackTrim(trackId, updatedTrack.trimStartTicks, updatedTrack.trimEndTicks);
     }
   }
+
 }
 
 export default AudioFilePlayer; 

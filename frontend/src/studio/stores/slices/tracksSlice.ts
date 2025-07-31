@@ -17,6 +17,9 @@ import SampleManager from '../../core/samples/sampleManager';
 import { db } from '../../core/db/dexie-client';
 import { processAudioFile } from '../../utils/audioProcessing';
 import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
+import AudioFilePlayer from '../../core/audio-engine/audioFilePlayer/audioEngine';
+
+
 
 // Define the state properties and actions for this slice
 export interface TracksSlice {
@@ -1165,6 +1168,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         dirty: true
       });
 
+      // Update the audio engine’s trim settings so playback reflects new trim immediately
+      const audioEngine = AudioFilePlayer.getInstance();
+      audioEngine.setTrackTrim(trackId, newTrimStartTicks, newTrimEndTicks);
+
+
       // Create instance resize action for history
       const action = new InstanceResize(
         get,
@@ -1877,7 +1885,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
       const oldPosition = { x: instance.x_position, y: instance.y_position };
 
-      // Skip if nothing changed at drag end
       if (isDragEnd &&
         oldPosition.x === newPosition.x &&
         oldPosition.y === newPosition.y) {
@@ -1885,13 +1892,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
 
       if (isDragEnd) {
-        // If this is a drum track, move it together with all its samplers
         if (track.track_type === 'DRUM') {
           const deltaX = newPosition.x - oldPosition.x;
           const deltaY = newPosition.y - oldPosition.y;
           const allTrackIds = expandDrumSelection([trackId]);
 
-          // Create instance updates for all tracks
           const instanceUpdates = allTrackIds.map(tId => {
             const targetTrack = findTrackById(tId);
             if (targetTrack?.instances?.[0]) {
@@ -1911,7 +1916,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           return;
         }
 
-        // Create instance-specific position action for history
         const action = new Actions.InstanceMove(
           get,
           trackId,
@@ -1920,11 +1924,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           oldPosition.y,
           Math.max(newPosition.x, 0),
           Math.max(newPosition.y, 0)
-
         );
         await executeHistoryAction(action);
 
-        // Update notes for this instance if it's a MIDI-based track
         if (track.track_type === 'MIDI') {
           const midiManager = storeInstance.getMidiManager();
           if (midiManager) {
@@ -1933,25 +1935,26 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           }
         }
 
+        // 🔄 Update audio engine position
         if (isPlaying && storeInstance.getTransport()?.handleTrackPositionChange) {
           storeInstance.getTransport().handleTrackPositionChange(trackId, Math.max(newPosition.x, 0));
         }
 
+        // ✅ Sync audio engine with updated instance position
+        storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
       } else {
-        // During drag, update position directly without history
         updateTrackInstance(trackId, instanceId, {
           x_position: newPosition.x,
           y_position: newPosition.y
         });
 
-        // Update audio engine for this specific instance
-        // TODO: Audio engine needs to support instance-based positioning
         storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
       }
     };
 
     _withErrorHandling(changeLogic, 'handleInstancePositionChange')();
   };
+
 
   const handleInstanceResizeEnd = (
     trackId: string,
@@ -1965,105 +1968,87 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const resizeLogic = async () => {
       const instance = track.instances.find(inst => inst.id === instanceId);
-      if (!instance) {
-        console.error(`Instance ${instanceId} not found in track ${trackId}`);
-        return;
-      }
+      if (!instance) return;
 
-      const oldTrimStartTicks = instance.trim_start_ticks;
-      const oldTrimEndTicks = instance.trim_end_ticks;
-      const oldPositionX = instance.x_position;
+      const oldTrimStart = instance.trim_start_ticks;
+      const oldTrimEnd = instance.trim_end_ticks;
+      const oldX = instance.x_position;
       const deltaTicks = pixelsToTicks(deltaPixels, bpm, timeSignature);
 
-      let newTrimStartTicks = oldTrimStartTicks;
-      let newTrimEndTicks = oldTrimEndTicks;
-      let newPositionX = oldPositionX;
+      let newTrimStart = oldTrimStart;
+      let newTrimEnd = oldTrimEnd;
+      let newX = oldX;
 
       if (resizeDirection === 'left') {
-        newPositionX = Math.max(0, oldPositionX + deltaTicks);
-        const actualPositionDelta = newPositionX - oldPositionX;
-        newTrimStartTicks = oldTrimStartTicks + actualPositionDelta;
+        newX = Math.max(0, oldX + deltaTicks);
+        newTrimStart = oldTrimStart + (newX - oldX);
       } else {
-        newTrimEndTicks = Math.max(newTrimStartTicks, oldTrimEndTicks + deltaTicks);
+        newTrimEnd = Math.max(newTrimStart, oldTrimEnd + deltaTicks);
       }
 
-      // Handle DRUM tracks: resize all linked samplers
+      // Handle DRUM tracks
       if (track.track_type === 'DRUM') {
-        const allTrackIds = expandDrumSelection([trackId]);
-        const instanceUpdates = allTrackIds
-          .map(tId => {
-            const targetTrack = findTrackById(tId);
-            if (targetTrack?.instances?.[0]) {
-              return {
-                trackId: tId,
-                instanceId: targetTrack.instances[0].id,
-                widthDelta: deltaPixels,
-                anchor: resizeDirection
-              };
-            }
-            return null;
-          })
-          .filter(Boolean) as Array<{
-            trackId: string;
-            instanceId: string;
-            widthDelta: number;
-            anchor: 'left' | 'right';
-          }>;
+        const drumIds = expandDrumSelection([trackId]);
+        const drumUpdates = drumIds.map(tId => {
+          const t = findTrackById(tId);
+          const inst = t?.instances?.[0];
+          return inst ? {
+            trackId: tId,
+            instanceId: inst.id,
+            widthDelta: deltaPixels,
+            anchor: resizeDirection
+          } : null;
+        }).filter(Boolean) as {
+          trackId: string;
+          instanceId: string;
+          widthDelta: number;
+          anchor: 'left' | 'right';
+        }[];
 
-        if (instanceUpdates.length > 0) {
-          resizeMultipleInstances(instanceUpdates);
+        if (drumUpdates.length) {
+          resizeMultipleInstances(drumUpdates);
         }
         return;
       }
 
+      // Save trim changes in history
       const action = new Actions.InstanceResize(
         get,
         trackId,
         instanceId,
-        oldTrimStartTicks,
-        oldTrimEndTicks,
-        oldPositionX,
-        newTrimStartTicks,
-        newTrimEndTicks,
-        newPositionX
+        oldTrimStart,
+        oldTrimEnd,
+        oldX,
+        newTrimStart,
+        newTrimEnd,
+        newX
       );
       await executeHistoryAction(action);
 
-      // Update playback for MIDI tracks
+      // Apply instance update
+      updateTrackInstance(trackId, instanceId, {
+        x_position: newX,
+        trim_start_ticks: newTrimStart,
+        trim_end_ticks: newTrimEnd
+      });
+
+      // Audio/MIDI playback update
       if (track.track_type === 'MIDI') {
-        const midiManager = rootGet().store?.getMidiManager();
-        if (midiManager) {
-          midiManager.trimInstance(trackId, instanceId, newTrimStartTicks, newTrimEndTicks);
-        }
-      }
-
-      // Update playback for AUDIO tracks
-      if (track.track_type === 'AUDIO') {
+        rootGet().store?.getMidiManager()?.trimInstance(trackId, instanceId, newTrimStart, newTrimEnd);
+      } else if (track.track_type === 'AUDIO') {
         const audioEngine = rootGet().store?.getAudioEngine();
-        if (audioEngine?.setTrackTrim) {
-          audioEngine.setTrackTrim(trackId, newTrimStartTicks, newTrimEndTicks);
+        audioEngine?.setTrackTrim(trackId, newTrimStart, newTrimEnd);
 
-          updateTrackInstance(trackId, instanceId, {
-            x_position: newPositionX,
-            trim_start_ticks: newTrimStartTicks,
-            trim_end_ticks: newTrimEndTicks
-          });
-
-          const transport = rootGet().store?.getTransport();
-          if (transport?.isPlaying) {
-            // Seek transport to current position and restart playback
-            const currentPos = transport.position;
-            transport.seek(currentPos); // ensure correct waveform position
-            transport.play(); // restart playback with updated trims
-          }
+        const transport = rootGet().store?.getTransport();
+        if (transport?.isPlaying) {
+          transport.seek(transport.position);
+          transport.play(); // sync updated trim to audio
         }
       }
     };
 
     _withErrorHandling(resizeLogic, 'handleInstanceResizeEnd')();
   };
-
-
 
 
 

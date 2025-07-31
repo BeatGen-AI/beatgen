@@ -10,7 +10,7 @@ import { MidiManager } from '../midi/MidiManagerNew';
 import { audioContextManager } from '../audio/audioContextManager';
 
 export interface Transport {
-    position: number;        // Current playback position
+    position: number;        // prent playback position
     isPlaying: boolean;
     tempo: number;
 
@@ -171,20 +171,41 @@ export class TransportController implements Transport {
                                 const trimStartSec = (trimStartTicks / ppq) * (60 / bpm);
                                 const trimEndSec = (trimEndTicks / ppq) * (60 / bpm);
 
-                                if (trimStartTicks > 0 || trimEndTicks < track.duration_ticks) {
-                                    (audioTrack.player as any)._trimSettings = {
-                                        trimEnabled: true,
-                                        trimStartSeconds: trimStartSec,
-                                        trimEndSeconds: trimEndSec
-                                    };
-                                }
+                                (audioTrack.player as any)._trimSettings = {
+                                    trimEnabled: trimStartTicks > 0 || trimEndTicks < track.duration_ticks,
+                                    trimStartSeconds: trimStartSec,
+                                    trimEndSeconds: trimEndSec
+                                };
+
+                                const isTrimmed = trimStartTicks > 0 || trimEndTicks < track.duration_ticks;
 
                                 if (trackPositionOffset <= transportPosition) {
-                                    const startOffset = Math.max(0, transportPosition - trackPositionOffset);
-                                    audioTrack.player.stop();
-                                    audioTrack.player.unsync();
-                                    audioTrack.player.sync().start(0, trimStartSec + startOffset);
-                                    console.log(`Audio track ${track.id} instance ${instance.id} synced, starting at offset ${startOffset}s`);
+                                    const relativePos = transportPosition - trackPositionOffset;
+
+                                    if (isTrimmed) {
+                                        const playFrom = trimStartSec + relativePos;
+
+                                        // Only play if within trimmed region
+                                        if (relativePos >= 0 && playFrom < trimEndSec) {
+                                            audioTrack.player.stop();
+                                            audioTrack.player.unsync();
+                                            audioTrack.player.sync().start(0, playFrom);
+                                            console.log(
+                                                `Audio track ${track.id} instance ${instance.id} synced, starting at ${playFrom}s (trimmed)`
+                                            );
+                                        } else {
+                                            console.log(
+                                                `Skipped audio track ${track.id} instance ${instance.id}: transport position past trimmed region`
+                                            );
+                                        }
+                                    } else {
+                                        audioTrack.player.stop();
+                                        audioTrack.player.unsync();
+                                        audioTrack.player.sync().start(0, relativePos);
+                                        console.log(
+                                            `Audio track ${track.id} instance ${instance.id} synced, starting at ${relativePos}s`
+                                        );
+                                    }
                                 }
                             }
                         } catch (error) {
@@ -232,7 +253,6 @@ export class TransportController implements Transport {
                         console.error(`Error scheduling track ${track.id}:`, error);
                     }
                 });
-
             }
 
             // Restart Tone.Transport if needed
@@ -263,6 +283,7 @@ export class TransportController implements Transport {
             this.isStarting = false;
         }
     }
+
 
 
     // Clear any scheduled events (called when stopping, seeking, or starting playback)
