@@ -32,7 +32,6 @@ import { Route as IndexImport } from './routes/index'
 import { Route as SubscriptionSuccessImport } from './routes/subscription.success'
 import { Route as SubscriptionCancelImport } from './routes/subscription.cancel'
 import { Route as CheckoutReturnImport } from './routes/checkout/return'
-import { Route as AuthCallbackImport } from './routes/auth/callback'
 import { Route as AccountSubscriptionImport } from './routes/account.subscription'
 
 // Create/Update Routes
@@ -161,12 +160,6 @@ const CheckoutReturnRoute = CheckoutReturnImport.update({
   id: '/return',
   path: '/return',
   getParentRoute: () => CheckoutRoute,
-} as any)
-
-const AuthCallbackRoute = AuthCallbackImport.update({
-  id: '/auth/callback',
-  path: '/auth/callback',
-  getParentRoute: () => rootRoute,
 } as any)
 
 const AccountSubscriptionRoute = AccountSubscriptionImport.update({
@@ -312,13 +305,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountSubscriptionImport
       parentRoute: typeof rootRoute
     }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/auth/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackImport
-      parentRoute: typeof rootRoute
-    }
     '/checkout/return': {
       id: '/checkout/return'
       path: '/return'
@@ -377,7 +363,6 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/account/subscription': typeof AccountSubscriptionRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/subscription/cancel': typeof SubscriptionCancelRoute
   '/subscription/success': typeof SubscriptionSuccessRoute
@@ -403,7 +388,6 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/account/subscription': typeof AccountSubscriptionRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/subscription/cancel': typeof SubscriptionCancelRoute
   '/subscription/success': typeof SubscriptionSuccessRoute
@@ -430,7 +414,6 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
   '/account/subscription': typeof AccountSubscriptionRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/subscription/cancel': typeof SubscriptionCancelRoute
   '/subscription/success': typeof SubscriptionSuccessRoute
@@ -458,7 +441,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/studio'
     | '/account/subscription'
-    | '/auth/callback'
     | '/checkout/return'
     | '/subscription/cancel'
     | '/subscription/success'
@@ -483,7 +465,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/studio'
     | '/account/subscription'
-    | '/auth/callback'
     | '/checkout/return'
     | '/subscription/cancel'
     | '/subscription/success'
@@ -508,7 +489,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/studio'
     | '/account/subscription'
-    | '/auth/callback'
     | '/checkout/return'
     | '/subscription/cancel'
     | '/subscription/success'
@@ -535,7 +515,6 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   StudioRoute: typeof StudioRoute
   AccountSubscriptionRoute: typeof AccountSubscriptionRoute
-  AuthCallbackRoute: typeof AuthCallbackRoute
   SubscriptionCancelRoute: typeof SubscriptionCancelRoute
   SubscriptionSuccessRoute: typeof SubscriptionSuccessRoute
 }
@@ -560,7 +539,6 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   StudioRoute: StudioRoute,
   AccountSubscriptionRoute: AccountSubscriptionRoute,
-  AuthCallbackRoute: AuthCallbackRoute,
   SubscriptionCancelRoute: SubscriptionCancelRoute,
   SubscriptionSuccessRoute: SubscriptionSuccessRoute,
 }
@@ -594,7 +572,6 @@ export const routeTree = rootRoute
         "/settings",
         "/studio",
         "/account/subscription",
-        "/auth/callback",
         "/subscription/cancel",
         "/subscription/success"
       ]
@@ -658,9 +635,6 @@ export const routeTree = rootRoute
     },
     "/account/subscription": {
       "filePath": "account.subscription.tsx"
-    },
-    "/auth/callback": {
-      "filePath": "auth/callback.tsx"
     },
     "/checkout/return": {
       "filePath": "checkout/return.tsx",

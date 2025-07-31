@@ -35,7 +35,14 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// JWT parsing no longer needed - Supabase handles session management
+// Helper function to decode JWT token (still needed for email/password login)
+function parseJwt(token: string) {
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch (e) {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -55,49 +62,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Initialize auth with Supabase session management
+  // Initialize auth - handle OAuth hash and existing sessions
   useEffect(() => {
     const initializeAuth = async () => {
-      setLoading(true);
-      
       try {
-        // Get initial session
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-          setLoading(false);
-          return;
+        // Check if we have OAuth tokens in URL hash first
+        if (window.location.hash.includes('access_token=')) {
+          console.log('OAuth callback detected, manually processing hash...');
+          
+          // Extract token from URL hash manually
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+          
+          if (accessToken) {
+            console.log('Found access token in hash, setting session manually');
+            
+            // Set the session manually using the tokens
+            const { data: { session }, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || ''
+            });
+            
+            if (session?.user && !error) {
+              console.log('OAuth session established manually:', session.user.email);
+              localStorage.setItem('access_token', session.access_token);
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+              });
+              
+              // Clean URL hash
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+              setLoading(false);
+              return;
+            } else {
+              console.error('Failed to set session manually:', error);
+            }
+          }
         }
 
+        // Check for existing JWT token (email/password login)
+        const existingToken = localStorage.getItem('access_token');
+        if (existingToken) {
+          const decodedToken = parseJwt(existingToken);
+          if (decodedToken && decodedToken.exp * 1000 > Date.now()) {
+            console.log('Found valid JWT token, setting user');
+            setUser({
+              id: decodedToken.sub || 'unknown',
+              email: decodedToken.email || decodedToken.sub || '',
+            });
+            setLoading(false);
+            return;
+          } else {
+            localStorage.removeItem('access_token');
+          }
+        }
+
+        // Standard session check for existing sessions
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('Standard session check:', session?.user?.email || 'No session');
         if (session?.user) {
-          console.log('Found existing session for user:', session.user.email);
-          
-          // Store token for API calls
           localStorage.setItem('access_token', session.access_token);
-          
-          // Set user state
           setUser({
             id: session.user.id,
             email: session.user.email || '',
           });
-
-          // Load user profile
-          const userProfile = await fetchProfile();
-          
-          // Check if profile needs completion (OAuth users without username)
-          if (userProfile && !userProfile.username && window.location.pathname !== '/complete-profile') {
-            console.log('Profile incomplete, redirecting to complete-profile');
-            window.location.href = '/complete-profile';
-          }
-        } else {
-          console.log('No active session found');
         }
+        
+        setLoading(false);
       } catch (error) {
-        console.error('Error during auth initialization:', error);
-        setUser(null);
-        setProfile(null);
-      } finally {
+        console.error('Auth initialization error:', error);
         setLoading(false);
       }
     };
@@ -105,38 +140,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email);
-      
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Store token for API calls
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth state change:', _event, session?.user?.email || 'No session');
+      if (session?.user) {
         localStorage.setItem('access_token', session.access_token);
-        
-        // Set user state
         setUser({
           id: session.user.id,
           email: session.user.email || '',
         });
-
-        // Load user profile
-        const userProfile = await fetchProfile();
-        
-        // Check if profile needs completion (OAuth users without username)
-        if (userProfile && !userProfile.username && window.location.pathname !== '/complete-profile') {
-          console.log('Profile incomplete, redirecting to complete-profile');
-          window.location.href = '/complete-profile';
-        }
-      } else if (event === 'SIGNED_OUT') {
+      } else if (_event === 'SIGNED_OUT') {
         localStorage.removeItem('access_token');
         setUser(null);
         setProfile(null);
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
+
+  // Separate effect for profile loading
+  useEffect(() => {
+    if (user && !profile) {
+      fetchProfile().then(userProfile => {
+        if (userProfile) {
+          setProfile(userProfile);
+          
+          // Check if profile needs completion (OAuth users without username)  
+          if (!userProfile.username && window.location.pathname !== '/complete-profile') {
+            console.log('Profile incomplete, redirecting to complete-profile');
+            window.location.href = '/complete-profile';
+          }
+        }
+      }).catch(error => {
+        console.error('Failed to fetch profile:', error);
+      });
+    }
+  }, [user, profile]);
 
   const handleAuthResponse = (response: LoginResponse): User | null => {
     console.log('Processing auth response:', response);

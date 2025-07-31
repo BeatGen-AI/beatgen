@@ -43,7 +43,7 @@ import GenerateSongModal from '../components/GenerateSongModal';
 import { GRID_CONSTANTS } from '../../studio/constants/gridConstants';
 import { createProject } from '../api/projects';
 import { ProjectCreate } from '../types/project';
-import { isAuthenticated } from '../auth/auth-utils';
+import { useIsAuthenticated } from '../auth/auth-utils';
 import { useProjectPrefetch } from '../hooks/useProjectPrefetch';
 
 // Import shared pagination constants
@@ -64,7 +64,7 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const userIsAuthenticated = isAuthenticated();
+  const userIsAuthenticated = useIsAuthenticated();
   const { prefetchProject, getPrefetchStatus, isProjectCached } = useProjectPrefetch();
 
   const [displayedProjectsCount, setDisplayedProjectsCount] = useState<number>(INITIAL_DISPLAY_COUNT);
@@ -269,58 +269,10 @@ export default function HomePage() {
     }
   };
 
-  // If user is not authenticated, show a simpler layout for guests
+  // If user is not authenticated, redirect to login
   if (!userIsAuthenticated) {
-    return (
-      <div className="flex flex-col min-h-screen">
-        {/* Header for guests */}
-        <header className="px-8 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h1 className="text-xl font-bold" style={{ color: GRID_CONSTANTS.logoColors[3] }}>
-            BeatGen Studio
-          </h1>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate({ to: '/login' })}>
-              Login
-            </Button>
-            <Button variant="default" onClick={() => navigate({ to: '/register' })}>
-              Sign Up
-            </Button>
-          </div>
-        </header>
-
-        {/* Main content for guests */}
-        <main className="flex-1 p-8 flex flex-col items-center justify-center">
-          <FadeCard className="p-8 max-w-[600px] w-full text-center">
-            <h2 className="text-3xl font-medium mb-4" style={{ color: GRID_CONSTANTS.logoColors[1] }}>
-              Generate Your Song
-            </h2>
-            <p className="text-base mb-6 text-muted-foreground">
-              Create music instantly with AI. Try our song generator for free!
-            </p>
-            
-            <Button
-              variant="default"
-              size="lg"
-              onClick={() => setShowGenerateSongModal(true)}
-              className="mb-4"
-            >
-              Generate Song
-            </Button>
-            
-            <p className="text-sm text-muted-foreground">
-              Sign up to save your generated songs as projects
-            </p>
-          </FadeCard>
-        </main>
-
-        {/* Generate Song Modal */}
-        <GenerateSongModal
-          open={showGenerateSongModal}
-          onClose={() => setShowGenerateSongModal(false)}
-          onSaveAsProject={handleSaveGeneratedSong}
-        />
-      </div>
-    );
+    navigate({ to: '/login' });
+    return null;
   }
 
   return (
