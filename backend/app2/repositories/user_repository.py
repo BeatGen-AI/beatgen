@@ -1,5 +1,5 @@
 """
-User repository for database operations using SQLModel
+User repository for database operations using SQLModel with Redis caching
 """
 
 from typing import Dict, Any, Optional
@@ -7,14 +7,17 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import traceback
 import uuid
+import json
+from datetime import datetime
 
 from app2.models.user import User
 from app2.core.exceptions import DatabaseException, NotFoundException
+from app2.infrastructure.redis_client import redis_client
 from .base_repository import BaseRepository
 
 
 class UserRepository(BaseRepository[User]):
-    """Repository for user operations"""
+    """Repository for user operations with Redis caching"""
 
     def __init__(self, session: AsyncSession):
         """
@@ -24,6 +27,73 @@ class UserRepository(BaseRepository[User]):
             session: The async SQLModel session for database operations
         """
         super().__init__(User, session)
+        self.redis = redis_client.get_client()
+        self.cache_ttl = 300  # 5 minutes
+    
+    def _serialize_user(self, user: User) -> str:
+        """Serialize user object to JSON string for Redis storage"""
+        user_dict = user.model_dump()
+        # Convert datetime objects to ISO strings for JSON serialization
+        for field in ['created_at', 'updated_at']:
+            if user_dict.get(field):
+                user_dict[field] = user_dict[field].isoformat()
+        return json.dumps(user_dict, default=str)
+    
+    def _deserialize_user(self, cached_data: str) -> User:
+        """Deserialize JSON string from Redis back to User object"""
+        user_dict = json.loads(cached_data)
+        # Convert ISO strings back to datetime objects
+        for field in ['created_at', 'updated_at']:
+            if user_dict.get(field) and isinstance(user_dict[field], str):
+                user_dict[field] = datetime.fromisoformat(user_dict[field].replace('Z', '+00:00'))
+        return User(**user_dict)
+
+    async def find_by_id(self, id: str) -> User:
+        """
+        Find a user by ID with Redis caching
+        
+        Args:
+            id: The ID of the user to find (as string)
+            
+        Returns:
+            The User model instance
+            
+        Raises:
+            NotFoundException: If the user is not found
+            DatabaseException: If the query fails
+        """
+        cache_key = f"user:{id}"
+        
+        try:
+            # Check Redis cache first
+            cached_data = await self.redis.get(cache_key)
+            if cached_data:
+                self.logger.info(f"📦 Redis cache hit for user {id}")
+                return self._deserialize_user(cached_data)
+            
+            # Cache miss - fetch from database
+            self.logger.info(f"💾 Redis cache miss - fetching user {id} from database")
+            user = await super().find_by_id(id)
+            
+            # Cache the result in Redis
+            serialized_user = self._serialize_user(user)
+            await self.redis.setex(cache_key, self.cache_ttl, serialized_user)
+            self.logger.info(f"✅ Cached user {id} in Redis for {self.cache_ttl}s")
+            
+            return user
+            
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"⚠️ Invalid JSON in Redis cache for user {id}, fetching from DB: {e}")
+            # Remove invalid cache entry
+            await self.redis.delete(cache_key)
+            return await super().find_by_id(id)
+        except Exception as e:
+            self.logger.error(f"Error fetching user {id}: {str(e)}")
+            # If Redis fails, fallback to database
+            if "redis" in str(e).lower():
+                self.logger.warning(f"⚠️ Redis error, falling back to database for user {id}")
+                return await super().find_by_id(id)
+            raise
 
     async def get_profile(self, user_id: uuid.UUID) -> User:
         """
@@ -50,6 +120,41 @@ class UserRepository(BaseRepository[User]):
             self.logger.error(f"Error getting user profile: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to get user profile: {str(e)}")
+    
+    async def update(self, id: str, data: Dict[str, Any]) -> User:
+        """
+        Update a user and invalidate Redis cache
+        
+        Args:
+            id: The ID of the user to update
+            data: Dictionary of fields to update
+            
+        Returns:
+            The updated User model instance
+        """
+        cache_key = f"user:{id}"
+        
+        try:
+            # Update the user in database
+            updated_user = await super().update(id, data)
+            
+            # Invalidate Redis cache
+            await self.redis.delete(cache_key)
+            self.logger.info(f"🗑️ Invalidated Redis cache for user {id}")
+            
+            # Cache the updated user
+            serialized_user = self._serialize_user(updated_user)
+            await self.redis.setex(cache_key, self.cache_ttl, serialized_user)
+            self.logger.info(f"✅ Cached updated user {id} in Redis")
+            
+            return updated_user
+        except Exception as e:
+            self.logger.error(f"Error updating user {id}: {str(e)}")
+            # If Redis fails during update, still return the updated user
+            if "redis" in str(e).lower():
+                self.logger.warning(f"⚠️ Redis error during user update, continuing without cache")
+                return updated_user
+            raise
 
     async def update_profile(
         self, user_id: uuid.UUID, profile_data: Dict[str, Any]
@@ -79,6 +184,28 @@ class UserRepository(BaseRepository[User]):
             self.logger.error(f"Error updating user profile: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to update user profile: {str(e)}")
+    
+    async def clear_user_cache(self, user_id: uuid.UUID) -> bool:
+        """
+        Clear user cache from Redis
+        
+        Args:
+            user_id: The ID of the user to clear from cache
+            
+        Returns:
+            True if cache was cleared, False if key didn't exist
+        """
+        cache_key = f"user:{str(user_id)}"
+        try:
+            result = await self.redis.delete(cache_key)
+            if result:
+                self.logger.info(f"🗑️ Cleared Redis cache for user {user_id}")
+            else:
+                self.logger.debug(f"No cache entry found for user {user_id}")
+            return bool(result)
+        except Exception as e:
+            self.logger.warning(f"⚠️ Failed to clear cache for user {user_id}: {e}")
+            return False
 
     async def create_profile(
         self,

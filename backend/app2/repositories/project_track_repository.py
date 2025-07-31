@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 
 from app2.core.exceptions import DatabaseException, NotFoundException
 from app2.core.logging import get_repository_logger

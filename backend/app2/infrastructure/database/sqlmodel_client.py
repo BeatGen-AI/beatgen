@@ -102,7 +102,7 @@ if is_transaction_mode:
     # Transaction mode: Use NullPool, let Supabase handle all pooling
     engine = create_async_engine(
         ASYNC_DATABASE_URL,
-        echo=settings.app.APP_ENV == "dev",
+        echo= False, #settings.app.APP_ENV == "dev",
         poolclass=NullPool,  # CRITICAL: No SQLAlchemy pooling in transaction mode
         connect_args=get_connect_args(),
         pool_pre_ping=True,  # Still useful for connection health checks
@@ -111,7 +111,7 @@ else:
     # Session/direct mode: Use SQLAlchemy pooling to reuse Supavisor connections
     engine = create_async_engine(
         ASYNC_DATABASE_URL,
-        echo=settings.app.APP_ENV == "dev",
+        echo=False, #settings.app.APP_ENV == "dev",
         pool_size=10,
         max_overflow=10,
         pool_recycle=1800,

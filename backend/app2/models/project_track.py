@@ -5,7 +5,7 @@ Link table model for the many-to-many relationship between Projects and Track ty
 from typing import Optional, TYPE_CHECKING
 import uuid
 from sqlmodel import Field, Relationship
-from sqlalchemy import Column, Enum as SAEnum
+from sqlalchemy import Column, Enum as SAEnum, Index
 from pydantic import ConfigDict
 from datetime import datetime
 
@@ -29,6 +29,13 @@ class ProjectTrack(ProjectTrackBase, table=True):
     """
 
     __tablename__ = "project_tracks"
+    __table_args__ = (
+        # Critical indexes for polymorphic join performance
+        Index("idx_project_tracks_track_type", "track_type"),
+        Index("idx_project_tracks_project_id", "project_id"),
+        Index("idx_project_tracks_composite", "project_id", "track_type"),
+        Index("idx_project_tracks_track_lookup", "track_id", "track_type"),
+    )
 
     # Basic identification fields
     project_id: uuid.UUID = Field(
