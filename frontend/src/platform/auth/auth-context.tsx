@@ -8,6 +8,7 @@ import {
   signInWithGoogle
 } from '../api/auth';
 import { supabase } from '../../lib/supabase';
+import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
   id: string;
@@ -16,6 +17,7 @@ interface User {
 
 type AuthContextType = {
   user: User | null;
+  session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
   signUp: (email: string, password: string, username?: string) => Promise<{
@@ -46,13 +48,14 @@ function parseJwt(token: string) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Function to fetch and set the user profile - kept for backward compatibility
+  // Function to fetch and set the user profile
   const fetchProfile = async () => {
     try {
-      console.log('Profile management now handled by UserContext - this is for backward compatibility');
+      console.log('Fetching user profile...');
       const userProfile = await getUserProfile();
       setProfile(userProfile);
       return userProfile;
@@ -62,97 +65,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Initialize auth - handle OAuth hash and existing sessions
+  // Initialize auth following official Supabase pattern
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        // Check if we have OAuth tokens in URL hash first
-        if (window.location.hash.includes('access_token=')) {
-          console.log('OAuth callback detected, manually processing hash...');
-          
-          // Extract token from URL hash manually
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const accessToken = hashParams.get('access_token');
-          const refreshToken = hashParams.get('refresh_token');
-          
-          if (accessToken) {
-            console.log('Found access token in hash, setting session manually');
-            
-            // Set the session manually using the tokens
-            const { data: { session }, error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken || ''
-            });
-            
-            if (session?.user && !error) {
-              console.log('OAuth session established manually:', session.user.email);
-              localStorage.setItem('access_token', session.access_token);
-              setUser({
-                id: session.user.id,
-                email: session.user.email || '',
-              });
-              
-              // Clean URL hash
-              window.history.replaceState(null, '', window.location.pathname + window.location.search);
-              setLoading(false);
-              return;
-            } else {
-              console.error('Failed to set session manually:', error);
-            }
-          }
-        }
-
-        // Check for existing JWT token (email/password login)
-        const existingToken = localStorage.getItem('access_token');
-        if (existingToken) {
-          const decodedToken = parseJwt(existingToken);
-          if (decodedToken && decodedToken.exp * 1000 > Date.now()) {
-            console.log('Found valid JWT token, setting user');
-            setUser({
-              id: decodedToken.sub || 'unknown',
-              email: decodedToken.email || decodedToken.sub || '',
-            });
-            setLoading(false);
-            return;
-          } else {
-            localStorage.removeItem('access_token');
-          }
-        }
-
-        // Standard session check for existing sessions
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('Standard session check:', session?.user?.email || 'No session');
-        if (session?.user) {
-          localStorage.setItem('access_token', session.access_token);
-          setUser({
-            id: session.user.id,
-            email: session.user.email || '',
-          });
-        }
-        
-        setLoading(false);
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth state change:', _event, session?.user?.email || 'No session');
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session:', session?.user?.email || 'No session');
+      setSession(session);
       if (session?.user) {
+        // Store access token for API calls
         localStorage.setItem('access_token', session.access_token);
         setUser({
           id: session.user.id,
           email: session.user.email || '',
         });
-      } else if (_event === 'SIGNED_OUT') {
+      }
+      setLoading(false);
+    });
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth state change:', _event, session?.user?.email || 'No session');
+      
+      setSession(session);
+      
+      if (session?.user) {
+        // User signed in
+        localStorage.setItem('access_token', session.access_token);
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+        });
+      } else {
+        // User signed out
         localStorage.removeItem('access_token');
         setUser(null);
         setProfile(null);
       }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -353,6 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = {
     user,
+    session,
     profile,
     loading,
     signUp,

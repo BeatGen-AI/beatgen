@@ -6,8 +6,8 @@ import { useAuth } from './auth-context';
  * @returns {boolean} True if the user is authenticated, false otherwise
  */
 export const useIsAuthenticated = (): boolean => {
-  const { user, loading } = useAuth();
-  const isAuth = !loading && !!user;
+  const { session, loading } = useAuth();
+  const isAuth = !loading && !!session;
   console.log(`Auth check: ${isAuth ? 'Authenticated' : 'Not authenticated'}`);
   return isAuth;
 };
@@ -17,10 +17,21 @@ export const useIsAuthenticated = (): boolean => {
  * Fallback function that checks localStorage (may have race condition issues)
  */
 export const isAuthenticated = (): boolean => {
+  // First try to check localStorage for backward compatibility
   const token = localStorage.getItem('access_token');
-  const isAuth = !!token;
-  console.log(`Auth check (deprecated): ${isAuth ? 'Authenticated' : 'Not authenticated'}`);
-  return isAuth;
+  if (token) {
+    console.log(`Auth check (deprecated): Authenticated via localStorage`);
+    return true;
+  }
+  
+  // Also check if we have OAuth tokens in URL hash
+  if (window.location.hash.includes('access_token=')) {
+    console.log(`Auth check (deprecated): OAuth callback detected`);
+    return true;
+  }
+  
+  console.log(`Auth check (deprecated): Not authenticated`);
+  return false;
 };
 
 /**
@@ -41,13 +52,6 @@ export const requireAuth = (redirectTo: string = '/login') => {
       console.group('Protected Route Check');
       console.log('Current URL:', location.href);
       console.log('Redirect target if unauthorized:', redirectTo); 
-      
-      // Check for OAuth tokens in URL hash - allow access during OAuth flow
-      if (window.location.hash.includes('access_token=')) {
-        console.log('OAuth callback detected in route guard, allowing access');
-        console.groupEnd();
-        return {};
-      }
       
       if (!isAuthenticated()) {
         console.log('User is NOT authenticated, redirecting to', redirectTo);
