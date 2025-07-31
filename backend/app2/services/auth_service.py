@@ -6,7 +6,6 @@ import hashlib
 import os
 
 from fastapi import Request, Response
-from cachetools import TTLCache
 
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import UnauthorizedException, ServiceException, ValidationException, NotFoundException
@@ -17,10 +16,6 @@ from app2.models.user import User
 from app2.core.config import settings
 
 logger = get_service_logger("auth")
-
-# Legacy cache - TODO: Remove after JWT metadata migration is complete
-CACHE_EXPIRY_SECONDS = 300  # 5 minutes
-_token_cache = TTLCache(maxsize=100, ttl=CACHE_EXPIRY_SECONDS)  # Reduced size since it's legacy
 
 
 class AuthService:
