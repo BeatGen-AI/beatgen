@@ -1636,7 +1636,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         time_signature = {'numerator': 4, 'denominator': 4}  # Default to 4/4
         
         # For Stable Audio, include key and BPM in the prompt for musical context
-        enhanced_prompt = f"{user_style_prompt}, {key_signature}, {bpm} BPM"
+        enhanced_prompt = f"{user_style_prompt}, {key_signature}, {bpm} BPM, repetitive and catchy"
         
         # Stable Audio doesn't use negative prompts
         negative_prompt = None
@@ -1768,7 +1768,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
                 if item.role.lower() == "melody"
             ), None)
             
-            track_name = f"AI Generated Melody: {enhanced_prompt}"
+            track_name = f"AI Generated Melody: {user_style_prompt}"
             if melody_instrument_selection:
                 track_name = f"AI {melody_instrument_selection.instrument_name} Melody"
             
