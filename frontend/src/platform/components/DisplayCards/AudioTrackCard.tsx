@@ -43,19 +43,6 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
 
   const icon = <AudioWaveform className="text-primary" size={18} />;
   
-  const headerActions = (
-    <>
-      <Button 
-        variant="ghost" 
-        size="icon"
-        onClick={() => handleDeleteSound(sound.id)}
-        className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
-      >
-        <Trash2 size={16} />
-      </Button>
-    </>
-  );
-
   const previewContent = (
     <div className="w-full h-[80px] flex items-center justify-center p-2">
       {audioBlob ? (
@@ -75,16 +62,25 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
     </div>
   );
 
-  const footerRight = formatTime(sound.audio_file_duration, false);
+  const footerLeft = formatTime(sound.audio_file_duration, false);
 
   return (
     <BaseTrackCard
       title={sound.name}
       icon={icon}
       sectionColor={sectionColor}
-      headerActions={headerActions}
+      headerActions={
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={() => handleDeleteSound(sound.id)}
+          className="text-muted-foreground hover:bg-accent hover:text-destructive h-7 w-7"
+        >
+          <Trash2 size={16} />
+        </Button>
+      }
       previewContent={previewContent}
-      footerRight={footerRight}
+      footerLeft={footerLeft}
       className="audio-track-card"
     />
   );
