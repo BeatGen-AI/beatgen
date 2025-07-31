@@ -10,6 +10,7 @@ import { Label } from "../components/ui/label"
 import { Alert as ShadcnAlert, AlertDescription, AlertTitle } from "../components/ui/alert" // Renamed to avoid conflict
 import { Separator } from "../components/ui/separator"
 import { Loader2, AlertCircle } from "lucide-react"
+import { FadeCard, FadeCardHeader, FadeCardTitle, FadeCardDescription, FadeCardContent } from "../components/ui/fade-card"
 
 // Placeholder for GoogleIcon, replace with actual SVG or a better Lucide icon if available
 const GoogleIcon = () => (
@@ -120,12 +121,14 @@ function RegisterPage() {
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-background py-8 px-4 sm:px-6 lg:px-8">
-      <div className="w-[512px] mx-auto space-y-8 bg-card text-card-foreground p-6 sm:p-8 rounded-xl shadow-xl">
-        <div>
-          <h1 className="mt-6 text-center text-3xl font-bold">
-            Create Your BeatGen Account
-          </h1>
-        </div>
+      <div className="w-[512px] mx-auto">
+        <FadeCard className="p-6 sm:p-8">
+          <FadeCardHeader>
+            <FadeCardTitle className="text-center text-3xl">
+              Create Your BeatGen Account
+            </FadeCardTitle>
+          </FadeCardHeader>
+          <FadeCardContent className="space-y-6">
         
         {error && (
           <ShadcnAlert variant="destructive" className="mt-4">
@@ -267,6 +270,8 @@ function RegisterPage() {
             </p>
           </div>
         </form>
+          </FadeCardContent>
+        </FadeCard>
       </div>
     </div>
   );

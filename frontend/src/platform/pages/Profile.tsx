@@ -10,6 +10,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { SubscriptionStatus } from '../components/subscription';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { useUser } from '../context/UserContext';
+import { FadeCard, FadeCardHeader, FadeCardTitle, FadeCardDescription, FadeCardContent } from '../../components/ui/fade-card';
 
 const ProfilePage: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -190,37 +191,38 @@ const ProfilePage: React.FC = () => {
     <div className="container mx-auto max-w-4xl py-8 px-4 sm:px-6 lg:px-8">
       <div className="grid gap-6 md:grid-cols-2">
         {/* Profile Section */}
-        <div className="bg-card text-card-foreground p-6 sm:p-8 rounded-xl shadow-xl">
-        <div className="flex flex-col items-center space-y-4 mb-6">
-          <input 
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/png, image/jpeg, image/gif"
-            className="hidden"
-          />
-          <div 
-            className="relative w-32 h-32 rounded-full cursor-pointer group ring-2 ring-offset-2 ring-primary ring-offset-background"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {previewUrl ? (
-              <img 
-                src={previewUrl} 
-                alt="Profile" 
-                className="w-full h-full rounded-full object-cover"
+        <FadeCard className="p-6 sm:p-8">
+          <FadeCardHeader>
+            <div className="flex flex-col items-center space-y-4">
+              <input 
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/png, image/jpeg, image/gif"
+                className="hidden"
               />
-            ) : (
-              <UserCircle className="w-full h-full text-muted-foreground" />
-            )}
-            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-              <UploadCloud className="w-8 h-8 text-white" />
+              <div 
+                className="relative w-32 h-32 rounded-full cursor-pointer group ring-2 ring-offset-2 ring-primary ring-offset-background"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {previewUrl ? (
+                  <img 
+                    src={previewUrl} 
+                    alt="Profile" 
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <UserCircle className="w-full h-full text-muted-foreground" />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                  <UploadCloud className="w-8 h-8 text-white" />
+                </div>
+              </div>
             </div>
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-center">User Profile</h1>
-            <p className="text-muted-foreground text-center">Manage your account settings.</p>
-          </div>
-        </div>
+            <FadeCardTitle className="text-center">User Profile</FadeCardTitle>
+            <FadeCardDescription className="text-center">Manage your account settings.</FadeCardDescription>
+          </FadeCardHeader>
+          <FadeCardContent>
 
         {error && (
           <Alert variant="destructive" className="mb-4">
@@ -323,13 +325,14 @@ const ProfilePage: React.FC = () => {
             </div>
           </div>
         </form>
-      </div>
+          </FadeCardContent>
+        </FadeCard>
 
-      {/* Subscription Section */}
-      <div className="h-fit">
-        <SubscriptionStatus />
+        {/* Subscription Section */}
+        <div className="h-fit">
+          <SubscriptionStatus />
+        </div>
       </div>
-    </div>
 
       {/* Add Password Dialog */}
       <Dialog open={showAddPassword} onOpenChange={(open) => {

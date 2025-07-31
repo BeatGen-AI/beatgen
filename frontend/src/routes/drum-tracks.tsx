@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import React from 'react'
 import DrumLibrary from '../platform/components/DrumLibrary'
 import { requireAuth } from '../platform/auth/auth-utils'
+import { FadeCard, FadeCardHeader, FadeCardTitle, FadeCardDescription, FadeCardContent } from '../components/ui/fade-card'
 
 const logoColors = [
   '#e539a9', // Bright Pink
@@ -24,22 +25,20 @@ function DrumTracksPage() {
   return (
     <div className="p-8">
       <div className="container mx-auto max-w-5xl">
-        <h1 
-          className="text-3xl font-bold mb-6"
-          style={{ 
-            color: drumTracksColor, 
-          }}
-        >
-          Drum Tracks
-        </h1>
-        <p className="text-muted-foreground mb-6">
-          Manage your drum tracks and kits. Create new drum patterns or use existing drum kits.
-        </p>
-        
         {/* Drum Library Component */}
-        <div className="bg-card rounded-lg p-4 shadow-md">
-          <DrumLibrary sectionColor={drumTracksColor} />
-        </div>
+        <FadeCard>
+          <FadeCardHeader>
+            <FadeCardTitle style={{ color: drumTracksColor }}>
+              Drum Tracks
+            </FadeCardTitle>
+            <FadeCardDescription>
+              Manage your drum tracks and kits. Create new drum patterns or use existing drum kits.
+            </FadeCardDescription>
+          </FadeCardHeader>
+          <FadeCardContent>
+            <DrumLibrary sectionColor={drumTracksColor} />
+          </FadeCardContent>
+        </FadeCard>
       </div>
     </div>
   )
