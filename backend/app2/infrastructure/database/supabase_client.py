@@ -14,6 +14,7 @@ class SupabaseClient:
 
     _instance = None
     _client = None
+    _admin_client = None
 
     def __new__(cls):
         """Singleton pattern to ensure only one instance exists"""
@@ -52,6 +53,22 @@ class SupabaseClient:
             cls._client: Client = create_client(
                 settings.supabase.URL, settings.supabase.KEY
             )
+            
+            # Initialize admin client with service role key if available
+            if settings.supabase.SERVICE_ROLE_KEY:
+                try:
+                    cls._admin_client: Client = create_client(
+                        settings.supabase.URL, settings.supabase.SERVICE_ROLE_KEY
+                    )
+                    logger.info("Supabase admin client initialized successfully")
+                except Exception as admin_error:
+                    logger.error(f"Failed to initialize admin client: {str(admin_error)}")
+                    logger.error(f"Service role key format: {settings.supabase.SERVICE_ROLE_KEY[:20]}...")
+                    cls._admin_client = None
+            else:
+                logger.warning("No service role key provided - admin operations will not be available")
+                cls._admin_client = None
+                
             logger.info("Supabase client initialized successfully")
         except Exception as e:
             logger.critical(f"Failed to initialize Supabase client: {str(e)}")
@@ -68,6 +85,13 @@ class SupabaseClient:
     def client(self) -> Client:
         """Get the Supabase client instance"""
         return self._client
+    
+    @property
+    def admin_client(self) -> Client:
+        """Get the Supabase admin client instance with service role key"""
+        if self._admin_client is None:
+            raise Exception("Admin client not available - service role key not configured")
+        return self._admin_client
 
     def table(self, table_name: str):
         """Get a table reference"""

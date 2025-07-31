@@ -42,6 +42,7 @@ class SupabaseConfig(BaseModel):
 
     URL: str = os.getenv("SUPABASE_URL", "")
     KEY: str = os.getenv("SUPABASE_KEY", "")
+    SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SECRET_KEY", "")
     JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")
 
 
