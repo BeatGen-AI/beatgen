@@ -1199,6 +1199,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
 
       const addLogic = async () => {
+          // Ensure project exists when user manually adds tracks
+          await rootState.ensureProjectExists();
+          
           // --- Drum Track Creation with Samplers --- 
           if (type === 'DRUM') {
               // 1. Create the main drum track first

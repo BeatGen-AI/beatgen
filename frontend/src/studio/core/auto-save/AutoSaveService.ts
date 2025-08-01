@@ -199,12 +199,34 @@ export class AutoSaveService {
       let savedProject: Project;
 
       if (projectState.projectId) {
-        // Update existing project - use saveProjectWithSounds to match manual save behavior
-        savedProject = await saveProjectWithSounds(
-          projectState.projectId,
-          projectData,
-          preparedTracks
-        );
+        try {
+          // Try to update existing project first
+          savedProject = await saveProjectWithSounds(
+            projectState.projectId,
+            projectData,
+            preparedTracks
+          );
+        } catch (error: any) {
+          // If project doesn't exist (404), create it with the frontend UUID
+          if (error.status === 404 || error.response?.status === 404) {
+            console.log('Project not found in database, creating new project with frontend ID');
+            const newProject = await createProject(projectData);
+            
+            if (preparedTracks.length > 0) {
+              // If we have tracks, use saveProjectWithSounds
+              savedProject = await saveProjectWithSounds(
+                newProject.id,
+                projectData,
+                preparedTracks
+              );
+            } else {
+              savedProject = newProject;
+            }
+          } else {
+            // Re-throw other errors
+            throw error;
+          }
+        }
       } else {
         // Create new project
         const newProject = await createProject(projectData);
@@ -219,10 +241,10 @@ export class AutoSaveService {
         } else {
           savedProject = newProject;
         }
-        
-        // Update the project ID for future saves
-        this.callbacks.updateProjectId(savedProject.id);
       }
+      
+      // Always update the project ID in URL after successful save
+      this.callbacks.updateProjectId(savedProject.id);
 
       // Mark tracks as clean
       const savedTrackIds = preparedTracks.map(track => track.id);
