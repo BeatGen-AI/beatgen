@@ -245,6 +245,7 @@ export default function HomePage() {
       
       // Fallback: Create project manually (for assistant API results)
       const projectData: ProjectCreate = {
+        id: crypto.randomUUID(), // Generate UUID to ensure consistent project ID
         name: generatedData.project_name || `Generated Song - ${new Date().toLocaleString()}`,
         bpm: generatedData.tempo || 120,
         time_signature_numerator: 4,

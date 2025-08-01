@@ -83,7 +83,9 @@ class AssistantMessageService:
         Returns:
             Created AssistantMessage
         """
-        self.logger.info(f"Saving assistant message for project {project_id}, request {request_id}")
+        self.logger.info(f"🔍 SERVICE: Saving assistant message for project {project_id}, request {request_id}")
+        self.logger.info(f"🔍 SERVICE: Mode: {mode}, Step: {step}")
+        self.logger.info(f"🔍 SERVICE: Content preview: {content[:100] if content else 'None'}...")
         
         try:
             message_data = {
@@ -98,7 +100,9 @@ class AssistantMessageService:
             }
             
             message = await self.repo.create(message_data)
-            self.logger.info(f"Saved assistant message {message.id} for project {project_id}")
+            self.logger.info(f"💾 SERVICE: Successfully created assistant message {message.id}")
+            self.logger.info(f"💾 SERVICE: Created for project_id: {message.project_id}")
+            self.logger.info(f"💾 SERVICE: With mode: {message.mode}, step: {message.step}")
             
             return message
             

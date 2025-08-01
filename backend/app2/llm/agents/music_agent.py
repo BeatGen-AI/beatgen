@@ -204,7 +204,8 @@ class MusicGenerationAgent:
             raise ValueError("Context not initialized with model info")
         
         project_id = self.context.request_context.get('project_id') if self.context.request_context else None
-        logger.info(f"🔍 Creating ChatSession with project_id: {project_id}, session: {self.context.session is not None}, step: {step}")
+        logger.info(f"🔍 MUSIC AGENT: Creating ChatSession with project_id: {project_id}, step: {step}")
+        logger.info(f"🔍 MUSIC AGENT: Full request_context: {self.context.request_context}")
         
         return ChatSession(
             provider_name=self.context.model_info.provider_name,

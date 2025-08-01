@@ -77,15 +77,15 @@ load_dotenv()
 
 async def ensure_project_exists(user_id: str, project_data: Dict[str, Any], session) -> str:
     """
-    Ensure project exists in database, create if needed
+    Ensure project exists in database, create if needed using frontend-provided ID
     
     Args:
         user_id: User ID who owns the project
-        project_data: Project context data from frontend
+        project_data: Project context data from frontend (must include project_id)
         session: Database session
         
     Returns:
-        Project ID (string)
+        Project ID (string) - always the same as frontend provided
     """
     from app2.services.project_service import ProjectService
     from app2.core.exceptions import NotFoundException
@@ -93,54 +93,93 @@ async def ensure_project_exists(user_id: str, project_data: Dict[str, Any], sess
     project_id = project_data.get('project_id')
     
     if not project_id:
-        # No project ID provided, create new project
-        project_service = ProjectService(session)
-        
-        new_project = await project_service.create_project(
-            user_id=uuid.UUID(user_id),
-            project_data={
-                'name': project_data.get('project_title', 'Untitled Project'),
-                'bpm': float(project_data.get('bpm', 120)),
-                'time_signature_numerator': int(project_data.get('time_signature', {}).get('numerator', 4)),
-                'time_signature_denominator': int(project_data.get('time_signature', {}).get('denominator', 4)),
-                'key_signature': project_data.get('key_signature', 'C')
-            }
-        )
-        logger.info(f"Created new project {new_project.id} for user {user_id}")
-        return str(new_project.id)
+        raise ValueError("project_id is required in request context")
     
-    # Project ID provided, check if it exists by trying to get it
+    logger.info(f"🔍 ensure_project_exists: Checking project {project_id} for user {user_id}")
+    
+    # Validate UUID format
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except ValueError:
+        raise ValueError(f"Invalid project_id format: {project_id}")
+    
+    # Check if project already exists
     try:
         from app2.repositories.project_repository import ProjectRepository
         project_repo = ProjectRepository(session)
-        # Try to find the project - if it doesn't exist, we'll get an exception
-        existing_project = await project_repo.get_by_id(uuid.UUID(project_id))
-        # Verify the project belongs to this user
-        if existing_project.user_id == uuid.UUID(user_id):
-            logger.info(f"Project {project_id} exists for user {user_id}")
-            return project_id
-        else:
-            logger.warning(f"Project {project_id} exists but belongs to different user")
-            # Fall through to create new project
-    except (NotFoundException, Exception):
-        logger.info(f"Project {project_id} does not exist, will create new one")
-        # Fall through to create new project
+        existing_project = await project_repo.get_by_id(project_uuid)
         
-    # Create a new project (don't try to use the provided ID, let it generate)
+        # 🔒 SECURITY: Verify ownership
+        if existing_project.user_id != uuid.UUID(user_id):
+            logger.warning(f"🚨 SECURITY: User {user_id} tried to access project {project_id} owned by {existing_project.user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to project"
+            )
+        
+        logger.info(f"✅ Project {project_id} exists and user {user_id} has access")
+        return project_id
+        
+    except NotFoundException:
+        logger.info(f"📝 Project {project_id} doesn't exist, creating with frontend ID")
+        pass  # Project doesn't exist, create it
+    
+    # Create project with exact frontend-provided ID
     project_service = ProjectService(session)
+    
+    project_creation_data = {
+        'id': project_uuid,  # 🔑 Use frontend's exact ID
+        'name': project_data.get('project_title', 'Untitled Project'),
+        'bpm': float(project_data.get('bpm', 120)),
+        'time_signature_numerator': int(project_data.get('time_signature', {}).get('numerator', 4)),
+        'time_signature_denominator': int(project_data.get('time_signature', {}).get('denominator', 4)),
+        'key_signature': project_data.get('key_signature', 'C')
+    }
     
     new_project = await project_service.create_project(
         user_id=uuid.UUID(user_id),
-        project_data={
-            'name': project_data.get('project_title', 'Assistant Chat Project'),
-            'bpm': float(project_data.get('bpm', 120)),
-            'time_signature_numerator': int(project_data.get('time_signature', {}).get('numerator', 4)),
-            'time_signature_denominator': int(project_data.get('time_signature', {}).get('denominator', 4)),
-            'key_signature': project_data.get('key_signature', 'C major')
-        }
+        project_data=project_creation_data
     )
-    logger.info(f"Created new project {new_project.id} for assistant conversation, user {user_id}")
-    return str(new_project.id)
+    
+    logger.info(f"✅ Created project {new_project.id} for user {user_id}")
+    
+    # Verify the created project has the right ID
+    if str(new_project.id) != project_id:
+        logger.error(f"🚨 CRITICAL: Created project ID {new_project.id} doesn't match requested {project_id}")
+        raise ValueError("Project creation ID mismatch")
+    
+    return project_id
+
+
+async def validate_project_access(project_id: str, user_id: str, session) -> None:
+    """
+    Validate that user has access to the specified project
+    
+    Args:
+        project_id: Project ID to validate
+        user_id: User ID to check ownership
+        session: Database session
+        
+    Raises:
+        HTTPException: If user doesn't have access to project
+    """
+    try:
+        from app2.repositories.project_repository import ProjectRepository
+        project_repo = ProjectRepository(session)
+        project = await project_repo.get_by_id(uuid.UUID(project_id))
+        
+        if project.user_id != uuid.UUID(user_id):
+            logger.warning(f"🚨 SECURITY: User {user_id} denied access to project {project_id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to project"
+            )
+    except Exception as e:
+        logger.error(f"Error validating project access: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
 
 
 # TODO: ProjectSavingSSEQueue will be implemented in a separate PR
@@ -219,6 +258,7 @@ async def create_assistant_request(
         # Ensure project exists and save user message if context provided
         if request.context:
             try:
+                logger.info(f"🔍 REQUEST CONTEXT project_id: {request.context.get('project_id')}")
                 # Get database session
                 async with get_async_session() as session:
                     # Ensure project exists first
@@ -230,6 +270,8 @@ async def create_assistant_request(
                     
                     # Store for later use - CRITICAL: this must be used by assistant message saving
                     current_project_id = project_id
+                    logger.info(f"📝 FRONTEND project_id: {request.context.get('project_id')}")
+                    logger.info(f"📝 BACKEND created/found project_id: {current_project_id}")
                     logger.info(f"📝 STORED project_id {current_project_id} for assistant message reuse")
                     
                     # Save user message
@@ -615,9 +657,14 @@ async def process_generate_request(
         
         # Prepare request context with project_id for assistant message saving
         enhanced_context = context.context.copy() if context.context else {}
+        logger.info(f"🔍 BEFORE enhancement - original context: {context.context}")
+        logger.info(f"🔍 BEFORE enhancement - stored project_id: {project_id}")
         if project_id:
             enhanced_context['project_id'] = project_id
+            logger.info(f"🔍 AFTER enhancement - enhanced context: {enhanced_context}")
             logger.info(f"🔍 Added project_id {project_id} to music agent context")
+        else:
+            logger.warning(f"🔍 NO project_id to add to music agent context!")
         
         wrapped_queue = sse_queue
         

@@ -508,9 +508,15 @@ class ChatSession:
 
     async def _save_assistant_message_to_db(self, content: str) -> None:
         """Save assistant message to database if context is available"""
-        logger.info(f"🔍 _save_assistant_message_to_db called - project_id: {self.project_id}, db_session: {self.db_session is not None}")
+        logger.info(f"🔍 CHAT SESSION: About to save message")
+        logger.info(f"🔍 CHAT SESSION: project_id: {self.project_id}")
+        logger.info(f"🔍 CHAT SESSION: request_id: {self.request_id}")
+        logger.info(f"🔍 CHAT SESSION: mode: {self.mode}")
+        logger.info(f"🔍 CHAT SESSION: step: {self.step}")
+        logger.info(f"🔍 CHAT SESSION: content preview: {content[:100]}...")
+        
         if not all([self.project_id, self.db_session]):
-            logger.warning(f"🔍 Skipping DB save - missing project_id: {self.project_id}, db_session: {self.db_session is not None}")
+            logger.warning(f"🔍 CHAT SESSION: Skipping DB save - missing project_id: {self.project_id}, db_session: {self.db_session is not None}")
             return
             
         try:
@@ -530,7 +536,9 @@ class ChatSession:
                     'tokens': self.get_last_call_usage()
                 }
             )
-            logger.info(f"💾 Saved assistant message to DB for project {self.project_id}")
+            logger.info(f"💾 CHAT SESSION: Successfully saved assistant message to DB")
+            logger.info(f"💾 CHAT SESSION: Saved to project_id: {self.project_id}")
+            logger.info(f"💾 CHAT SESSION: With mode: {self.mode}, step: {self.step}")
             
         except Exception as e:
             # Don't break chat flow if DB save fails

@@ -68,13 +68,17 @@ export const useAutoSave = (options: UseAutoSaveOptions = {}): UseAutoSaveReturn
   const getCurrentProjectState = useCallback(() => {
     const state = useStudioStore.getState();
     
+    // Get project ID from ProjectManager if available, fallback to ref
+    const projectManagerId = state.store?.projectManager.getCurrentProject()?.id;
+    const currentProjectId = projectManagerId || projectIdRef.current;
+    
     return {
       projectTitle: state.projectTitle || 'Untitled Project',
       bpm: state.bpm,
       timeSignature: state.timeSignature,
       keySignature: state.keySignature,
       tracks: state.tracks,
-      projectId: projectIdRef.current, // Use ref to get current project ID
+      projectId: currentProjectId,
       userId: user?.id || ''
     };
   }, [user]);
