@@ -275,14 +275,14 @@ class ChatSession:
                         response_content_for_history = f"Error during streaming: {e_stream_inner}"
                         self.message_history.add_message(role="assistant", content=response_content_for_history)
                         # Save error message to database
-                        await self._save_assistant_message_to_db(response_content_for_history)
+                        await self._save_assistant_message_to_db(response_content_for_history, is_tool_response=False)
                         raise # Re-raise to be caught by outer handler
                     else:
                         if full_response_text_chunks:
                              logger.info(f"🔍 Adding streaming assistant message to history (length: {len(response_content_for_history)}): {response_content_for_history[:100]}...")
                              self.message_history.add_message(role="assistant", content=response_content_for_history)
                              # Save assistant message to database
-                             await self._save_assistant_message_to_db(response_content_for_history)
+                             await self._save_assistant_message_to_db(response_content_for_history, is_tool_response=expect_json)
                 
                 return stream_wrapper()
             else: # Not streaming (stream=False)
@@ -319,7 +319,7 @@ class ChatSession:
                     logger.info(f"🔍 Adding assistant message to history (length: {len(response_content_for_history)}): {response_content_for_history[:100]}...")
                     self.message_history.add_message(role="assistant", content=response_content_for_history)
                     # Save assistant message to database
-                    await self._save_assistant_message_to_db(response_content_for_history)
+                    await self._save_assistant_message_to_db(response_content_for_history, is_tool_response=expect_json)
                 else:
                     logger.info(f"ChatSession ({self.current_model_name}): Non-streaming call cancelled during/after adapter await; not adding to history.")
                     # Potentially set response_content_for_history to a specific marker if needed by caller
@@ -506,18 +506,25 @@ class ChatSession:
             logger.warning(f"Failed to extract token usage: {e}")
             return default
 
-    async def _save_assistant_message_to_db(self, content: str) -> None:
+    async def _save_assistant_message_to_db(self, content: str, is_tool_response: bool = False) -> None:
         """Save assistant message to database if context is available"""
         logger.info(f"🔍 CHAT SESSION: About to save message")
         logger.info(f"🔍 CHAT SESSION: project_id: {self.project_id}")
         logger.info(f"🔍 CHAT SESSION: request_id: {self.request_id}")
         logger.info(f"🔍 CHAT SESSION: mode: {self.mode}")
         logger.info(f"🔍 CHAT SESSION: step: {self.step}")
+        logger.info(f"🔍 CHAT SESSION: is_tool_response: {is_tool_response}")
         logger.info(f"🔍 CHAT SESSION: content preview: {content[:100]}...")
         
         if not all([self.project_id, self.db_session]):
             logger.warning(f"🔍 CHAT SESSION: Skipping DB save - missing project_id: {self.project_id}, db_session: {self.db_session is not None}")
             return
+        
+        # Determine the appropriate step name
+        step_to_save = self.step
+        if is_tool_response and self.step and not self.step.endswith('_TOOL'):
+            step_to_save = f"{self.step}_TOOL"
+            logger.info(f"🔍 CHAT SESSION: Tool response detected, using step: {step_to_save}")
             
         try:
             import uuid
@@ -529,7 +536,7 @@ class ChatSession:
                 request_id=self.request_id or "unknown",
                 content=content,
                 mode=self.mode or 'chat',
-                step=self.step,
+                step=step_to_save,
                 metadata={
                     'model': self.current_model_name,
                     'provider': self.current_provider_name,

@@ -50,6 +50,7 @@ from app2.models.assistant import (
     AssistantAction,
     TrackData,
 )
+from app2.models.assistant_message import GenerationStep
 from app2.models.subscription import SubscriptionPlan, BillingPeriod
 from app2.models.track_models.audio_track import AudioTrack, AudioTrackCreate, AudioTrackRead
 from app2.models.user import User
@@ -518,7 +519,7 @@ async def process_assistant_request(request_id: str, project_id: str = None):
                         request_id=request_id,
                         content=assistant_content,
                         mode=context.mode,
-                        step="complete" if context.mode == "generate" else None,
+                        step=GenerationStep.COMPLETE.value if context.mode == "generate" else None,
                         metadata=response_metadata
                     )
                     logger.info(f"📝 Saved complete assistant response for project {current_project_id}")

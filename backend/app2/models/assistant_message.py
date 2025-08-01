@@ -16,14 +16,17 @@ from app2.models.base import DefaultUUIDStandardBase
 
 class GenerationStep(str, Enum):
     """Enum for different generation steps in music creation"""
-    RESEARCH = "research"
-    PARAMETERS = "parameters"
-    INSTRUMENTS = "instruments"
-    DRUMS = "drums"
-    DRUM_PATTERNS = "drum_patterns"
-    CHORDS = "chords"
-    MELODY = "melody"
-    COMPLETE = "complete"
+    RESEARCH_MUSICAL_CONTEXT = "RESEARCH_MUSICAL_CONTEXT"
+    DETERMINE_MUSICAL_PARAMS = "DETERMINE_MUSICAL_PARAMS"
+    DETERMINE_MUSICAL_PARAMS_TOOL = "DETERMINE_MUSICAL_PARAMS_TOOL"
+    INSTRUMENT_SELECTION = "INSTRUMENT_SELECTION"
+    INSTRUMENT_SELECTION_TOOL = "INSTRUMENT_SELECTION_TOOL"
+    DRUM_SELECTION = "DRUM_SELECTION"
+    DRUM_SELECTION_TOOL = "DRUM_SELECTION_TOOL"
+    DRUM_BEAT_GENERATION = "DRUM_BEAT_GENERATION"
+    CHORD_GENERATION = "CHORD_GENERATION"
+    MELODY_GENERATION = "MELODY_GENERATION"
+    COMPLETE = "COMPLETE"
 
 
 class AssistantMessage(DefaultUUIDStandardBase, table=True):

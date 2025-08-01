@@ -431,7 +431,7 @@ Choose sounds that fit the tempo and style of the composition."""
 
         # Create fresh session with parameter-specific prompt
         system_prompt = self._get_parameter_determination_prompt()
-        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.PARAMETERS)
+        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.DETERMINE_MUSICAL_PARAMS.value)
 
         # 1. Stream Explanation
         explanation_prompt = f"""Based on the user request: '{user_prompt}' for a song of {duration_bars} bars, please explain your reasoning for the following musical parameters:
@@ -554,7 +554,7 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
         
         # Create fresh session
         system_prompt = self._get_instrument_selection_prompt()
-        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.INSTRUMENTS)
+        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.INSTRUMENT_SELECTION.value)
         
         soundfont_names_list = [sf.display_name for sf in self._available_soundfonts]
 
@@ -1039,7 +1039,7 @@ Chord Progression: {chord_progression_str}
 
 Create interval-based melodies that follow the harmonic structure."""
         
-        melody_chat_session = self._create_fresh_chat_session(melody_system_prompt, GenerationStep.MELODY)
+        melody_chat_session = self._create_fresh_chat_session(melody_system_prompt, GenerationStep.MELODY_GENERATION.value)
         
         logger.info(f"DEBUG: Prompting for IntervalMelodyOutput with fresh context. Prompt length: {len(interval_prompt)} chars.")
         logger.info(f"DEBUG: Prompt start: {interval_prompt[:200]}...")
@@ -1168,7 +1168,7 @@ Create interval-based melodies that follow the harmonic structure."""
         
         # Create fresh session
         system_prompt = self._get_drum_selection_prompt()
-        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.DRUMS)
+        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.DRUM_SELECTION.value)
         
         drum_sample_names = [ds.display_name for ds in self._available_drum_samples]
 
@@ -1336,7 +1336,7 @@ Style: {determined_params.song_title}
 
 Create rhythmic patterns that fit the composition style."""
         
-        drum_chat_session = self._create_fresh_chat_session(drum_system_prompt, GenerationStep.DRUM_PATTERNS)
+        drum_chat_session = self._create_fresh_chat_session(drum_system_prompt, GenerationStep.DRUM_BEAT_GENERATION.value)
 
         max_retries = 1 
         drum_beat_data_raw: Optional[CreateDrumBeat] = None

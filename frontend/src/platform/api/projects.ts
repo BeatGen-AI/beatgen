@@ -12,6 +12,21 @@ import {
   ProjectWithTracksEntity,
   CombinedTrack 
 } from '../types/project';
+
+// Assistant message types
+export interface AssistantMessage {
+  id: string;
+  project_id: string;
+  request_id?: string;
+  role: 'user' | 'assistant';
+  content?: string;
+  mode?: string;
+  step?: string;
+  message_metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+}
 import { AudioTrack, AudioTrackRead } from '../types/dto/track_models/audio_track';
 import { SamplerTrack } from '../types/dto/track_models/sampler_track';
 import { MidiTrack } from '../types/dto/track_models/midi_track';
@@ -67,6 +82,13 @@ export const updateProject = async (id: string, updates: ProjectWithTracksEntity
 
 export const deleteProject = async (id: string): Promise<void> => {
   await apiClient.delete(`/projects/${id}`);
+};
+
+export const getProjectMessages = async (projectId: string, limit: number = 50): Promise<AssistantMessage[]> => {
+  const response = await apiClient.get<AssistantMessage[]>(`/projects/${projectId}/messages`, {
+    params: { limit }
+  });
+  return response.data;
 };
 
 export const addTrack = async (projectId: string, track: Omit<CombinedTrack, 'id'>): Promise<Project> => {

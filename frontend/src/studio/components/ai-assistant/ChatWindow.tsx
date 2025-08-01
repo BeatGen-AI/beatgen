@@ -36,6 +36,8 @@ import AudioGenerationModelMenu from './AudioGenerationModelMenu';
 import { getAudioModelInfo, getAvailableAudioModels } from '../../config/audioModels';
 import { MUSIC_CONSTANTS } from '@/studio/constants/musicConstants';
 import { createDefaultInstance } from '../../utils/instanceHelpers';
+import { getProjectMessages } from '../../../platform/api/projects';
+import { transformDatabaseMessagesToChat } from './messageUtils';
 
 interface Message {
   type: 'user' | 'assistant' | 'steps';
@@ -57,6 +59,7 @@ interface ChatWindowProps {
   isOpen: boolean;
   onClose: () => void;
   controlBarHeight?: number;
+  projectId?: string;
 }
 
 // Define available AI models (placeholder)
@@ -71,7 +74,7 @@ const ANIMATION_DURATION = 225; // ms
 const DOT_ANIMATION_INTERVAL = 500; // ms
 
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeight = 50 }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeight = 50, projectId }) => {
   const { studioMode } = useAppTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState('');
@@ -102,6 +105,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   const [isStepMode, setIsStepMode] = useState(true);
   const [currentStepMessageId, setCurrentStepMessageId] = useState<string | null>(null);
   const currentStepMessageIdRef = useRef<string | null>(null);
+  
+  // Message loading state
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string | undefined>(projectId);
   
   
   
@@ -157,17 +165,82 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     };
   }, [streamConnection, currentRequestId]);
   
-  // Initialize with welcome message when first opened
-  useEffect(() => {
-    if (isOpen && messages.length === 0) {
+  // Load project messages when project ID changes
+  const loadProjectMessages = async (projectId: string) => {
+    if (isLoadingMessages) return; // Prevent double loading
+    
+    setIsLoadingMessages(true);
+    try {
+      console.log('Loading messages for project:', projectId);
+      const dbMessages = await getProjectMessages(projectId);
+      
+      if (dbMessages.length > 0) {
+        console.log('Loaded', dbMessages.length, 'messages from database');
+        
+        // Reset step manager before loading historical messages to avoid conflicts
+        stepManager.reset();
+        
+        const chatMessages = transformDatabaseMessagesToChat(dbMessages);
+        setMessages(chatMessages);
+        setMessagesLoaded(true);
+      } else {
+        // No messages found, show welcome message
+        setMessages([
+          { 
+            type: 'assistant',
+            text: "Hi! I'm your AI assistant. How can I help with your music project today?"
+          }
+        ]);
+        setMessagesLoaded(true);
+      }
+    } catch (error) {
+      console.error('Failed to load project messages:', error);
+      
+      // Check if it's a network error vs parsing error
+      const isNetworkError = error && (error as any).response?.status;
+      const errorMessage = isNetworkError 
+        ? "Hi! I'm your AI assistant. I couldn't load our previous conversation, but I'm ready to help with your music project today!"
+        : "Hi! I'm your AI assistant. How can I help with your music project today?";
+      
+      // On error, show welcome message with context
       setMessages([
         { 
           type: 'assistant',
-          text: "Hi! I'm your AI assistant. How can I help with your music project today?"
+          text: errorMessage
         }
       ]);
+      setMessagesLoaded(true);
+    } finally {
+      setIsLoadingMessages(false);
     }
-  }, [isOpen, messages.length]);
+  };
+
+  // Handle project ID changes
+  useEffect(() => {
+    if (projectId !== currentProjectId) {
+      setCurrentProjectId(projectId);
+      setMessagesLoaded(false);
+      setMessages([]); // Clear current messages
+    }
+  }, [projectId, currentProjectId]);
+
+  // Initialize messages when chat opens
+  useEffect(() => {
+    if (isOpen && !messagesLoaded && !isLoadingMessages) {
+      if (currentProjectId) {
+        loadProjectMessages(currentProjectId);
+      } else {
+        // No project ID, show welcome message
+        setMessages([
+          { 
+            type: 'assistant',
+            text: "Hi! I'm your AI assistant. How can I help with your music project today?"
+          }
+        ]);
+        setMessagesLoaded(true);
+      }
+    }
+  }, [isOpen, messagesLoaded, isLoadingMessages, currentProjectId]);
   
   // Listen to step manager updates
   useEffect(() => {
@@ -1044,8 +1117,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-2 px-6 flex flex-col gap-3">
+          {/* Loading indicator */}
+          {isLoadingMessages && (
+            <div className="flex items-center justify-center py-4">
+              <div className="text-sm opacity-60">
+                Loading conversation history...
+              </div>
+            </div>
+          )}
+          
           {/* Show all conversation history */}
-          {messages.map((msg, index) => {
+          {!isLoadingMessages && messages.map((msg, index) => {
             if (msg.type === 'user') {
               return (
                 <UserChatBubble 
