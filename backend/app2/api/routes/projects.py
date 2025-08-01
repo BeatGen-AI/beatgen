@@ -5,14 +5,17 @@ from uuid import UUID
 from app2.api.dependencies import (
     get_current_user,
     get_project_service,
+    get_assistant_message_service,
 )
 from app2.services.project_service import ProjectService
+from app2.services.assistant_message_service import AssistantMessageService
 from app2.core.exceptions import NotFoundException, ForbiddenException
 from app2.core.logging import get_api_logger
 from app2.models.project import (
     ProjectRead,
     ProjectWithTracks,
 )
+from app2.models.assistant_message import AssistantMessage
 from app2.types.track_types import TrackType
 from app2.dto.projects_dto import Page, PageParams
 
@@ -322,4 +325,56 @@ async def remove_track(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to remove track: {str(e)}",
+        )
+
+
+@router.get("/{project_id}/messages", response_model=List[AssistantMessage])
+async def get_project_messages(
+    project_id: UUID,
+    limit: int = 50,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    assistant_service: AssistantMessageService = Depends(get_assistant_message_service),
+) -> List[AssistantMessage]:
+    """
+    Get conversation history for a project
+    
+    Args:
+        project_id: The project UUID
+        limit: Maximum number of messages to return (default: 50, max: 100)
+        
+    Returns:
+        List of messages ordered by creation time (oldest first)
+    """
+    logger.info(f"Getting message history for project {project_id}, limit: {limit}")
+    
+    # Validate limit
+    if limit > 100:
+        limit = 100
+    elif limit < 1:
+        limit = 1
+    
+    try:
+        # Get project messages - this will verify project ownership via the repository
+        messages = await assistant_service.get_project_history(project_id, limit)
+        
+        logger.info(f"Retrieved {len(messages)} messages for project {project_id}")
+        return messages
+        
+    except NotFoundException as e:
+        logger.error(f"Project not found: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Project not found"
+        )
+    except ForbiddenException as e:
+        logger.error(f"Forbidden: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this project",
+        )
+    except Exception as e:
+        logger.error(f"Error getting project messages: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get project messages: {str(e)}",
         )

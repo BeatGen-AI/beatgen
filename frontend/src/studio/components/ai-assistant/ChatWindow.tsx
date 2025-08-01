@@ -107,6 +107,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   
   // Access the store for executing actions and project context
   const { 
+    store,
     handleAddTrack, 
     handleTrackVolumeChange,
     handleTrackMuteToggle,
@@ -502,6 +503,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       
       // Prepare context with proper model selection
       const context: any = {
+        project_id: store?.projectManager.getCurrentProject()?.id,
         model: selectedModel,
         track_id: trackId,
         bpm: bpm,

@@ -113,6 +113,8 @@ class ChatSessionManager:
         sse_queue: Any,
         user_id: Optional[str] = None,
         track_context: Optional[Dict[str, Any]] = None,
+        db_session: Optional[Any] = None,
+        request_id: Optional[str] = None,
         **kwargs
     ) -> ChatSession:
         """
@@ -125,6 +127,8 @@ class ChatSessionManager:
             sse_queue: SSE queue for streaming
             user_id: User ID (for logging/debugging purposes)
             track_context: Track context for edit mode
+            db_session: Database session for saving assistant messages
+            request_id: Request ID for message metadata
             **kwargs: Additional arguments for ChatSession
 
         Returns:
@@ -146,6 +150,11 @@ class ChatSessionManager:
             
             # Update the queue for the session (it changes per request)
             chat_session.queue = sse_queue
+            
+            # Update database context (changes per request)
+            chat_session.db_session = db_session
+            chat_session.request_id = request_id
+            chat_session.mode = mode
             
             # Update track context in system prompt if it changed
             if mode == "edit" and track_context:
@@ -181,6 +190,10 @@ class ChatSessionManager:
             api_key=model_info.get_api_key(),
             base_url=getattr(model_info, 'base_url', None),
             tools=tools,
+            project_id=project_id,
+            db_session=db_session,
+            request_id=request_id,
+            mode=mode,
             **getattr(model_info, 'provider_kwargs', {}),
             **kwargs
         )

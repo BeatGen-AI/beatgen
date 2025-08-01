@@ -41,6 +41,7 @@ from app2.api.dependencies import (
 )
 from app2.models.track_models.midi_track import MidiTrackRead
 from app2.types.assistant_actions import AssistantAction
+from app2.models.assistant_message import GenerationStep
 
 from app2.llm.music_gen_service.midi import (
     convert_interval_melody_to_absolute_melody,
@@ -197,10 +198,13 @@ class MusicGenerationAgent:
         self._drum_sample_map = {ds.display_name: ds for ds in self._available_drum_samples}
         self._drum_sample_id_map = {str(ds.id): ds for ds in self._available_drum_samples}
 
-    def _create_fresh_chat_session(self, system_prompt: str) -> ChatSession:
+    def _create_fresh_chat_session(self, system_prompt: str, step: Optional[str] = None) -> ChatSession:
         """Creates a new ChatSession with current model configuration."""
         if not self.context or not self.context.model_info:
             raise ValueError("Context not initialized with model info")
+        
+        project_id = self.context.request_context.get('project_id') if self.context.request_context else None
+        logger.info(f"🔍 Creating ChatSession with project_id: {project_id}, session: {self.context.session is not None}, step: {step}")
         
         return ChatSession(
             provider_name=self.context.model_info.provider_name,
@@ -209,6 +213,11 @@ class MusicGenerationAgent:
             system_prompt=system_prompt,
             api_key=self.context.model_info.api_key,
             base_url=self.context.model_info.base_url,
+            project_id=self.context.request_context.get('project_id') if self.context.request_context else None,
+            db_session=self.context.session,
+            request_id=self.context.queue.get_request_id() if self.context.queue else None,
+            mode='generate',
+            step=step,
             **getattr(self.context.model_info, 'provider_kwargs', {})
         )
 
@@ -421,7 +430,7 @@ Choose sounds that fit the tempo and style of the composition."""
 
         # Create fresh session with parameter-specific prompt
         system_prompt = self._get_parameter_determination_prompt()
-        chat_session = self._create_fresh_chat_session(system_prompt)
+        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.PARAMETERS)
 
         # 1. Stream Explanation
         explanation_prompt = f"""Based on the user request: '{user_prompt}' for a song of {duration_bars} bars, please explain your reasoning for the following musical parameters:
@@ -544,7 +553,7 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
         
         # Create fresh session
         system_prompt = self._get_instrument_selection_prompt()
-        chat_session = self._create_fresh_chat_session(system_prompt)
+        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.INSTRUMENTS)
         
         soundfont_names_list = [sf.display_name for sf in self._available_soundfonts]
 
@@ -1029,7 +1038,7 @@ Chord Progression: {chord_progression_str}
 
 Create interval-based melodies that follow the harmonic structure."""
         
-        melody_chat_session = self._create_fresh_chat_session(melody_system_prompt)
+        melody_chat_session = self._create_fresh_chat_session(melody_system_prompt, GenerationStep.MELODY)
         
         logger.info(f"DEBUG: Prompting for IntervalMelodyOutput with fresh context. Prompt length: {len(interval_prompt)} chars.")
         logger.info(f"DEBUG: Prompt start: {interval_prompt[:200]}...")
@@ -1158,7 +1167,7 @@ Create interval-based melodies that follow the harmonic structure."""
         
         # Create fresh session
         system_prompt = self._get_drum_selection_prompt()
-        chat_session = self._create_fresh_chat_session(system_prompt)
+        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.DRUMS)
         
         drum_sample_names = [ds.display_name for ds in self._available_drum_samples]
 
@@ -1326,7 +1335,7 @@ Style: {determined_params.song_title}
 
 Create rhythmic patterns that fit the composition style."""
         
-        drum_chat_session = self._create_fresh_chat_session(drum_system_prompt)
+        drum_chat_session = self._create_fresh_chat_session(drum_system_prompt, GenerationStep.DRUM_PATTERNS)
 
         max_retries = 1 
         drum_beat_data_raw: Optional[CreateDrumBeat] = None

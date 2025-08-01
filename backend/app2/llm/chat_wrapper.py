@@ -37,6 +37,11 @@ class ChatSession:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         tools: Optional[List[Any]] = None,  # Pydantic AI tool functions
+        project_id: Optional[str] = None,  # For saving messages to database
+        db_session: Optional[Any] = None,  # Database session for saving messages
+        request_id: Optional[str] = None,  # Request ID for message metadata
+        mode: Optional[str] = None,  # Mode for message saving
+        step: Optional[str] = None,  # Generation step for message saving
         **provider_kwargs: Any
     ) -> None:
         """
@@ -48,6 +53,11 @@ class ChatSession:
             system_prompt: An optional system prompt for the Pydantic AI agent.
             api_key: Optional API key for the provider.
             base_url: Optional base URL for the provider (e.g., for OpenAI-compatible or Ollama).
+            project_id: Optional project ID for saving messages to database.
+            db_session: Optional database session for saving messages.
+            request_id: Optional request ID for message metadata.
+            mode: Optional mode for message saving.
+            step: Optional generation step for message saving.
             **provider_kwargs: Additional keyword arguments to pass to the provider adapter's constructor
                                  and subsequently to the Pydantic AI provider setup.
         """
@@ -61,6 +71,13 @@ class ChatSession:
         self.current_tools = tools
         self.current_provider_kwargs = provider_kwargs
         self.is_cancelled = False # Initialize cancellation flag
+        
+        # Database saving context
+        self.project_id = project_id
+        self.db_session = db_session
+        self.request_id = request_id
+        self.mode = mode
+        self.step = step
         
         # Token tracking
         self.total_request_tokens: int = 0
@@ -227,11 +244,12 @@ class ChatSession:
 
                             if isinstance(event, TextDeltaEvent):
                                 current_chunk_from_adapter = event.delta
-                                full_response_text_chunks.append(current_chunk_from_adapter)
-                                actual_delta_to_yield = ""
+                                # Calculate the actual new delta (new part only)
                                 actual_delta_to_yield = current_chunk_from_adapter[len(last_yielded_text):]
                                 
-                                if actual_delta_to_yield: 
+                                # Only append the NEW part, not the whole cumulative text
+                                if actual_delta_to_yield:
+                                    full_response_text_chunks.append(actual_delta_to_yield)
                                     yield actual_delta_to_yield 
                                 
                                 last_yielded_text = current_chunk_from_adapter 
@@ -256,10 +274,15 @@ class ChatSession:
                         logger.error(f"ChatSession ({self.current_model_name}): Error during streaming adapter call: {e_stream_inner}", exc_info=True)
                         response_content_for_history = f"Error during streaming: {e_stream_inner}"
                         self.message_history.add_message(role="assistant", content=response_content_for_history)
+                        # Save error message to database
+                        await self._save_assistant_message_to_db(response_content_for_history)
                         raise # Re-raise to be caught by outer handler
                     else:
                         if full_response_text_chunks:
+                             logger.info(f"🔍 Adding streaming assistant message to history (length: {len(response_content_for_history)}): {response_content_for_history[:100]}...")
                              self.message_history.add_message(role="assistant", content=response_content_for_history)
+                             # Save assistant message to database
+                             await self._save_assistant_message_to_db(response_content_for_history)
                 
                 return stream_wrapper()
             else: # Not streaming (stream=False)
@@ -293,7 +316,10 @@ class ChatSession:
                 
                 # Add the assistant's response to our internal history only if not cancelled during await
                 if not self.is_cancelled: # Check after the await
+                    logger.info(f"🔍 Adding assistant message to history (length: {len(response_content_for_history)}): {response_content_for_history[:100]}...")
                     self.message_history.add_message(role="assistant", content=response_content_for_history)
+                    # Save assistant message to database
+                    await self._save_assistant_message_to_db(response_content_for_history)
                 else:
                     logger.info(f"ChatSession ({self.current_model_name}): Non-streaming call cancelled during/after adapter await; not adding to history.")
                     # Potentially set response_content_for_history to a specific marker if needed by caller
@@ -479,5 +505,35 @@ class ChatSession:
         except Exception as e:
             logger.warning(f"Failed to extract token usage: {e}")
             return default
+
+    async def _save_assistant_message_to_db(self, content: str) -> None:
+        """Save assistant message to database if context is available"""
+        logger.info(f"🔍 _save_assistant_message_to_db called - project_id: {self.project_id}, db_session: {self.db_session is not None}")
+        if not all([self.project_id, self.db_session]):
+            logger.warning(f"🔍 Skipping DB save - missing project_id: {self.project_id}, db_session: {self.db_session is not None}")
+            return
+            
+        try:
+            import uuid
+            from app2.services.assistant_message_service import AssistantMessageService
+            
+            message_service = AssistantMessageService(self.db_session)
+            await message_service.save_assistant_message(
+                project_id=uuid.UUID(self.project_id),
+                request_id=self.request_id or "unknown",
+                content=content,
+                mode=self.mode or 'chat',
+                step=self.step,
+                metadata={
+                    'model': self.current_model_name,
+                    'provider': self.current_provider_name,
+                    'tokens': self.get_last_call_usage()
+                }
+            )
+            logger.info(f"💾 Saved assistant message to DB for project {self.project_id}")
+            
+        except Exception as e:
+            # Don't break chat flow if DB save fails
+            logger.error(f"Failed to save assistant message to DB: {e}")
 
     # --- End of class --- 
