@@ -215,12 +215,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     }
   };
 
-  // Handle project ID changes
+  // Handle project ID changes - only clear when switching between different projects
   useEffect(() => {
     if (projectId !== currentProjectId) {
+      // Only clear messages if we're switching between two different actual project IDs
+      // Don't clear when going from undefined to a project ID (that's just the project getting saved)
+      const isActualProjectSwitch = currentProjectId && projectId && currentProjectId !== projectId;
+      
       setCurrentProjectId(projectId);
-      setMessagesLoaded(false);
-      setMessages([]); // Clear current messages
+      
+      if (isActualProjectSwitch) {
+        setMessagesLoaded(false);
+        setMessages([]); // Clear current messages only when switching projects
+        console.log(`ChatWindow: Switching from project ${currentProjectId} to ${projectId}`);
+      } else {
+        console.log(`ChatWindow: Project ID updated to ${projectId} (not clearing messages)`);
+      }
     }
   }, [projectId, currentProjectId]);
 
@@ -240,7 +250,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
         setMessagesLoaded(true);
       }
     }
-  }, [isOpen, messagesLoaded, isLoadingMessages, currentProjectId]);
+  }, [isOpen, messagesLoaded, isLoadingMessages]);
   
   // Listen to step manager updates
   useEffect(() => {
