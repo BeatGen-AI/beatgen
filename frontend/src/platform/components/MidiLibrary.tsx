@@ -13,6 +13,7 @@ import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/paginatio
 import { getMidiTracks, deleteMidiTrack } from '../api/sounds';
 import { MidiTrackRead } from '../types/dto/track_models/midi_track';
 import MidiTrackCard from './DisplayCards/MidiTrackCard';
+import { IconPiano } from '@tabler/icons-react';
 
 interface MidiLibraryProps {
   onReload?: () => void;
@@ -110,7 +111,7 @@ export default function MidiLibrary({ onReload, sectionColor }: MidiLibraryProps
 
   // Custom empty state with the correct icon
   const emptyState = {
-    icon: <Music className="h-15 w-15" />,
+    icon: <IconPiano className="h-15 w-15" />,
     title: "No MIDI tracks in your library",
     description: "Create MIDI tracks in the studio to see them here"
   };

@@ -6,6 +6,7 @@ import { Project } from '../types/project';
 import { Button } from "../../components/ui/button";
 import ProjectCard from './DisplayCards/ProjectCard';
 import { PrefetchStatus as PrefetchStatusType } from '../hooks/useProjectPrefetch';
+import { IconFolder } from '@tabler/icons-react';
 const logoColors = [
   '#e539a9', // Bright Pink
   '#c63ba6', // Magenta
@@ -74,7 +75,7 @@ const ProjectsDisplay: React.FC<ProjectsDisplayProps> = ({
       ) : allFetchedProjects.length === 0 ? (
         <Card className="project-empty-state flex flex-col items-center py-8 mt-2 text-center">
           <CardContent className="flex flex-col items-center">
-            <Music className="project-empty-icon w-15 h-15 mb-2" />
+            <IconFolder className="project-empty-icon w-15 h-15 mb-2" />
             <h3 
               className="text-lg font-semibold mb-2"
               style={{ 
