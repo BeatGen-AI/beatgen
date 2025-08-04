@@ -50,6 +50,7 @@ from app2.models.assistant import (
     AssistantAction,
     TrackData,
 )
+from app2.models.assistant_message import GenerationStep
 from app2.models.subscription import SubscriptionPlan, BillingPeriod
 from app2.models.track_models.audio_track import AudioTrack, AudioTrackCreate, AudioTrackRead
 from app2.models.user import User
@@ -73,6 +74,113 @@ router = APIRouter()
 sse_manager = SSEManager(heartbeat_interval=20)
 
 load_dotenv()
+
+
+async def ensure_project_exists(user_id: str, project_data: Dict[str, Any], session) -> str:
+    """
+    Ensure project exists in database, create if needed using frontend-provided ID
+    
+    Args:
+        user_id: User ID who owns the project
+        project_data: Project context data from frontend (must include project_id)
+        session: Database session
+        
+    Returns:
+        Project ID (string) - always the same as frontend provided
+    """
+    from app2.services.project_service import ProjectService
+    from app2.core.exceptions import NotFoundException
+    
+    project_id = project_data.get('project_id')
+    
+    if not project_id:
+        raise ValueError("project_id is required in request context")
+    
+    logger.info(f"🔍 ensure_project_exists: Checking project {project_id} for user {user_id}")
+    
+    # Validate UUID format
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except ValueError:
+        raise ValueError(f"Invalid project_id format: {project_id}")
+    
+    # Check if project already exists
+    try:
+        from app2.repositories.project_repository import ProjectRepository
+        project_repo = ProjectRepository(session)
+        existing_project = await project_repo.get_by_id(project_uuid)
+        
+        # 🔒 SECURITY: Verify ownership
+        if existing_project.user_id != uuid.UUID(user_id):
+            logger.warning(f"🚨 SECURITY: User {user_id} tried to access project {project_id} owned by {existing_project.user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to project"
+            )
+        
+        logger.info(f"✅ Project {project_id} exists and user {user_id} has access")
+        return project_id
+        
+    except NotFoundException:
+        logger.info(f"📝 Project {project_id} doesn't exist, creating with frontend ID")
+        pass  # Project doesn't exist, create it
+    
+    # Create project with exact frontend-provided ID
+    project_service = ProjectService(session)
+    
+    project_creation_data = {
+        'id': project_uuid,  # 🔑 Use frontend's exact ID
+        'name': project_data.get('project_title', 'Untitled Project'),
+        'bpm': float(project_data.get('bpm', 120)),
+        'time_signature_numerator': int(project_data.get('time_signature', {}).get('numerator', 4)),
+        'time_signature_denominator': int(project_data.get('time_signature', {}).get('denominator', 4)),
+        'key_signature': project_data.get('key_signature', 'C')
+    }
+    
+    new_project = await project_service.create_project(
+        user_id=uuid.UUID(user_id),
+        project_data=project_creation_data
+    )
+    
+    logger.info(f"✅ Created project {new_project.id} for user {user_id}")
+    
+    # Verify the created project has the right ID
+    if str(new_project.id) != project_id:
+        logger.error(f"🚨 CRITICAL: Created project ID {new_project.id} doesn't match requested {project_id}")
+        raise ValueError("Project creation ID mismatch")
+    
+    return project_id
+
+
+async def validate_project_access(project_id: str, user_id: str, session) -> None:
+    """
+    Validate that user has access to the specified project
+    
+    Args:
+        project_id: Project ID to validate
+        user_id: User ID to check ownership
+        session: Database session
+        
+    Raises:
+        HTTPException: If user doesn't have access to project
+    """
+    try:
+        from app2.repositories.project_repository import ProjectRepository
+        project_repo = ProjectRepository(session)
+        project = await project_repo.get_by_id(uuid.UUID(project_id))
+        
+        if project.user_id != uuid.UUID(user_id):
+            logger.warning(f"🚨 SECURITY: User {user_id} denied access to project {project_id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to project"
+            )
+    except Exception as e:
+        logger.error(f"Error validating project access: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
 
 
 # TODO: ProjectSavingSSEQueue will be implemented in a separate PR
@@ -144,11 +252,57 @@ async def create_assistant_request(
         )
         logger.info(f"📝 CREATE REQUEST - Request created with ID: {request_id}")
 
+        # Store project_id for later use in assistant message saving
+        # This will be set during user message saving and reused for assistant message
+        current_project_id = None
+        
+        # Ensure project exists and save user message if context provided
+        if request.context:
+            try:
+                logger.info(f"🔍 REQUEST CONTEXT project_id: {request.context.get('project_id')}")
+                # Get database session
+                async with get_async_session() as session:
+                    # Ensure project exists first
+                    project_id = await ensure_project_exists(
+                        user_id=user.get('id'),
+                        project_data=request.context,
+                        session=session
+                    )
+                    
+                    # Store for later use - CRITICAL: this must be used by assistant message saving
+                    current_project_id = project_id
+                    logger.info(f"📝 FRONTEND project_id: {request.context.get('project_id')}")
+                    logger.info(f"📝 BACKEND created/found project_id: {current_project_id}")
+                    logger.info(f"📝 STORED project_id {current_project_id} for assistant message reuse")
+                    
+                    # Save user message
+                    from app2.services.assistant_message_service import AssistantMessageService
+                    message_service = AssistantMessageService(session)
+                    await message_service.save_user_message(
+                        project_id=uuid.UUID(project_id),
+                        content=request.prompt,
+                        mode=request.mode,
+                        metadata={
+                            'selected_track': request.context.get('track_id'),
+                            'generation_type': request.context.get('generation_type'),
+                            'model': request.model,
+                            'request_id': request_id
+                        }
+                    )
+                    logger.info(f"📝 Saved user message for project {project_id}")
+            except Exception as e:
+                logger.error(f"Error saving user message: {str(e)}")
+                # Don't fail the request if message saving fails
+
         # Update request status to processing
         await request_manager.update_request_status(request_id, RequestStatus.PROCESSING)
 
-        # Start processing in background
-        background_tasks.add_task(process_assistant_request, request_id=request_id)
+        # Start processing in background, passing the project_id for message saving
+        background_tasks.add_task(
+            process_assistant_request, 
+            request_id=request_id, 
+            project_id=current_project_id
+        )
 
         # Estimate processing time based on mode
         estimated_time = 30  # Default 30 seconds
@@ -273,7 +427,7 @@ async def cancel_assistant_request(
         )
 
 
-async def process_assistant_request(request_id: str):
+async def process_assistant_request(request_id: str, project_id: str = None):
     """
     Background task to process an assistant request.
 
@@ -285,6 +439,10 @@ async def process_assistant_request(request_id: str):
     if not context:
         logger.error(f"Request context not found for ID: {request_id}")
         return
+    
+    # Use the project_id passed from the main request (from user message saving)
+    current_project_id = project_id
+    logger.info(f"🔍 Using passed project_id {current_project_id} for assistant message saving")
 
     # Get the SSE queue for sending events
     sse_queue = context.sse_queue if context.sse_queue else await request_manager.get_sse_queue(request_id)
@@ -313,17 +471,63 @@ async def process_assistant_request(request_id: str):
                 details=f"Prompt: {context.prompt}",
             )
 
-            # Process based on mode, passing the session
+            # Track processing start time for metadata
+            processing_start_time = time.time()
+
+            # Process based on mode, passing the session and project_id
             if context.mode == "generate":
-                await process_generate_request(request_id, context, sse_queue, session)
+                await process_generate_request(request_id, context, sse_queue, session, current_project_id)
             elif context.mode == "generate-audio":
-                await process_generate_audio_request(request_id, context, sse_queue, session)
+                await process_generate_audio_request(request_id, context, sse_queue, session, current_project_id)
             elif context.mode == "edit":
-                # If process_edit_request needs a session, pass it here
-                await process_edit_request(request_id, context, sse_queue)
+                # Pass session to edit request for database saving
+                await process_edit_request(request_id, context, sse_queue, session)
             else:  # chat
                 # If process_chat_request needs a session, pass it here
                 await process_chat_request(request_id, context, sse_queue)
+
+            # Save complete assistant response if project_id is available
+            if current_project_id:
+                logger.info(f"🔍 Saving complete assistant message for {context.mode} mode")
+                try:
+                    # Create complete assistant response content based on mode
+                    response_metadata = {
+                        'mode': context.mode,
+                        'model': context.model,
+                        'request_id': request_id,
+                        'processing_time': time.time() - processing_start_time,
+                        'prompt': context.prompt[:200]  # Store first 200 chars of prompt for context
+                    }
+                    
+                    # Add mode-specific content - this represents the COMPLETE assistant response
+                    if context.mode == "generate":
+                        assistant_content = "🎵 Generated complete music composition with all tracks and arrangements"
+                    elif context.mode == "generate-audio":
+                        assistant_content = "🎵 Generated complete audio track"
+                    elif context.mode == "edit":
+                        assistant_content = "✏️ Applied all requested edits to project"
+                    elif context.mode == "chat":
+                        assistant_content = "💬 Provided complete assistance and guidance"
+                    else:
+                        assistant_content = f"✅ Completed {context.mode} request"
+                    
+                    # Save complete assistant message
+                    from app2.services.assistant_message_service import AssistantMessageService
+                    message_service = AssistantMessageService(session)
+                    await message_service.save_assistant_message(
+                        project_id=uuid.UUID(current_project_id),
+                        request_id=request_id,
+                        content=assistant_content,
+                        mode=context.mode,
+                        step=GenerationStep.COMPLETE.value if context.mode == "generate" else None,
+                        metadata=response_metadata
+                    )
+                    logger.info(f"📝 Saved complete assistant response for project {current_project_id}")
+                    
+                except Exception as e:
+                    # Don't fail the request if message saving fails
+                    logger.error(f"Failed to save assistant message for request {request_id}: {str(e)}")
+                    logger.error(traceback.format_exc())
 
             # Mark request as completed
             await request_manager.update_request_status(request_id, RequestStatus.COMPLETED)
@@ -348,15 +552,41 @@ async def process_assistant_request(request_id: str):
             logger.error(f"Failed to send error event for request: {request_id}")
             logger.error(f"Send error traceback: {traceback.format_exc()}")
 
+        # Save error response using the same project_id from the main request
+        error_project_id = project_id
+        logger.info(f"🔍 Checking error message saving - error_project_id: {error_project_id}")
+        if error_project_id:
+            try:
+                error_content = f"Error in {context.mode} request: {str(e)}"
+                error_metadata = {
+                    'mode': context.mode,
+                    'model': getattr(context, 'model', 'unknown'),
+                    'request_id': request_id,
+                    'error': str(e),
+                    'status': 'failed'
+                }
+                
+                # Use a new session for error saving
+                async with get_async_session() as error_session:
+                    from app2.services.assistant_message_service import AssistantMessageService
+                    error_message_service = AssistantMessageService(error_session)
+                    await error_message_service.save_assistant_message(
+                        project_id=uuid.UUID(error_project_id),
+                        request_id=request_id,
+                        content=error_content,
+                        metadata=error_metadata
+                    )
+                    logger.info(f"📝 Saved error response for project {error_project_id}")
+            except Exception as save_error:
+                logger.error(f"Failed to save error message: {str(save_error)}")
+
         # Mark request as failed
         await request_manager.update_request_status(request_id, RequestStatus.FAILED)
 
     finally:
         # Clean up request after a short delay to allow events to be consumed
         asyncio.create_task(delayed_request_cleanup(request_id))
-        # Session is automatically closed by the 'with' statement
-        if session:
-            logger.info(f"Session closed for request {request_id}")
+        logger.info(f"Cleanup scheduled for request {request_id}")
 
 
 async def delayed_request_cleanup(request_id: str, delay_seconds: int = 10):
@@ -371,7 +601,7 @@ async def delayed_request_cleanup(request_id: str, delay_seconds: int = 10):
 
 
 async def process_generate_request(
-    request_id: str, context, sse_queue: SSEQueueManager, session: AsyncSession
+    request_id: str, context, sse_queue: SSEQueueManager, session: AsyncSession, project_id: str = None
 ):
     """Process a generate mode request"""
 
@@ -426,8 +656,17 @@ async def process_generate_request(
         selected_model_info.api_key = selected_model_info.get_api_key()
         logger.info(f"Selected model: {selected_model_info}")
         
-        # TODO: Project auto-creation and saving will be implemented separately
-        # For now, use regular SSE queue to keep this merge focused on UI changes
+        # Prepare request context with project_id for assistant message saving
+        enhanced_context = context.context.copy() if context.context else {}
+        logger.info(f"🔍 BEFORE enhancement - original context: {context.context}")
+        logger.info(f"🔍 BEFORE enhancement - stored project_id: {project_id}")
+        if project_id:
+            enhanced_context['project_id'] = project_id
+            logger.info(f"🔍 AFTER enhancement - enhanced context: {enhanced_context}")
+            logger.info(f"🔍 Added project_id {project_id} to music agent context")
+        else:
+            logger.warning(f"🔍 NO project_id to add to music agent context!")
+        
         wrapped_queue = sse_queue
         
         response = await music_agent.run(
@@ -438,8 +677,8 @@ async def process_generate_request(
             queue=wrapped_queue,
             db_session=session,
             user_id=user_id,
-            generation_type=context.context.get('generation_type', 'midi') if context.context else 'midi',
-            request_context=context.context
+            generation_type=enhanced_context.get('generation_type', 'midi'),
+            request_context=enhanced_context
         )
         
         # logger.info(
@@ -542,7 +781,7 @@ async def process_generate_request(
         raise
 
 
-async def process_edit_request(request_id: str, context, sse_queue: SSEQueueManager):
+async def process_edit_request(request_id: str, context, sse_queue: SSEQueueManager, session: Any = None):
     """Process an edit mode request using LLM tool calling with persistent ChatSession"""
 
     try:
@@ -578,7 +817,9 @@ async def process_edit_request(request_id: str, context, sse_queue: SSEQueueMana
             model=context.model,
             sse_queue=sse_queue,
             user_id=context.user_id,
-            track_context=context.context
+            track_context=context.context,
+            db_session=session,  # Pass database session for message saving
+            request_id=request_id
         )
 
         logger.info(f"Using ChatSession for project {project_id}, user {context.user_id}, session count: {chat_session_manager.get_session_count()}")
@@ -709,7 +950,7 @@ async def process_chat_request(request_id: str, context, sse_queue: SSEQueueMana
 
 
 async def process_generate_audio_request(
-    request_id: str, context, sse_queue: SSEQueueManager, session: AsyncSession
+    request_id: str, context, sse_queue: SSEQueueManager, session: AsyncSession, project_id: str = None
 ):
     """
     Process a generate-audio mode request using FAL-AI Lyria2 model

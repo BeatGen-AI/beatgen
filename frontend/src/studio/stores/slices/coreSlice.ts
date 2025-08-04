@@ -8,6 +8,7 @@ export interface CoreSlice {
   setStore: (store: Store) => void;
   setIsInitialized: (isInitialized: boolean) => void;
   initializeAudio: () => Promise<void>;
+  ensureProjectExists: () => Promise<void>;
   // Reference to the generic state updater (will be provided by the root store creator)
   _updateState: <K extends keyof RootState>(
     key: K, 
@@ -57,12 +58,37 @@ export const createCoreSlice: StoreSliceCreator<CoreSlice> = (set, get) => {
     await safeInitializeAudio();
   };
 
+  // Ensure project exists (for manual track addition)
+  const ensureProjectExists = async () => {
+    const rootGet = get as GetFn;
+    const { store, projectTitle, _withErrorHandling } = rootGet();
+    
+    const ensureLogic = async () => {
+      if (!store) {
+        throw new Error("Store instance not available");
+      }
+
+      if (!store.projectManager.getCurrentProject()) {
+        console.log('Creating project for manual track addition');
+        const project = store.projectManager.createProject(projectTitle);
+        console.log('Project created:', project);
+        
+        // The auto-save system will automatically save the project when tracks become dirty
+        // No need to manually trigger auto-save here
+      }
+    };
+
+    const safeEnsureProject = _withErrorHandling(ensureLogic, 'ensureProjectExists');
+    await safeEnsureProject();
+  };
+
   return {
     store: null, // Initialize store as null, it should be set externally or created on demand
     isInitialized: false,
     setStore: (newStore) => setCoreState({ store: newStore }),
     setIsInitialized: (isInitialized) => setCoreState({ isInitialized }),
     initializeAudio,
+    ensureProjectExists,
     // Dummy implementations for placeholders, will be replaced by root store utilities
     _updateState: (key, value) => console.warn('_updateState called before initialization'),
     _withErrorHandling: <T extends unknown[], R>(

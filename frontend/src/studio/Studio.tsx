@@ -762,6 +762,7 @@ function Studio({ projectId }: StudioProps) {
             isOpen={isChatOpen}
             onClose={handleChatToggle}
             controlBarHeight={controlBarHeight}
+            projectId={existingProjectId || undefined}
           />
           
           {/* Render the new piano roll windows directly in Studio */}

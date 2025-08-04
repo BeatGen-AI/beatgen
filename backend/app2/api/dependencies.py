@@ -22,6 +22,7 @@ from app2.services.project_service import ProjectService
 from app2.services.track_service import TrackService
 from app2.services.file_service import FileService
 from app2.services.drum_sample_service import DrumSampleService
+from app2.services.assistant_message_service import AssistantMessageService
 
 logger = get_logger("beatgen.api.dependencies")
 
@@ -103,6 +104,11 @@ def get_drum_sample_service(
 ) -> DrumSampleService:
     """Get the drum sample service instance"""
     return DrumSampleService(drum_sample_repository)
+
+
+def get_assistant_message_service(session: SessionDep) -> AssistantMessageService:
+    """Get the assistant message service instance with request-scoped session"""
+    return AssistantMessageService(session)
 
 
 # Auth dependency with request-scoped caching

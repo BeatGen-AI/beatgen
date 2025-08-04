@@ -183,6 +183,7 @@ export interface RootState {
   setStore: (store: Store) => void;
   setIsInitialized: (isInitialized: boolean) => void;
   initializeAudio: () => Promise<void>;
+  ensureProjectExists: () => Promise<void>;
 
   // Project Settings (Refactored)
   projectTitle: string; 
