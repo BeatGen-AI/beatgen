@@ -22,14 +22,16 @@ logger = get_service_logger("auth")
 class AuthService:
     """Service for authentication operations"""
 
-    def __init__(self, user_repository: UserRepository):
+    def __init__(self, user_repository: UserRepository, credits_service=None):
         """
         Initialize the service with repositories
 
         Args:
             user_repository: The repository for user operations
+            credits_service: The credits service for credit operations (optional for backward compatibility)
         """
         self.user_repository = user_repository
+        self.credits_service = credits_service
         
         logger.info("🔐 AUTH SYSTEM: Native Supabase auth enabled")
         logger.info("   ✅ Using public.users.id = auth.users.id")
@@ -85,8 +87,13 @@ class AuthService:
                 )
                 
                 # Initialize user credits for new user
-                await credits_service.initialize_user_credits(user_profile, tier="free")
-                logger.info(f"User credits initialized for User ID: {user_id}")
+                if self.credits_service:
+                    await self.credits_service.initialize_user_credits(user_profile, tier="free")
+                    logger.info(f"User credits initialized for User ID: {user_id}")
+                else:
+                    # Fallback to old credits service for backward compatibility
+                    await credits_service.initialize_user_credits(user_profile, tier="free")
+                    logger.info(f"User credits initialized for User ID: {user_id} (fallback)")
             except Exception as repo_err:
                 logger.error(
                     f"Failed to create profile for User ID {user_id}: {repo_err}",
@@ -616,8 +623,13 @@ class AuthService:
                     logger.info(f"Created new profile for User ID: {session_user_id}")
                     
                     # Initialize user credits for new user
-                    await credits_service.initialize_user_credits(user_profile, tier="free")
-                    logger.info(f"User credits initialized for User ID: {session_user_id}")
+                    if self.credits_service:
+                        await self.credits_service.initialize_user_credits(user_profile, tier="free")
+                        logger.info(f"User credits initialized for User ID: {session_user_id}")
+                    else:
+                        # Fallback to old credits service for backward compatibility
+                        await credits_service.initialize_user_credits(user_profile, tier="free")
+                        logger.info(f"User credits initialized for User ID: {session_user_id} (fallback)")
                 
             except Exception as create_err:
                 logger.error(

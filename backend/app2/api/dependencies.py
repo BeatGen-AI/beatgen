@@ -15,6 +15,7 @@ from app2.repositories.project_repository import ProjectRepository
 from app2.repositories.project_track_repository import ProjectTrackRepository
 from app2.repositories.file_repository import FileRepository
 from app2.repositories.drum_sample_public_repository import DrumSamplePublicRepository
+from app2.repositories.credits_repository import CreditsRepository, CreditTransactionRepository
 
 from app2.services.auth_service import AuthService
 from app2.services.user_service import UserService
@@ -23,6 +24,7 @@ from app2.services.track_service import TrackService
 from app2.services.file_service import FileService
 from app2.services.drum_sample_service import DrumSampleService
 from app2.services.assistant_message_service import AssistantMessageService
+from app2.services.credits_service_v2 import CreditsServiceV2
 
 logger = get_logger("beatgen.api.dependencies")
 
@@ -65,12 +67,31 @@ def get_drum_sample_public_repository(
     return DrumSamplePublicRepository(session)
 
 
+def get_credits_repository(session: SessionDep) -> CreditsRepository:
+    """Get the credits repository instance"""
+    return CreditsRepository(session)
+
+
+def get_credit_transaction_repository(session: SessionDep) -> CreditTransactionRepository:
+    """Get the credit transaction repository instance"""
+    return CreditTransactionRepository(session)
+
+
 # Service instances
+def get_credits_service_v2(
+    credits_repository: Annotated[CreditsRepository, Depends(get_credits_repository)],
+    transaction_repository: Annotated[CreditTransactionRepository, Depends(get_credit_transaction_repository)],
+) -> CreditsServiceV2:
+    """Get the credits service instance (V2 - dependency injection)"""
+    return CreditsServiceV2(credits_repository, transaction_repository)
+
+
 def get_auth_service(
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
+    credits_service: Annotated[CreditsServiceV2, Depends(get_credits_service_v2)],
 ) -> AuthService:
     """Get the auth service instance"""
-    return AuthService(user_repository)
+    return AuthService(user_repository, credits_service)
 
 
 def get_user_service(
