@@ -202,13 +202,13 @@ class BaseRepository(Generic[T]):
                 if hasattr(model_instance, key):
                     setattr(model_instance, key, value)
 
-            # Commit changes
-            self.session.add(model_instance)
+            # Use merge to handle potentially detached objects properly
+            merged_instance = await self.session.merge(model_instance)
             await self.session.commit()
-            await self.session.refresh(model_instance)
-
+            await self.session.refresh(merged_instance)
+            
             self.logger.info(f"Updated {self.model_class.__name__} with ID {id}")
-            return model_instance
+            return merged_instance
         except Exception as e:
             await self.session.rollback()
             if isinstance(e, NotFoundException):
