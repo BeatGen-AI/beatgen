@@ -758,7 +758,7 @@ Tempo: {params.tempo} BPM
 Chord Progression: {params.chord_progression}
 Create harmonic foundations that fit the composition style."""
         
-        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.CHORD_GENERATION.value)
+        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.CHORD_GENERATION_TOOL.value)
         
         explanation_prompt = f"""I'm now generating the chord progression '{params.chord_progression}' in {params.key} {params.mode} at {params.tempo} BPM using {chord_instrument_name}.
 
@@ -1098,7 +1098,7 @@ Chord Progression: {chord_progression_str}
 
 Create interval-based melodies that follow the harmonic structure."""
         
-        melody_chat_session = self._create_fresh_chat_session(melody_system_prompt, GenerationStep.MELODY_GENERATION.value)
+        melody_chat_session = self._create_fresh_chat_session(melody_system_prompt, GenerationStep.MELODY_GENERATION_TOOL.value)
         
         logger.info(f"DEBUG: Prompting for IntervalMelodyOutput with fresh context. Prompt length: {len(interval_prompt)} chars.")
         logger.info(f"DEBUG: Prompt start: {interval_prompt[:200]}...")
@@ -1395,7 +1395,7 @@ Style: {determined_params.song_title}
 
 Create rhythmic patterns that fit the composition style."""
         
-        drum_chat_session = self._create_fresh_chat_session(drum_system_prompt, GenerationStep.DRUM_BEAT_GENERATION.value)
+        drum_chat_session = self._create_fresh_chat_session(drum_system_prompt, GenerationStep.DRUM_BEAT_GENERATION_TOOL.value)
 
         max_retries = 1 
         drum_beat_data_raw: Optional[CreateDrumBeat] = None
