@@ -14,6 +14,7 @@ from app2.infrastructure.jwt_verifier import jwt_verifier
 from app2.repositories.user_repository import UserRepository
 from app2.models.user import User
 from app2.core.config import settings
+from app2.services.credits_service import credits_service
 
 logger = get_service_logger("auth")
 
@@ -73,7 +74,7 @@ class AuthService:
 
             # Create user profile using the Supabase Auth ID directly
             try:
-                await self.user_repository.create_profile(
+                user_profile = await self.user_repository.create_profile(
                     user_id=uuid.UUID(user_id),
                     email=email,
                     username=username,
@@ -82,6 +83,10 @@ class AuthService:
                 logger.info(
                     f"User profile created in public table for User ID: {user_id}"
                 )
+                
+                # Initialize user credits for new user
+                await credits_service.initialize_user_credits(user_profile, tier="free")
+                logger.info(f"User credits initialized for User ID: {user_id}")
             except Exception as repo_err:
                 logger.error(
                     f"Failed to create profile for User ID {user_id}: {repo_err}",
@@ -602,13 +607,17 @@ class AuthService:
                     logger.info(f"Profile already exists for User ID: {session_user_id}")
                 except NotFoundException:
                     # Create new user profile - convert string ID to UUID
-                    await self.user_repository.create_profile(
+                    user_profile = await self.user_repository.create_profile(
                         user_id=uuid.UUID(session_user_id),
                         email=email,
                         username=None,
                         display_name=full_name
                     )
                     logger.info(f"Created new profile for User ID: {session_user_id}")
+                    
+                    # Initialize user credits for new user
+                    await credits_service.initialize_user_credits(user_profile, tier="free")
+                    logger.info(f"User credits initialized for User ID: {session_user_id}")
                 
             except Exception as create_err:
                 logger.error(
