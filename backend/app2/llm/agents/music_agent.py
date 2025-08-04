@@ -78,6 +78,18 @@ from app2.sse.request_manager import request_manager
 
 logger = get_service_logger("music_agent")
 
+
+def uuid_serializer(obj):
+    """JSON serializer for objects containing UUIDs"""
+    if hasattr(obj, '__dict__'):
+        return {k: str(v) if hasattr(v, 'hex') else v for k, v in obj.__dict__.items()}
+    elif isinstance(obj, dict):
+        return {k: str(v) if hasattr(v, 'hex') else v for k, v in obj.items()}
+    elif hasattr(obj, 'hex'):  # UUID objects have a hex attribute
+        return str(obj)
+    return obj
+
+
 # --- Music Generation Context ---
 @dataclass
 class MusicGenerationContext:
@@ -718,63 +730,110 @@ Output only the JSON object."""
         return result
 
     async def _generate_chords_and_send_sse(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
-        """Finds chord instrument, generates notes, and sends add_midi_track SSE action."""
+        """Generates chord progression with streaming explanation and JSON saving, then sends SSE action."""
         logger.info("Starting chord generation...")
+        
+        # Find chord instrument
         chord_instrument_selection = next((
             item for item in selected_instruments.instrument_selections 
             if item.role.lower() == "chords"
         ), None)
 
-        if chord_instrument_selection:
-            chord_instrument_name = chord_instrument_selection.instrument_name
-            if chord_instrument_name in self._soundfont_map:
-                chord_instrument_details = self._soundfont_map[chord_instrument_name]
-                logger.info(f"Found chords instrument: {chord_instrument_name}")
-
-                try:
-                    if isinstance(params.chord_progression, str):
-                        processed_chord_progression = re.sub(
-                            r"[,\s]+", "-", params.chord_progression
-                        ).strip("-")
-                    else:
-                        logger.info(f"Warning: Invalid chord progression format: {params.chord_progression}, skipping chord generation.")
-                        processed_chord_progression = None
-
-                    if processed_chord_progression:
-                        logger.info(f"Generating notes for chord progression: '{processed_chord_progression}' in {params.key} {params.mode} using {chord_instrument_name}")
-                        
-                        chord_notes_data = transform_chord_progression_to_instrument_format(
-                            chord_progression=processed_chord_progression,
-                            instrument=chord_instrument_details,
-                            key=params.key,
-                        )
-
-                        if not chord_notes_data or "notes" not in chord_notes_data or not chord_notes_data["notes"]:
-                            logger.info(
-                                f"Chord transformation returned empty or invalid result for progression '{processed_chord_progression}'"
-                            )
-                        else:
-                            logger.info(f"Generated {len(chord_notes_data.get('notes', []))} chord notes.")
-                            track_id = uuid.uuid4()
-                            chord_track = MidiTrackRead(
-                                id=track_id,
-                                name=chord_instrument_details.display_name,
-                                instrument_id=chord_instrument_details.id,
-                                midi_notes_json=chord_notes_data.get("notes"),
-                                instrument_file=chord_instrument_details,
-                            )
-                            
-                            logger.info(f"Sending add_midi_track action for chords: {chord_track.name}")
-                            await self.context.queue.action(AssistantAction.add_midi_track(track=chord_track))
-
-                except Exception as e:
-                    logger.info(f"Error during chord generation/SSE: {str(e)}")
-                    # Optionally send an error via queue?
-                    # await queue.error("Failed to generate chords.")
-            else:
-                logger.info(f"Warning: Selected chords instrument '{chord_instrument_name}' not found in soundfont map.")
-        else:
+        if not chord_instrument_selection:
             logger.info("Warning: No instrument with role 'chords' selected. Skipping chord generation.")
+            return
+            
+        chord_instrument_name = chord_instrument_selection.instrument_name
+        if chord_instrument_name not in self._soundfont_map:
+            logger.info(f"Warning: Selected chords instrument '{chord_instrument_name}' not found in soundfont map.")
+            return
+            
+        chord_instrument_details = self._soundfont_map[chord_instrument_name]
+        logger.info(f"Found chords instrument: {chord_instrument_name}")
+
+        # 1. Stream Explanation
+        system_prompt = f"""You are an AI music composer creating chord progressions.
+Key: {params.key} {params.mode}
+Tempo: {params.tempo} BPM
+Chord Progression: {params.chord_progression}
+Create harmonic foundations that fit the composition style."""
+        
+        chat_session = self._create_fresh_chat_session(system_prompt, GenerationStep.CHORD_GENERATION.value)
+        
+        explanation_prompt = f"""I'm now generating the chord progression '{params.chord_progression}' in {params.key} {params.mode} at {params.tempo} BPM using {chord_instrument_name}.
+
+This chord progression will provide the harmonic foundation for the track. Let me explain how these chords work together to create the musical atmosphere and support the overall composition."""
+
+        logger.info("Streaming explanation for chord generation...")
+        try:
+            async for text_chunk in await chat_session.send_message_async(
+                user_prompt_content=explanation_prompt,
+                stream=True
+            ):
+                if isinstance(text_chunk, str):
+                    await self.context.queue.add_chunk(text_chunk)
+            logger.info("Finished streaming chord generation explanation")
+        except Exception as e:
+            logger.error(f"Error streaming chord generation explanation: {e}")
+            await self.context.queue.error("Failed to stream chord explanation.")
+            return
+
+        await self.context.queue.add_chunk("\n\n")
+
+        # 2. Generate JSON Data (Focused Call) 
+        logger.info("Generating chord data for track creation...")
+        try:
+            # Process chord progression
+            if isinstance(params.chord_progression, str):
+                processed_chord_progression = re.sub(r"[,\s]+", "-", params.chord_progression).strip("-")
+            else:
+                logger.info(f"Warning: Invalid chord progression format: {params.chord_progression}, skipping chord generation.")
+                return
+
+            if processed_chord_progression:
+                logger.info(f"Generating notes for chord progression: '{processed_chord_progression}' in {params.key} {params.mode}")
+                
+                # Generate chord notes data
+                chord_notes_data = transform_chord_progression_to_instrument_format(
+                    chord_progression=processed_chord_progression,
+                    instrument=chord_instrument_details,
+                    key=params.key,
+                )
+
+                if not chord_notes_data or "notes" not in chord_notes_data or not chord_notes_data["notes"]:
+                    logger.info(f"Chord transformation returned empty result for progression '{processed_chord_progression}'")
+                    return
+
+                # Save JSON tool output using _focused_llm_call pattern
+                chord_json_output = json.dumps(chord_notes_data, indent=2, default=uuid_serializer)
+                focused_prompt = f"Based on the chord progression discussion, here is the generated chord data for '{params.chord_progression}' in {params.key} {params.mode}:\n\n{chord_json_output}"
+                
+                # Use _focused_llm_call to save the JSON (this will auto-save with _TOOL suffix)
+                await chat_session.send_message_async(
+                    user_prompt_content=focused_prompt,
+                    stream=False,
+                    expect_json=True
+                )
+
+                logger.info(f"Generated {len(chord_notes_data.get('notes', []))} chord notes.")
+                
+                # 3. Create and send track
+                track_id = uuid.uuid4()
+                chord_track = MidiTrackRead(
+                    id=track_id,
+                    name=chord_instrument_details.display_name,
+                    instrument_id=chord_instrument_details.id,
+                    midi_notes_json=chord_notes_data.get("notes"),
+                    instrument_file=chord_instrument_details,
+                )
+                
+                logger.info(f"Sending add_midi_track action for chords: {chord_track.name}")
+                await self.context.queue.action(AssistantAction.add_midi_track(track=chord_track))
+
+        except Exception as e:
+            logger.error(f"Error during chord generation: {str(e)}")
+            await self.context.queue.error("Failed to generate chord progression.")
+            raise
 
     # COMMENTED OUT: Melody explanation step removed per user request
     # async def _stream_melody_explanation(self, params: FullMusicalParameters, selected_instruments: SelectInstruments):
