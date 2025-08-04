@@ -248,8 +248,12 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         if (!currentProjectInstance || (projectData.id && currentProjectInstance.id !== projectData.id)) {
              // If no current project or ID mismatch, create/set the new one
              console.log("Creating/Setting project in manager:", projectData.name);
-             // Assuming createProject sets the created project as current
-             passedStore.projectManager.createProject(projectData.name); 
+             // Create project and immediately set the correct backend ID
+             passedStore.projectManager.createProject(projectData.name);
+             if (projectData.id) {
+                 passedStore.projectManager.setProjectId(projectData.id);
+                 console.log("Set ProjectManager ID to backend ID:", projectData.id);
+             }
              // Re-fetch the instance AFTER creation/setting
              currentProjectInstance = passedStore.projectManager.getCurrentProject();
         } 

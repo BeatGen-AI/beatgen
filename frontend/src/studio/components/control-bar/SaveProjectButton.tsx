@@ -119,26 +119,11 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
         
         console.log(`Total tracks: ${preparedTracks.length}, Dirty tracks: ${dirtyTracks.length}`);
         
-        // For new projects only, generate new track IDs to avoid conflicts
-        if (!projectId && dirtyTracks.length > 0) {
-          preparedTracks = dirtyTracks.map(track => {
-            const { dirty, ...trackWithoutDirty } = track; // Remove dirty field for backend
-            return {
-              ...trackWithoutDirty,
-              id: crypto.randomUUID(), // Generate new UUID for each track
-              track: track.track ? {
-                ...track.track,
-                id: crypto.randomUUID() // Also update the nested track ID
-              } : track.track
-            };
-          });
-        } else {
-          // For existing projects, only send dirty tracks
-          preparedTracks = dirtyTracks.map(track => {
-            const { dirty, ...trackWithoutDirty } = track; // Remove dirty field for backend
-            return trackWithoutDirty;
-          });
-        }
+        // Always just remove dirty flag, keep original IDs
+        preparedTracks = dirtyTracks.map(track => {
+          const { dirty, ...trackWithoutDirty } = track;
+          return trackWithoutDirty;
+        });
         
         let savedProject: Project | undefined;
         
@@ -152,51 +137,26 @@ export const SaveProjectButton: React.FC<SaveProjectButtonProps> = ({
           return; // Exit early - no need to save
         }
 
+        // Simple: Update if ID exists, create if not
         if (projectId) {
-          // Update existing project
-          if (preparedTracks.some(track => track.track_type === 'AUDIO' || track.track_type === 'SAMPLER')) {
-            // Use saveProjectWithSounds if we have audio or sampler tracks
-            savedProject = await saveProjectWithSounds(projectId, projectData, preparedTracks);
-          } else {
-            // Use standard update for projects without audio tracks
-            savedProject = await updateProject(projectId, {
-              ...projectData,
-              tracks: preparedTracks
-            });
-          }
-          
-          // Mark saved tracks as clean in the store
-          markTracksAsClean(preparedTracks.map(t => t.id));
-          
+          savedProject = await saveProjectWithSounds(projectId, projectData, preparedTracks);
           setNotification({
             show: true,
             message: `Project updated successfully (${preparedTracks.length} tracks saved)`,
             type: 'success'
           });
         } else {
-          // Create new project
           const newProject = await createProject(projectData);
-          
-          if (preparedTracks.length > 0) {
-            // If we have tracks, use saveProjectWithSounds
-            savedProject = await saveProjectWithSounds(
-              newProject.id, 
-              projectData, 
-              preparedTracks
-            );
-          } else {
-            savedProject = newProject;
-          }
-          
-          // Mark all tracks as clean since it's a new project
-          markTracksAsClean(preparedTracks.map(t => t.id));
-          
+          savedProject = await saveProjectWithSounds(newProject.id, projectData, preparedTracks);
           setNotification({
             show: true,
             message: 'Project saved successfully',
             type: 'success'
           });
         }
+        
+        // Mark saved tracks as clean in the store
+        markTracksAsClean(preparedTracks.map(t => t.id));
         
         // After successful save/update, update URL and call onSaved
         if (savedProject && savedProject.id) {

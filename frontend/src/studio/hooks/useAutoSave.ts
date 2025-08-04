@@ -72,6 +72,8 @@ export const useAutoSave = (options: UseAutoSaveOptions = {}): UseAutoSaveReturn
     const projectManagerId = state.store?.projectManager.getCurrentProject()?.id;
     const currentProjectId = projectManagerId || projectIdRef.current;
     
+
+    
     return {
       projectTitle: state.projectTitle || 'Untitled Project',
       bpm: state.bpm,

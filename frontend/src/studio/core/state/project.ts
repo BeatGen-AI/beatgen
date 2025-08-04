@@ -24,6 +24,12 @@ export class ProjectManager {
     }
   }
 
+  public setProjectId(id: string): void {
+    if (this.currentProject) {
+      this.currentProject.id = id;
+    }
+  }
+
   public getCurrentProject(): ProjectWithTracks | undefined {
     return this.currentProject;
   }
