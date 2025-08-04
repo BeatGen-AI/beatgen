@@ -2000,20 +2000,12 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             # Start background completion handler
             drum_completion_task = asyncio.create_task(handle_drum_completion())
             
-            # Step 5: Chord Generation
+            # Steps 5-6: Chord and Melody Generation (parallel, both start after instrument selection)
             chord_task = self._emit_step_events(
                 5, "Chord Generation", self._generate_chords_and_send_sse, params, selected_instruments
             )
             
-            # Wait for chord generation to complete
-            chord_data = await chord_task
-            
-            # Handle exceptions from chord generation phase
-            if isinstance(chord_data, Exception):
-                logger.error(f"Chord generation failed: {chord_data}")
-                raise chord_data
-            
-            # Step 6: Melody Generation (MIDI or Audio based on generation_type) - moved from step 7
+            # Step 6: Melody Generation (MIDI or Audio based on generation_type)
             if generation_type == "audio":
                 melody_task = self._emit_step_events(
                     6, "Melody Generation", self.generate_diffusion_melody_and_send_sse, params, selected_instruments
@@ -2023,8 +2015,11 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
                     6, "Melody Generation", self._generate_melody_notes_and_send_sse, params, selected_instruments
                 )
             
-            # Wait for melody generation and drum completion task
-            melody_data = await melody_task
+            # Wait for chord generation, melody generation, and drum completion task
+            chord_data, melody_data = await asyncio.gather(
+                chord_task, melody_task,
+                return_exceptions=True
+            )
             await drum_completion_task
             
             # Retrieve drum results
@@ -2033,7 +2028,10 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             else:
                 drum_data = drum_result
             
-            # Handle exceptions from final generation phase
+            # Handle exceptions from all generation phases
+            if isinstance(chord_data, Exception):
+                logger.error(f"Chord generation failed: {chord_data}")
+                raise chord_data
             if isinstance(melody_data, Exception):
                 logger.error(f"Melody generation failed: {melody_data}")
                 raise melody_data
