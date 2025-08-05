@@ -1,4 +1,4 @@
-import { Store } from '../../core/state/store';
+import { RefactoredStore } from '../../core/state/RefactoredStore';
 import { RootState, SetFn, GetFn, StoreSliceCreator, PlaybackCommand } from '../types';
 import * as Tone from 'tone';
 
@@ -17,6 +17,7 @@ export interface TransportSlice {
 // Create the slice function
 export const createTransportSlice: StoreSliceCreator<TransportSlice> = (set, get) => {
   const rootGet = get as GetFn; // Helper for root state access
+  let positionUpdateInterval: NodeJS.Timeout | null = null;
 
   // Utility to set state within this slice
   const setTransportState = (partial: Partial<TransportSlice> | ((state: TransportSlice) => Partial<TransportSlice>)) => set(partial);
@@ -30,7 +31,7 @@ export const createTransportSlice: StoreSliceCreator<TransportSlice> = (set, get
         return;
     }
 
-    const commandLogic = async (store: Store) => {
+    const commandLogic = async (store: RefactoredStore) => {
         const transport = store.getTransport();
         if (!transport) {
             console.error("Transport not available in store");
@@ -46,16 +47,37 @@ export const createTransportSlice: StoreSliceCreator<TransportSlice> = (set, get
                     const tracks = rootGet().tracks;
                     await transport.play(tracks);
                     setTransportState({ isPlaying: true });
+                    
+                    // Start position update loop
+                    if (positionUpdateInterval) {
+                        clearInterval(positionUpdateInterval);
+                    }
+                    positionUpdateInterval = setInterval(() => {
+                        const currentPos = transport.position;
+                        setTransportState({ currentTime: currentPos });
+                    }, 50); // Update every 50ms for smooth cursor movement
                 }
                 break;
             case 'pause':
                 if (currentIsPlaying) {
-                    transport.pause(); // Pause is usually synchronous
+                    // Stop position update loop
+                    if (positionUpdateInterval) {
+                        clearInterval(positionUpdateInterval);
+                        positionUpdateInterval = null;
+                    }
+                    
+                    await transport.pause(); // Now async in RefactoredTransportController
                     const newCurrentTime = transport.position; // Get current time from TransportController
                     setTransportState({ isPlaying: false, currentTime: newCurrentTime });
                 }
                 break;
             case 'stop':
+                // Stop position update loop
+                if (positionUpdateInterval) {
+                    clearInterval(positionUpdateInterval);
+                    positionUpdateInterval = null;
+                }
+                
                 await transport.stop();
                 setTransportState({ isPlaying: false, currentTime: 0 });
                 break;

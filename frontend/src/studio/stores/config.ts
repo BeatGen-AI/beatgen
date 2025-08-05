@@ -1,4 +1,4 @@
-import { Store } from '../core/state/store';
+import { RefactoredStore } from '../core/state/RefactoredStore';
 import { TrackType, GetFn, AudioTrackOptions, MidiTrackOptions, SamplerTrackOptions, TrackOptions } from './types';
 import { db } from '../core/db/dexie-client';
 
@@ -16,28 +16,23 @@ export const DEFAULT_SAMPLER_CONFIG = {
 export const TRACK_CONFIG: Record<TrackType, {
     getDefaultName: (count: number, instrumentName?: string) => string;
     initTrack: (id: string, file?: File) => Record<string, any>;
-    initEngine: (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => Promise<any>;
+    initEngine: (store: RefactoredStore, trackId: string, get: GetFn, options?: TrackOptions) => Promise<any>;
 }> = {
   AUDIO: {
     getDefaultName: (count: number, instrumentName?: string) => instrumentName || `Audio Track ${count}`,
     initTrack: (id: string, file?: File) => ({ type: 'AUDIO' as const, audioFile: file }),
-    initEngine: async (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => {
+    initEngine: async (store: RefactoredStore, trackId: string, get: GetFn, options?: TrackOptions) => {
       const file = options && (options as AudioTrackOptions).audioFile;
       if (!file) return Promise.resolve();
       
       console.log(`TRACK_CONFIG[audio].initEngine: Loading file for track ${trackId}...`);
       await store.loadAudioFile(trackId, file);
-      console.log(`TRACK_CONFIG[audio].initEngine: File loaded for track ${trackId}. Fetching metadata...`);
+      console.log(`TRACK_CONFIG[audio].initEngine: File loaded for track ${trackId}.`);
 
-      const engineTrack = store.getAudioEngine().getAllTracks().find(t => t.id === trackId);
-      if (!engineTrack?.player?.buffer) {
-        console.error(`Failed to get audio buffer after loading for track ${trackId}`);
-        return;
-      }
-
-      const buffer = engineTrack.player.buffer;
-      const duration = buffer.duration;
-      const sampleRate = buffer.sampleRate;
+      // In the new system, we don't have direct access to the buffer
+      // We'll use the file's metadata instead
+      const duration = 0; // Will be set by the audio player when loaded
+      const sampleRate = 44100; // Default sample rate
       const format = file.type;
       const size = file.size;
 
@@ -62,7 +57,7 @@ export const TRACK_CONFIG: Record<TrackType, {
   MIDI: {
     getDefaultName: (count: number, instrumentName?: string) => instrumentName || `MIDI Track ${count}`,
     initTrack: (id: string) => ({ type: 'MIDI' as const }),
-    initEngine: async (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => {
+    initEngine: async (store: RefactoredStore, trackId: string, get: GetFn, options?: TrackOptions) => {
       const instrumentId = options && (options as MidiTrackOptions).instrumentId;
       return instrumentId ? store.connectTrackToSoundfont(trackId, instrumentId) : Promise.resolve();
     },
@@ -73,7 +68,7 @@ export const TRACK_CONFIG: Record<TrackType, {
       type: 'DRUM' as const, 
       drumPattern: Array(4).fill(null).map(() => Array(64).fill(false)) 
     }),
-    initEngine: async (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => Promise.resolve(),
+    initEngine: async (store: RefactoredStore, trackId: string, get: GetFn, options?: TrackOptions) => Promise.resolve(),
   },
   SAMPLER: {
     getDefaultName: (count: number, instrumentName?: string) => instrumentName || `Sampler ${count}`,
@@ -83,7 +78,7 @@ export const TRACK_CONFIG: Record<TrackType, {
       grainSize: DEFAULT_SAMPLER_CONFIG.grainSize,
       overlap: DEFAULT_SAMPLER_CONFIG.overlap
     }),
-    initEngine: async (store: Store, trackId: string, get: GetFn, options?: SamplerTrackOptions) => {
+    initEngine: async (store: RefactoredStore, trackId: string, get: GetFn, options?: SamplerTrackOptions) => {
       const sampleManager = store.getSampleManager();
       if (!sampleManager) {
         console.error(`SampleManager not available on Store instance for sampler initEngine (track: ${trackId})`);
@@ -111,33 +106,27 @@ export const TRACK_CONFIG: Record<TrackType, {
         return Promise.resolve();
       }
 
-      const samplerController = store.getTransport().getSamplerController();
-      const midiManager = store.getMidiManager();
-      if (!samplerController || !midiManager) {
-        console.warn('SamplerController or MidiManager not available for sampler initEngine');
-        return Promise.resolve();
+      // In the new system, sampler connection is handled differently
+      // The loadTrack method in RefactoredStore will handle sampler setup
+      console.log(`TRACK_CONFIG[sampler].initEngine: Sampler ${trackId} will be initialized when track is loaded`);
+      
+      // Store the sample file in Dexie for later use by the new system
+      try {
+        const file = new File([sampleFile.data], trackName || sampleFile.name, { type: sampleFile.type });
+        await db.storeAudioFile(trackId, file);
+        console.log(`TRACK_CONFIG[sampler].initEngine: Stored sample for ${trackId} in cache`);
+      } catch (error) {
+        console.error(`TRACK_CONFIG[sampler].initEngine: Failed to store sample for ${trackId}:`, error);
       }
       
       const trackData = get().findTrackById(trackId);
       const baseMidiNote = options?.baseMidiNote ?? (trackData?.track as any)?.baseMidiNote ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote;
       const grainSize = options?.grainSize ?? (trackData?.track as any)?.grainSize ?? DEFAULT_SAMPLER_CONFIG.grainSize;
       const overlap = options?.overlap ?? (trackData?.track as any)?.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap;
-
-      try {
-        console.log(`Connecting sampler ${trackId} to controller using retrieved blob`);
-        const file = new File([sampleFile.data], trackName || sampleFile.name, { type: sampleFile.type });
-        await samplerController.connectTrackToSampler(
-          trackId,
-          file,
-          midiManager,
-          baseMidiNote,
-          grainSize,
-          overlap
-        );
-        samplerController.registerTrackSubscription(trackId, midiManager);
-      } catch (connectError) {
-        console.error(`Error connecting sampler track ${trackId} in initEngine:`, connectError);
-      }
+      
+      // The new system handles sampler configuration when the track is loaded
+      console.log(`TRACK_CONFIG[sampler].initEngine: Sampler params for ${trackId}: baseMidiNote=${baseMidiNote}, grainSize=${grainSize}, overlap=${overlap}`);
+      
       return Promise.resolve();
     },
   }

@@ -1,4 +1,4 @@
-import { Store } from '../../core/state/store';
+import { RefactoredStore } from '../../core/state/RefactoredStore';
 import { RootState, SetFn, GetFn, StoreSliceCreator, TrackOptions, TrackType, DrumTrackRead } from '../types';
 import { CombinedTrack } from 'src/platform/types/project';
 import { SamplerTrackBase, SamplerTrackRead } from 'src/platform/types/dto/track_models/sampler_track'; // Added SamplerTrackRead

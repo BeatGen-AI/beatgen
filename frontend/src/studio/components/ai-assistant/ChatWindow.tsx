@@ -890,7 +890,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
                 actions.push({
                   execute: async () => {
                     console.log(`Muting existing track ${track.id}`);
-                    store.getAudioEngine().setTrackMute(track.id, true);
+                    store.setTrackMute(track.id, true);
                     useStudioStore.setState({
                       tracks: useStudioStore.getState().tracks.map(t => 
                         t.id === track.id ? { ...t, muted: true } : t
@@ -899,7 +899,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
                   },
                   undo: async () => {
                     console.log(`Unmuting existing track ${track.id}`);
-                    store.getAudioEngine().setTrackMute(track.id, false);
+                    store.setTrackMute(track.id, false);
                     useStudioStore.setState({
                       tracks: useStudioStore.getState().tracks.map(t => 
                         t.id === track.id ? { ...t, muted: false } : t

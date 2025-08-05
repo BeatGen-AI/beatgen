@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { Store } from '../../core/state/store';
+import { RefactoredStore } from '../../core/state/RefactoredStore';
 import { ProjectWithTracks, CombinedTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, CombinedTrackEntity } from 'src/platform/types/project';
 import { getProject } from '../../../platform/api/projects';
 import { Actions } from '../../core/state/history/actions';
@@ -233,7 +233,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
   // Helper to initialize project settings using Immer
   const initializeProjectSettings = async (projectData: ProjectWithTracks) => {
      const { _withStore, store } = rootGet();
-     const initSettings = async (passedStore: Store, projectData: ProjectWithTracks) => {
+     const initSettings = async (passedStore: RefactoredStore, projectData: ProjectWithTracks) => {
         // Update state using Immer
         set(produce((draft: RootState) => {
             draft.projectTitle = projectData.name;
@@ -293,7 +293,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         return null;
       }
 
-      const processLogic = async (store: Store): Promise<CombinedTrack | null> => {
+      const processLogic = async (store: RefactoredStore): Promise<CombinedTrack | null> => {
           const trackType = apiTrack.track_type as TrackType;
           if (!TRACK_CONFIG[trackType]) { 
             console.error("Invalid track type from API:", trackType);
@@ -365,41 +365,9 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           }
           
           const finalCombinedTrack = { ...combinedTrackData, track: nestedTrackData } as CombinedTrack;
-
-          // 3. Perform necessary ENGINE setup (NO HISTORY)
-          const audioEngine = store.getAudioEngine();
-          await audioEngine.createTrack(finalCombinedTrack.id, finalCombinedTrack.name);
-          audioEngine.setTrackVolume(finalCombinedTrack.id, finalCombinedTrack.volume);
-          audioEngine.setTrackPan(finalCombinedTrack.id, finalCombinedTrack.pan);
-          audioEngine.setTrackMute(finalCombinedTrack.id, finalCombinedTrack.mute);
-          // Set position based on first instance if available
-          const firstInstance = finalCombinedTrack.instances?.[0];
-          if (firstInstance) {
-              audioEngine.setTrackPosition(finalCombinedTrack.id, firstInstance.x_position, firstInstance.y_position);
-          }
           
-          // Load audio file specifically for audio tracks during initial processing
-          if (trackType === 'AUDIO' && finalCombinedTrack.track && 'audio_file_storage_key' in finalCombinedTrack.track) {
-              const storageKey = finalCombinedTrack.track.audio_file_storage_key;
-              if (storageKey) {
-                  console.log(`Attempting to load audio for track ${finalCombinedTrack.id} from key ${storageKey}...`);
-                  try {
-                      const sampleManager = SampleManager.getInstance(db);
-                      const audioBlob = await sampleManager.getSampleBlob(finalCombinedTrack.id, storageKey, 'audio_track', finalCombinedTrack.name);
-                      if (audioBlob) {
-                          const audioFile = new File([audioBlob.data], finalCombinedTrack.name || 'audio_track', { type: audioBlob.type });
-                          await store.loadAudioFile(finalCombinedTrack.id, audioFile);
-                          console.log(`Called store.loadAudioFile for track ${finalCombinedTrack.id}`);
-                      } else {
-                          console.warn(`Downloaded audio blob was null or undefined for track ${finalCombinedTrack.id}`);
-                      }
-                  } catch (error) {
-                      console.error(`Failed to download or load audio for track ${finalCombinedTrack.id} (key: ${storageKey}):`, error);
-                  }
-              } else {
-                   console.warn(`Audio track ${finalCombinedTrack.id} has no audio_file_storage_key.`);
-              }
-          }
+          // The new system will handle all track setup when loadTrack is called
+          // Just return the track data structure
           
           return finalCombinedTrack;
       };
@@ -407,13 +375,13 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
       return _withErrorHandling(async () => _withStore(processLogic)(), `processTrack: ${apiTrack.id}`)();
   };
 
-  // Modified connectTracksToEngines
+  // Simplified connectTracksToEngines for new system only
   const connectTracksToEngines = async (loadedTracks: CombinedTrack[]) => {
       console.log(`Connecting ${loadedTracks.length} tracks to engines...`);
       const { store, _withStore, _withErrorHandling } = rootGet(); 
       if (!_withStore || !_withErrorHandling) { return; }
 
-      const connectLogic = async (store: Store, tracks: CombinedTrack[]) => {
+      const connectLogic = async (store: RefactoredStore, tracks: CombinedTrack[]) => {
         // Double-check that store is initialized before connecting tracks
         if (!get().isInitialized) {
           console.warn('Store not initialized when connecting tracks to engines, initializing now...');
@@ -421,148 +389,22 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           console.log('Store initialized during track connection');
         }
         
-        const samplerController = store.getTransport().getSamplerController();
-        const midiManager = store.getMidiManager();
-
+        // Use the new system's loadTrack method for each track
+        console.log('Loading tracks with new audio system');
         for (const track of tracks) {
-          console.log(`Connecting track ${track.id} (type: ${track.track_type})`);
           try {
-              // --- MIDI Connection --- 
-              if (track.track_type === 'MIDI' && track.track && 'instrument_id' in track.track) {
-                  const instrumentId = track.track.instrument_id;
-                  if (instrumentId) {
-                      await store.connectTrackToSoundfont(track.id, instrumentId);
-                      console.log(`Connected MIDI track ${track.id} to soundfont ${instrumentId}`);
-                  } else { console.warn(`MIDI track ${track.id} missing instrumentId`); }
-                  // Load notes from midi_notes_json if available
-                  const midiNotesJson = (track.track as any).midi_notes_json;
-                  if (midiNotesJson && midiNotesJson.notes) {
-                      const notesToLoad = convertJsonToNotes(midiNotesJson, track.id);
-                      console.log(`Loading ${notesToLoad.length} notes for MIDI track ${track.id}`);
-                      midiManager.updateTrack(track.id, notesToLoad);
-                  } else {
-                      console.log(`No MIDI notes to load for track ${track.id}`);
-                      midiManager.updateTrack(track.id, []);
-                  }
-                  
-                  // Register all instances with MidiManager
-                  if (track.instances) {
-                      track.instances.forEach((instance, index) => {
-                          console.log(`Registering MIDI track ${track.id} instance ${instance.id}`);
-                          midiManager.registerInstance(track.id, instance.id);
-                      });
-                  }
-              }
-              
-              // --- Audio Connection --- 
-              else if (track.track_type === 'AUDIO') {
-                  console.log(`Attempting to connect audio track ${track.id}... checking Dexie.`);
-                  const fileFromDb = await db.getAudioFile(track.id);
-                  if (fileFromDb?.data) {
-                      console.log(`Found audio for track ${track.id} in Dexie. Loading into engine...`);
-                      // Fix: Convert Blob from Dexie back to a File object
-                      const audioFile = new File(
-                          [fileFromDb.data],
-                          fileFromDb.name || track.name || `${track.id}_audio`, // Use name from DB or track
-                          { type: fileFromDb.data.type } // Use blob's type
-                      );
-                      await store.loadAudioFile(track.id, audioFile);
-                  } else {
-                      console.warn(`Audio file for track ${track.id} not found in Dexie cache.`);
-                  }
-              }
-
-              // --- Sampler Connection --- 
-              else if (track.track_type === 'SAMPLER') {
-                  if (!samplerController || !midiManager) {
-                      console.warn(`SamplerController/MidiManager missing for sampler track ${track.id}`);
-                      continue;
-                  }
-                  const samplerTrackData = track.track as SamplerTrackRead | undefined;
-                  const baseMidiNote = samplerTrackData?.base_midi_note ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote;
-                  const grainSize = samplerTrackData?.grain_size ?? DEFAULT_SAMPLER_CONFIG.grainSize;
-                  const overlap = samplerTrackData?.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap;
-                  let sampleFile: Blob | undefined = undefined; // Expect Blob from Dexie
-
-                  console.log(`Attempting to connect sampler track ${track.id}... checking Dexie.`);
-                  const fileFromDb = await db.getAudioFile(track.id);
-                  if (fileFromDb?.data) {
-                       console.log(`Found audio for sampler ${track.id} in Dexie.`);
-                       sampleFile = fileFromDb.data; 
-                  } else {
-                      console.warn(`Audio file for sampler track ${track.id} not found in Dexie cache.`);
-                  }
-
-                  if (sampleFile) {
-                      // Convert Blob to File if necessary for connectTrackToSampler
-                      const fileToConnect = new File([sampleFile], track.name || 'sampler_audio', { type: sampleFile.type });
-                      console.log(`Connecting sampler ${track.id} with cached file...`);
-                      await samplerController.connectTrackToSampler(
-                          track.id, fileToConnect, midiManager, baseMidiNote, grainSize, overlap
-                      );
-                  } else {
-                      console.log(`Initializing empty sampler for ${track.id}...`);
-                      await samplerController.initializeSampler(
-                          track.id, undefined, baseMidiNote, grainSize, overlap
-                      );
-                  }
-                  const convertedNotes = convertJsonToNotes(samplerTrackData?.midi_notes_json, track.id);
-                  midiManager.updateTrack(track.id, convertedNotes);
-                  samplerController.registerTrackSubscription(track.id, midiManager);
-                  
-                  // Register all instances with MidiManager
-                  if (track.instances) {
-                      track.instances.forEach((instance, index) => {
-                          console.log(`Registering sampler track ${track.id} instance ${instance.id}`);
-                          midiManager.registerInstance(track.id, instance.id);
-                      });
-                  }
-              }
+            await store.loadTrack(track);
+            console.log(`Loaded track ${track.id} (${track.track_type})`);
           } catch (error) {
-               console.error(`Error connecting track ${track.id} (type: ${track.track_type}):`, error);
-          }
-          
-          // Apply track parameters (volume, pan, mute) after connection
-          try {
-              const audioEngine = store.getAudioEngine();
-              const soundfontController = store.getSoundfontController();
-              const samplerController = store.getSamplerController();
-              
-              // Set volume
-              const volume = track.volume ?? 80;
-              audioEngine.setTrackVolume(track.id, volume);
-              soundfontController?.setTrackVolume?.(track.id, volume);
-              samplerController?.setTrackVolume?.(track.id, volume);
-              
-              // Set pan
-              const pan = track.pan ?? 0;
-              audioEngine.setTrackPan(track.id, pan);
-              
-              // Set mute state
-              const muted = track.mute ?? false;
-              audioEngine.setTrackMute(track.id, muted);
-              soundfontController?.muteTrack?.(track.id, muted);
-              samplerController?.muteTrack?.(track.id, muted);
-              
-              // Set position based on first instance if available
-              const firstInstance = track.instances?.[0];
-              if (firstInstance) {
-                  audioEngine.setTrackPosition(
-                      track.id,
-                      firstInstance.x_position ?? 0,
-                      firstInstance.y_position ?? 0
-                  );
-              }
-              
-              console.log(`Applied parameters to track ${track.id}: volume=${volume}, pan=${pan}, muted=${muted}`);
-          } catch (paramError) {
-              console.error(`Error applying parameters to track ${track.id}:`, paramError);
+            console.error(`Error loading track ${track.id}:`, error);
           }
         }
       }
+      
       await _withErrorHandling(async () => _withStore(connectLogic)(loadedTracks), 'connectTracksToEngines')();
       console.log('Finished connecting tracks to engines.');
   };
+
 
   // Download and cache audio files if they aren't in Dexie
   const downloadAndCacheAudioFiles = async (tracks: CombinedTrack[]): Promise<void> => {
