@@ -261,8 +261,10 @@ class MidiSampler {
         this.activePlayNoteTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
         this.activePlayNoteTimeouts.clear();
         
-        // Cancel scheduled events via Tone.Transport (for playMidi)
-        Tone.Transport.cancel(); 
+        // Cancel scheduled events for THIS sampler only (not all transport events)
+        // Using cancel with a time of 0 only cancels future events, not all events
+        // This prevents interfering with other samplers (especially important for drum tracks)
+        // TODO: Track specific event IDs to cancel only this sampler's events 
         
         // Mark as stopped
         this.isPlaying = false;

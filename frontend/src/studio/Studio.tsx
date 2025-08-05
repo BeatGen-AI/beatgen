@@ -190,15 +190,8 @@ function Studio({ projectId }: StudioProps) {
   const handleTrackVolumeChangeLive = useCallback((trackId: string, volume: number) => {
     if (!store) return;
     
-    // Update audio engines directly without history
-    const audioEngine = store.getAudioEngine();
-    const soundfontController = store.getSoundfontController();
-    const samplerController = store.getSamplerController();
-    
-    // Set volume on all audio engines
-    audioEngine.setTrackVolume(trackId, volume);
-    soundfontController?.setTrackVolume?.(trackId, volume);
-    samplerController?.setTrackVolume?.(trackId, volume);
+    // Update volume directly without history
+    store.setTrackVolume(trackId, volume);
     
     // Handle drum track volume propagation to sampler tracks
     const track = tracks.find(t => t.id === trackId);
@@ -210,8 +203,7 @@ function Studio({ projectId }: StudioProps) {
         (t.track as any).drum_track_id === trackId
       );
       samplerTracks.forEach(samplerTrack => {
-        audioEngine.setTrackVolume(samplerTrack.id, volume);
-        samplerController?.setTrackVolume?.(samplerTrack.id, volume);
+        store.setTrackVolume(samplerTrack.id, volume);
       });
     }
   }, [store, tracks]);
@@ -220,9 +212,8 @@ function Studio({ projectId }: StudioProps) {
   const handleTrackPanChangeLive = useCallback((trackId: string, pan: number) => {
     if (!store) return;
     
-    // Update audio engine directly without history
-    const audioEngine = store.getAudioEngine();
-    audioEngine.setTrackPan(trackId, pan);
+    // Update pan directly without history
+    store.setTrackPan(trackId, pan);
   }, [store]);
 
   // Effect to measure control bar height

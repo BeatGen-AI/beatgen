@@ -1,11 +1,11 @@
-import { Store } from '../../core/state/store';
+import { RefactoredStore } from '../../core/state/RefactoredStore';
 import { RootState, SetFn, GetFn, StoreSliceCreator } from '../types';
 
 // Define the state properties for this slice
 export interface CoreSlice {
-  store: Store | null;
+  store: RefactoredStore | null;
   isInitialized: boolean;
-  setStore: (store: Store) => void;
+  setStore: (store: RefactoredStore) => void;
   setIsInitialized: (isInitialized: boolean) => void;
   initializeAudio: () => Promise<void>;
   ensureProjectExists: () => Promise<void>;

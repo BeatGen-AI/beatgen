@@ -2,7 +2,7 @@ import { Position } from '../components/track';
 import { TrackInstance } from 'src/platform/types/project';
 import { CombinedTrackEntity as CombinedTrack } from 'src/platform/types/entities/project';
 import { Note } from '../../types/note';
-import { Store } from '../core/state/store';
+import { RefactoredStore } from '../core/state/RefactoredStore';
 import { Action } from '../core/state/history/actions/BaseAction';
 import { 
     ProjectWithTracks,
@@ -178,9 +178,9 @@ export type GetFn = () => RootState;
 // This will aggregate all the individual slices
 export interface RootState {
   // Core Engine / Initialization
-  store: Store | null;
+  store: RefactoredStore | null;
   isInitialized: boolean;
-  setStore: (store: Store) => void;
+  setStore: (store: RefactoredStore) => void;
   setIsInitialized: (isInitialized: boolean) => void;
   initializeAudio: () => Promise<void>;
   ensureProjectExists: () => Promise<void>;
@@ -316,7 +316,7 @@ export interface RootState {
     key: K, 
     value: RootState[K] | ((prev: RootState[K]) => RootState[K])
   ) => void;
-  _withStore: <T extends unknown[], R>(fn: (store: Store, ...args: T) => R | Promise<R>) => (...args: T) => R | Promise<R> | null;
+  _withStore: <T extends unknown[], R>(fn: (store: RefactoredStore, ...args: T) => R | Promise<R>) => (...args: T) => Promise<R | null>;
   _withErrorHandling: <T extends unknown[], R>(fn: (...args: T) => Promise<R>, actionName: string) => (...args: T) => Promise<R | null>;
 }
 

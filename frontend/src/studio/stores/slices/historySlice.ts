@@ -1,4 +1,4 @@
-import { Store } from '../../core/state/store';
+import { RefactoredStore } from '../../core/state/RefactoredStore';
 import { RootState, SetFn, GetFn, StoreSliceCreator } from '../types';
 import { historyManager } from '../../core/state/history/HistoryManager';
 import { Action } from '../../core/state/history/actions/BaseAction';

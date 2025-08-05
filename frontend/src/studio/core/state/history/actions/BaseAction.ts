@@ -1,4 +1,4 @@
-import { Store } from '../../store';
+import { RefactoredStore } from '../../RefactoredStore';
 import { GetFn, RootState } from '../../../../stores/types';
 import { ActionType } from '.';
 
@@ -14,7 +14,7 @@ export interface Action {
 export abstract class BaseAction implements Action {
     abstract type: ActionType;
     protected get: GetFn;
-    protected store: Store;
+    protected store: RefactoredStore;
     
     constructor(get: GetFn) {
         this.get = get;

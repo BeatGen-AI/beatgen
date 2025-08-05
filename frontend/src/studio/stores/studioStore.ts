@@ -1,5 +1,5 @@
 import { create, StoreApi } from 'zustand';
-import { Store } from '../core/state/store';
+import { RefactoredStore } from '../core/state/RefactoredStore';
 import { RootState, TrackOperation, CombinedTrack } from './types';
 import { immer } from 'zustand/middleware/immer';
 
@@ -49,7 +49,7 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
 
   // Fix _withStore to always return a Promise
   const _withStore = <T extends unknown[], R>(
-    fn: (storeInstance: Store, ...args: T) => R | Promise<R> 
+    fn: (storeInstance: RefactoredStore, ...args: T) => R | Promise<R> 
   ) => async (...args: T): Promise<R | null> => { // Ensure the RETURNED function is async
       const storeInstance = get().store; 
       if (!storeInstance) {
@@ -140,8 +140,8 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
     _withStore,
     _withErrorHandling,
     
-    // Initialize the store instance
-    store: new Store(), 
+    // Initialize the store instance using RefactoredStore
+    store: new RefactoredStore(),
     // isInitialized might be part of CoreSlice now?
     isInitialized: false, 
   };

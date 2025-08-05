@@ -2,7 +2,7 @@ import { TrackInstance } from 'src/platform/types/project';
 import { CombinedTrackEntity as CombinedTrack } from 'src/platform/types/entities/project';
 import { Position } from '../../components/track';
 import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTrackPayload, DrumTrackPayload, MidiTrackPayload, AudioTrackPayload, AudioTrackOptions, SamplerTrackOptions, MidiTrackOptions, AnyTrackRead, MidiTrack, AudioTrack, SamplerTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, DrumTrackOptions } from '../types';
-import { Store } from '../../core/state/store';
+import { RefactoredStore } from '../../core/state/RefactoredStore';
 import { Actions } from '../../core/state/history/actions';
 import type { Action } from '../../core/state/history/actions'; 
 import { InstanceAdd, InstanceMove, InstanceResize, InstanceDelete } from '../../core/state/history/actions/InstanceActions';
@@ -384,7 +384,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         }
       }
 
-      await passedStore.getAudioEngine().createTrack(trackId, name); 
+      await passedStore.createTrack(trackId, name); 
       
       // Calculate defaults
       const beatsPerBar = timeSignature[0]; 
@@ -699,7 +699,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           }));
 
           try {
-              await passedStore.getAudioEngine().removeTrack(trackId);
+              await passedStore.removeTrack(trackId);
           } catch (engineError) {
               console.error(`Error removing track ${trackId} from audio engine:`, engineError);
           }
@@ -832,10 +832,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       
       // Update Audio Engine 
       if (engineUpdateNeeded) {
-        const audioEngine = passedStore.getAudioEngine();
         switch (paramName) {
-          case 'volume': audioEngine.setTrackVolume(trackId, newValue as number); break;
-          case 'pan': audioEngine.setTrackPan(trackId, newValue as number); break;
+          case 'volume': passedStore.setTrackVolume(trackId, newValue as number); break;
+          case 'pan': passedStore.setTrackPan(trackId, newValue as number); break;
           // Mute/Solo handled by specific handlers
         }
       }
@@ -930,7 +929,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         });
         
         // Update audio engine
-        storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
+        storeInstance.setTrackPosition(trackId, newPosition.x, newPosition.y);
         
         if (isDragEnd) {
             // Use instance action for history
@@ -977,7 +976,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         // Re-evaluate solo status based on the *current* state of all tracks
         const isAnyTrackSoloed = currentTracks.some(t => (t as any).soloed); 
 
-        const audioEngine = passedStore.getAudioEngine();
         const historyActions = [];
 
         // Helper function to check if a track should be unmuted based on solo relationships
@@ -1006,7 +1004,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             
             if (oldMuteState !== shouldBeMuted) {
                 updateTrackState(track.id, { mute: shouldBeMuted }); // Use local helper
-                audioEngine.setTrackMute(track.id, shouldBeMuted);
+                passedStore.setTrackMute(track.id, shouldBeMuted);
                 
                 const action = new Actions.ParameterChange( get, track.id, 'muted', oldMuteState ? 1 : 0, shouldBeMuted ? 1 : 0 );
                 historyActions.push(action);
@@ -1947,7 +1945,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             
             // Update audio engine for this specific instance
             // TODO: Audio engine needs to support instance-based positioning
-            storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
+            storeInstance.setTrackPosition(trackId, newPosition.x, newPosition.y);
         }
     };
     

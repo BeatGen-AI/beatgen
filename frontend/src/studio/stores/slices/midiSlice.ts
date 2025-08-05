@@ -1,4 +1,4 @@
-import { Store } from '../../core/state/store';
+import { RefactoredStore } from '../../core/state/RefactoredStore';
 import { RootState, SetFn, GetFn, StoreSliceCreator } from '../types';
 import { MidiManager } from '../../core/midi/MidiManagerNew'; // Assuming MidiManagerNew is the intended class
 import { Note } from '../../../types/note';
