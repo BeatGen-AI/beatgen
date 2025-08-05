@@ -434,12 +434,14 @@ export class TransportController implements Transport {
             }
         }
         
-        // Stop sampler tracks
+        // Stop sampler tracks and reset them to position 0
+        // Using seek(0) instead of stop() to ensure samplers are ready for next playback
+        // This fixes the issue where drum tracks don't play after using skip back button
         try {
-            console.log('Stopping sampler tracks at position', this.position);
-            await this.getSamplerController().stop();
+            console.log('Resetting sampler tracks to position 0');
+            await this.getSamplerController().seek(0, this.tempo);
         } catch (error) {
-            console.error('Failed to stop sampler tracks:', error);
+            console.error('Failed to reset sampler tracks:', error);
         }
         
         // Stop players first with fade out
