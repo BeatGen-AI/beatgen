@@ -25,7 +25,7 @@ class UploadUrlRequest(BaseModel):
 
     file_name: str
     id: str  # ID for the file (UUID)
-    file_type: str  # 'audio', 'midi', or 'instrument'
+    file_type: str  # 'audio' or 'instrument'
     should_overwrite: bool = False  # Whether to overwrite existing file
 
 
@@ -52,9 +52,7 @@ async def get_upload_url(
     try:
         # Map the string file type to enum
         file_type_enum = FileType.AUDIO
-        if request_data.file_type == "midi":
-            file_type_enum = FileType.MIDI
-        elif request_data.file_type == "instrument":
+        if request_data.file_type == "instrument":
             file_type_enum = FileType.INSTRUMENT
 
         result = await file_service.create_upload_url(

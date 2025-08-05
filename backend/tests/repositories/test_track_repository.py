@@ -43,12 +43,11 @@ class TestTrackRepository:
 
     @pytest.fixture
     def midi_track(
-        self, sample_user, sample_midi_file, sample_instrument_file, db_session
+        self, sample_user, sample_instrument_file, db_session
     ):
         """Create a sample MIDI track in the database"""
-        # Add user, MIDI file, and instrument file
+        # Add user and instrument file
         db_session.add(sample_user)
-        db_session.add(sample_midi_file)
         db_session.add(sample_instrument_file)
         db_session.commit()
 
@@ -58,7 +57,6 @@ class TestTrackRepository:
             name="Test MIDI Track",
             type=TrackType.MIDI,
             user_id=sample_user.id,
-            midi_file_id=sample_midi_file.id,
             instrument_id=sample_instrument_file.id,
         )
         db_session.add(track)

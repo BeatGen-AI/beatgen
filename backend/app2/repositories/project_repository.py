@@ -173,7 +173,6 @@ class ProjectRepository:
                             selectinload(ProjectTrack.audio_track.audio_file)
                         ),
                         selectinload(ProjectTrack.midi_track).options(
-                            selectinload(ProjectTrack.midi_track.midi_file),
                             selectinload(ProjectTrack.midi_track.instrument_file)
                         ),
                         selectinload(ProjectTrack.sampler_track).options(
@@ -205,11 +204,6 @@ class ProjectRepository:
                 for pt in project.project_tracks
                 if pt.audio_track and hasattr(pt.audio_track, "audio_file") and pt.audio_track.audio_file is not None
             )
-            midi_file_count = sum(
-                1
-                for pt in project.project_tracks
-                if pt.midi_track and hasattr(pt.midi_track, "midi_file") and pt.midi_track.midi_file is not None
-            )
             instrument_file_count = sum(
                 1
                 for pt in project.project_tracks
@@ -217,7 +211,7 @@ class ProjectRepository:
             )
 
             self.logger.info(
-                f"Loaded {audio_file_count} audio files, {midi_file_count} MIDI files, and {instrument_file_count} instrument files"
+                f"Loaded {audio_file_count} audio files and {instrument_file_count} instrument files"
             )
 
             return project

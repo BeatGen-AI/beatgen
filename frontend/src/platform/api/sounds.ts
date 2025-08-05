@@ -18,7 +18,7 @@ export interface UploadUrlResponse {
  * Get a presigned URL for uploading a file (audio or MIDI)
  * @param fileName The name of the file to upload
  * @param id The ID to use for the sound (UUID)
- * @param fileType The type of file ('audio' or 'midi')
+ * @param fileType The type of file ('audio' or 'instrument')
  * @returns Object containing upload URL, ID, and storage key
  */
 export const getUploadUrl = async (

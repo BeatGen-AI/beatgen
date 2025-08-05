@@ -38,14 +38,12 @@ class TrackRepository:
         # Map file types to their track field names
         self._file_field_mapping = {
             FileType.AUDIO: "audio_file_id",
-            FileType.MIDI: "midi_file_id",
             FileType.INSTRUMENT: "instrument_id",
         }
 
         # Map track fields to their relationship attributes
         self._relationship_mapping = {
             "audio_file_id": "audio_file",
-            "midi_file_id": "midi_file",
             "instrument_id": "instrument_file",
         }
 
@@ -113,7 +111,6 @@ class TrackRepository:
                 select(Track)
                 .options(
                     joinedload(Track.audio_file),
-                    joinedload(Track.midi_file),
                     joinedload(Track.instrument_file),
                 )
                 .where(Track.id == track_id)
