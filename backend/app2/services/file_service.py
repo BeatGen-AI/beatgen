@@ -133,8 +133,6 @@ class FileService:
                     file = None
                     if file_type == FileType.AUDIO and user_track.audio_file:
                         file = user_track.audio_file
-                    elif file_type == FileType.MIDI and user_track.midi_file:
-                        file = user_track.midi_file
                     elif (
                         file_type == FileType.INSTRUMENT and user_track.instrument_file
                     ):
@@ -365,7 +363,7 @@ class FileService:
 
             bucket = (
                 "tracks"
-                if file_type in [FileType.AUDIO, FileType.MIDI]
+                if file_type == FileType.AUDIO
                 else "instruments"
             )
             storage = SupabaseStorage(bucket)

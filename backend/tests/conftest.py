@@ -65,7 +65,6 @@ from app2.models.project import Project
 from app2.models.track import Track
 from app2.models.project_track import ProjectTrack
 from app2.models.file_models.audio_file import AudioFile
-from app2.models.file_models.midi_file import MidiFile
 from app2.models.public_models.instrument_file import InstrumentFile
 
 
@@ -148,14 +147,6 @@ def sample_project_track(sample_project, sample_track):
     )
 
 
-@pytest.fixture
-def sample_midi_file():
-    return MidiFile(
-        id=uuid.uuid4(),
-        name="Test MIDI File",
-        file_path="path/to/midi_file.mid",
-        user_id=uuid.uuid4(),
-    )
 
 
 @pytest.fixture
