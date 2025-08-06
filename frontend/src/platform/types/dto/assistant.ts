@@ -1,5 +1,5 @@
 /* tslint:disable */
- 
+/* eslint-disable */
 /**
 /* This file was automatically generated from pydantic models by running pydantic2ts.
 /* Do not modify it by hand - just update the pydantic models and then re-run the script
@@ -11,11 +11,12 @@
 export type ActionType =
   | "change_bpm"
   | "change_key"
+  | "change_project_name"
   | "change_time_signature"
   | "add_track"
+  | "add_audio_track"
   | "add_drum_track"
   | "add_sampler_track"
-  | "add_audio_track"
   | "adjust_volume"
   | "adjust_pan"
   | "toggle_mute"
@@ -25,7 +26,7 @@ export type ActionType =
  * Base class for all assistant actions
  */
 export interface AssistantAction {
-  type: ActionType;
+  action_type: ActionType;
   data: ActionData;
 }
 /**

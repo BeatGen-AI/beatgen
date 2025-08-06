@@ -23,6 +23,7 @@ export interface AudioTrackRead {
   audio_file_size: number;
   audio_file_duration: number;
   audio_file_sample_rate: number;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
   waveform_data?: number[] | null;
 }
 /**
@@ -100,6 +101,7 @@ export interface SamplerTrackRead {
   audio_file_name: string;
   audio_file_duration: number;
   audio_file_sample_rate: number;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
   midi_notes_json?: {
     [k: string]: unknown;
   };

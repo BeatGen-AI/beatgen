@@ -95,6 +95,8 @@ export const createMidiFileRecord = async (midiData: MidiTrackCreate): Promise<M
 export const createSamplerTrackRecord = async (samplerData: SamplerTrackCreate): Promise<SamplerTrackRead> => {
   
   try {
+    console.log('[createSamplerTrackRecord] Input samplerData:', samplerData);
+    
     // Transform the data to match backend expectations
     const transformedData = {
       ...samplerData,
@@ -102,6 +104,8 @@ export const createSamplerTrackRecord = async (samplerData: SamplerTrackCreate):
       duration: samplerData.audio_file_duration,
       sample_rate: samplerData.audio_file_sample_rate,
     };
+    
+    console.log('[createSamplerTrackRecord] Sending to backend:', transformedData);
     
     const response = await apiClient.post('/sounds/sampler', transformedData);
     console.log('Sampler track record created successfully:', response.data);

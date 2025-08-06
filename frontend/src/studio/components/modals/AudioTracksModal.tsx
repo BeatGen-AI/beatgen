@@ -83,7 +83,9 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
           setGenerationStatus(status.message || 'Processing...');
         },
         onAction: async (action) => {
-          if (action.type === 'add_audio_track' && action.data?.track_data) {
+          // Handle both 'type' and 'action_type' for compatibility
+          const actionType = action.action_type || (action as any).type;
+          if (actionType === 'add_audio_track' && action.data?.track_data) {
             const trackData = action.data.track_data as AudioTrackRead;
             
             if (trackData.audio_file_storage_key) {
@@ -91,8 +93,7 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
                 setGenerationStatus('Downloading audio file...');
                 // Use storage_type if available from the track data
                 const audioBlob = await downloadAudioTrackFile(
-                  trackData.audio_file_storage_key,
-                  (trackData as any).storage_type
+                  trackData.audio_file_storage_key
                 );
                 
                 const sampleManager = SampleManager.getInstance(db);

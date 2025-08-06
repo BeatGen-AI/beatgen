@@ -4,6 +4,7 @@ Utility functions for storage bucket and path resolution
 
 from typing import Tuple, Optional
 from app2.models.enums.storage_type import StorageType
+from app2.models.enums.storage_type_literal import StorageTypeLiteral
 
 
 def get_storage_location(file_type: str = "audio", is_public: bool = False) -> Tuple[str, str]:
@@ -41,6 +42,16 @@ def get_storage_location_from_type(storage_type: StorageType) -> Tuple[str, str]
         Tuple of (bucket_name, prefix)
     """
     return storage_type.get_bucket_and_prefix()
+
+
+def literal_to_enum(literal: StorageTypeLiteral) -> StorageType:
+    """Convert a StorageType literal to the enum"""
+    return StorageType(literal)
+
+
+def enum_to_literal(enum: StorageType) -> StorageTypeLiteral:
+    """Convert a StorageType enum to the literal"""
+    return enum.value
 
 
 def get_full_storage_path(file_type: str, relative_path: str, is_public: bool = False) -> str:

@@ -53,9 +53,14 @@ export const DrumMachineModal = ({ open, onClose, onConfirmSelection }: DrumMach
             setError(null);
             
             const data = await getPublicDrumSamples();
+            console.log('Fetched drum samples from API:', data);
+            // Check if any samples have empty storage_key
+            const samplesWithEmptyKeys = data.filter(s => !s.storage_key);
+            if (samplesWithEmptyKeys.length > 0) {
+                console.error('Drum samples with empty storage_key:', samplesWithEmptyKeys);
+            }
             setDrumSamples(data);
             setFilteredDrumSamples(data); // Initialize filtered list
-            console.log('Fetched drum samples:', data);
         } catch (err) {
             console.error('Error fetching drum samples:', err);
             setError('Failed to load drum samples from library');

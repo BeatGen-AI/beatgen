@@ -18,6 +18,12 @@ export enum StorageType {
 export function getStorageUrl(storageKey: string, storageType?: StorageType): string {
   const baseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co';
   
+  // Check if storageKey is empty or undefined
+  if (!storageKey) {
+    console.error('[getStorageUrl] Empty storage key provided!', { storageKey, storageType });
+    throw new Error('Storage key cannot be empty');
+  }
+  
   // Remove leading slash from storage key if present
   let cleanKey = storageKey.startsWith('/') ? storageKey.slice(1) : storageKey;
   
@@ -49,15 +55,11 @@ export function getStorageUrl(storageKey: string, storageType?: StorageType): st
         prefix = 'storage/v1/object/public/assets/soundfonts_public';
         break;
     }
-  } else {
-    // Fallback: try to determine from storage key content
-    if (storageKey.includes('drum_samples') || storageKey.includes('kick/') || storageKey.includes('snare/') || storageKey.includes('hihat/')) {
-      prefix = 'storage/v1/object/public/assets/drum_samples_public';
-    } else if (storageKey.includes('soundfonts')) {
-      prefix = 'storage/v1/object/public/assets/soundfonts_public';
-    }
   }
+  // If no storage type provided, use default (USER_AUDIO)
   
   // Construct the final URL
-  return `${baseUrl}/${prefix}/${cleanKey}`;
+  const url = `${baseUrl}/${prefix}/${cleanKey}`;
+  console.log('[getStorageUrl] Generated URL:', { storageKey, storageType, cleanKey, prefix, url });
+  return url;
 }

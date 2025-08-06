@@ -92,7 +92,6 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
           duration={track.audio_file_duration}
           isPlaying={isPlaying}
           color={sectionColor}
-          storageType="USER_SAMPLE"
         />
       </div>
       <div className="h-[35px] w-full">

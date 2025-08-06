@@ -81,8 +81,7 @@ export default function SoundLibrary({ onReload, sectionColor }: SoundLibraryPro
     try {
       // Use the proper API function to download the audio file with storage_type if available
       const audioBlob = await downloadAudioTrackFile(
-        sound.audio_file_storage_key,
-        (sound as any).storage_type
+        sound.audio_file_storage_key
       );
       
       // Store the blob for use by AudioPlayer

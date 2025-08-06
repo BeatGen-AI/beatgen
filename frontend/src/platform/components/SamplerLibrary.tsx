@@ -13,6 +13,7 @@ import { TRACK_PAGINATION_CONFIG, configToOptions } from '../constants/paginatio
 import { getSamplerTracks, deleteSamplerTrack } from '../api/sounds';
 import { SamplerTrackRead } from '../types/dto/track_models/sampler_track';
 import SamplerTrackCard from './DisplayCards/SamplerTrackCard';
+import { getStorageUrl, StorageType } from '../types/storage';
 
 interface SamplerLibraryProps {
   onReload?: () => void;
@@ -77,8 +78,11 @@ export default function SamplerLibrary({ onReload, sectionColor }: SamplerLibrar
     try {
       const audio = new Audio();
       
-      const baseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co';
-      const url = `${baseUrl}/storage/v1/object/public/tracks/${track.audio_storage_key}`;
+      // Use getStorageUrl with the appropriate storage type
+      const storageType = track.storage_type === 'PUBLIC_DRUM' ? StorageType.PUBLIC_DRUM :
+                         track.storage_type === 'PUBLIC_SOUNDFONT' ? StorageType.PUBLIC_SOUNDFONT :
+                         StorageType.USER_SAMPLE;
+      const url = getStorageUrl(track.audio_storage_key, storageType);
       
       console.log('Audio URL:', url);
       

@@ -2,6 +2,7 @@ import * as Tone from 'tone';
 import { Store } from '../../core/state/store';
 import { ProjectWithTracks, CombinedTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, CombinedTrackEntity } from 'src/platform/types/project';
 import { getProject } from '../../../platform/api/projects';
+import { StorageType } from '../../../platform/types/storage';
 import { Actions } from '../../core/state/history/actions';
 import { DEFAULT_SAMPLER_CONFIG, TRACK_CONFIG } from '../config';
 import { 
@@ -170,6 +171,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
             midi_notes_json: samplerTrack.midi_notes_json,
             audio_storage_key: samplerTrack.audio_storage_key, // Make sure storage key is included
             audio_file_format: samplerTrack.audio_file_format,
+            storage_type: samplerTrack.storage_type, // IMPORTANT: Preserve storage_type from the AI agent
             drum_track_id: track.id // Explicitly link back to the drum track
           }
         };
@@ -570,13 +572,21 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     const downloadPromises = tracks.map(async (track) => {
       let storageKey: string | undefined | null = null;
       let fileType: string = 'audio'; // Default or determine based on track type
+      let storageType: StorageType | undefined = undefined;
+      let downloadType: 'audio_track' | 'sample' = 'audio_track'; // Default to audio_track
 
       if (track.track_type === 'AUDIO' && track.track && 'audio_file_storage_key' in track.track) {
         storageKey = track.track.audio_file_storage_key;
         fileType = track.track.audio_file_format || fileType;
+        storageType = (track.track as any).storage_type;
       } else if (track.track_type === 'SAMPLER' && track.track && 'audio_storage_key' in track.track) {
         storageKey = track.track.audio_storage_key;
-        fileType = track.track.audio_file_format || fileType; // Distinguish sampler audio if needed
+        fileType = track.track.audio_file_format || fileType;
+        storageType = (track.track as any).storage_type;
+        // If it's a PUBLIC_DRUM sampler, use 'sample' type for downloading
+        if (storageType === 'PUBLIC_DRUM') {
+          downloadType = 'sample';
+        }
       }
 
       if (!storageKey) {
@@ -593,10 +603,10 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         }
         
         // File not in Dexie, download it
-        console.log(`Cache miss for track ${track.id}, downloading key ${storageKey}...`);
+        console.log(`Cache miss for track ${track.id}, downloading key ${storageKey} with type ${downloadType} and storageType ${storageType}...`);
 
         const sampleManager = SampleManager.getInstance(db);
-        const audioBlob = await sampleManager.getSampleBlob(track.id, storageKey, 'audio_track', track.name);
+        const audioBlob = await sampleManager.getSampleBlob(track.id, storageKey, downloadType, track.name, storageType);
         
         if (audioBlob) {
           // Convert Blob to File for metadata (name primarily)

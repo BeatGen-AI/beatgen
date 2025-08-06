@@ -130,11 +130,18 @@ export interface SamplerTrackOptions extends BaseTrackOptions {
   sampleFile?: File;
   drum_track_id?: string;
   storage_key?: string;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
   baseMidiNote?: number;
   grainSize?: number;
   overlap?: number;
   midiNotes?: any[]; // TODO: Define a proper MidiNote type
   waveform_data?: number[] | null;
+  // Additional metadata for drum samples
+  audio_file_format?: string;
+  audio_file_size?: number;
+  audio_file_name?: string;
+  audio_file_duration?: number;
+  audio_file_sample_rate?: number;
 }
 
 // Unified options type for track creation

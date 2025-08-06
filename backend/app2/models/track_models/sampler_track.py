@@ -3,13 +3,13 @@ Sampler Track model for SQL database
 """
 
 from typing import List, Optional, TYPE_CHECKING, Dict
-from sqlalchemy import Column
+from sqlalchemy import Column, Enum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship
 import uuid
 
 from app2.models.base import TrackBase, all_optional
-from app2.models.enums.storage_type import StorageType
+from app2.models.enums.storage_type_literal import StorageTypeLiteral, DEFAULT_USER_SAMPLE
 
 # Handle circular imports
 if TYPE_CHECKING:
@@ -30,7 +30,18 @@ class SamplerTrackBase(TrackBase):
     audio_file_name: str
     audio_file_duration: float
     audio_file_sample_rate: int
-    storage_type: StorageType = Field(default=StorageType.USER_SAMPLE)
+    storage_type: StorageTypeLiteral = Field(
+        default=DEFAULT_USER_SAMPLE,
+        sa_column=Column(
+            Enum(
+                "USER_AUDIO", "USER_SAMPLE", "PUBLIC_DRUM", "PUBLIC_SOUNDFONT",
+                name="storagetype",  # Use the existing enum type in the database
+                create_type=False
+            ),
+            nullable=False,
+            default=DEFAULT_USER_SAMPLE
+        )
+    )
     midi_notes_json: Dict = Field(default_factory=dict, sa_column=Column(JSONB))
     waveform_data: Optional[List[float]] = Field(default=None, sa_column=Column(JSONB))
 

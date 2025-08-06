@@ -18,6 +18,7 @@ export interface AudioTrack {
   audio_file_size: number;
   audio_file_duration: number;
   audio_file_sample_rate: number;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
   waveform_data?: number[] | null;
   user_id: string;
 }
@@ -34,6 +35,7 @@ export interface AudioTrackBase {
   audio_file_size: number;
   audio_file_duration: number;
   audio_file_sample_rate: number;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
   waveform_data?: number[] | null;
 }
 /**
@@ -49,6 +51,7 @@ export interface AudioTrackCreate {
   audio_file_size: number;
   audio_file_duration: number;
   audio_file_sample_rate: number;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
   waveform_data?: number[] | null;
 }
 /**
@@ -68,6 +71,7 @@ export interface AudioTrackRead {
   audio_file_size: number;
   audio_file_duration: number;
   audio_file_sample_rate: number;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
   waveform_data?: number[] | null;
 }
 /**
@@ -83,6 +87,7 @@ export interface AudioTrackUpdate {
   audio_file_size?: number;
   audio_file_duration?: number;
   audio_file_sample_rate?: number;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
   waveform_data?: number[] | null;
 }
 export interface SQLModel {}

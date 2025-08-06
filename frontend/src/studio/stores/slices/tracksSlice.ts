@@ -455,17 +455,24 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
       else if (type === 'SAMPLER') {
            const samplerOptions = options as SamplerTrackOptions;
+           console.log('[createTrackAndRegisterWithHistory] SAMPLER options:', samplerOptions);
            nestedTrackDataObject = {
               ...nestedTrackDataObject,
               baseMidiNote: samplerOptions.baseMidiNote ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote,
               grainSize: samplerOptions.grainSize ?? DEFAULT_SAMPLER_CONFIG.grainSize,
               overlap: samplerOptions.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap,
-              audio_file_name: file?.name, // Get name from extracted file variable
-              storage_key: samplerOptions.storage_key,
+              audio_file_name: samplerOptions.audio_file_name || file?.name, // Use provided name or file name
+              audio_storage_key: samplerOptions.storage_key,  // Changed from storage_key to audio_storage_key
+              audio_file_format: samplerOptions.audio_file_format,
+              audio_file_size: samplerOptions.audio_file_size,
+              audio_file_duration: samplerOptions.audio_file_duration,
+              audio_file_sample_rate: samplerOptions.audio_file_sample_rate,
+              storage_type: samplerOptions.storage_type ?? "USER_SAMPLE", // Default to USER_SAMPLE if not specified
               drum_track_id: samplerOptions.drum_track_id || null,
               waveform_data: samplerOptions.waveform_data,
               // NO sampleFile property here
            }
+           console.log('[createTrackAndRegisterWithHistory] SAMPLER nestedTrackDataObject:', nestedTrackDataObject);
       }
       
       // Calculate proper trim_end_ticks for audio tracks
@@ -633,8 +640,13 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               baseMidiNote: samplerOptions.baseMidiNote ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote,
               grainSize: samplerOptions.grainSize ?? DEFAULT_SAMPLER_CONFIG.grainSize,
               overlap: samplerOptions.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap,
-              audio_file_name: file?.name,
-              storage_key: samplerOptions.storage_key,
+              audio_file_name: samplerOptions.audio_file_name || file?.name,
+              audio_storage_key: samplerOptions.storage_key,  // Changed from storage_key to audio_storage_key
+              audio_file_format: samplerOptions.audio_file_format,
+              audio_file_size: samplerOptions.audio_file_size,
+              audio_file_duration: samplerOptions.audio_file_duration,
+              audio_file_sample_rate: samplerOptions.audio_file_sample_rate,
+              storage_type: samplerOptions.storage_type,       // Also include storage_type
               drum_track_id: samplerOptions.drum_track_id || null,
               waveform_data: samplerOptions.waveform_data,
            };
@@ -1231,6 +1243,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                               storage_key: sample.storage_key, // Assuming DrumSamplePublicRead has storage_key
                               // Add other necessary fields if addSamplerTrackToDrumTrack expects them
                           };
+                          console.log('[handleAddTrack] Creating sampler for drum sample:', sampleDataForAction);
                           // Call action to create sampler and link it (handles history)
                           await addSamplerTrackToDrumTrack(mainDrumTrackId, sampleDataForAction);
                       } catch (error) {
@@ -1352,13 +1365,26 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     const addSamplerLogic = async (): Promise<CombinedTrack | null> => {
         // 1. Prepare Sampler Options, linking to parent
+        console.log('[addSamplerTrackToDrumTrack] sampleData:', sampleData);
+        
+        // Get additional metadata from the drum sample if available
+        const drumSample = sampleData as any; // Cast to access all properties
+        
         const samplerOptions: SamplerTrackOptions = {
             name: sampleData.display_name,          // Use sample name for track name initially
             storage_key: sampleData.storage_key,    // Pass storage key
+            storage_type: "PUBLIC_DRUM",            // Mark as public drum sample
             drum_track_id: drumTrackId,             // **Link to parent**
+            // Add drum sample metadata if available
+            audio_file_format: drumSample.file_format || 'wav',
+            audio_file_size: drumSample.file_size || 0,
+            audio_file_name: drumSample.file_name || sampleData.display_name,
+            audio_file_duration: drumSample.duration || 0,
+            audio_file_sample_rate: 44100, // Default sample rate
             // Add any other relevant options derived from sampleData if needed
             // e.g., baseMidiNote might be derived or default
         };
+        console.log('[addSamplerTrackToDrumTrack] samplerOptions:', samplerOptions);
         const samplerTrackName = sampleData.display_name; // Or generate a more unique name
 
 

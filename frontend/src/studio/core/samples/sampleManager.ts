@@ -112,7 +112,7 @@ class SampleManager {
       console.log(`Downloading sample (storageKey ${storageKey}): ${type}, storageType: ${storageType}`);
       // Fetch using storageKey and storageType if available
       const blob = await (type === 'audio_track' 
-        ? downloadAudioTrackFile(storageKey, storageType) 
+        ? downloadAudioTrackFile(storageKey) 
         : downloadDrumSampleFile(storageKey)); 
       if (!blob) {
         throw new Error(`Failed to download sample using storageKey ${storageKey}`);

@@ -188,6 +188,30 @@ export const uploadMidiTrack = async (track: CombinedTrack): Promise<void> => {
 export const uploadSamplerTrack = async (track: CombinedTrack): Promise<void> => {
   const samplerTrack = track.track as SamplerTrack;
   
+  // For PUBLIC_DRUM samples, we need to create the record but not upload the file
+  if (samplerTrack.storage_type === 'PUBLIC_DRUM' && samplerTrack.audio_storage_key) {
+    console.log(`Creating sampler track record for PUBLIC_DRUM sample ${track.id}`);
+    
+    // Create the sampler track record with the existing storage key
+    await createSamplerTrackRecord({
+      id: samplerTrack.id,
+      name: samplerTrack.name,
+      audio_storage_key: samplerTrack.audio_storage_key,
+      audio_file_format: samplerTrack.audio_file_format || 'wav',
+      audio_file_size: samplerTrack.audio_file_size || 0,
+      base_midi_note: samplerTrack.base_midi_note || 60,
+      grain_size: samplerTrack.grain_size || 0.1,
+      overlap: samplerTrack.overlap || 0,
+      audio_file_name: samplerTrack.audio_file_name || samplerTrack.name,
+      audio_file_duration: samplerTrack.audio_file_duration || 0,
+      audio_file_sample_rate: samplerTrack.audio_file_sample_rate || 44100,
+      storage_type: samplerTrack.storage_type,
+      midi_notes_json: samplerTrack.midi_notes_json || { notes: [] },
+      drum_track_id: samplerTrack.drum_track_id || null
+    });
+    return;
+  }
+  
   // Check if this sampler track already has a storage key (existing track from backend)
   if (samplerTrack.audio_storage_key) {
     console.log(`Sampler track ${track.id} already has storage key: ${samplerTrack.audio_storage_key}, skipping upload`);
@@ -248,6 +272,7 @@ export const uploadSamplerTrack = async (track: CombinedTrack): Promise<void> =>
     audio_file_name: samplerTrack.audio_file_name,
     audio_file_duration: metadata.duration,
     audio_file_sample_rate: metadata.sampleRate,
+    storage_type: samplerTrack.storage_type,  // Pass the storage_type
     midi_notes_json: samplerTrack.midi_notes_json,
     drum_track_id: samplerTrack.drum_track_id ? samplerTrack.drum_track_id : null
   })
