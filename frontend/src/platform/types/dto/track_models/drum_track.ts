@@ -1,5 +1,5 @@
 /* tslint:disable */
- 
+/* eslint-disable */
 /**
 /* This file was automatically generated from pydantic models by running pydantic2ts.
 /* Do not modify it by hand - just update the pydantic models and then re-run the script
@@ -61,6 +61,7 @@ export interface SamplerTrackRead {
   audio_file_name: string;
   audio_file_duration: number;
   audio_file_sample_rate: number;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
   midi_notes_json?: {
     [k: string]: unknown;
   };

@@ -301,6 +301,7 @@ export const createSamplerSlice: StoreSliceCreator<SamplerSlice> = (set, get) =>
         if (audioStorageKey) {
           console.log(`Attempting download for sampler ${trackId} using key ${audioStorageKey}`);
           try {
+            // Download audio file using the simplified API
             audioBlob = await downloadAudioTrackFile(audioStorageKey);
             console.log(`Downloaded audio for sampler ${trackId}`);
           } catch (error) {

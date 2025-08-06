@@ -84,17 +84,19 @@ export const TRACK_CONFIG: Record<TrackType, {
       overlap: DEFAULT_SAMPLER_CONFIG.overlap
     }),
     initEngine: async (store: Store, trackId: string, get: GetFn, options?: SamplerTrackOptions) => {
+      console.log(`[SAMPLER initEngine] track ${trackId}, options:`, options);
       const sampleManager = store.getSampleManager();
       if (!sampleManager) {
         console.error(`SampleManager not available on Store instance for sampler initEngine (track: ${trackId})`);
         return Promise.resolve();
       }
 
-      const storageKey = options?.storage_key;
+      // Look for audio_storage_key (what we set in track data) or storage_key (from options)
+      const storageKey = (options as any)?.audio_storage_key || options?.storage_key;
       const trackName = options?.name;
 
       if (!storageKey) {
-          console.warn(`TRACK_CONFIG[sampler].initEngine: No storage_key provided in options for track ${trackId}. Cannot load sample.`);
+          console.warn(`TRACK_CONFIG[sampler].initEngine: No storage_key or audio_storage_key provided in options for track ${trackId}. Cannot load sample.`);
           const existingBlob = await sampleManager.getSampleBlob(trackId, '', 'sample');
           if (!existingBlob) {
               console.error(`Failed to get blob via ID ${trackId} either.`);

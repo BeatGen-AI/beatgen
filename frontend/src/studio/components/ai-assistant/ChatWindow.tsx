@@ -335,7 +335,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       onAction: (action) => {
         console.log('Action received:', action);
         // Process the action right away
-        handleAction(action.type, action.data);
+        // Handle both 'type' and 'action_type' for compatibility
+        const actionType = action.action_type || (action as any).type;
+        handleAction(actionType, action.data);
         
         // Add action message
         // setMessages(prev => [

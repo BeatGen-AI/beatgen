@@ -56,6 +56,7 @@ export interface DrumSamplePublic {
   duration?: number | null;
   description?: string | null;
   waveform_data?: number[] | null;
+  storage_type?: "USER_AUDIO" | "USER_SAMPLE" | "PUBLIC_DRUM" | "PUBLIC_SOUNDFONT";
 }
 /**
  * Base model for drum samples

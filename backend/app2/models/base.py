@@ -5,7 +5,7 @@ Base models for SQL database entities
 from datetime import datetime, timezone
 from typing import Optional, Type, List
 from sqlmodel import SQLModel, Field
-from sqlalchemy import TIMESTAMP, Column
+from sqlalchemy import TIMESTAMP, Column, Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from pydantic import BaseModel, create_model, ConfigDict
 import uuid
@@ -13,7 +13,7 @@ import uuid
 from app2.types.drum_sample_types import DrumSampleType
 from app2.types.genre_types import GenreType
 from app2.types.track_types import TrackType
-from sqlalchemy import Enum as SAEnum
+# StorageType removed - all user audio now goes to tracks/audio
 
 
 class TrackInstance(BaseModel):
@@ -105,6 +105,7 @@ class FileBase(StandardBase):
     storage_key: str
     file_format: str
     file_size: int
+    # storage_type field removed - all audio uses tracks/audio path
 
 
 class UserBase(StandardBase):

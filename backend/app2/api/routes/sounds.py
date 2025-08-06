@@ -27,6 +27,7 @@ class UploadUrlRequest(BaseModel):
     id: str  # ID for the file (UUID)
     file_type: str  # 'audio' or 'instrument'
     should_overwrite: bool = False  # Whether to overwrite existing file
+    is_sample: bool = False  # Whether this is a sample file (for samplers)
 
 
 class UploadUrlResponse(BaseModel):
@@ -61,6 +62,7 @@ async def get_upload_url(
             user_id=uuid.UUID(current_user["id"]),
             file_type=file_type_enum,
             should_overwrite=request_data.should_overwrite,
+            is_sample=request_data.is_sample,
         )
         logger.info(f"Upload URL generated for file: {request_data.file_name}")
         return result

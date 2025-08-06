@@ -121,16 +121,37 @@ export const uploadAudioTrack = async (track: CombinedTrack): Promise<void> => {
     return;
   }
   
-  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'audio', true);
+  // Get the audio file first to determine the proper filename with extension
+  const audioFile = await db.getAudioFile(audioTrack.id);
+  if (!audioFile) {
+    console.warn(`Audio file not found for audio track ${audioTrack.id}`);
+    // If the track doesn't have a file in IndexedDB but has a storage key, it's already uploaded
+    if (audioTrack.audio_file_storage_key) {
+      console.log(`Audio track ${audioTrack.id} already has storage key, skipping upload`);
+      return;
+    }
+    // Skip this track instead of throwing to allow other tracks to save
+    console.error(`Audio track ${audioTrack.id} has no audio file and no storage key, skipping`);
+    return;
+  }
+  
+  // Determine the file extension from the audio file type or default to .wav
+  const fileExtension = audioFile.data.type === 'audio/mpeg' ? '.mp3' : 
+                       audioFile.data.type === 'audio/mp4' ? '.m4a' : 
+                       audioFile.data.type === 'audio/ogg' ? '.ogg' : '.wav';
+  
+  // Ensure the filename has an extension
+  const fileName = audioTrack.name.includes('.') ? 
+                   audioTrack.name : 
+                   `${audioTrack.name}${fileExtension}`;
+  
+  const { id, upload_url, storage_key } = await getUploadUrl(fileName, track.id, 'audio', true);
   if (!upload_url) {
     console.log("Audio track already exists, skipping upload");
     return
   }
-  const audioFile = await db.getAudioFile(audioTrack.id);
-  if (!audioFile) {
-    throw new Error(`Audio file not found for track ${audioTrack.id}`);
-  }
-  const file = new File([audioFile.data], audioTrack.name, {
+  
+  const file = new File([audioFile.data], fileName, {
     type: audioFile.data.type
   });
   
@@ -166,19 +187,73 @@ export const uploadMidiTrack = async (track: CombinedTrack): Promise<void> => {
 
 export const uploadSamplerTrack = async (track: CombinedTrack): Promise<void> => {
   const samplerTrack = track.track as SamplerTrack;
-  const { id, upload_url, storage_key } = await getUploadUrl("", track.id, 'audio', true);
+  
+  // For PUBLIC_DRUM samples, we need to create the record but not upload the file
+  if (samplerTrack.storage_type === 'PUBLIC_DRUM' && samplerTrack.audio_storage_key) {
+    console.log(`Creating sampler track record for PUBLIC_DRUM sample ${track.id}`);
+    
+    // Create the sampler track record with the existing storage key
+    await createSamplerTrackRecord({
+      id: samplerTrack.id,
+      name: samplerTrack.name,
+      audio_storage_key: samplerTrack.audio_storage_key,
+      audio_file_format: samplerTrack.audio_file_format || 'wav',
+      audio_file_size: samplerTrack.audio_file_size || 0,
+      base_midi_note: samplerTrack.base_midi_note || 60,
+      grain_size: samplerTrack.grain_size || 0.1,
+      overlap: samplerTrack.overlap || 0,
+      audio_file_name: samplerTrack.audio_file_name || samplerTrack.name,
+      audio_file_duration: samplerTrack.audio_file_duration || 0,
+      audio_file_sample_rate: samplerTrack.audio_file_sample_rate || 44100,
+      storage_type: samplerTrack.storage_type,
+      midi_notes_json: samplerTrack.midi_notes_json || { notes: [] },
+      drum_track_id: samplerTrack.drum_track_id || null
+    });
+    return;
+  }
+  
+  // Check if this sampler track already has a storage key (existing track from backend)
+  if (samplerTrack.audio_storage_key) {
+    console.log(`Sampler track ${track.id} already has storage key: ${samplerTrack.audio_storage_key}, skipping upload`);
+    return;
+  }
+  
+  // Get the audio file first to determine the proper filename with extension
+  const audioFile = await db.getAudioFile(samplerTrack.id);
+  if (!audioFile) {
+    console.warn(`Audio file not found for sampler track ${samplerTrack.id}, checking if it's already uploaded`);
+    // If the track doesn't have a file in IndexedDB but also doesn't have a storage key,
+    // this is an error condition
+    if (!samplerTrack.audio_storage_key) {
+      console.error(`Sampler track ${samplerTrack.id} has no audio file and no storage key`);
+      // Skip this track instead of throwing to allow other tracks to save
+      return;
+    }
+    return;
+  }
+  
+  // Ensure we have a proper filename with extension
+  if (!samplerTrack.audio_file_name) {
+    samplerTrack.audio_file_name = samplerTrack.name;
+  }
+  
+  // Determine the file extension from the audio file type or default to .wav
+  const fileExtension = audioFile.data.type === 'audio/mpeg' ? '.mp3' : 
+                       audioFile.data.type === 'audio/mp4' ? '.m4a' : 
+                       audioFile.data.type === 'audio/ogg' ? '.ogg' : '.wav';
+  
+  // Ensure the filename has an extension
+  const fileName = samplerTrack.audio_file_name.includes('.') ? 
+                   samplerTrack.audio_file_name : 
+                   `${samplerTrack.audio_file_name}${fileExtension}`;
+  
+  const { id, upload_url, storage_key } = await getUploadUrl(fileName, track.id, 'audio', true, true); // is_sample=true
   if (!upload_url) {
     console.log("Sampler audio track already exists, skipping upload");
     return
   }
-  const audioFile = await db.getAudioFile(samplerTrack.id);
-  if (!samplerTrack.audio_file_name) {
-    samplerTrack.audio_file_name = samplerTrack.name;
-  }
-  if (!audioFile) {
-    throw new Error(`Audio file not found for track ${samplerTrack.id}`);
-  }
-  const file = new File([audioFile.data], samplerTrack.name, {
+  
+  const file = new File([audioFile.data], fileName, {
     type: audioFile.data.type
   });
   
@@ -197,6 +272,7 @@ export const uploadSamplerTrack = async (track: CombinedTrack): Promise<void> =>
     audio_file_name: samplerTrack.audio_file_name,
     audio_file_duration: metadata.duration,
     audio_file_sample_rate: metadata.sampleRate,
+    storage_type: samplerTrack.storage_type,  // Pass the storage_type
     midi_notes_json: samplerTrack.midi_notes_json,
     drum_track_id: samplerTrack.drum_track_id ? samplerTrack.drum_track_id : null
   })

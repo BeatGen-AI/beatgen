@@ -1,0 +1,73 @@
+"""
+Utility functions for storage bucket and path resolution
+"""
+
+from typing import Tuple, Optional
+from app2.models.enums.storage_type import StorageType
+from app2.models.enums.storage_type_literal import StorageTypeLiteral
+
+
+def get_storage_location(file_type: str = "audio", is_public: bool = False) -> Tuple[str, str]:
+    """
+    Get the bucket name and prefix for a given file type
+    Simplified: All user audio files go to tracks/audio
+    
+    Args:
+        file_type: The type of file (audio, soundfont, etc.)
+        is_public: Whether the file is publicly accessible
+        
+    Returns:
+        Tuple of (bucket_name, prefix)
+    """
+    # Public soundfonts still get their own location
+    if file_type == "soundfont" or file_type == "instrument":
+        return ("assets", "soundfonts_public")  # Use assets bucket to match actual infrastructure
+    
+    # Public drum samples
+    if file_type == "drum_sample" or (is_public and file_type == "audio"):
+        return ("assets", "drum_samples_public")  # Use assets bucket to match actual infrastructure
+    
+    # Everything else (all user audio including samples) goes to tracks/audio
+    return ("tracks", "audio")
+
+
+def get_storage_location_from_type(storage_type: StorageType) -> Tuple[str, str]:
+    """
+    Get the bucket name and prefix from a StorageType enum
+    
+    Args:
+        storage_type: The StorageType enum value
+        
+    Returns:
+        Tuple of (bucket_name, prefix)
+    """
+    return storage_type.get_bucket_and_prefix()
+
+
+def literal_to_enum(literal: StorageTypeLiteral) -> StorageType:
+    """Convert a StorageType literal to the enum"""
+    return StorageType(literal)
+
+
+def enum_to_literal(enum: StorageType) -> StorageTypeLiteral:
+    """Convert a StorageType enum to the literal"""
+    return enum.value
+
+
+def get_full_storage_path(file_type: str, relative_path: str, is_public: bool = False) -> str:
+    """
+    Get the full storage path for a file
+    
+    Args:
+        file_type: The type of file
+        relative_path: The relative path within the storage location
+        is_public: Whether the file is publicly accessible
+        
+    Returns:
+        The full storage path including prefix
+    """
+    _, prefix = get_storage_location(file_type, is_public)
+    
+    if prefix:
+        return f"{prefix}/{relative_path}"
+    return relative_path

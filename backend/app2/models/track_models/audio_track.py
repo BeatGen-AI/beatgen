@@ -3,7 +3,7 @@ Audio Track model for SQL database
 """
 
 from typing import Optional, TYPE_CHECKING, List
-from sqlalchemy import Column
+from sqlalchemy import Column, Enum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import SQLModel, Field, Relationship
 import uuid
@@ -12,6 +12,7 @@ from app2.models.base import (
     TrackBase,
     all_optional,
 )
+from app2.models.enums.storage_type_literal import StorageTypeLiteral, DEFAULT_USER_AUDIO
 
 # Handle circular imports
 if TYPE_CHECKING:
@@ -27,6 +28,18 @@ class AudioTrackBase(TrackBase):
     audio_file_size: int
     audio_file_duration: float
     audio_file_sample_rate: int
+    storage_type: StorageTypeLiteral = Field(
+        default=DEFAULT_USER_AUDIO,
+        sa_column=Column(
+            Enum(
+                "USER_AUDIO", "USER_SAMPLE", "PUBLIC_DRUM", "PUBLIC_SOUNDFONT",
+                name="storagetype",  # Use the existing enum type in the database
+                create_type=False
+            ),
+            nullable=False,
+            default=DEFAULT_USER_AUDIO
+        )
+    )
     waveform_data: Optional[List[float]] = Field(default=None, sa_column=Column(JSONB))
 
 

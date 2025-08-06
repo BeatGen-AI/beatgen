@@ -1545,6 +1545,7 @@ Create rhythmic patterns that fit the composition style."""
                         audio_file_format=drum_sample.file_format,
                         audio_file_size=drum_sample.file_size,
                         audio_file_duration=drum_sample.duration or 0,
+                        storage_type="PUBLIC_DRUM",  # Public drum samples are always from the public bucket
                         drum_track_id=drum_track_id,
                         midi_notes_json=notes,
                     )
@@ -1811,7 +1812,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             )
             
             # Upload audio to storage
-            storage_key = await file_service.upload_audio_file(
+            storage_key, storage_type = await file_service.upload_audio_file(
                 audio_data, 
                 generation_result.file_name,
                 user_id
