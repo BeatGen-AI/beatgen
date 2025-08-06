@@ -66,7 +66,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             </div>
             <div className="flex items-center gap-1">
               <IconPlaylist size={12} />
-              <span>{project.track_previews?.length || 0}</span>
+              <span>{project.track_previews?.filter(t => t.track_type !== 'SAMPLER').length || 0}</span>
             </div>
           </div>
         </div>
