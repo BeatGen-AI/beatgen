@@ -42,14 +42,14 @@ const ProjectPreview: React.FC<ProjectPreviewProps> = ({ project }) => {
   }
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden">
-      <div className="flex flex-col gap-1 py-1">
+    <div className="h-full flex items-center justify-center overflow-hidden">
+      <div className="flex flex-col gap-1 w-full max-w-[200px]">
         {tracksWithInstances.map((track) => (
           <div 
             key={track.id}
-            className="flex items-center gap-2 h-3 px-1"
+            className="flex items-center justify-center h-3"
           >
-            <div className="flex-1 relative h-2">
+            <div className="relative h-2 w-full">
               {/* Show track instances as bars positioned absolutely */}
               {track.instance_metadata?.map((instance: TrackInstance) => {
                 // Calculate width based on trim values
