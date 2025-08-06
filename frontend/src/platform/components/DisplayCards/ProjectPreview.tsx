@@ -61,7 +61,7 @@ const ProjectPreview: React.FC<ProjectPreviewProps> = ({ project }) => {
                   className="absolute h-[12px] rounded-[3px]"
                   style={{
                     backgroundColor: getTrackColor(track.track_number),
-                    opacity: track.mute ? 0.3 : 0.8,
+                    opacity: track.mute ? 0.15 : 0.65,
                     width: `${Math.max(2, instanceWidth)}px`, // Minimum 2px width for visibility
                     left: `${instanceLeft}px`
                   }}
