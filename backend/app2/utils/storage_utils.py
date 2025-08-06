@@ -21,11 +21,11 @@ def get_storage_location(file_type: str = "audio", is_public: bool = False) -> T
     """
     # Public soundfonts still get their own location
     if file_type == "soundfont" or file_type == "instrument":
-        return ("public", "soundfonts")  # Changed from assets to public
+        return ("assets", "soundfonts_public")  # Use assets bucket to match actual infrastructure
     
     # Public drum samples
     if file_type == "drum_sample" or (is_public and file_type == "audio"):
-        return ("public", "drum_samples")  # Changed from assets to public
+        return ("assets", "drum_samples_public")  # Use assets bucket to match actual infrastructure
     
     # Everything else (all user audio including samples) goes to tracks/audio
     return ("tracks", "audio")

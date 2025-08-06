@@ -38,8 +38,8 @@ class StorageType(str, Enum):
         elif self == StorageType.USER_SAMPLE:
             return ("tracks", "audio")  # Samples ALSO go to /audio, not /samples
         elif self == StorageType.PUBLIC_DRUM:
-            return ("public", "drum_samples")
+            return ("assets", "drum_samples_public")
         elif self == StorageType.PUBLIC_SOUNDFONT:
-            return ("public", "soundfonts")
+            return ("assets", "soundfonts_public")
         else:
             return ("tracks", "audio")  # Default

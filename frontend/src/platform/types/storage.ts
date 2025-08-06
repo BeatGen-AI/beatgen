@@ -20,8 +20,12 @@ export function getStorageUrl(storageKey: string, storageType?: StorageType): st
   
   // Check if storageKey is empty or undefined
   if (!storageKey) {
-    console.error('[getStorageUrl] Empty storage key provided!', { storageKey, storageType });
     throw new Error('Storage key cannot be empty');
+  }
+  
+  // Validate against path traversal attacks
+  if (storageKey.includes('../') || storageKey.includes('..\\')) {
+    throw new Error('Invalid storage key: path traversal detected');
   }
   
   // Remove leading slash from storage key if present
@@ -60,6 +64,5 @@ export function getStorageUrl(storageKey: string, storageType?: StorageType): st
   
   // Construct the final URL
   const url = `${baseUrl}/${prefix}/${cleanKey}`;
-  console.log('[getStorageUrl] Generated URL:', { storageKey, storageType, cleanKey, prefix, url });
   return url;
 }

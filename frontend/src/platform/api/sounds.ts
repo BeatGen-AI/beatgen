@@ -270,9 +270,10 @@ export const deleteDrumTrack = async (id: string): Promise<void> => {
  * Download a file from cloud storage
  * @param storageKey The storage key of the file
  * @param storageType Optional storage type to determine the correct bucket
- * @returns The file as a Blob, or null if file doesn't exist
+ * @returns The file as a Blob
+ * @throws Error if file doesn't exist or download fails
  */
-const downloadFile = async (storageKey: string, storageType?: StorageType): Promise<Blob | null> => {
+const downloadFile = async (storageKey: string, storageType?: StorageType): Promise<Blob> => {
   const storageUrl = getStorageUrl(storageKey, storageType);
 
   try {
@@ -282,20 +283,14 @@ const downloadFile = async (storageKey: string, storageType?: StorageType): Prom
     });
 
     if (!response.ok) {
-      // Check if it's a 404 or 400 (file not found)
-      if (response.status === 404 || response.status === 400) {
-        console.warn(`File not found in storage: ${storageKey} (${response.status})`);
-        return null; // Return null for missing files instead of throwing
-      }
-      // For other errors, still throw
-      throw new Error(`HTTP error ${response.status}: ${response.statusText} for URL ${storageUrl}`);
+      // Always throw errors - fail loudly as per CLAUDE.md
+      throw new Error(`HTTP error ${response.status}: ${response.statusText} for storage key ${storageKey}`);
     }
 
     // Return the file content as a Blob
     return await response.blob();
   } catch (error) {
-    // Log the error and re-throw a more specific error message
-    console.error(`Error downloading file from ${storageUrl}:`, error);
+    // Re-throw with more context
     throw new Error(`Failed to download file (${storageKey}): ${error.message}`);
   }
 };
@@ -307,11 +302,7 @@ const downloadFile = async (storageKey: string, storageType?: StorageType): Prom
  */
 export const downloadAudioTrackFile = async (storageKey: string): Promise<Blob> => {
   console.log(`Downloading audio track file: ${storageKey}`);
-  const blob = await downloadFile(storageKey);
-  if (!blob) {
-    throw new Error(`Audio file not found in storage: ${storageKey}`);
-  }
-  return blob;
+  return await downloadFile(storageKey);
 };
 
 /**
@@ -321,11 +312,7 @@ export const downloadAudioTrackFile = async (storageKey: string): Promise<Blob> 
  */
 export const downloadDrumSampleFile = async (storageKey: string): Promise<Blob> => {
   // Drum samples are in the public bucket
-  const blob = await downloadFile(storageKey, StorageType.PUBLIC_DRUM);
-  if (!blob) {
-    throw new Error(`Drum sample file not found in storage: ${storageKey}`);
-  }
-  return blob;
+  return await downloadFile(storageKey, StorageType.PUBLIC_DRUM);
 };
 
 /**
@@ -334,9 +321,5 @@ export const downloadDrumSampleFile = async (storageKey: string): Promise<Blob> 
  * @returns The file as a Blob, or throws if file doesn't exist
  */
 export const downloadSamplerFile = async (storageKey: string): Promise<Blob> => {
-  const blob = await downloadFile(storageKey);
-  if (!blob) {
-    throw new Error(`Sampler file not found in storage: ${storageKey}`);
-  }
-  return blob;
+  return await downloadFile(storageKey);
 };
