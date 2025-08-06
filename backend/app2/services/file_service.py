@@ -331,6 +331,7 @@ class FileService:
         user_id: uuid.UUID,
         file_type: FileType,
         should_overwrite: bool = True,
+        is_sample: bool = False,
     ) -> Dict[str, str]:
         """
         Create a signed URL for uploading a file
@@ -341,9 +342,10 @@ class FileService:
             user_id: The ID of the user
             file_type: The type of file
             should_overwrite: Whether to overwrite existing file with the same name (default True)
+            is_sample: Whether this is a sample file (for samplers)
 
         Returns:
-            A dictionary with the upload URL and storage key
+            A dictionary with the upload URL, storage key, and storage type
 
         Raises:
             ServiceException: If the operation fails
@@ -352,20 +354,23 @@ class FileService:
             f"Creating upload URL for {file_type} file {file_name} for user ID: {user_id}"
         )
         try:
-            # Storage path logic based on file type
-            file_extension = file_name.split(".")[-1]
-
-            prefix = file_type.value  # Use enum value
+            from app2.utils.storage_utils import get_storage_location
+            from app2.infrastructure.storage.supabase_storage import SupabaseStorage
+            
+            # Get bucket and prefix - simplified, no more storage type
+            bucket, prefix = get_storage_location(file_type.value, is_public=False)
+            
+            # Storage path logic - ensure we have a valid extension
+            if '.' in file_name and file_name.split('.')[-1]:
+                file_extension = file_name.split('.')[-1]
+            else:
+                # Default to .wav if no extension provided
+                logger.warning(f"No file extension found in {file_name}, defaulting to .wav")
+                file_extension = 'wav'
+            
             storage_key = f"{prefix}/{user_id}/{file_id}.{file_extension}"
 
             # Create storage client
-            from app2.infrastructure.storage.supabase_storage import SupabaseStorage
-
-            bucket = (
-                "tracks"
-                if file_type == FileType.AUDIO
-                else "instruments"
-            )
             storage = SupabaseStorage(bucket)
 
             # Generate upload URL with overwrite option
@@ -373,8 +378,9 @@ class FileService:
                 storage_key, should_overwrite=should_overwrite
             )
 
-            # Add file ID to result
+            # Add file ID to result (no more storage_type)
             result["id"] = str(file_id)
+            result["storage_key"] = storage_key  # Include the full storage key
 
             logger.info(
                 f"Created upload URL for {file_type} file {file_name} for user ID: {user_id}"
@@ -392,8 +398,9 @@ class FileService:
         self,
         audio_data: bytes,
         file_name: str,
-        user_id: str
-    ) -> str:
+        user_id: str,
+        is_sample: bool = False
+    ) -> tuple[str, str]:
         """
         Upload audio file data directly to storage
         
@@ -401,23 +408,29 @@ class FileService:
             audio_data: The audio file content as bytes
             file_name: The name of the file
             user_id: The ID of the user
+            is_sample: Whether this is a sample file (for samplers)
             
         Returns:
-            The storage key of the uploaded file
+            Tuple of (storage_key, storage_type)
             
         Raises:
             ServiceException: If the operation fails
         """
         logger.info(f"Uploading audio file {file_name} for user ID: {user_id}")
         try:
-            # Generate unique storage key for audio files
+            from app2.utils.storage_utils import get_storage_location
+            from app2.infrastructure.storage.supabase_storage import SupabaseStorage
+            
+            # Get bucket and prefix - simplified, all audio goes to same place
+            bucket, prefix = get_storage_location("audio", is_public=False)
+            
+            # Generate unique storage key
             track_id = str(uuid.uuid4())
             file_extension = file_name.split(".")[-1]
-            storage_key = f"audio/{user_id}/{track_id}.{file_extension}"
+            storage_key = f"{prefix}/{user_id}/{track_id}.{file_extension}"
             
             # Create storage client
-            from app2.infrastructure.storage.supabase_storage import SupabaseStorage
-            storage = SupabaseStorage("tracks")
+            storage = SupabaseStorage(bucket)
             
             # Upload the file data directly to Supabase storage with proper content type
             upload_result = storage.upload_file(storage_key, audio_data, "audio/wav")
@@ -428,7 +441,7 @@ class FileService:
                 raise Exception(error_msg)
             
             logger.info(f"Successfully uploaded audio file {file_name} with storage key: {storage_key}")
-            return storage_key
+            return storage_key, None  # No more storage_type
             
         except Exception as e:
             logger.error(f"Error uploading audio file: {str(e)}")

@@ -12,6 +12,7 @@ from app2.models.base import (
     TrackBase,
     all_optional,
 )
+from app2.models.enums.storage_type import StorageType
 
 # Handle circular imports
 if TYPE_CHECKING:
@@ -27,6 +28,7 @@ class AudioTrackBase(TrackBase):
     audio_file_size: int
     audio_file_duration: float
     audio_file_sample_rate: int
+    storage_type: StorageType = Field(default=StorageType.USER_AUDIO)
     waveform_data: Optional[List[float]] = Field(default=None, sa_column=Column(JSONB))
 
 

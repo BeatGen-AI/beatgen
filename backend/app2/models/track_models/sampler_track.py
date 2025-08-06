@@ -9,6 +9,7 @@ from sqlmodel import Field, Relationship
 import uuid
 
 from app2.models.base import TrackBase, all_optional
+from app2.models.enums.storage_type import StorageType
 
 # Handle circular imports
 if TYPE_CHECKING:
@@ -29,6 +30,7 @@ class SamplerTrackBase(TrackBase):
     audio_file_name: str
     audio_file_duration: float
     audio_file_sample_rate: int
+    storage_type: StorageType = Field(default=StorageType.USER_SAMPLE)
     midi_notes_json: Dict = Field(default_factory=dict, sa_column=Column(JSONB))
     waveform_data: Optional[List[float]] = Field(default=None, sa_column=Column(JSONB))
 

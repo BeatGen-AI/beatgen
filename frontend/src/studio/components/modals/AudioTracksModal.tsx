@@ -89,14 +89,19 @@ export const AudioTracksModal: React.FC<AudioTracksModalProps> = ({
             if (trackData.audio_file_storage_key) {
               try {
                 setGenerationStatus('Downloading audio file...');
-                const audioBlob = await downloadAudioTrackFile(trackData.audio_file_storage_key);
+                // Use storage_type if available from the track data
+                const audioBlob = await downloadAudioTrackFile(
+                  trackData.audio_file_storage_key,
+                  (trackData as any).storage_type
+                );
                 
                 const sampleManager = SampleManager.getInstance(db);
                 await sampleManager.getSampleBlob(
                   trackData.id, 
                   trackData.audio_file_storage_key, 
                   'audio_track', 
-                  trackData.name
+                  trackData.name,
+                  (trackData as any).storage_type
                 );
                 
                 setGeneratedTrack(trackData);

@@ -111,11 +111,28 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       let audioBlob: Blob;
       if (audioUrlOrKey.startsWith('blob:')) {
         // Fetch from blob URL
-        const response = await fetch(audioUrlOrKey);
-        audioBlob = await response.blob();
+        try {
+          const response = await fetch(audioUrlOrKey);
+          if (!response.ok) {
+            // Blob URL might be expired or revoked
+            console.warn(`Blob URL expired or not found: ${audioUrlOrKey}`);
+            throw new Error('Blob URL expired or not found');
+          }
+          audioBlob = await response.blob();
+        } catch (blobError) {
+          // If blob URL fails, it might be expired
+          console.warn('Failed to fetch blob URL, it may have expired:', blobError);
+          throw new Error('Audio data no longer available (blob expired)');
+        }
       } else {
         // Download audio file using the API (storage key)
-        audioBlob = await downloadAudioTrackFile(audioUrlOrKey);
+        try {
+          audioBlob = await downloadAudioTrackFile(audioUrlOrKey);
+        } catch (downloadError) {
+          // If the file doesn't exist in storage, throw a specific error
+          console.warn(`Failed to download audio file: ${audioUrlOrKey}`, downloadError);
+          throw new Error('Audio file not found or unavailable');
+        }
       }
       
       const arrayBuffer = await audioBlob.arrayBuffer();

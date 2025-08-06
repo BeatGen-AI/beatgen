@@ -27,7 +27,10 @@ const AudioTrackCard: React.FC<AudioTrackCardProps> = ({
     
     setIsLoadingBlob(true);
     try {
-      const blob = await downloadAudioTrackFile(sound.audio_file_storage_key);
+      const blob = await downloadAudioTrackFile(
+        sound.audio_file_storage_key,
+        (sound as any).storage_type
+      );
       setAudioBlob(blob);
     } catch (error) {
       console.error('Failed to load audio blob:', error);

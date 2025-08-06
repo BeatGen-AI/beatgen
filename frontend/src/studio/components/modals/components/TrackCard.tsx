@@ -39,8 +39,11 @@ const TrackCard: React.FC<TrackCardProps> = ({ track, onClick }) => {
         return;
       }
 
-      // Download from remote storage
-      const blob = await downloadAudioTrackFile(track.audio_file_storage_key);
+      // Download from remote storage using storage_type if available
+      const blob = await downloadAudioTrackFile(
+        track.audio_file_storage_key,
+        (track as any).storage_type
+      );
       
       // Store in IndexedDB for future use (upsert to handle existing keys)
       const file = new File([blob], track.name, { type: blob.type });

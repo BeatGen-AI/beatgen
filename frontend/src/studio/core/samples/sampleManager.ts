@@ -1,5 +1,6 @@
 import { downloadAudioTrackFile, downloadDrumSampleFile } from '../../../platform/api/sounds';
 import { AudioFile, BeatGenDB } from '../db/dexie-client';
+import { StorageType } from '../../../platform/types/storage';
 
 /**
  * SampleManager handles loading, caching, and retrieving generic audio samples
@@ -63,7 +64,8 @@ class SampleManager {
     id: string,
     storageKey: string,
     type: 'audio_track' | 'sample',
-    name?: string
+    name?: string,
+    storageType?: StorageType | string
   ): Promise<AudioFile | null> {
     // 1. Check in-memory cache using ID
     if (this.inMemoryBlobCache.has(id)) {
@@ -89,7 +91,7 @@ class SampleManager {
 
     // 3. Download if not in caches, passing all necessary info
     console.log(`Sample blob ${id} (storageKey: ${storageKey}) not found in cache, attempting download.`);
-    return this.downloadAndCacheSample(id, storageKey, type, name); // Pass ID, storageKey, name
+    return this.downloadAndCacheSample(id, storageKey, type, name, storageType); // Pass ID, storageKey, name, storageType
   }
 
   /**
@@ -103,12 +105,15 @@ class SampleManager {
     id: string,         // ID for caching
     storageKey: string, // Key for fetching
     type: 'audio_track' | 'sample',
-    name?: string
+    name?: string,
+    storageType?: StorageType | string
   ): Promise<AudioFile | null> {
     try {
-      console.log(`Downloading sample (storageKey ${storageKey}): ${type}`);
-      // Fetch using storageKey
-      const blob = await (type === 'audio_track' ? downloadAudioTrackFile(storageKey) : downloadDrumSampleFile(storageKey)); 
+      console.log(`Downloading sample (storageKey ${storageKey}): ${type}, storageType: ${storageType}`);
+      // Fetch using storageKey and storageType if available
+      const blob = await (type === 'audio_track' 
+        ? downloadAudioTrackFile(storageKey, storageType) 
+        : downloadDrumSampleFile(storageKey)); 
       if (!blob) {
         throw new Error(`Failed to download sample using storageKey ${storageKey}`);
       }

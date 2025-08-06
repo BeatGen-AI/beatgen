@@ -6,6 +6,7 @@ import { MidiTrackCreate } from '../types/dto/track_models/midi_track';
 import { SamplerTrackCreate } from '../types/dto/track_models/sampler_track';
 import { DrumTrackCreate } from '../types/dto/track_models/drum_track';
 import { Page } from '../types/pagination';
+import { getStorageUrl, StorageType } from '../types/storage';
 
 // Keep using the Sound interface from studio for now until we can fully migrate
 
@@ -15,23 +16,27 @@ export interface UploadUrlResponse {
   storage_key: string;
 }
 /**
- * Get a presigned URL for uploading a file (audio or MIDI)
+ * Get a presigned URL for uploading a file (audio or instrument)
  * @param fileName The name of the file to upload
  * @param id The ID to use for the sound (UUID)
  * @param fileType The type of file ('audio' or 'instrument')
- * @returns Object containing upload URL, ID, and storage key
+ * @param shouldOverwrite Whether to overwrite existing file
+ * @param isSample Whether this is a sample file (for samplers)
+ * @returns Object containing upload URL, ID, storage key, and storage type
  */
 export const getUploadUrl = async (
   fileName: string, 
   id: string, 
-  fileType: 'audio' | 'soundfont',
-  shouldOverwrite: boolean = false
+  fileType: 'audio' | 'soundfont' | 'instrument',
+  shouldOverwrite: boolean = false,
+  isSample: boolean = false
 ): Promise<UploadUrlResponse> => {
   const response = await apiClient.post('/sounds/upload-url', { 
     file_name: fileName,
     id: id, // Always pass the ID
-    file_type: fileType,
-    should_overwrite: shouldOverwrite
+    file_type: fileType === 'soundfont' ? 'instrument' : fileType,
+    should_overwrite: shouldOverwrite,
+    is_sample: isSample
   });
   return response.data;
 };
@@ -258,16 +263,13 @@ export const deleteDrumTrack = async (id: string): Promise<void> => {
 };
 
 /**
- * Private helper function to download a file from cloud storage.
- * @param prefix The storage path prefix (e.g., 'storage/v1/object/public/tracks')
+ * Download a file from cloud storage
  * @param storageKey The storage key of the file
- * @returns The file as a Blob
+ * @param storageType Optional storage type to determine the correct bucket
+ * @returns The file as a Blob, or null if file doesn't exist
  */
-const downloadFile = async (prefix: string, storageKey: string): Promise<Blob> => {
-  const baseUrlString = process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co';
-
-  // Construct the full URL path
-  const storageUrl = new URL(`/${prefix}/${storageKey}`, baseUrlString).toString();
+const downloadFile = async (storageKey: string, storageType?: StorageType): Promise<Blob | null> => {
+  const storageUrl = getStorageUrl(storageKey, storageType);
 
   try {
     // Fetch the file using the constructed URL
@@ -276,7 +278,12 @@ const downloadFile = async (prefix: string, storageKey: string): Promise<Blob> =
     });
 
     if (!response.ok) {
-      // Throw a more informative error if the fetch fails
+      // Check if it's a 404 or 400 (file not found)
+      if (response.status === 404 || response.status === 400) {
+        console.warn(`File not found in storage: ${storageKey} (${response.status})`);
+        return null; // Return null for missing files instead of throwing
+      }
+      // For other errors, still throw
       throw new Error(`HTTP error ${response.status}: ${response.statusText} for URL ${storageUrl}`);
     }
 
@@ -292,29 +299,40 @@ const downloadFile = async (prefix: string, storageKey: string): Promise<Blob> =
 /**
  * Download an audio track file from cloud storage
  * @param storageKey The storage key of the file
- * @returns The file as a Blob
+ * @returns The file as a Blob, or throws if file doesn't exist
  */
 export const downloadAudioTrackFile = async (storageKey: string): Promise<Blob> => {
-  // Define the specific prefix for audio tracks
-  const prefix = 'storage/v1/object/public/tracks'; 
-  try {
-    console.log(`Attempting to download audio track file (storageKey ${storageKey}) from tracks prefix.`);
-    return await downloadFile(prefix, storageKey);
-  } catch (error) {
-    console.warn(`Failed to download audio track file from tracks prefix (storageKey ${storageKey}). Falling back to drum samples.`);
-    try {
-      console.log(`Attempting to download drum sample file (storageKey ${storageKey}) as fallback.`);
-      return await downloadDrumSampleFile(storageKey);
-    } catch (fallbackError) {
-      console.error(`Error downloading file after fallback to drum samples (storageKey ${storageKey}): ${fallbackError}`);
-      // Re-throw the original error or the fallback error, depending on desired behavior.
-      // Throwing the fallback error might be more informative here.
-      throw fallbackError; 
-    }
+  console.log(`Downloading audio track file: ${storageKey}`);
+  const blob = await downloadFile(storageKey);
+  if (!blob) {
+    throw new Error(`Audio file not found in storage: ${storageKey}`);
   }
+  return blob;
 };
 
+/**
+ * Download a drum sample file from public storage
+ * @param storageKey The storage key of the file
+ * @returns The file as a Blob, or throws if file doesn't exist
+ */
 export const downloadDrumSampleFile = async (storageKey: string): Promise<Blob> => {
-  const prefix = 'storage/v1/object/public/assets/drum_samples_public';
-  return await downloadFile(prefix, storageKey);
+  // Drum samples are in the public bucket
+  const blob = await downloadFile(storageKey, StorageType.PUBLIC_DRUM);
+  if (!blob) {
+    throw new Error(`Drum sample file not found in storage: ${storageKey}`);
+  }
+  return blob;
+};
+
+/**
+ * Download a sampler file from storage
+ * @param storageKey The storage key of the file
+ * @returns The file as a Blob, or throws if file doesn't exist
+ */
+export const downloadSamplerFile = async (storageKey: string): Promise<Blob> => {
+  const blob = await downloadFile(storageKey);
+  if (!blob) {
+    throw new Error(`Sampler file not found in storage: ${storageKey}`);
+  }
+  return blob;
 };

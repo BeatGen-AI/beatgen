@@ -1,7 +1,7 @@
 import uuid
-
 from sqlmodel import Field, SQLModel
 from app2.models.base import DrumSamplePublicBase, all_optional
+from app2.models.enums.storage_type import StorageType
 
 
 class DrumSamplePublic(DrumSamplePublicBase, table=True):
@@ -9,6 +9,8 @@ class DrumSamplePublic(DrumSamplePublicBase, table=True):
 
     __tablename__ = "drum_samples_public"
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    
+    storage_type: StorageType = Field(default=StorageType.PUBLIC_DRUM)
 
 
 class DrumSamplePublicCreate(DrumSamplePublicBase):
