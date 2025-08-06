@@ -6,7 +6,7 @@
 export const CARD_HEIGHTS = {
   // Display cards (track cards, project cards)
   DISPLAY_CARD: 200,
-  DISPLAY_CARD_HEADER: 40,
+  DISPLAY_CARD_HEADER: 44,
   DISPLAY_CARD_FOOTER: 40,
   
   // Content preview area is calculated as: DISPLAY_CARD - HEADER - FOOTER
