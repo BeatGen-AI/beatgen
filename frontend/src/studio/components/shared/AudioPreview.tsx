@@ -244,7 +244,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     
     return data.map((amplitude, index) => {
       const height = Math.max(2, amplitude * 100); // Convert to percentage
-      const isPlayed = currentTime > 0 && index < currentBarIndex;
+      const isPlayed = currentTime == 0 || (currentTime > 0 && index < currentBarIndex);
       
       // Use a lighter/muted color for unplayed portions
       let barColor: string;
