@@ -33,6 +33,7 @@ export interface KonvaTrackProps {
   snapSizeInPixels?: number;
   trackColor?: string; // Track color prop
   data?: any; // Additional data for color etc
+  isTouchDevice?: boolean; // Add touch device prop
 }
 
 /**
@@ -63,7 +64,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   gridSnapEnabled = true,
   snapSizeInPixels = 12.5,
   trackColor,
-  data
+  data,
+  isTouchDevice = false
 }) => {
   // Return null if track has a drum_track_id
   if (track.track_type === 'SAMPLER' && 
@@ -168,9 +170,11 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       width={displayWidth}
       height={height}
       draggable={false}  // Disable Konva dragging, use manual position updates
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      listening={!isTouchDevice}  // Disable all event handling on touch devices
+      onMouseEnter={() => !isTouchDevice && setIsHovered(true)}
+      onMouseLeave={() => !isTouchDevice && setIsHovered(false)}
       onClick={(e) => {
+        if (isTouchDevice) return;  // Skip click handling on touch devices
         console.log('🎯 KonvaTrack onClick', {
           instanceId,
           trackId: track.id,
@@ -190,6 +194,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         }
       }}
       onMouseDown={(e) => {
+        if (isTouchDevice) return;  // Skip mousedown handling on touch devices
         console.log('🎯 KonvaTrack onMouseDown START', {
           instanceId,
           trackId: track.id,
@@ -359,8 +364,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       )}
       
       
-      {/* Custom resize handles - show on hover for all tracks */}
-      {isHovered && !isDragging && !isResizing && isValidWidth && (
+      {/* Custom resize handles - show on hover for all tracks (disabled on touch devices) */}
+      {!isTouchDevice && isHovered && !isDragging && !isResizing && isValidWidth && (
         <>
           {/* Left resize handle */}
           <Rect
@@ -501,6 +506,7 @@ export default React.memo(KonvaTrack, (prevProps, nextProps) => {
     prevProps.timeSignature[1] === nextProps.timeSignature[1] &&
     prevProps.gridSnapEnabled === nextProps.gridSnapEnabled &&
     prevProps.snapSizeInPixels === nextProps.snapSizeInPixels &&
-    prevProps.selectedCount === nextProps.selectedCount
+    prevProps.selectedCount === nextProps.selectedCount &&
+    prevProps.isTouchDevice === nextProps.isTouchDevice
   );
 });

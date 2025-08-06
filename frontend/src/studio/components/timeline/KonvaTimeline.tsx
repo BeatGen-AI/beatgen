@@ -121,6 +121,12 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
 }, ref) => {
   const { studioMode } = useAppTheme();
   
+  // Detect if we're on a touch device
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  useEffect(() => {
+    setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+  
   // State
   const [tool, setTool] = useState<Tool>(selectedTool);
   const [clipboard, setClipboard] = useState<CombinedTrack[]>([]);
@@ -1036,6 +1042,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                 selectedCount={interaction.selectedIds.length}
                 data={item.data}
                 trackColor={item.data?.trackIndex !== undefined ? getTrackColor(item.data.trackIndex) : undefined}
+                isTouchDevice={isTouchDevice}
                 onClick={(id, e) => {
                   // Handle instance selection
                   const modifiers = {
@@ -1106,7 +1113,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
             timeSignature,
             gridSnapEnabled,
             actualSnapSize,
-            onTrackSelect
+            onTrackSelect,
+            isTouchDevice
           ])}
           
           {/* Selection Rectangle */}
