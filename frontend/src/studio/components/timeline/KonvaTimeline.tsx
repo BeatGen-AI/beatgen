@@ -896,6 +896,7 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   viewport={{ x: viewport.x, y: 0, width: stageSize.width || 800, height: GRID_CONSTANTS.headerHeight }}
                   zoom={internalZoom}
                   studioMode={studioMode}
+                  isTouchDevice={isTouchDevice}
                 />
               </Layer>
             </Stage>

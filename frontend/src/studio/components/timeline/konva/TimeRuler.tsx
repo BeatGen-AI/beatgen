@@ -14,6 +14,7 @@ export interface TimeRulerProps {
   viewport: Viewport;
   zoom: number;
   studioMode?: 'light' | 'dark';
+  isTouchDevice?: boolean;
 }
 
 /**
@@ -30,7 +31,8 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
   onClick,
   viewport,
   zoom,
-  studioMode = 'dark'
+  studioMode = 'dark',
+  isTouchDevice = false
 }) => {
   const [beatsPerMeasure, subdivisionsPerBeat] = timeSignature;
   const pixelsPerBeat = pixelsPerMeasure / beatsPerMeasure;
@@ -50,7 +52,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
   
   // Handle click
   const handleClick = (e: any) => {
-    if (!onClick) return;
+    if (!onClick || isTouchDevice) return; // Skip on touch devices
     
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
@@ -71,8 +73,8 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
           height={height}
           fill={BACKGROUND_COLOR}
           onClick={handleClick}
-          listening={true}
-          mouseCursor="pointer"
+          listening={!isTouchDevice} // Disable listening on touch devices
+          mouseCursor={isTouchDevice ? "default" : "pointer"}
         />
         
         {/* Bottom border */}
@@ -82,6 +84,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
           width={width}
           height={1}
           fill={BORDER_COLOR}
+          listening={false}
         />
         
         {/* Subtle shadow effect */}
@@ -96,6 +99,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
             [0, 'rgba(0, 0, 0, 0)', 1, 'rgba(0, 0, 0, 0.1)'] :
             [0, 'rgba(0, 0, 0, 0)', 1, 'rgba(0, 0, 0, 0.05)']
           }
+          listening={false}
         />
       
       {/* Draw subdivisions first (dimmest) - only visible ones */}
@@ -114,6 +118,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
                   points={[x+0.5, height * 0.85, x+0.5, height]}
                   stroke={SUBDIVISION_LINE_COLOR}
                   strokeWidth={1}
+                  listening={false}
                 />
               );
             });
@@ -136,6 +141,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
                 points={[x + 0.5, 0, x + 0.5, height]}
                 stroke={BEAT_LINE_COLOR}
                 strokeWidth={0.5}
+                listening={false}
               />
             );
           });
@@ -156,6 +162,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
               points={[x+0.5, 0, x+0.5, height]}
               stroke={MEASURE_LINE_COLOR}
               strokeWidth={1}
+              listening={false}
             />
           );
         });
@@ -179,6 +186,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
               fontFamily="Sen"
               fill={TEXT_COLOR_MAIN}
               verticalAlign="middle"
+              listening={false} // Text should never be interactive
             />
           );
         });
@@ -203,6 +211,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
                 fontFamily="Sen"
                 fill={TEXT_COLOR_SECONDARY}
                 verticalAlign="middle"
+                listening={false} // Text should never be interactive
               />
             );
           });
