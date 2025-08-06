@@ -33,6 +33,7 @@ export interface KonvaTrackProps {
   snapSizeInPixels?: number;
   trackColor?: string; // Track color prop
   data?: any; // Additional data for color etc
+  isTouchDevice?: boolean; // Add touch device prop
 }
 
 /**
@@ -63,7 +64,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
   gridSnapEnabled = true,
   snapSizeInPixels = 12.5,
   trackColor,
-  data
+  data,
+  isTouchDevice = false
 }) => {
   // Return null if track has a drum_track_id
   if (track.track_type === 'SAMPLER' && 
@@ -168,9 +170,29 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       width={displayWidth}
       height={height}
       draggable={false}  // Disable Konva dragging, use manual position updates
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      listening={true}  // Keep listening enabled for both touch and mouse
+      onMouseEnter={() => !isTouchDevice && setIsHovered(true)}
+      onMouseLeave={() => !isTouchDevice && setIsHovered(false)}
+      onTouchStart={(e) => {
+        console.log('📱 KonvaTrack onTouchStart', {
+          instanceId,
+          trackId: track.id,
+          isTouchDevice,
+          stage: !!e.target.getStage(),
+          pointerPosition: e.target.getStage()?.getPointerPosition()
+        });
+        
+        // For touch devices, treat touchstart like mousedown for dragging
+        e.cancelBubble = true;
+        if (onMouseDown) {
+          const idToUse = instanceId || track.id;
+          console.log('📱 Calling onMouseDown from touch with id:', idToUse);
+          onMouseDown(idToUse, e);
+        }
+      }}
       onClick={(e) => {
+        // Skip click handling on touch devices to avoid double-firing
+        if (isTouchDevice) return;
         console.log('🎯 KonvaTrack onClick', {
           instanceId,
           trackId: track.id,
@@ -190,6 +212,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         }
       }}
       onMouseDown={(e) => {
+        // Don't skip for touch devices - handle both mouse and touch through this handler
         console.log('🎯 KonvaTrack onMouseDown START', {
           instanceId,
           trackId: track.id,
@@ -359,8 +382,8 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       )}
       
       
-      {/* Custom resize handles - show on hover for all tracks */}
-      {isHovered && !isDragging && !isResizing && isValidWidth && (
+      {/* Custom resize handles - show on hover for all tracks (disabled on touch devices) */}
+      {!isTouchDevice && isHovered && !isDragging && !isResizing && isValidWidth && (
         <>
           {/* Left resize handle */}
           <Rect
@@ -501,6 +524,7 @@ export default React.memo(KonvaTrack, (prevProps, nextProps) => {
     prevProps.timeSignature[1] === nextProps.timeSignature[1] &&
     prevProps.gridSnapEnabled === nextProps.gridSnapEnabled &&
     prevProps.snapSizeInPixels === nextProps.snapSizeInPixels &&
-    prevProps.selectedCount === nextProps.selectedCount
+    prevProps.selectedCount === nextProps.selectedCount &&
+    prevProps.isTouchDevice === nextProps.isTouchDevice
   );
 });
