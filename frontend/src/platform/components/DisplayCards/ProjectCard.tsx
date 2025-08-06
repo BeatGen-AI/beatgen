@@ -12,17 +12,17 @@ import {
   FadeCardTitle
 } from "../../../components/ui/fade-card";
 import { Button } from "../../../components/ui/button";
-import { Separator } from "../../../components/ui/separator";
 import { FolderOpen } from 'lucide-react';
-import { IconTrashFilled } from '@tabler/icons-react';
-import { Project } from '../../types/project';
+import { IconTrashFilled, IconKey, IconMetronome, IconPlaylist } from '@tabler/icons-react';
+import { ProjectWithTrackPreviews } from '../../types/project';
 import { cn } from "../../../lib/utils";
 import PrefetchStatus from '../PrefetchStatus';
 import { PrefetchStatus as PrefetchStatusType } from '../../hooks/useProjectPrefetch';
 import { CARD_HEIGHTS } from "../../constants/cardDimensions";
+import ProjectPreview from './ProjectPreview';
 
 interface ProjectCardProps {
-  project: Project;
+  project: ProjectWithTrackPreviews;
   onOpenProject: (projectId: string) => void;
   onEditProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
@@ -49,12 +49,26 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     >
       {/* Fixed height header */}
       <FadeCardHeader 
-        className="flex flex-row items-center justify-between p-2 flex-shrink-0"
+        className="flex flex-row items-center justify-between px-3 py-2.5 flex-shrink-0"
         style={{ height: `${CARD_HEIGHTS.DISPLAY_CARD_HEADER}px` }}
       >
         <div className="flex items-center min-w-0 flex-1">
-          <FolderOpen className="text-primary mr-2" size={18} />
-          <FadeCardTitle className="text-sm font-medium truncate">{project.name}</FadeCardTitle>
+          <FolderOpen className="text-primary mr-2" size={16} />
+          <FadeCardTitle className="text-sm font-medium truncate mr-3">{project.name}</FadeCardTitle>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <IconMetronome size={12} />
+              <span>{project.bpm}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <IconKey size={12} />
+              <span>{project.key_signature?.replace(/\s+minor/i, 'm').replace(/\s+major/i, 'M')}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <IconPlaylist size={12} />
+              <span>{project.track_previews?.filter(t => t.track_type !== 'SAMPLER').length || 0}</span>
+            </div>
+          </div>
         </div>
         {project.id && getPrefetchStatus && (
           <div className="ml-2">
@@ -63,24 +77,17 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         )}
       </FadeCardHeader>
       
-      {/* Fixed height preview area */}
-      <div className="flex-1 flex items-center justify-center px-3 py-1 overflow-hidden">
-        <div className={cn(
-          "w-full h-full flex flex-col items-center justify-center",
-          `max-h-[${CARD_HEIGHTS.DISPLAY_CARD_CONTENT}px]`
-        )}>
-          <Separator className="w-full mb-2" />
-          <div className="project-metadata flex justify-between items-center text-sm text-muted-foreground w-full px-4">
-            <p>BPM: {project.bpm}</p>
-            <p>Key: {project.key_signature}</p>
-          </div>
-          <Separator className="w-full mt-2" />
-        </div>
+      {/* Fixed height preview area with overflow handling */}
+      <div 
+        className="px-3 py-1 overflow-hidden"
+        style={{ height: `${CARD_HEIGHTS.DISPLAY_CARD_CONTENT}px` }}
+      >
+        <ProjectPreview project={project} />
       </div>
       
-      {/* Fixed height footer */}
+      {/* Fixed height footer - always at bottom */}
       <FadeCardFooter 
-        className="p-2 flex items-center gap-2 flex-shrink-0"
+        className="px-2 pb-3 pt-1 flex items-center gap-2 flex-shrink-0 mt-auto"
         style={{ height: `${CARD_HEIGHTS.DISPLAY_CARD_FOOTER}px` }}
       >
         <Button

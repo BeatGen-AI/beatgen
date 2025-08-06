@@ -220,6 +220,35 @@ export interface ProjectUpdate {
   key_signature?: string | null;
 }
 /**
+ * API response model for project with lightweight track preview data
+ */
+export interface ProjectWithTrackPreviews {
+  created_at?: string;
+  updated_at?: string;
+  id?: string;
+  name: string;
+  bpm: number;
+  time_signature_numerator: number;
+  time_signature_denominator: number;
+  key_signature: string;
+  version?: number;
+  user_id: string;
+  track_previews?: TrackPreview[];
+}
+/**
+ * Minimal track data for project preview visualization
+ */
+export interface TrackPreview {
+  id: string;
+  name: string;
+  track_type: TrackType;
+  track_number: number;
+  mute?: boolean;
+  instance_metadata?: {
+    [k: string]: unknown;
+  }[];
+}
+/**
  * API response model for project with tracks data
  */
 export interface ProjectWithTracks {

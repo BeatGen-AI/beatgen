@@ -14,6 +14,7 @@ from app2.core.logging import get_api_logger
 from app2.models.project import (
     ProjectRead,
     ProjectWithTracks,
+    ProjectWithTrackPreviews,
 )
 from app2.models.assistant_message import AssistantMessage
 from app2.types.track_types import TrackType
@@ -27,14 +28,14 @@ _active_requests = {}
 _request_lock = None
 
 
-@router.get("", response_model=Page[ProjectRead])
-@router.get("/", response_model=Page[ProjectRead])
+@router.get("", response_model=Page[ProjectWithTrackPreviews])
+@router.get("/", response_model=Page[ProjectWithTrackPreviews])
 async def get_projects(
     request: Request,
     current_user: Dict[str, Any] = Depends(get_current_user),
     project_service: ProjectService = Depends(get_project_service),
     page_params: PageParams = Depends(),
-) -> Page[ProjectRead]:
+) -> Page[ProjectWithTrackPreviews]:
     """
     Get all projects for the current user
     """

@@ -2,7 +2,7 @@ import React from 'react';
 import { Plus, Music } from 'lucide-react';
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Card, CardContent } from "../../components/ui/card";
-import { Project } from '../types/project';
+import { ProjectWithTrackPreviews } from '../types/project';
 import { Button } from "../../components/ui/button";
 import ProjectCard from './DisplayCards/ProjectCard';
 import { PrefetchStatus as PrefetchStatusType } from '../hooks/useProjectPrefetch';
@@ -17,7 +17,7 @@ const logoColors = [
 ];
 
 interface ProjectsDisplayProps {
-  allFetchedProjects: Project[];
+  allFetchedProjects: ProjectWithTrackPreviews[];
   displayedProjectsCount: number;
   totalProjectsOnServer: number;
   loading: boolean;

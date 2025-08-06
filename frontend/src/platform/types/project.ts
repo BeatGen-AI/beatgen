@@ -13,5 +13,11 @@ export type {
   ProjectWithTracksEntity,
 } from './entities/project';
 
+// Re-export DTOs that don't need extension
+export type {
+  TrackPreview,
+  ProjectWithTrackPreviews
+} from './dto/project';
+
 // For backward compatibility, alias CombinedTrackEntity as CombinedTrack
 export type { CombinedTrackEntity as CombinedTrack } from './entities/project';

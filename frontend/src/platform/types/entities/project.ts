@@ -42,5 +42,7 @@ export type {
   ProjectCreate,
   ProjectRead,
   ProjectUpdate,
-  ProjectTrack
+  ProjectTrack,
+  TrackPreview,
+  ProjectWithTrackPreviews
 } from '../dto/project';
