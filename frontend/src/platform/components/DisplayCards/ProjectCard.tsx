@@ -12,17 +12,17 @@ import {
   FadeCardTitle
 } from "../../../components/ui/fade-card";
 import { Button } from "../../../components/ui/button";
-import { Separator } from "../../../components/ui/separator";
 import { FolderOpen } from 'lucide-react';
 import { IconTrashFilled } from '@tabler/icons-react';
-import { Project } from '../../types/project';
+import { ProjectWithTrackPreviews } from '../../types/project';
 import { cn } from "../../../lib/utils";
 import PrefetchStatus from '../PrefetchStatus';
 import { PrefetchStatus as PrefetchStatusType } from '../../hooks/useProjectPrefetch';
 import { CARD_HEIGHTS } from "../../constants/cardDimensions";
+import ProjectPreview from './ProjectPreview';
 
 interface ProjectCardProps {
-  project: Project;
+  project: ProjectWithTrackPreviews;
   onOpenProject: (projectId: string) => void;
   onEditProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
@@ -64,18 +64,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       </FadeCardHeader>
       
       {/* Fixed height preview area */}
-      <div className="flex-1 flex items-center justify-center px-3 py-1 overflow-hidden">
-        <div className={cn(
-          "w-full h-full flex flex-col items-center justify-center",
-          `max-h-[${CARD_HEIGHTS.DISPLAY_CARD_CONTENT}px]`
-        )}>
-          <Separator className="w-full mb-2" />
-          <div className="project-metadata flex justify-between items-center text-sm text-muted-foreground w-full px-4">
-            <p>BPM: {project.bpm}</p>
-            <p>Key: {project.key_signature}</p>
-          </div>
-          <Separator className="w-full mt-2" />
-        </div>
+      <div className="flex-1 flex flex-col px-3 py-1 overflow-hidden">
+        <ProjectPreview project={project} />
       </div>
       
       {/* Fixed height footer */}

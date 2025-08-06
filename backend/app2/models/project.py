@@ -67,6 +67,26 @@ class CombinedTrack(ProjectTrackBase):
     track: Union[AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead]
 
 
+# Lightweight track preview for project cards
+class TrackPreview(SQLModel):
+    """Minimal track data for project preview visualization"""
+    
+    id: uuid.UUID
+    name: str
+    track_type: TrackType
+    track_number: int
+    mute: bool = False
+    instance_metadata: List[dict] = Field(default_factory=list)  # Only positioning data
+
+
+# Project with lightweight track preview
+class ProjectWithTrackPreviews(ProjectBase):
+    """API response model for project with lightweight track preview data"""
+    
+    user_id: uuid.UUID
+    track_previews: List[TrackPreview] = Field(default_factory=list)
+
+
 # Projects with tracks included
 class ProjectWithTracks(ProjectBase):
     """API response model for project with tracks data"""

@@ -17,7 +17,7 @@ from app2.repositories.midi_track_repository import MidiTrackRepository
 from app2.repositories.audio_track_repository import AudioTrackRepository
 from app2.repositories.sampler_track_repository import SamplerTrackRepository
 from app2.repositories.drum_track_repository import DrumTrackRepository
-from app2.models.project import ProjectWithTracks, ProjectRead, CombinedTrack
+from app2.models.project import ProjectWithTracks, ProjectRead, CombinedTrack, ProjectWithTrackPreviews, TrackPreview
 from app2.types.track_types import TrackType
 from app2.services.track_service import TrackService
 from app2.dto.projects_dto import Page, PageParams
@@ -48,16 +48,16 @@ class ProjectService:
 
     async def get_user_projects(
         self, user_id: uuid.UUID, page_params: PageParams
-    ) -> Page[ProjectRead]:
+    ) -> Page[ProjectWithTrackPreviews]:
         """
-        Get all projects for a user with pagination
+        Get all projects for a user with pagination and lightweight track previews
 
         Args:
             user_id: The ID of the user
             page_params: Pagination parameters (page, size)
 
         Returns:
-            A paginated list of projects
+            A paginated list of projects with track previews
 
         Raises:
             ServiceException: If the operation fails
@@ -69,8 +69,7 @@ class ProjectService:
             import time
             service_start = time.time()
             
-            # Assume project_repository.get_by_user_id_paginated exists
-            # and returns (items, total_count)
+            # Get projects with tracks from repository
             projects, total_items = (
                 await self.project_repository.get_by_user_id_paginated(
                     user_id, page_params.page, page_params.size
@@ -81,9 +80,39 @@ class ProjectService:
             logger.info(f"⏱️ Repository call took: {repo_time * 1000:.2f}ms")
             
             validation_start = time.time()
-            project_reads = [
-                ProjectRead.model_validate(project) for project in projects
-            ]
+            projects_with_previews = []
+            
+            for project in projects:
+                # Create lightweight track previews
+                track_previews = []
+                
+                for project_track in project.project_tracks:
+                    # Create lightweight track preview with only essential data
+                    track_preview = TrackPreview(
+                        id=project_track.track_id,
+                        name=project_track.name,
+                        track_type=project_track.track_type,
+                        track_number=project_track.track_number,
+                        mute=project_track.mute,
+                        instance_metadata=project_track.instance_metadata or []
+                    )
+                    track_previews.append(track_preview)
+                
+                # Create ProjectWithTrackPreviews
+                project_with_previews = ProjectWithTrackPreviews(
+                    id=project.id,
+                    name=project.name,
+                    bpm=project.bpm,
+                    time_signature_numerator=project.time_signature_numerator,
+                    time_signature_denominator=project.time_signature_denominator,
+                    key_signature=project.key_signature,
+                    user_id=project.user_id,
+                    created_at=project.created_at,
+                    updated_at=project.updated_at,
+                    track_previews=track_previews,
+                )
+                projects_with_previews.append(project_with_previews)
+            
             validation_time = time.time() - validation_start
             logger.info(f"⏱️ Model validation took: {validation_time * 1000:.2f}ms")
             
@@ -92,7 +121,7 @@ class ProjectService:
             )
 
             return Page.create(
-                items=project_reads, total_items=total_items, params=page_params
+                items=projects_with_previews, total_items=total_items, params=page_params
             )
         except Exception as e:
             logger.error(f"Error getting user projects: {str(e)}")
@@ -467,7 +496,7 @@ class ProjectService:
                     "pan": track_data.get("pan", 0.0),
                     "mute": track_data.get("mute", False),
                     "duration_ticks": track_data.get("duration_ticks", 0),
-                    "track_number": track_idx,
+                    "track_number": track_data.get("track_number", track_idx),
                     "instance_metadata": instance_metadata,
                 }
                 

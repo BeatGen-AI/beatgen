@@ -64,9 +64,10 @@ class ProjectRepository:
         """Fallback method to get projects directly from database"""
         offset = (page - 1) * size
         
-        # Query for items on the current page
+        # Query for items on the current page with project_tracks
         items_statement = (
             select(Project)
+            .options(selectinload(Project.project_tracks))
             .where(Project.user_id == user_id)
             .offset(offset)
             .limit(size)
@@ -314,9 +315,10 @@ class ProjectRepository:
             
             offset = (page - 1) * size
 
-            # Query for items on the current page
+            # Query for items on the current page with project_tracks
             items_statement = (
                 select(Project)
+                .options(selectinload(Project.project_tracks))
                 .where(Project.user_id == user_id)
                 .offset(offset)
                 .limit(size)

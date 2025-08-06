@@ -10,6 +10,7 @@ import {
   ProjectUpdate, 
   ProjectWithTracks,
   ProjectWithTracksEntity,
+  ProjectWithTrackPreviews,
   CombinedTrack 
 } from '../types/project';
 
@@ -34,8 +35,8 @@ import { db } from '../../studio/core/db/dexie-client';
 import { DrumTrack } from '../types/dto/track_models/drum_track';
 import { Page } from '../types/pagination';
 
-export const getProjects = async (page: number = 1, size: number = 10): Promise<Page<Project>> => {
-  const response = await apiClient.get<Page<Project>>('/projects', {
+export const getProjects = async (page: number = 1, size: number = 10): Promise<Page<ProjectWithTrackPreviews>> => {
+  const response = await apiClient.get<Page<ProjectWithTrackPreviews>>('/projects', {
     params: { page, size }
   });
   return response.data;
