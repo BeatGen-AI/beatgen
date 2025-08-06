@@ -170,11 +170,29 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
       width={displayWidth}
       height={height}
       draggable={false}  // Disable Konva dragging, use manual position updates
-      listening={!isTouchDevice}  // Disable all event handling on touch devices
+      listening={true}  // Keep listening enabled for both touch and mouse
       onMouseEnter={() => !isTouchDevice && setIsHovered(true)}
       onMouseLeave={() => !isTouchDevice && setIsHovered(false)}
+      onTouchStart={(e) => {
+        console.log('📱 KonvaTrack onTouchStart', {
+          instanceId,
+          trackId: track.id,
+          isTouchDevice,
+          stage: !!e.target.getStage(),
+          pointerPosition: e.target.getStage()?.getPointerPosition()
+        });
+        
+        // For touch devices, treat touchstart like mousedown for dragging
+        e.cancelBubble = true;
+        if (onMouseDown) {
+          const idToUse = instanceId || track.id;
+          console.log('📱 Calling onMouseDown from touch with id:', idToUse);
+          onMouseDown(idToUse, e);
+        }
+      }}
       onClick={(e) => {
-        if (isTouchDevice) return;  // Skip click handling on touch devices
+        // Skip click handling on touch devices to avoid double-firing
+        if (isTouchDevice) return;
         console.log('🎯 KonvaTrack onClick', {
           instanceId,
           trackId: track.id,
@@ -194,7 +212,7 @@ export const KonvaTrack: React.FC<KonvaTrackProps> = ({
         }
       }}
       onMouseDown={(e) => {
-        if (isTouchDevice) return;  // Skip mousedown handling on touch devices
+        // Don't skip for touch devices - handle both mouse and touch through this handler
         console.log('🎯 KonvaTrack onMouseDown START', {
           instanceId,
           trackId: track.id,

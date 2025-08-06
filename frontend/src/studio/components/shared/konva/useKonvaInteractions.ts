@@ -264,7 +264,8 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
       itemId,
       mousePos,
       selectedIds: Array.from(selectedIds),
-      itemsCount: items.length
+      itemsCount: items.length,
+      stackTrace: new Error().stack
     });
     
     // Check if the dragged item is part of current selection
@@ -838,6 +839,28 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
         }
       }
     };
+    
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (isResizing || isDragging || isSelecting) {
+        if (e.touches.length === 1) {
+          const container = stage.container();
+          const rect = container.getBoundingClientRect();
+          const touch = e.touches[0];
+          const pos = {
+            x: touch.clientX - rect.left,
+            y: touch.clientY - rect.top
+          };
+          
+          if (isDragging) {
+            updateDrag(pos);
+          } else if (isResizing) {
+            updateResize(pos);
+          } else if (isSelecting) {
+            updateRectSelection(pos);
+          }
+        }
+      }
+    };
 
     const handleWindowMouseUp = () => {
       if (isDragging) {
@@ -848,16 +871,30 @@ export function useKonvaInteractions(options: UseKonvaInteractionsOptions) {
         endSelection();
       }
     };
+    
+    const handleWindowTouchEnd = () => {
+      if (isDragging) {
+        endDrag();
+      } else if (isResizing) {
+        endResize();
+      } else if (isSelecting) {
+        endSelection();
+      }
+    };
 
     window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
     window.addEventListener('mouseup', handleWindowMouseUp);
+    window.addEventListener('touchend', handleWindowTouchEnd);
 
     return () => {
       stage.off('mousedown touchstart', handleMouseDown);
       stage.off('mousemove touchmove', handleMouseMove);
       stage.off('mouseup touchend', handleMouseUp);
       window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('touchmove', handleWindowTouchMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('touchend', handleWindowTouchEnd);
     };
   }, [stage, handleMouseDown, handleMouseMove, handleMouseUp, isDragging, isResizing, isSelecting, updateDrag, updateResize, updateRectSelection, endDrag, endResize, endSelection]);
 

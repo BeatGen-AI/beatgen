@@ -824,8 +824,8 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
           bottom: 0,
           overflow: 'auto',
           backgroundColor: studioMode === 'dark' ? '#000000' : '#ffffff',
-          // Prevent ALL zoom and pinch gestures - only allow horizontal panning
-          touchAction: 'pan-x',
+          // Allow both panning and manipulation (drag/drop)
+          touchAction: 'manipulation',
           // Prevent zoom on iOS Safari
           userSelect: 'none',
           WebkitUserSelect: 'none',
@@ -1086,7 +1086,15 @@ export const KonvaTimeline = forwardRef<KonvaTimelineRef, KonvaTimelineProps>(({
                   // Start drag via interaction system
                   const stage = e.target.getStage();
                   const pos = stage?.getPointerPosition();
+                  console.log('🔥 KonvaTimeline onMouseDown handler', {
+                    id,
+                    hasStage: !!stage,
+                    pos,
+                    hasStartDrag: !!interaction.startDrag,
+                    eventType: e.type
+                  });
                   if (pos && interaction.startDrag) {
+                    console.log('🔥 Calling interaction.startDrag', { id, pos });
                     interaction.startDrag(id, pos);
                   }
                 }}
