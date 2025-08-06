@@ -29,8 +29,8 @@ const ProjectPreview: React.FC<ProjectPreviewProps> = ({ project }) => {
     return max;
   }, [tracksWithInstances]);
 
-  // Scale factor to fit preview in available width (roughly 200px available)
-  const scaleFactor = maxPosition > 0 ? 180 / maxPosition : 1;
+  // Scale factor to fit preview in available width (use more of the card width)
+  const scaleFactor = maxPosition > 0 ? 240 / maxPosition : 1;
 
   if (tracksWithInstances.length === 0) {
     // Show "No Tracks" message when no tracks have instances
@@ -42,8 +42,8 @@ const ProjectPreview: React.FC<ProjectPreviewProps> = ({ project }) => {
   }
 
   return (
-    <div className="h-full flex items-center justify-center overflow-hidden">
-      <div className="flex flex-col gap-1 w-full max-w-[200px]">
+    <div className="h-full flex items-center justify-center overflow-hidden px-2">
+      <div className="flex flex-col gap-1 w-full">
         {tracksWithInstances.map((track) => (
           <div 
             key={track.id}
