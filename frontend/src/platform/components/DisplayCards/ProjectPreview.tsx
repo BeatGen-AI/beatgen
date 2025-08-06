@@ -30,7 +30,7 @@ const ProjectPreview: React.FC<ProjectPreviewProps> = ({ project }) => {
   }, [tracksWithInstances]);
 
   // Scale factor to fit preview in available width (use more of the card width)
-  const scaleFactor = maxPosition > 0 ? 240 / maxPosition : 1;
+  const scaleFactor = maxPosition > 0 ? 228 / maxPosition : 1;
 
   if (tracksWithInstances.length === 0) {
     // Show "No Tracks" message when no tracks have instances
@@ -42,34 +42,32 @@ const ProjectPreview: React.FC<ProjectPreviewProps> = ({ project }) => {
   }
 
   return (
-    <div className="h-full flex items-center justify-center overflow-hidden px-2">
-      <div className="flex flex-col gap-1 w-full">
-        {tracksWithInstances.map((track) => (
+    <div className="h-full flex justify-center overflow-hidden pt-2">
+      <div className="flex flex-col gap-[3px] w-full px-3">
+        {tracksWithInstances.slice(0, 5).map((track) => (
           <div 
             key={track.id}
-            className="flex items-center justify-center h-3"
+            className="relative h-[12px] w-full"
           >
-            <div className="relative h-2 w-full">
-              {/* Show track instances as bars positioned absolutely */}
-              {track.instance_metadata?.map((instance: TrackInstance) => {
-                // Calculate width based on trim values
-                const instanceWidth = (instance.trim_end_ticks - instance.trim_start_ticks) * scaleFactor;
-                const instanceLeft = instance.x_position * scaleFactor;
-                
-                return (
-                  <div
-                    key={instance.id}
-                    className="absolute h-2 rounded-[2px]"
-                    style={{
-                      backgroundColor: getTrackColor(track.track_number),
-                      opacity: track.mute ? 0.3 : 0.7,
-                      width: `${Math.max(2, instanceWidth)}px`, // Minimum 2px width for visibility
-                      left: `${instanceLeft}px`
-                    }}
-                  />
-                );
-              })}
-            </div>
+            {/* Show track instances as bars positioned absolutely */}
+            {track.instance_metadata?.map((instance: TrackInstance) => {
+              // Calculate width based on trim values
+              const instanceWidth = (instance.trim_end_ticks - instance.trim_start_ticks) * scaleFactor;
+              const instanceLeft = instance.x_position * scaleFactor;
+              
+              return (
+                <div
+                  key={instance.id}
+                  className="absolute h-[12px] rounded-[3px]"
+                  style={{
+                    backgroundColor: getTrackColor(track.track_number),
+                    opacity: track.mute ? 0.3 : 0.8,
+                    width: `${Math.max(2, instanceWidth)}px`, // Minimum 2px width for visibility
+                    left: `${instanceLeft}px`
+                  }}
+                />
+              );
+            })}
           </div>
         ))}
       </div>
