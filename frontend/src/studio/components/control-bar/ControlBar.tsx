@@ -1,4 +1,4 @@
-import React, { forwardRef, memo, useRef, useState } from 'react';
+import React, { forwardRef, memo, useRef, useState, useCallback } from 'react';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../../../components/ui/tooltip';
@@ -102,6 +102,32 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 }, ref) => {
     const { studioMode } = useAppTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
+    
+    // Click animation handler
+    const handleButtonClick = useCallback((callback: () => void) => {
+        return (event: React.MouseEvent<HTMLButtonElement>) => {
+            const button = event.currentTarget;
+            
+            // Add click animation class - more noticeable scale
+            button.style.transform = 'scale(0.85)';
+            button.style.transition = 'transform 0.15s ease-out';
+            
+            // Reset after animation with bounce effect
+            setTimeout(() => {
+                button.style.transform = 'scale(1.05)';
+                setTimeout(() => {
+                    button.style.transform = 'scale(1)';
+                    setTimeout(() => {
+                        button.style.transform = '';
+                        button.style.transition = '';
+                    }, 100);
+                }, 100);
+            }, 100);
+            
+            // Execute the original callback
+            callback();
+        };
+    }, []);
 
     const handlePlayPause = () => {
         if (isPlaying) {
@@ -138,9 +164,9 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={() => {
+                                        onClick={handleButtonClick(() => {
                                             window.location.href = '/home';
-                                        }}
+                                        })}
                                         className="h-8 w-8 p-0 rounded-lg transition-colors"
                                         style={{
                                             backgroundColor: 'transparent',
@@ -169,7 +195,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={onUndo}
+                                        onClick={handleButtonClick(onUndo)}
                                         disabled={!canUndo}
                                         className="h-8 w-8 p-0 rounded-lg transition-colors disabled:opacity-50"
                                         style={{
@@ -201,7 +227,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={onRedo}
+                                        onClick={handleButtonClick(onRedo)}
                                         disabled={!canRedo}
                                         className="h-8 w-8 p-0 rounded-lg transition-colors disabled:opacity-50"
                                         style={{
@@ -247,7 +273,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 
                         <div className="flex gap-3">
                             <button
-                                onClick={handlePlayPause}
+                                onClick={handleButtonClick(handlePlayPause)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -268,7 +294,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                 {isPlaying ? <IconPlayerPauseFilled size={24} /> : <IconPlayerPlayFilled size={24} />}
                             </button>
                             <button
-                                onClick={handleStop}
+                                onClick={handleButtonClick(handleStop)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -318,7 +344,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             />
                             
                             <button
-                                onClick={onZoomIn}
+                                onClick={handleButtonClick(onZoomIn)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -351,7 +377,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             </div>
                             
                             <button
-                                onClick={onZoomOut}
+                                onClick={handleButtonClick(onZoomOut)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -386,7 +412,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={onExportClick}
+                                        onClick={handleButtonClick(onExportClick || (() => {}))}
                                         className="h-8 w-8 p-0 rounded-lg transition-colors"
                                         style={{
                                             backgroundColor: 'transparent',
@@ -413,7 +439,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             </Tooltip>
                             
                             <button
-                                onClick={onChatToggle}
+                                onClick={handleButtonClick(onChatToggle)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -435,7 +461,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             </button>
                             
                             <button
-                                onClick={onSettingsToggle}
+                                onClick={handleButtonClick(onSettingsToggle)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
