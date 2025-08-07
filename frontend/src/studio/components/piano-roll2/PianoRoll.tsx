@@ -28,6 +28,8 @@ import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { IconPencil, IconBrush, IconEraser } from '@tabler/icons-react';
 // Import tooltip components
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../../../components/ui/tooltip';
+// Import custom hooks
+import { useButtonClickAnimation } from '../../../hooks/useButtonClickAnimation';
 
 // Define a constant grid size to use throughout the component
 const GRID_SIZE = 48; // pixels
@@ -1209,6 +1211,9 @@ export const PianoRoll: FC<PianoRollProps> = ({
   const handleZoomOut = () => {
     setZoomLevel(prev => Math.max(MIN_ZOOM, prev - ZOOM_STEP));
   };
+  
+  // Use button click animation hook
+  const { handleButtonClick } = useButtonClickAnimation();
   
   // Calculate effective grid size based on zoom level
   const effectiveGridSize = GRID_SIZE * zoomLevel;
@@ -2673,7 +2678,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
                   borderRadius: '2px',
                   transition: 'all 0.2s ease',
                 }}
-                onClick={() => handleToolSelect('select')}
+                onClick={handleButtonClick(() => handleToolSelect('select'))}
                 onMouseEnter={selectedTool !== 'select' ? iconHoverStyle : undefined}
                 onMouseLeave={selectedTool !== 'select' ? iconLeaveStyle : undefined}
               />
@@ -2696,7 +2701,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}
-                    onClick={() => handleToolSelect('pen')}
+                    onClick={handleButtonClick(() => handleToolSelect('pen'))}
                     onMouseEnter={selectedTool !== 'pen' ? iconHoverStyle : undefined}
                     onMouseLeave={selectedTool !== 'pen' ? iconLeaveStyle : undefined}
                   >
@@ -2732,7 +2737,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}
-                    onClick={() => handleToolSelect('highlighter')}
+                    onClick={handleButtonClick(() => handleToolSelect('highlighter'))}
                     onMouseEnter={selectedTool !== 'highlighter' ? iconHoverStyle : undefined}
                     onMouseLeave={selectedTool !== 'highlighter' ? iconLeaveStyle : undefined}
                   >
@@ -2768,7 +2773,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}
-                    onClick={() => handleToolSelect('eraser')}
+                    onClick={handleButtonClick(() => handleToolSelect('eraser'))}
                     onMouseEnter={selectedTool !== 'eraser' ? iconHoverStyle : undefined}
                     onMouseLeave={selectedTool !== 'eraser' ? iconLeaveStyle : undefined}
                   >
@@ -2829,7 +2834,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
               <img 
                 src="/icons/zoom-out.svg"
                 alt="Zoom out"
-                onClick={handleZoomOut}
+                onClick={handleButtonClick(handleZoomOut)}
                 style={{ 
                   width: "18px",
                   height: "18px",
@@ -2852,7 +2857,7 @@ export const PianoRoll: FC<PianoRollProps> = ({
               <img 
                 src="/icons/zoom-in.svg"
                 alt="Zoom in"
-                onClick={handleZoomIn}
+                onClick={handleButtonClick(handleZoomIn)}
                 style={{ 
                   width: "18px",
                   height: "18px",

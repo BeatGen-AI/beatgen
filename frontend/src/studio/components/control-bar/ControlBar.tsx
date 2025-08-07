@@ -18,6 +18,7 @@ import { Tool } from '../../shared/interactions';
 import { GridSnapOption, getGridSnapOptionName } from '../piano-roll2/gridConstants';
 import { GridSnapSelector } from '../ui/GridSnapSelector';
 import { cn } from '../../../lib/utils';
+import { useButtonClickAnimation } from '../../../hooks/useButtonClickAnimation';
 
 interface StudioControlBarProps {
     canUndo: boolean;
@@ -102,6 +103,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 }, ref) => {
     const { studioMode } = useAppTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
+    const { handleButtonClick } = useButtonClickAnimation();
 
     const handlePlayPause = () => {
         if (isPlaying) {
@@ -138,9 +140,9 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={() => {
+                                        onClick={handleButtonClick(() => {
                                             window.location.href = '/home';
-                                        }}
+                                        })}
                                         className="h-8 w-8 p-0 rounded-lg transition-colors"
                                         style={{
                                             backgroundColor: 'transparent',
@@ -169,7 +171,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={onUndo}
+                                        onClick={handleButtonClick(onUndo)}
                                         disabled={!canUndo}
                                         className="h-8 w-8 p-0 rounded-lg transition-colors disabled:opacity-50"
                                         style={{
@@ -201,7 +203,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={onRedo}
+                                        onClick={handleButtonClick(onRedo)}
                                         disabled={!canRedo}
                                         className="h-8 w-8 p-0 rounded-lg transition-colors disabled:opacity-50"
                                         style={{
@@ -247,7 +249,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 
                         <div className="flex gap-3">
                             <button
-                                onClick={handlePlayPause}
+                                onClick={handleButtonClick(handlePlayPause)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -268,7 +270,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                                 {isPlaying ? <IconPlayerPauseFilled size={24} /> : <IconPlayerPlayFilled size={24} />}
                             </button>
                             <button
-                                onClick={handleStop}
+                                onClick={handleButtonClick(handleStop)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -318,7 +320,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             />
                             
                             <button
-                                onClick={onZoomIn}
+                                onClick={handleButtonClick(onZoomIn)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -351,7 +353,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             </div>
                             
                             <button
-                                onClick={onZoomOut}
+                                onClick={handleButtonClick(onZoomOut)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -386,7 +388,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={onExportClick}
+                                        onClick={handleButtonClick(onExportClick || (() => {}))}
                                         className="h-8 w-8 p-0 rounded-lg transition-colors"
                                         style={{
                                             backgroundColor: 'transparent',
@@ -413,7 +415,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             </Tooltip>
                             
                             <button
-                                onClick={onChatToggle}
+                                onClick={handleButtonClick(onChatToggle)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
@@ -435,7 +437,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
                             </button>
                             
                             <button
-                                onClick={onSettingsToggle}
+                                onClick={handleButtonClick(onSettingsToggle)}
                                 className="h-8 w-8 p-0 rounded-lg transition-colors"
                                 style={{
                                     backgroundColor: 'transparent',
