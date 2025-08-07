@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +41,32 @@ export const GridSnapSelector: React.FC<GridSnapSelectorProps> = ({
   iconSize = 24,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLElement>(null);
+
+  // Handle dropdown open/close and trigger animation
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    
+    // Only animate on opening (when user clicks)
+    if (open && triggerRef.current) {
+      const trigger = triggerRef.current;
+      // Apply the click animation
+      trigger.style.transform = 'scale(0.85)';
+      trigger.style.transition = 'transform 0.15s ease-out';
+      
+      // Reset after animation with bounce effect
+      setTimeout(() => {
+        trigger.style.transform = 'scale(1.05)';
+        setTimeout(() => {
+          trigger.style.transform = 'scale(1)';
+          setTimeout(() => {
+            trigger.style.transform = '';
+            trigger.style.transition = '';
+          }, 100);
+        }, 100);
+      }, 100);
+    }
+  };
 
   const handleValueChange = (newValue: string) => {
     const option = parseInt(newValue) as GridSnapOption;
@@ -53,6 +79,7 @@ export const GridSnapSelector: React.FC<GridSnapSelectorProps> = ({
       // Piano roll specific styling with Grid3X3
       return (
         <div
+          ref={triggerRef as React.RefObject<HTMLDivElement>}
           onMouseDown={(e) => {
             e.stopPropagation();
           }}
@@ -88,6 +115,7 @@ export const GridSnapSelector: React.FC<GridSnapSelectorProps> = ({
     // Control bar styling - matching other buttons in ControlBar
     return (
       <button
+        ref={triggerRef as React.RefObject<HTMLButtonElement>}
         className="h-8 w-8 p-0 rounded-lg transition-colors"
         style={{
           backgroundColor: 'transparent',
@@ -275,7 +303,7 @@ export const GridSnapSelector: React.FC<GridSnapSelectorProps> = ({
     <TooltipProvider>
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <Tooltip>
-          <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+          <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
             <DropdownMenuTrigger asChild>
               <TooltipTrigger asChild>
                 {renderTrigger()}
