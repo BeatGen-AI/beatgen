@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, ReactElement, useMemo, FC, useCallback } from "react";
+import React, { useState, useRef, useEffect, ReactElement, useMemo, FC } from "react";
 import { Rnd } from "react-rnd";
 import { Stage, Layer, Line, Rect } from "react-konva";
 import Konva from "konva";
@@ -28,6 +28,8 @@ import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { IconPencil, IconBrush, IconEraser } from '@tabler/icons-react';
 // Import tooltip components
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../../../components/ui/tooltip';
+// Import custom hooks
+import { useButtonClickAnimation } from '../../../hooks/useButtonClickAnimation';
 
 // Define a constant grid size to use throughout the component
 const GRID_SIZE = 48; // pixels
@@ -1210,31 +1212,8 @@ export const PianoRoll: FC<PianoRollProps> = ({
     setZoomLevel(prev => Math.max(MIN_ZOOM, prev - ZOOM_STEP));
   };
   
-  // Click animation handler
-  const handleButtonClick = useCallback((callback: () => void) => {
-    return (event: React.MouseEvent<HTMLElement>) => {
-      const button = event.currentTarget;
-      
-      // Add click animation class - more noticeable scale
-      button.style.transform = 'scale(0.85)';
-      button.style.transition = 'transform 0.15s ease-out';
-      
-      // Reset after animation with bounce effect
-      setTimeout(() => {
-        button.style.transform = 'scale(1.05)';
-        setTimeout(() => {
-          button.style.transform = 'scale(1)';
-          setTimeout(() => {
-            button.style.transform = '';
-            button.style.transition = '';
-          }, 100);
-        }, 100);
-      }, 100);
-      
-      // Execute the original callback
-      callback();
-    };
-  }, []);
+  // Use button click animation hook
+  const { handleButtonClick } = useButtonClickAnimation();
   
   // Calculate effective grid size based on zoom level
   const effectiveGridSize = GRID_SIZE * zoomLevel;

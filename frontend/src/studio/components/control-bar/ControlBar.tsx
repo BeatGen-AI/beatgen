@@ -1,4 +1,4 @@
-import React, { forwardRef, memo, useRef, useState, useCallback } from 'react';
+import React, { forwardRef, memo, useRef, useState } from 'react';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../../../components/ui/tooltip';
@@ -18,6 +18,7 @@ import { Tool } from '../../shared/interactions';
 import { GridSnapOption, getGridSnapOptionName } from '../piano-roll2/gridConstants';
 import { GridSnapSelector } from '../ui/GridSnapSelector';
 import { cn } from '../../../lib/utils';
+import { useButtonClickAnimation } from '../../../hooks/useButtonClickAnimation';
 
 interface StudioControlBarProps {
     canUndo: boolean;
@@ -102,32 +103,7 @@ const StudioControlBar = memo(forwardRef<HTMLDivElement, StudioControlBarProps>(
 }, ref) => {
     const { studioMode } = useAppTheme();
     const timeDisplayRef = useRef<TimeDisplayHandle>(null);
-    
-    // Click animation handler
-    const handleButtonClick = useCallback((callback: () => void) => {
-        return (event: React.MouseEvent<HTMLButtonElement>) => {
-            const button = event.currentTarget;
-            
-            // Add click animation class - more noticeable scale
-            button.style.transform = 'scale(0.85)';
-            button.style.transition = 'transform 0.15s ease-out';
-            
-            // Reset after animation with bounce effect
-            setTimeout(() => {
-                button.style.transform = 'scale(1.05)';
-                setTimeout(() => {
-                    button.style.transform = 'scale(1)';
-                    setTimeout(() => {
-                        button.style.transform = '';
-                        button.style.transition = '';
-                    }, 100);
-                }, 100);
-            }, 100);
-            
-            // Execute the original callback
-            callback();
-        };
-    }, []);
+    const { handleButtonClick } = useButtonClickAnimation();
 
     const handlePlayPause = () => {
         if (isPlaying) {
