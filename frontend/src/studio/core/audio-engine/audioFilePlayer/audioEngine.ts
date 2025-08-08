@@ -1,51 +1,31 @@
 import * as Tone from 'tone';
 import { convertVolumeToDecibels } from '../../../utils/audioProcessing';
 import { TrackPlayer } from '../trackPlayer';
+import { MUSIC_CONSTANTS } from '../../../constants/musicConstants';
 
-export interface AudioTrack {
-  id: string;
-  name: string;
-  channel: Tone.Channel;
-  player?: Tone.Player;
-  volume: number;
-  pan: number;
-  muted: boolean;
-  soloed: boolean;
-  trimStartTicks?: number;
-  trimEndTicks?: number;
-  originalDurationTicks?: number;
-  position?: {
-    x: number; // Position in ticks from left (musical time position)
-    y: number; // Position in pixels from top (track order)
-  };
+export interface AudioPlayerInstance {
+  id: string;              // Instance ID (e.g., "track_123_instance_2")
+  trackId: string;         // Parent track ID (e.g., "track_123")
+  player: Tone.Player;     // The Tone.js player for this instance
 }
 
 class AudioFilePlayer implements TrackPlayer {
   private static instance: AudioFilePlayer;
   private mainOutput: Tone.Channel;
-  private tracks: Map<string, AudioTrack>;
+  
+  // New storage structure
+  private playerInstances: Map<string, AudioPlayerInstance>;  // instanceId -> player
+  private trackChannels: Map<string, Tone.Channel>;          // trackId -> channel (shared)
+  private audioBuffers: Map<string, AudioBuffer>;            // trackId -> buffer (shared)
+  
+  // Store reference for accessing track/instance data
+  private getStoreState?: () => any;
 
   private constructor() {
     this.mainOutput = new Tone.Channel().toDestination();
-    this.tracks = new Map();
-  }
-  setTrackPositionTicks(id: string, position: number): Promise<void> {
-    throw new Error('Method not implemented.');
-  }
-  setTrackTrimStartTicks(id: string, start: number): Promise<void> {
-    throw new Error('Method not implemented.');
-  }
-  setTrackTrimEndTicks(id: string, end: number): Promise<void> {
-    throw new Error('Method not implemented.');
-  }
-  play(position: number): Promise<void> {
-    throw new Error('Method not implemented.');
-  }
-  pause(): Promise<void> {
-    throw new Error('Method not implemented.');
-  }
-  stop(): Promise<void> {
-    throw new Error('Method not implemented.');
+    this.playerInstances = new Map();
+    this.trackChannels = new Map();
+    this.audioBuffers = new Map();
   }
 
   public static getInstance(): AudioFilePlayer {
@@ -55,275 +35,443 @@ class AudioFilePlayer implements TrackPlayer {
     return AudioFilePlayer.instance;
   }
 
+  /**
+   * Set store getter for accessing track/instance data
+   */
+  public setStoreGetter(getter: () => any): void {
+    this.getStoreState = getter;
+  }
+
+  /**
+   * Get track data from store
+   */
+  private getTrackFromStore(trackId: string): any {
+    if (!this.getStoreState) return null;
+    const state = this.getStoreState();
+    return state.tracks?.find((t: any) => t.id === trackId);
+  }
+
+  /**
+   * Get instance data from store
+   */
+  private getInstanceFromStore(instanceId: string): any {
+    if (!this.getStoreState) return null;
+    const state = this.getStoreState();
+    
+    // Extract track ID from instance ID (format: "trackId_instance_N")
+    const parts = instanceId.split('_instance_');
+    if (parts.length < 2) return null;
+    
+    const trackId = parts[0];
+    const track = this.getTrackFromStore(trackId);
+    return track?.instances?.find((i: any) => i.id === instanceId);
+  }
+
   public async initialize(): Promise<void> {
     try {
-      console.log('AudioEngine: Starting Tone.js');
-      //await Tone.start();
-      // Set context to start immediately
-      //Tone.getContext().resume();
-      console.log('AudioEngine: Tone.js started successfully');
+      console.log('AudioEngine: Initializing');
+      // Tone.js initialization is handled elsewhere
+      console.log('AudioEngine: Initialized successfully');
     } catch (error) {
-      console.error('AudioEngine: Failed to start Tone.js:', error);
+      console.error('AudioEngine: Failed to initialize:', error);
       throw error;
     }
   }
 
-  public async createTrack(id: string, name: string, audioFile?: File): Promise<AudioTrack> {
-    console.log(`Creating track ${id}, cleaning up existing...`);
-    this.removeTrack(id);
+  /**
+   * Load audio buffer for a track (shared by all instances)
+   */
+  public async loadAudioBuffer(trackId: string, audioFile: File): Promise<AudioBuffer> {
+    console.log(`Loading audio buffer for track ${trackId}`);
+    
+    // Check if buffer already exists
+    if (this.audioBuffers.has(trackId)) {
+      console.log(`Audio buffer already exists for track ${trackId}`);
+      return this.audioBuffers.get(trackId)!;
+    }
+    
+    try {
+      const buffer = await audioFile.arrayBuffer();
+      const audioBuffer = await Tone.getContext().decodeAudioData(buffer);
+      
+      this.audioBuffers.set(trackId, audioBuffer);
+      console.log(`Audio buffer loaded for track ${trackId}`);
+      
+      return audioBuffer;
+    } catch (error) {
+      console.error(`Failed to load audio buffer for track ${trackId}:`, error);
+      throw error;
+    }
+  }
 
+  /**
+   * Get audio buffer for a track
+   */
+  public getAudioBuffer(trackId: string): AudioBuffer | undefined {
+    return this.audioBuffers.get(trackId);
+  }
+
+  /**
+   * Get channel for a track (for export purposes)
+   */
+  public getTrackChannel(trackId: string): Tone.Channel | undefined {
+    return this.trackChannels.get(trackId);
+  }
+
+  /**
+   * Create or get track channel (shared by all instances)
+   */
+  public async createTrackChannel(trackId: string, name: string): Promise<Tone.Channel> {
+    // Check if channel already exists
+    if (this.trackChannels.has(trackId)) {
+      return this.trackChannels.get(trackId)!;
+    }
+    
     const channel = new Tone.Channel().connect(this.mainOutput);
     
-    // Default volume is 80 (on 0-100 scale, which represents original volume)
+    // Set default volume
     const defaultVolume = 80;
-    
-    // Convert the default volume to decibels and set the channel volume
     channel.volume.value = convertVolumeToDecibels(defaultVolume, false);
     
-    // Get track name from the filename if available
-    const trackName = audioFile ? audioFile.name.split('.')[0] : "MIDI Instrument";
+    this.trackChannels.set(trackId, channel);
+    console.log(`Created channel for track ${trackId} (${name})`);
     
-    const track: AudioTrack = {
-      id,
-      name: name,
-      channel,
-      volume: defaultVolume,
-      pan: 0,
-      muted: false,
-      soloed: false
-    };
-
-    if (audioFile) {
-      console.log(`Loading audio file for track ${id}`);
-      const buffer = await audioFile.arrayBuffer();
-      const player = new Tone.Player({
-        url: URL.createObjectURL(new Blob([buffer])),
-        loop: false,
-        autostart: false,
-      }).connect(channel);
-      
-      // Do NOT sync with transport immediately
-      // This would cause unexpected behavior - players should only be synced right before playing
-      track.player = player;
-      await Tone.loaded();
-      console.log(`Audio loaded for track ${id}`);
-    }
-
-    this.tracks.set(id, track);
-    return track;
+    return channel;
   }
 
-  public removeTrack(id: string): void {
-    const track = this.tracks.get(id);
-    if (track) {
-      if (track.player) {
-        track.player.stop();
-        track.player.dispose();  // dispose handles both unsync and disconnect
-      }
-      track.channel.dispose();
-      this.tracks.delete(id);
+  /**
+   * Create a player instance for a specific track instance
+   */
+  public async createInstance(trackId: string, instanceId: string): Promise<void> {
+    console.log(`Creating player instance ${instanceId} for track ${trackId}`);
+    
+    // Check if instance already exists
+    if (this.playerInstances.has(instanceId)) {
+      console.log(`Player instance ${instanceId} already exists`);
+      return;
+    }
+    
+    // Get or create the shared channel for this track
+    let channel = this.trackChannels.get(trackId);
+    if (!channel) {
+      const track = this.getTrackFromStore(trackId);
+      channel = await this.createTrackChannel(trackId, track?.name || 'Audio Track');
+    }
+    
+    // Get the shared buffer for this track
+    const buffer = this.audioBuffers.get(trackId);
+    if (!buffer) {
+      throw new Error(`No audio buffer loaded for track ${trackId}`);
+    }
+    
+    // Create a new player for this instance, connected to the shared channel
+    const player = new Tone.Player({
+      url: buffer,
+      loop: false,
+      autostart: false
+    }).connect(channel);
+    
+    await Tone.loaded();
+    
+    this.playerInstances.set(instanceId, {
+      id: instanceId,
+      trackId,
+      player
+    });
+    
+    console.log(`Created player instance ${instanceId} for track ${trackId}`);
+  }
+
+  /**
+   * Remove a specific instance
+   */
+  public removeInstance(instanceId: string): void {
+    const instance = this.playerInstances.get(instanceId);
+    if (instance) {
+      instance.player.stop();
+      instance.player.dispose();
+      this.playerInstances.delete(instanceId);
+      console.log(`Removed player instance ${instanceId}`);
     }
   }
 
-  public setTrackVolume(id: string, volume: number): Promise<void> {
-    const track = this.tracks.get(id);
-    if (track) {
-      track.volume = volume;
-      
-      // Convert UI volume (0-100) to appropriate dB scale using the utility function
-      const volumeInDB = convertVolumeToDecibels(volume, track.muted);
-      
-      // Set the channel's volume
-      track.channel.volume.value = volumeInDB;
-      
-      // If there's a player, also set its volume directly to ensure consistency
-      if (track.player) {
-        track.player.volume.value = volumeInDB;
+  /**
+   * Remove all instances and cleanup track resources
+   */
+  public removeTrack(trackId: string): void {
+    console.log(`Removing track ${trackId} and all its instances`);
+    
+    // Remove all instances for this track
+    const instancesToRemove: string[] = [];
+    for (const [instanceId, instance] of this.playerInstances) {
+      if (instance.trackId === trackId) {
+        instancesToRemove.push(instanceId);
       }
+    }
+    
+    instancesToRemove.forEach(instanceId => this.removeInstance(instanceId));
+    
+    // Remove track channel
+    const channel = this.trackChannels.get(trackId);
+    if (channel) {
+      channel.dispose();
+      this.trackChannels.delete(trackId);
+    }
+    
+    // Remove audio buffer
+    this.audioBuffers.delete(trackId);
+    
+    console.log(`Removed track ${trackId} and ${instancesToRemove.length} instances`);
+  }
+
+  /**
+   * Get all instances for a track
+   */
+  public getPlayerInstances(trackId: string): AudioPlayerInstance[] {
+    const instances: AudioPlayerInstance[] = [];
+    for (const instance of this.playerInstances.values()) {
+      if (instance.trackId === trackId) {
+        instances.push(instance);
+      }
+    }
+    return instances;
+  }
+
+  /**
+   * Get all player instances
+   */
+  public getAllPlayerInstances(): AudioPlayerInstance[] {
+    return Array.from(this.playerInstances.values());
+  }
+
+  /**
+   * Get specific instance
+   */
+  public getPlayerInstance(instanceId: string): AudioPlayerInstance | undefined {
+    return this.playerInstances.get(instanceId);
+  }
+
+  // Track-level controls (affect ALL instances via shared channel)
+  
+  public setTrackVolume(trackId: string, volume: number): Promise<void> {
+    const channel = this.trackChannels.get(trackId);
+    if (channel) {
+      const track = this.getTrackFromStore(trackId);
+      const muted = track?.mute || false;
+      channel.volume.value = convertVolumeToDecibels(volume, muted);
     }
     return Promise.resolve();
   }
 
-  public setTrackPan(id: string, pan: number): Promise<void> {
-    const track = this.tracks.get(id);
-    if (track) {
-      track.pan = pan;
-      // Convert from UI range (-100 to 100) to Tone.js range (-1 to 1)
-      const normalizedPan = pan / 100;
-      track.channel.pan.value = normalizedPan;
+  public setTrackPan(trackId: string, pan: number): Promise<void> {
+    const channel = this.trackChannels.get(trackId);
+    if (channel) {
+      channel.pan.value = pan / 100;
     }
     return Promise.resolve();
   }
 
-  public setTrackMute(id: string, muted: boolean): Promise<void> {
-    const track = this.tracks.get(id);
-    if (track) {
-      track.muted = muted;
-      // Convert volume to decibels using the correct utility function
-      track.channel.volume.value = convertVolumeToDecibels(track.volume, muted);
-      
-      // If there's a player, also update its volume for consistency
-      if (track.player) {
-        track.player.volume.value = convertVolumeToDecibels(track.volume, muted);
+  public setTrackMute(trackId: string, muted: boolean): Promise<void> {
+    const channel = this.trackChannels.get(trackId);
+    if (channel) {
+      const track = this.getTrackFromStore(trackId);
+      const volume = track?.volume || 80;
+      channel.volume.value = convertVolumeToDecibels(volume, muted);
+    }
+    return Promise.resolve();
+  }
+
+  /**
+   * Set solo state for a track
+   */
+  public setTrackSolo(trackId: string, soloed: boolean): void {
+    // Solo logic would affect all tracks, muting non-soloed ones
+    if (soloed) {
+      // Mute all other tracks
+      for (const [otherTrackId, channel] of this.trackChannels) {
+        if (otherTrackId !== trackId) {
+          channel.volume.value = -Infinity;
+        }
+      }
+    } else {
+      // Restore all track volumes
+      for (const [otherTrackId, channel] of this.trackChannels) {
+        const track = this.getTrackFromStore(otherTrackId);
+        if (track) {
+          channel.volume.value = convertVolumeToDecibels(track.volume || 80, track.mute || false);
+        }
       }
     }
-    return Promise.resolve();
   }
 
-  public getAllTracks(): AudioTrack[] {
-    return Array.from(this.tracks.values());
-  }
-
+  /**
+   * Set master volume
+   */
   public setMasterVolume(volume: number): void {
     this.mainOutput.volume.value = volume;
   }
 
-  // Stops all playback and should only be used for full stop, not pause
+  /**
+   * Stop all playback
+   */
   public stopAllPlayback(): void {
-    console.log('Stopping all playback (full stop)');
-    this.tracks.forEach((track, id) => {
-      if (track.player) {
-        console.log(`Stopping player for track ${id}`);
-        // With Tone.js, we need to be careful with stop() as it completely stops the player
-        // Only stop if it's actually playing
-        if (track.player.state === "started") {
-          track.player.stop();  
-        }
-        
-        // Do NOT resync here - this is a critical fix
-        // Players should only be synced right before starting them with a specific offset
+    console.log('Stopping all playback');
+    for (const instance of this.playerInstances.values()) {
+      if (instance.player.state === "started") {
+        instance.player.stop();
       }
-    });
+    }
   }
-  
-  // Add a method specifically for pausing (doesn't actually stop the players)
+
+  /**
+   * Pause all playback
+   */
   public pauseAllPlayback(): void {
-    console.log('Pausing all playback (maintain position)');
-    // For pause, we don't actually call stop() on the players
-    // We just let the transport pause and the players will pause with it
-    // since they are synced to the transport
-    this.tracks.forEach((track, id) => {
-      if (track.player && track.player.state === "started") {
-        console.log(`Track ${id} player synced with paused transport`);
-      }
-    });
-  }
-
-  // Add method to update track name
-  public setTrackName(id: string, name: string): void {
-    const track = this.tracks.get(id);
-    if (track) {
-      track.name = name;
-    }
-  }
-  
-  // Set a track's position on the timeline
-  public setTrackPosition(id: string, x: number, y: number): void {
-    const track = this.tracks.get(id);
-    if (track) {
-      track.position = { x, y };
-      console.log(`AudioEngine: Set track ${id} position to x:${x}, y:${y}`);
-    }
-  }
-  
-  // Set a track's solo state
-  public setTrackSolo(id: string, soloed: boolean): void {
-    const track = this.tracks.get(id);
-    if (track) {
-      track.soloed = soloed;
-      
-      // If soloing this track, mute all other non-soloed tracks
-      if (soloed) {
-        this.tracks.forEach((otherTrack) => {
-          if (otherTrack.id !== id && !otherTrack.soloed) {
-            // Temporarily mute this track by setting volume to -Infinity
-            otherTrack.channel.volume.value = -Infinity;
-          }
-        });
-      } else {
-        // When un-soloing, restore volumes of all tracks that aren't explicitly muted
-        this.tracks.forEach((otherTrack) => {
-          if (!otherTrack.muted && !otherTrack.soloed) {
-            otherTrack.channel.volume.value = convertVolumeToDecibels(otherTrack.volume, false);
-          }
-        });
+    console.log('Pausing all playback');
+    // For pause, we just stop the players but maintain their state
+    for (const instance of this.playerInstances.values()) {
+      if (instance.player.state === "started") {
+        instance.player.stop();
       }
     }
   }
 
+  // Helper methods for conversion
+  private ticksToSeconds(ticks: number): number {
+    const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote;
+    const bpm = Tone.Transport.bpm.value;
+    const beats = ticks / ppq;
+    const secondsPerBeat = 60 / bpm;
+    return beats * secondsPerBeat;
+  }
+
+  // TrackPlayer interface implementations (these will be updated in Phase 2)
+  
+  setTrackPositionTicks(id: string, position: number): Promise<void> {
+    // Position is now per-instance, not per-track
+    console.warn('setTrackPositionTicks is deprecated - position is per-instance');
+    return Promise.resolve();
+  }
+  
+  setTrackTrimStartTicks(id: string, start: number): Promise<void> {
+    // Trim is now per-instance, not per-track
+    console.warn('setTrackTrimStartTicks is deprecated - trim is per-instance');
+    return Promise.resolve();
+  }
+  
+  setTrackTrimEndTicks(id: string, end: number): Promise<void> {
+    // Trim is now per-instance, not per-track
+    console.warn('setTrackTrimEndTicks is deprecated - trim is per-instance');
+    return Promise.resolve();
+  }
+  
+  play(position: number): Promise<void> {
+    // This will be handled by Transport
+    throw new Error('play should be called on Transport, not AudioFilePlayer directly');
+  }
+  
+  pause(): Promise<void> {
+    this.pauseAllPlayback();
+    return Promise.resolve();
+  }
+  
+  stop(): Promise<void> {
+    this.stopAllPlayback();
+    return Promise.resolve();
+  }
+
+  // Deprecated methods (for backward compatibility during transition)
+  
+  /**
+   * @deprecated Use loadAudioBuffer and createInstance instead
+   */
+  public async createTrack(id: string, name: string, audioFile?: File): Promise<any> {
+    console.warn('createTrack is deprecated - use loadAudioBuffer and createInstance instead');
+    
+    if (audioFile) {
+      await this.loadAudioBuffer(id, audioFile);
+    }
+    await this.createTrackChannel(id, name);
+    
+    // Create a default instance for backward compatibility
+    const instanceId = `${id}_instance_1`;
+    if (audioFile) {
+      await this.createInstance(id, instanceId);
+    }
+    
+    return {
+      id,
+      name,
+      channel: this.trackChannels.get(id),
+      player: this.playerInstances.get(instanceId)?.player,
+      volume: 80,
+      pan: 0,
+      muted: false,
+      soloed: false
+    };
+  }
+
+  /**
+   * @deprecated Use removeInstance for instances or removeTrack for entire track
+   */
+  public getAllTracks(): any[] {
+    console.warn('getAllTracks is deprecated - use getPlayerInstances or getAllPlayerInstances');
+    
+    // Return a legacy format for backward compatibility
+    const tracks: any[] = [];
+    const processedTrackIds = new Set<string>();
+    
+    for (const [trackId, channel] of this.trackChannels) {
+      if (!processedTrackIds.has(trackId)) {
+        const track = this.getTrackFromStore(trackId);
+        const firstInstance = this.getPlayerInstances(trackId)[0];
+        
+        tracks.push({
+          id: trackId,
+          name: track?.name || 'Audio Track',
+          channel,
+          player: firstInstance?.player,
+          volume: track?.volume || 80,
+          pan: track?.pan || 0,
+          muted: track?.mute || false,
+          soloed: track?.solo || false,
+          position: { x: 0, y: 0 }
+        });
+        
+        processedTrackIds.add(trackId);
+      }
+    }
+    
+    return tracks;
+  }
+
+  /**
+   * @deprecated Position is now per-instance
+   */
+  public setTrackPosition(trackId: string, x: number, y: number): void {
+    console.warn('setTrackPosition is deprecated - position is per-instance in the store');
+  }
+
+  /**
+   * @deprecated Trim is now per-instance
+   */
   public setTrackTrim(trackId: string, trimStartTicks: number, trimEndTicks: number): void {
-    const track = this.tracks.get(trackId);
-    if (!track || !track.player) return;
-    
-    // Store trim values on the track
-    track.trimStartTicks = trimStartTicks;
-    track.trimEndTicks = trimEndTicks;
-    
-    // If we have a Tone.Player, update its trim settings
-    if (track.player instanceof Tone.Player) {
-      // Convert ticks to seconds
-      const ticksPerSecond = Tone.Transport.bpm.value * Tone.Transport.PPQ / 60;
-      const trimStartSeconds = trimStartTicks / ticksPerSecond;
-      const trimEndSeconds = trimEndTicks / ticksPerSecond;
-      
-      // Log the trim values for debugging
-      console.log(`Setting track trim for ${trackId}:`, {
-        trimStartTicks,
-        trimEndTicks,
-        trimStartSeconds,
-        trimEndSeconds,
-        playerDuration: track.player.buffer?.duration || 0
-      });
-      
-      // Set playback region for the player
-      if (track.player.buffer) {
-        // Clamp values to buffer duration
-        const bufferDuration = track.player.buffer.duration;
-        const startSec = Math.min(Math.max(0, trimStartSeconds), bufferDuration);
-        const endSec = Math.min(Math.max(startSec, trimEndSeconds), bufferDuration);
-        
-        // Update player settings - these will be used during playback
-        // The key is to set both loopStart/End AND playbackRate.
-        // Simply setting loopStart/End is not enough - we need to modify how the player is scheduled
-        track.player.loopStart = startSec;
-        track.player.loopEnd = endSec;
-        
-        // Store additional settings on the player instance for use during playback scheduling
-        // These will be used by the transport controller when syncing the player
-        (track.player as any)._trimSettings = {
-          trimStartSeconds: startSec,
-          trimEndSeconds: endSec,
-          trimEnabled: true
-        };
-        
-        console.log(`Set player trim for ${trackId}: ${startSec}s to ${endSec}s (${endSec - startSec}s duration)`);
-      } else {
-        console.warn(`Cannot set trim for ${trackId}: player has no buffer`);
-      }
-    }
+    console.warn('setTrackTrim is deprecated - trim is per-instance in the store');
   }
 
-  public updateTrack(trackId: string, updatedTrack: AudioTrack): void {
-    // Check if track exists in the map
-    if (!this.tracks.has(trackId)) return;
-    
-    // Get the existing track
-    const existingTrack = this.tracks.get(trackId);
-    
-    // Update the track in the tracks map
-    this.tracks.set(trackId, { 
-      ...existingTrack,
-      ...updatedTrack,
-      // Ensure player and channel instances are preserved
-      player: existingTrack.player,
-      channel: existingTrack.channel
-    });
-    
-    // If the track has trim settings, apply them
-    if (updatedTrack.trimStartTicks !== undefined && updatedTrack.trimEndTicks !== undefined) {
-      this.setTrackTrim(trackId, updatedTrack.trimStartTicks, updatedTrack.trimEndTicks);
-    }
+  /**
+   * @deprecated Use setTrackVolume, setTrackPan, setTrackMute instead
+   */
+  public setTrackName(trackId: string, name: string): void {
+    console.warn('setTrackName is deprecated - track name is managed in the store');
+  }
+
+  /**
+   * @deprecated
+   */
+  public updateTrack(trackId: string, updatedTrack: any): void {
+    console.warn('updateTrack is deprecated - use specific methods like setTrackVolume');
   }
 }
 
-export default AudioFilePlayer; 
+export default AudioFilePlayer;

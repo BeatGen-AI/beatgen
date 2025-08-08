@@ -1491,7 +1491,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         });
       });
       
-      baseOffsetX = maxRightPosition + pixelsToTicks(96, bpm, timeSignature); // 96px gap in ticks
+      baseOffsetX = maxRightPosition; // Place directly after the rightmost instance
     }
 
     // Find the leftmost instance position to calculate relative positions
@@ -1820,6 +1820,20 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
     }
     
+    // Create audio player instance for audio tracks
+    if (track.track_type === 'AUDIO') {
+      const audioEngine = rootGet().store?.getAudioEngine();
+      if (audioEngine) {
+        try {
+          // Create the new player instance in the audio engine
+          await audioEngine.createInstance(trackId, instanceId);
+          console.log(`Created audio player instance ${instanceId} for track ${trackId}`);
+        } catch (error) {
+          console.error(`Failed to create audio player instance ${instanceId}:`, error);
+        }
+      }
+    }
+    
     // Create history action for adding instance
     const action = new Actions.InstanceAdd(get, trackId, newInstance);
     await executeHistoryAction(action);
@@ -1863,6 +1877,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const midiManager = rootGet().store?.getMidiManager();
       if (midiManager) {
         midiManager.unregisterInstance(trackId, instanceId);
+      }
+    }
+    
+    // Remove audio player instance for audio tracks
+    if (track.track_type === 'AUDIO') {
+      const audioEngine = rootGet().store?.getAudioEngine();
+      if (audioEngine) {
+        audioEngine.removeInstance(instanceId);
+        console.log(`Removed audio player instance ${instanceId} for track ${trackId}`);
       }
     }
     

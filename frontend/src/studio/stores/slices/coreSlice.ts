@@ -47,6 +47,12 @@ export const createCoreSlice: StoreSliceCreator<CoreSlice> = (set, get) => {
       }
       
       await store.initializeAudio();
+      
+      // Set up the store getter for the transport and audio engine
+      // This allows them to access track/instance data from the Zustand store
+      const transport = store.getTransport();
+      transport.setStoreGetter(() => rootGet());
+      
       setCoreState({ isInitialized: true });
       
       // Keep this for debugging if needed, but generally avoid window assignment

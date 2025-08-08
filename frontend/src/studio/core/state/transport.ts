@@ -28,6 +28,7 @@ export class TransportController implements Transport {
     private isStarting: boolean = false;
     private maxPosition: number = 3600;  // Default to 1 hour (3600 seconds) as safety
     private static FADE_TIME = 0.01; // 10ms fade
+    private getStoreState?: () => any;  // Store getter for accessing track data
 
     constructor(initialBpm: number = 120) {
         this.audioEngine = AudioFilePlayer.getInstance();
@@ -41,6 +42,15 @@ export class TransportController implements Transport {
     
     setMidiManager(midiManager: MidiManager): void {
         this.midiManager = midiManager;
+    }
+
+    /**
+     * Set store getter for accessing track/instance data
+     */
+    setStoreGetter(getter: () => any): void {
+        this.getStoreState = getter;
+        // Also pass it to the audio engine
+        this.audioEngine.setStoreGetter(getter);
     }
 
     get position(): number {
@@ -114,6 +124,10 @@ export class TransportController implements Transport {
 
     // Track the IDs of scheduled events so we can clean them up
     private scheduledEvents: number[] = [];
+    // Track scheduled audio players so we can stop them
+    private scheduledPlayers: Set<Tone.Player> = new Set();
+    // Track actively playing instances with their stop times
+    private activeInstances: Map<string, { player: Tone.Player, stopTime?: number }> = new Map();
     
     public async play(tracks?: CombinedTrack[]): Promise<void> {
         if (this.isStarting) return;
@@ -141,8 +155,10 @@ export class TransportController implements Transport {
                 throw new Error(`Cannot start playback: Audio context resumption failed - ${contextError.message}`);
             }
             
-            // Clear any previously scheduled events
+            // Clear any previously scheduled events and active instances
             this.clearScheduledEvents();
+            // Ensure activeInstances is also cleared (should already be cleared by clearScheduledEvents)
+            this.activeInstances.clear();
             
             // CRITICAL: Get the EXACT transport position right before playback starts
             // This ensures we're using the most current position for calculations
@@ -150,80 +166,180 @@ export class TransportController implements Transport {
             console.log(`[TransportController.play] transportPosition determined as: ${transportPosition.toFixed(4)}s`);
             console.log(`Starting playback at transport position: ${transportPosition}s`);
             
-            // Ensure all players are completely reset before starting new playback
-            this.audioEngine.getAllTracks().forEach(track => {
-                if (track.player) {
+            // Ensure all player instances are completely reset before starting new playback
+            this.audioEngine.getAllPlayerInstances().forEach(instance => {
+                if (instance.player) {
                     // Always stop and unsync ALL players before starting playback
-                    if (track.player.state === "started") {
-                        track.player.stop();
+                    if (instance.player.state === "started") {
+                        instance.player.stop();
                     }
+                    
+                    // Additional safety: explicitly stop at current time to cancel all schedules
+                    // This is critical to prevent any lingering scheduled stops from previous playback
+                    instance.player.stop(Tone.now());
+                    
                     // CRITICAL: Ensure completely unsynced
-                    track.player.unsync();
+                    instance.player.unsync();
                     
                     // Cancel any volume ramps
-                    track.player.volume.cancelScheduledValues(Tone.now());
+                    instance.player.volume.cancelScheduledValues(Tone.now());
                 }
             });
             
             // Process each track instance with its specific timeline position
             // If tracks are provided, use them; otherwise fall back to audio engine tracks
             if (tracks && tracks.length > 0) {
+                console.log(`[Transport] Processing ${tracks.length} tracks with instances`);
                 // New instance-aware approach
-                tracks.forEach(track => {
+                for (const track of tracks) {
                     // Skip tracks without instances
-                    if (!track.instances || track.instances.length === 0) return;
+                    if (!track.instances || track.instances.length === 0) {
+                        console.log(`[Transport] Track ${track.id} has no instances, skipping`);
+                        continue;
+                    }
+                    console.log(`[Transport] Track ${track.id} (${track.track_type}) has ${track.instances.length} instances`);
                     
                     // Process each instance of the track
-                    track.instances.forEach(instance => {
+                    for (const instance of track.instances) {
                         try {
-                            const trackXTicks = instance.x_position;
-                            const trimStartTicks = instance.trim_start_ticks;
-                            const trimEndTicks = instance.trim_end_ticks;
+                            const trackXTicks = instance.x_position || 0;
+                            const trimStartTicks = instance.trim_start_ticks || 0;
+                            const trimEndTicks = instance.trim_end_ticks || track.duration_ticks || 0;
                             
-                            // For audio tracks, get the player from audio engine
+                            // For audio tracks, handle instance-specific playback
                             if (track.track_type === 'AUDIO') {
-                                const audioTrack = this.audioEngine.getAllTracks().find(t => t.id === track.id);
-                                if (!audioTrack || !audioTrack.player) return;
+                                // Ensure the instance exists in the audio engine
+                                let playerInstance = this.audioEngine.getPlayerInstance(instance.id);
+                                
+                                // Create the instance if it doesn't exist
+                                if (!playerInstance) {
+                                    try {
+                                        // First ensure we have the audio buffer loaded
+                                        if (!this.audioEngine.getAudioBuffer(track.id)) {
+                                            console.warn(`No audio buffer for track ${track.id}, skipping instance ${instance.id}`);
+                                            continue;
+                                        }
+                                        
+                                        // Create the instance
+                                        await this.audioEngine.createInstance(track.id, instance.id);
+                                        playerInstance = this.audioEngine.getPlayerInstance(instance.id);
+                                    } catch (err) {
+                                        console.error(`Failed to create instance ${instance.id} for track ${track.id}:`, err);
+                                        continue;
+                                    }
+                                }
+                                
+                                if (!playerInstance || !playerInstance.player) continue;
                                 
                                 // Calculate the offset when this instance should start playing
                                 const trackPositionOffset = this.getTrackTimeOffset(trackXTicks);
                                 
-                                // TODO: Handle instance-specific playback for audio tracks
-                                // For now, use the first instance only (temporary)
-                                if (instance.id.endsWith('_instance_1')) {
-                                    // Apply trim settings if needed
-                                    const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote;
-                                    const bpm = Tone.getTransport().bpm.value;
-                                    const trimStartSec = (trimStartTicks / ppq) * (60 / bpm);
-                                    const trimEndSec = (trimEndTicks / ppq) * (60 / bpm);
+                                // Apply trim settings if needed
+                                const ppq = MUSIC_CONSTANTS.pulsesPerQuarterNote;
+                                const bpm = Tone.getTransport().bpm.value;
+                                const trimStartSec = (trimStartTicks / ppq) * (60 / bpm);
+                                const trimEndSec = (trimEndTicks / ppq) * (60 / bpm);
+                                
+                                // Validate trim values
+                                if (trimEndSec <= trimStartSec && trimEndTicks > 0) {
+                                    console.warn(`Invalid trim for instance ${instance.id}: end (${trimEndSec}s) <= start (${trimStartSec}s)`);
+                                    continue;
+                                }
+                                
+                                if (trimStartTicks > 0 || trimEndTicks < track.duration_ticks) {
+                                    // Set trim on the player
+                                    (playerInstance.player as any)._trimSettings = {
+                                        trimEnabled: true,
+                                        trimStartSeconds: trimStartSec,
+                                        trimEndSeconds: trimEndSec
+                                    };
+                                }
+                                
+                                // Stop any existing playback
+                                if (playerInstance.player.state === "started") {
+                                    playerInstance.player.stop();
+                                }
+                                // Don't sync to transport - we're managing timing manually
+                                playerInstance.player.unsync();
+                                
+                                // Schedule playback based on timing
+                                if (trackPositionOffset <= transportPosition) {
+                                    // Track should already be playing - start immediately with offset
+                                    const startOffset = Math.max(0, transportPosition - trackPositionOffset);
                                     
-                                    if (trimStartTicks > 0 || trimEndTicks < track.duration_ticks) {
-                                        // Set trim on the player
-                                        (audioTrack.player as any)._trimSettings = {
-                                            trimEnabled: true,
-                                            trimStartSeconds: trimStartSec,
-                                            trimEndSeconds: trimEndSec
-                                        };
+                                    // Check if we're still within the trimmed duration
+                                    const trimmedDuration = trimEndSec - trimStartSec;
+                                    if (startOffset < trimmedDuration) {
+                                        // Calculate how much of the trimmed audio should play
+                                        const remainingDuration = trimmedDuration - startOffset;
+                                        
+                                        // Start the player at the correct offset within the trimmed region
+                                        const actualStartOffset = trimStartSec + startOffset;
+                                        playerInstance.player.start(0, actualStartOffset);
+                                        
+                                        // Schedule a stop at the exact time the trim should end
+                                        // This is critical for accurate trim end timing
+                                        if (trimmedDuration > 0) {
+                                            // Calculate the exact stop time using Tone.now() plus remaining duration
+                                            const stopTime = Tone.now() + remainingDuration;
+                                            playerInstance.player.stop(stopTime);
+                                            
+                                            // Track this active instance
+                                            this.activeInstances.set(instance.id, {
+                                                player: playerInstance.player,
+                                                stopTime: stopTime
+                                            });
+                                            
+                                            console.log(`Audio track ${track.id} instance ${instance.id} started at offset ${actualStartOffset}s, will stop in ${remainingDuration}s`);
+                                        } else {
+                                            // Track without stop time
+                                            this.activeInstances.set(instance.id, {
+                                                player: playerInstance.player
+                                            });
+                                        }
+                                    } else {
+                                        console.log(`Audio track ${track.id} instance ${instance.id} already past its trim end, not starting`);
                                     }
+                                } else {
+                                    // Track should start in the future - schedule it
+                                    const delaySeconds = trackPositionOffset - transportPosition;
                                     
-                                    // Schedule playback
-                                    if (trackPositionOffset <= transportPosition) {
-                                        const startOffset = Math.max(0, transportPosition - trackPositionOffset);
-                                        audioTrack.player.stop();
-                                        audioTrack.player.unsync();
-                                        audioTrack.player.start(0, trimStartSec + startOffset);
-                                        audioTrack.player.sync();
-                                        console.log(`Audio track ${track.id} instance ${instance.id} synced, starting at offset ${startOffset}s`);
-                                    }
+                                    // Schedule using Tone.Transport.schedule for proper timing
+                                    const eventId = Tone.Transport.schedule((time) => {
+                                        // Make sure player is stopped before starting
+                                        if (playerInstance.player.state === "started") {
+                                            playerInstance.player.stop(time);
+                                        }
+                                        
+                                        // Calculate the trimmed duration
+                                        const trimmedDuration = trimEndSec - trimStartSec;
+                                        
+                                        // Start the player at the scheduled time from trim start
+                                        playerInstance.player.start(time, trimStartSec);
+                                        
+                                        // Schedule stop at the exact trim end time
+                                        // This ensures trim end is respected even for scheduled playback
+                                        if (trimmedDuration > 0) {
+                                            const stopTime = time + trimmedDuration;
+                                            playerInstance.player.stop(stopTime);
+                                            console.log(`Audio track ${track.id} instance ${instance.id} scheduled to start, will stop after ${trimmedDuration}s`);
+                                        }
+                                    }, `+${delaySeconds}`);
+                                    
+                                    // Track this scheduled event so we can cancel it if needed
+                                    this.scheduledEvents.push(eventId);
+                                    this.scheduledPlayers.add(playerInstance.player);
+                                    console.log(`Audio track ${track.id} instance ${instance.id} scheduled to start in ${delaySeconds}s`);
                                 }
                             }
                         } catch (error) {
                             console.error(`Error scheduling instance ${instance.id} of track ${track.id}:`, error);
                         }
-                    });
-                });
+                    }
+                }
             } else {
                 // Fallback to old approach for backward compatibility
+                // Use the deprecated getAllTracks method for now
                 this.audioEngine.getAllTracks().forEach(track => {
                     if (!track.player) return;
                     
@@ -365,6 +481,31 @@ export class TransportController implements Transport {
             Tone.getTransport().clear(id);
         });
         this.scheduledEvents = [];
+        
+        // Clear active instances - these are currently playing with scheduled stops
+        console.log(`Clearing ${this.activeInstances.size} active instances`);
+        this.activeInstances.forEach((info, instanceId) => {
+            // Force stop immediately to cancel any scheduled stops
+            if (info.player.state === "started") {
+                info.player.stop();
+            }
+            // Double-stop to ensure all schedules are cancelled
+            info.player.stop(Tone.now());
+        });
+        this.activeInstances.clear();
+        
+        // Also stop any scheduled audio players
+        console.log(`Clearing ${this.scheduledPlayers.size} scheduled audio players`);
+        this.scheduledPlayers.forEach(player => {
+            // Stop the player immediately if it's playing
+            if (player.state === "started") {
+                player.stop();
+            }
+            // Cancel any scheduled starts or stops
+            // Calling stop() with Tone.now() ensures immediate cancellation
+            player.stop(Tone.now());
+        });
+        this.scheduledPlayers.clear();
     }
 
     public pause(): void {
@@ -390,9 +531,9 @@ export class TransportController implements Transport {
         }
         
         // Fade out before stopping
-        this.audioEngine.getAllTracks().forEach(track => {
-            if (track.player) {
-                track.player.volume.rampTo(-Infinity, TransportController.FADE_TIME);
+        this.audioEngine.getAllPlayerInstances().forEach(instance => {
+            if (instance.player) {
+                instance.player.volume.rampTo(-Infinity, TransportController.FADE_TIME);
             }
         });
 
@@ -404,12 +545,14 @@ export class TransportController implements Transport {
             // Pause the transport first (doesn't reset position)
             Tone.getTransport().pause();
             
-            // Stop all playing players to ensure clean state
-            this.audioEngine.getAllTracks().forEach(track => {
-                if (track.player && track.player.state === "started") {
-                    track.player.stop();
-                    // Important: unsync players when pausing to prevent state confusion
-                    track.player.unsync();
+            // Stop all playing player instances to ensure clean state
+            this.audioEngine.getAllPlayerInstances().forEach(instance => {
+                if (instance.player && instance.player.state === "started") {
+                    instance.player.stop();
+                }
+                // Always unsync to ensure clean state for next playback
+                if (instance.player) {
+                    instance.player.unsync();
                 }
             });
             
@@ -442,10 +585,10 @@ export class TransportController implements Transport {
             console.error('Failed to stop sampler tracks:', error);
         }
         
-        // Stop players first with fade out
-        this.audioEngine.getAllTracks().forEach(track => {
-            if (track.player) {
-                track.player.volume.rampTo(-Infinity, TransportController.FADE_TIME);
+        // Stop player instances first with fade out
+        this.audioEngine.getAllPlayerInstances().forEach(instance => {
+            if (instance.player) {
+                instance.player.volume.rampTo(-Infinity, TransportController.FADE_TIME);
             }
         });
 
@@ -459,14 +602,20 @@ export class TransportController implements Transport {
             // Now stop all audio playback
             this.audioEngine.stopAllPlayback();
             
-            // Prepare players for future playback - completely reset their state
-            this.audioEngine.getAllTracks().forEach(track => {
-                if (track.player) {
+            // Prepare player instances for future playback - completely reset their state
+            this.audioEngine.getAllPlayerInstances().forEach(instance => {
+                if (instance.player) {
+                    // Make sure player is stopped
+                    if (instance.player.state === "started") {
+                        instance.player.stop();
+                    }
                     // Unsync to clear any previous state
-                    track.player.unsync();
+                    instance.player.unsync();
+                    // Reset volume to original
+                    instance.player.volume.cancelScheduledValues(Tone.now());
+                    instance.player.volume.value = 0;
                     
-                    // No need to seek here - we'll handle positioning when play is called
-                    console.log(`Reset player for track ${track.id}`);
+                    console.log(`Reset player for instance ${instance.id}`);
                 }
             });
             
@@ -513,22 +662,33 @@ export class TransportController implements Transport {
             console.error('Failed to seek sampler tracks:', error);
         }
         
-        // 4. Completely reset all players
-        this.audioEngine.getAllTracks().forEach(track => {
-            if (track.player) {
-                // Ensure player is fully stopped
-                if (track.player.state === "started") {
-                    track.player.stop();
+        // 4. Completely reset all player instances
+        this.audioEngine.getAllPlayerInstances().forEach(instance => {
+            if (instance.player) {
+                // Ensure player is fully stopped - this cancels any scheduled stops
+                if (instance.player.state === "started") {
+                    instance.player.stop();
                 }
                 
-                // Completely reset player state
-                track.player.unsync();
+                // Additional safety: explicitly stop at current time to cancel schedules
+                instance.player.stop(Tone.now());
                 
-                // Clear any volume automations
-                track.player.volume.cancelScheduledValues(Tone.now());
-                // Let the audio engine handle volume setting with proper dB conversion
-                this.audioEngine.setTrackVolume(track.id, track.volume);
-                this.audioEngine.setTrackMute(track.id, track.muted);
+                // Completely reset player state - unsync from transport
+                instance.player.unsync();
+                
+                // Clear any volume automations and reset to 0
+                instance.player.volume.cancelScheduledValues(Tone.now());
+                instance.player.volume.value = 0;
+                
+                // Get track data from store if available to restore volume/mute
+                if (this.getStoreState) {
+                    const state = this.getStoreState();
+                    const track = state.tracks?.find((t: any) => t.id === instance.trackId);
+                    if (track) {
+                        this.audioEngine.setTrackVolume(instance.trackId, track.volume || 80);
+                        this.audioEngine.setTrackMute(instance.trackId, track.mute || false);
+                    }
+                }
             }
         });
         
@@ -546,11 +706,18 @@ export class TransportController implements Transport {
         
         // If was playing, restart with the new position
         if (wasPlaying) {
+            // Get tracks from store to pass to play() method
+            let tracks: CombinedTrack[] | undefined;
+            if (this.getStoreState) {
+                const state = this.getStoreState();
+                tracks = state.tracks;
+            }
+            
             // Use a small delay to ensure Tone.js state is updated
             // This is a crucial step to ensure reliable seeking
             setTimeout(() => {
-                console.log(`Restarting playback from position: ${Tone.getTransport().seconds}s`);
-                this.play(); 
+                console.log(`Restarting playback from position: ${Tone.getTransport().seconds}s with ${tracks?.length || 0} tracks`);
+                this.play(tracks); 
             }, 30); // 30ms is a good compromise
         }
     }
@@ -575,21 +742,30 @@ export class TransportController implements Transport {
 
     public async loadAudioFile(trackId: string, file: File, position?: { x: number, y: number }): Promise<void> {
         try {
-            await this.audioEngine.createTrack(trackId, file.name, file);
+            // Load the audio buffer for the track
+            await this.audioEngine.loadAudioBuffer(trackId, file);
             
-            const track = this.audioEngine.getAllTracks().find(t => t.id === trackId);
-            if (!track?.player) {
-                throw new Error(`Failed to create player for track ${trackId}`);
+            // Create the channel for the track
+            await this.audioEngine.createTrackChannel(trackId, file.name);
+            
+            // Create a default first instance (for backward compatibility)
+            const instanceId = `${trackId}_instance_1`;
+            await this.audioEngine.createInstance(trackId, instanceId);
+            
+            // Get the created instance to check buffer duration
+            const instance = this.audioEngine.getPlayerInstance(instanceId);
+            if (!instance?.player) {
+                throw new Error(`Failed to create player instance for track ${trackId}`);
             }
 
             // Safely access buffer duration
-            const duration = track.player.buffer?.duration ?? 0;
+            const duration = instance.player.buffer?.duration ?? 0;
             this.maxPosition = Math.max(this.maxPosition, duration);
             
-            // If position is provided, set it in the AudioEngine
+            // Position is now managed per-instance in the store, not in AudioEngine
             if (position) {
-                console.log(`TransportController: Setting track ${trackId} position to x:${position.x}, y:${position.y}`);
-                this.audioEngine.setTrackPosition(trackId, position.x, position.y);
+                console.log(`TransportController: Track ${trackId} position should be set in store at x:${position.x}, y:${position.y}`);
+                // The actual position setting should be handled by the store/action layer
             }
         } catch (error) {
             console.error(`Failed to load audio file for track ${trackId}:`, error);
@@ -607,12 +783,24 @@ export class TransportController implements Transport {
         }
         
         // Recalculate maxPosition when a track is removed
-        this.maxPosition = Math.max(
-            0,
-            ...this.audioEngine.getAllTracks()
-                .filter(t => t.id !== trackId)
-                .map(t => t.player?.buffer?.duration ?? 0)
-        );
+        // Get unique track IDs from all instances
+        const remainingTrackIds = new Set<string>();
+        this.audioEngine.getAllPlayerInstances().forEach(instance => {
+            if (instance.trackId !== trackId) {
+                remainingTrackIds.add(instance.trackId);
+            }
+        });
+        
+        // Calculate max duration from remaining tracks
+        const durations: number[] = [];
+        for (const tid of remainingTrackIds) {
+            const instances = this.audioEngine.getPlayerInstances(tid);
+            if (instances.length > 0 && instances[0].player?.buffer) {
+                durations.push(instances[0].player.buffer.duration);
+            }
+        }
+        
+        this.maxPosition = Math.max(0, ...durations);
     }
     
     public setPosition(position: number): void {
@@ -636,11 +824,11 @@ export class TransportController implements Transport {
             return;
         }
         
-        // Find the track
-        const track = this.audioEngine.getAllTracks().find(t => t.id === trackId);
-        if (!track || !track.player) {
+        // Find track instances
+        const instances = this.audioEngine.getPlayerInstances(trackId);
+        if (!instances || instances.length === 0) {
             // Log a warning instead of just returning silently
-            console.warn(`Track ${trackId} or its player not found during position change while playing. Skipping sync for now.`);
+            console.warn(`Track ${trackId} instances not found during position change while playing. Skipping sync for now.`);
             return; // Continue to return, but log the warning
         }
         
@@ -662,13 +850,13 @@ export class TransportController implements Transport {
         // Stop all playback immediately and clear scheduled events
         this.clearScheduledEvents();
         
-        // Stop all players and unsync them
-        this.audioEngine.getAllTracks().forEach(t => {
-            if (t.player) {
-                if (t.player.state === "started") {
-                    t.player.stop();
+        // Stop all player instances and unsync them
+        this.audioEngine.getAllPlayerInstances().forEach(instance => {
+            if (instance.player) {
+                if (instance.player.state === "started") {
+                    instance.player.stop();
                 }
-                t.player.unsync();
+                instance.player.unsync();
             }
         });
         
@@ -680,10 +868,17 @@ export class TransportController implements Transport {
         
         // Now restart if needed
         if (wasPlaying) {
+            // Get tracks from store to pass to play() method
+            let tracks: CombinedTrack[] | undefined;
+            if (this.getStoreState) {
+                const state = this.getStoreState();
+                tracks = state.tracks;
+            }
+            
             // Use setTimeout to allow the UI to update before restarting
             setTimeout(() => {
                 console.log(`Restarting playback at position ${currentPosition}s with new track positions`);
-                this.play();
+                this.play(tracks);
             }, 20); // Small delay to ensure clean restart
         }
     }

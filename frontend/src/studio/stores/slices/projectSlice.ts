@@ -370,15 +370,12 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
 
           // 3. Perform necessary ENGINE setup (NO HISTORY)
           const audioEngine = store.getAudioEngine();
-          await audioEngine.createTrack(finalCombinedTrack.id, finalCombinedTrack.name);
+          // Create the channel for the track (shared by all instances)
+          await audioEngine.createTrackChannel(finalCombinedTrack.id, finalCombinedTrack.name);
           audioEngine.setTrackVolume(finalCombinedTrack.id, finalCombinedTrack.volume);
           audioEngine.setTrackPan(finalCombinedTrack.id, finalCombinedTrack.pan);
           audioEngine.setTrackMute(finalCombinedTrack.id, finalCombinedTrack.mute);
-          // Set position based on first instance if available
-          const firstInstance = finalCombinedTrack.instances?.[0];
-          if (firstInstance) {
-              audioEngine.setTrackPosition(finalCombinedTrack.id, firstInstance.x_position, firstInstance.y_position);
-          }
+          // Note: Position is now per-instance, not per-track
           
           // Load audio file specifically for audio tracks during initial processing
           if (trackType === 'AUDIO' && finalCombinedTrack.track && 'audio_file_storage_key' in finalCombinedTrack.track) {
@@ -390,8 +387,26 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       const audioBlob = await sampleManager.getSampleBlob(finalCombinedTrack.id, storageKey, 'audio_track', finalCombinedTrack.name);
                       if (audioBlob) {
                           const audioFile = new File([audioBlob.data], finalCombinedTrack.name || 'audio_track', { type: audioBlob.type });
-                          await store.loadAudioFile(finalCombinedTrack.id, audioFile);
-                          console.log(`Called store.loadAudioFile for track ${finalCombinedTrack.id}`);
+                          
+                          // Load the audio buffer and create channel (shared by all instances)
+                          const audioEngine = store.getAudioEngine();
+                          await audioEngine.loadAudioBuffer(finalCombinedTrack.id, audioFile);
+                          await audioEngine.createTrackChannel(finalCombinedTrack.id, finalCombinedTrack.name);
+                          
+                          // Create all instances for this track
+                          if (finalCombinedTrack.instances && finalCombinedTrack.instances.length > 0) {
+                              for (const instance of finalCombinedTrack.instances) {
+                                  console.log(`Creating audio instance ${instance.id} for track ${finalCombinedTrack.id}`);
+                                  await audioEngine.createInstance(finalCombinedTrack.id, instance.id);
+                              }
+                          } else {
+                              // Create default instance for backward compatibility
+                              const instanceId = `${finalCombinedTrack.id}_instance_1`;
+                              console.log(`Creating default audio instance ${instanceId} for track ${finalCombinedTrack.id}`);
+                              await audioEngine.createInstance(finalCombinedTrack.id, instanceId);
+                          }
+                          
+                          console.log(`Loaded audio and created instances for track ${finalCombinedTrack.id}`);
                       } else {
                           console.warn(`Downloaded audio blob was null or undefined for track ${finalCombinedTrack.id}`);
                       }
@@ -468,7 +483,24 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                           fileFromDb.name || track.name || `${track.id}_audio`, // Use name from DB or track
                           { type: fileFromDb.data.type } // Use blob's type
                       );
-                      await store.loadAudioFile(track.id, audioFile);
+                      
+                      // Load the audio buffer and create channel (shared by all instances)
+                      const audioEngine = store.getAudioEngine();
+                      await audioEngine.loadAudioBuffer(track.id, audioFile);
+                      await audioEngine.createTrackChannel(track.id, track.name);
+                      
+                      // Create all instances for this track
+                      if (track.instances && track.instances.length > 0) {
+                          for (const instance of track.instances) {
+                              console.log(`Creating audio instance ${instance.id} for track ${track.id}`);
+                              await audioEngine.createInstance(track.id, instance.id);
+                          }
+                      } else {
+                          // Create default instance for backward compatibility
+                          const instanceId = `${track.id}_instance_1`;
+                          console.log(`Creating default audio instance ${instanceId} for track ${track.id}`);
+                          await audioEngine.createInstance(track.id, instanceId);
+                      }
                   } else {
                       console.warn(`Audio file for track ${track.id} not found in Dexie cache.`);
                   }

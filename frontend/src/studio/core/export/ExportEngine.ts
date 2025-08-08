@@ -38,14 +38,20 @@ export class ToneExportEngine extends BaseExportEngine {
       throw new Error('ToneExportEngine can only render AUDIO tracks');
     }
     
-    const audioTrack = this.audioEngine.getAllTracks().find(t => t.id === track.id);
-    if (!audioTrack || !audioTrack.player || !audioTrack.player.buffer) {
+    // Get the audio buffer for this track (shared by all instances)
+    const audioBuffer = this.audioEngine.getAudioBuffer(track.id);
+    if (!audioBuffer) {
       throw new ExportError(
         `Audio track ${track.id} not found or has no audio loaded`,
         ExportErrorCode.TRACK_RENDER_FAILED,
         track.id
       );
     }
+    
+    // Get the channel for volume/pan settings
+    const channel = this.audioEngine.getTrackChannel(track.id);
+    const channelVolume = channel?.volume.value ?? 0;
+    const channelPan = channel?.pan.value ?? 0;
     
     this.checkCancelled();
     
@@ -55,44 +61,54 @@ export class ToneExportEngine extends BaseExportEngine {
     try {
       // Use Tone.Offline for rendering
       const renderedBuffer = await Tone.Offline(async () => {
-        // Create a new player for offline rendering
-        const offlinePlayer = new Tone.Player({
-          url: audioTrack.player!.buffer,
-          loop: false
-        });
-        
         // Create channel for volume/pan
-        const channel = new Tone.Channel({
-          volume: audioTrack.channel.volume.value,
-          pan: audioTrack.channel.pan.value
+        const offlineChannel = new Tone.Channel({
+          volume: channelVolume,
+          pan: channelPan
         }).toDestination();
         
-        offlinePlayer.connect(channel);
-        
-        // Handle track positioning and trimming
-        const trackStartTime = this.getTrackStartTime(track);
-        let playbackStartTime = 0;
-        let sourceStartOffset = 0;
-        
-        // Calculate when to start the player based on export start time
-        if (trackStartTime < options.startTime) {
-          // Track starts before export range, skip to correct position
-          sourceStartOffset = options.startTime - trackStartTime;
-        } else {
-          // Track starts within export range
-          playbackStartTime = trackStartTime - options.startTime;
+        // Render all instances of this track
+        const instances = track.instances || [];
+        if (instances.length === 0) {
+          console.warn(`Track ${track.id} has no instances to render`);
+          return;
         }
         
-        // Apply trim settings if they exist
-        if (audioTrack.trimStartTicks || audioTrack.trimEndTicks) {
-          const trimStartSec = this.ticksToSeconds(audioTrack.trimStartTicks || 0);
-          const trimEndSec = this.ticksToSeconds(audioTrack.trimEndTicks || this.getTrackDurationTicks(track));
+        for (const instance of instances) {
+          // Create a new player for each instance
+          const offlinePlayer = new Tone.Player({
+            url: audioBuffer,
+            loop: false
+          });
+          
+          offlinePlayer.connect(offlineChannel);
+          
+          // Calculate instance timing
+          const instanceStartTime = this.ticksToSeconds(instance.x_position);
+          let playbackStartTime = 0;
+          let sourceStartOffset = 0;
+          
+          // Calculate when to start the player based on export start time
+          if (instanceStartTime < options.startTime) {
+            // Instance starts before export range, skip to correct position
+            sourceStartOffset = options.startTime - instanceStartTime;
+          } else {
+            // Instance starts within export range
+            playbackStartTime = instanceStartTime - options.startTime;
+          }
+          
+          // Apply trim settings for this instance
+          const trimStartSec = this.ticksToSeconds(instance.trim_start_ticks || 0);
+          const trimEndSec = this.ticksToSeconds(instance.trim_end_ticks || track.duration_ticks || 0);
           sourceStartOffset += trimStartSec;
-        }
-        
-        // Start the player at the calculated time
-        if (playbackStartTime < duration) {
-          offlinePlayer.start(playbackStartTime, sourceStartOffset);
+          
+          // Calculate instance duration
+          const instanceDuration = trimEndSec - trimStartSec;
+          
+          // Start the player at the calculated time if within export range
+          if (playbackStartTime < duration && sourceStartOffset < instanceDuration) {
+            offlinePlayer.start(playbackStartTime, sourceStartOffset);
+          }
         }
         
       }, duration);
