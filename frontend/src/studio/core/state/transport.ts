@@ -256,6 +256,19 @@ export class TransportController implements Transport {
                                     const trimmedDuration = trimEndSec - trimStartSec;
                                     if (startOffset < trimmedDuration) {
                                         playerInstance.player.start(0, trimStartSec + startOffset);
+                                        
+                                        // Schedule stop at trim end if there's a trim
+                                        if (trimEndTicks < track.duration_ticks) {
+                                            const stopInSeconds = trimmedDuration - startOffset;
+                                            if (stopInSeconds > 0) {
+                                                const stopEventId = Tone.Transport.schedule((time) => {
+                                                    playerInstance.player.stop(time);
+                                                    console.log(`Audio track ${track.id} instance ${instance.id} stopped at trim end`);
+                                                }, `+${stopInSeconds}`);
+                                                this.scheduledEvents.push(stopEventId);
+                                            }
+                                        }
+                                        
                                         console.log(`Audio track ${track.id} instance ${instance.id} started immediately at offset ${startOffset}s`);
                                     } else {
                                         console.log(`Audio track ${track.id} instance ${instance.id} already past its end, not starting`);
@@ -272,6 +285,19 @@ export class TransportController implements Transport {
                                         }
                                         playerInstance.player.start(time, trimStartSec);
                                         console.log(`Audio track ${track.id} instance ${instance.id} started at scheduled time`);
+                                        
+                                        // Schedule stop at trim end if there's a trim
+                                        if (trimEndTicks < track.duration_ticks) {
+                                            const trimmedDuration = trimEndSec - trimStartSec;
+                                            if (trimmedDuration > 0) {
+                                                // Schedule stop relative to when the track starts
+                                                const stopEventId = Tone.Transport.schedule((stopTime) => {
+                                                    playerInstance.player.stop(stopTime);
+                                                    console.log(`Audio track ${track.id} instance ${instance.id} stopped at trim end`);
+                                                }, `+${delaySeconds + trimmedDuration}`);
+                                                this.scheduledEvents.push(stopEventId);
+                                            }
+                                        }
                                     }, `+${delaySeconds}`);
                                     
                                     // Track this scheduled event so we can cancel it if needed
