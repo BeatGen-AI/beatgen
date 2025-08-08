@@ -126,6 +126,8 @@ export class TransportController implements Transport {
     private scheduledEvents: number[] = [];
     // Track scheduled audio players so we can stop them
     private scheduledPlayers: Set<Tone.Player> = new Set();
+    // Track actively playing instances with their stop times
+    private activeInstances: Map<string, { player: Tone.Player, stopTime?: number }> = new Map();
     
     public async play(tracks?: CombinedTrack[]): Promise<void> {
         if (this.isStarting) return;
@@ -153,8 +155,10 @@ export class TransportController implements Transport {
                 throw new Error(`Cannot start playback: Audio context resumption failed - ${contextError.message}`);
             }
             
-            // Clear any previously scheduled events
+            // Clear any previously scheduled events and active instances
             this.clearScheduledEvents();
+            // Ensure activeInstances is also cleared (should already be cleared by clearScheduledEvents)
+            this.activeInstances.clear();
             
             // CRITICAL: Get the EXACT transport position right before playback starts
             // This ensures we're using the most current position for calculations
@@ -169,6 +173,11 @@ export class TransportController implements Transport {
                     if (instance.player.state === "started") {
                         instance.player.stop();
                     }
+                    
+                    // Additional safety: explicitly stop at current time to cancel all schedules
+                    // This is critical to prevent any lingering scheduled stops from previous playback
+                    instance.player.stop(Tone.now());
+                    
                     // CRITICAL: Ensure completely unsynced
                     instance.player.unsync();
                     
@@ -193,9 +202,9 @@ export class TransportController implements Transport {
                     // Process each instance of the track
                     for (const instance of track.instances) {
                         try {
-                            const trackXTicks = instance.x_position;
-                            const trimStartTicks = instance.trim_start_ticks;
-                            const trimEndTicks = instance.trim_end_ticks;
+                            const trackXTicks = instance.x_position || 0;
+                            const trimStartTicks = instance.trim_start_ticks || 0;
+                            const trimEndTicks = instance.trim_end_ticks || track.duration_ticks || 0;
                             
                             // For audio tracks, handle instance-specific playback
                             if (track.track_type === 'AUDIO') {
@@ -231,6 +240,12 @@ export class TransportController implements Transport {
                                 const trimStartSec = (trimStartTicks / ppq) * (60 / bpm);
                                 const trimEndSec = (trimEndTicks / ppq) * (60 / bpm);
                                 
+                                // Validate trim values
+                                if (trimEndSec <= trimStartSec && trimEndTicks > 0) {
+                                    console.warn(`Invalid trim for instance ${instance.id}: end (${trimEndSec}s) <= start (${trimStartSec}s)`);
+                                    continue;
+                                }
+                                
                                 if (trimStartTicks > 0 || trimEndTicks < track.duration_ticks) {
                                     // Set trim on the player
                                     (playerInstance.player as any)._trimSettings = {
@@ -255,23 +270,35 @@ export class TransportController implements Transport {
                                     // Check if we're still within the trimmed duration
                                     const trimmedDuration = trimEndSec - trimStartSec;
                                     if (startOffset < trimmedDuration) {
-                                        playerInstance.player.start(0, trimStartSec + startOffset);
+                                        // Calculate how much of the trimmed audio should play
+                                        const remainingDuration = trimmedDuration - startOffset;
                                         
-                                        // Schedule stop at trim end if there's a trim
-                                        if (trimEndTicks < track.duration_ticks) {
-                                            const stopInSeconds = trimmedDuration - startOffset;
-                                            if (stopInSeconds > 0) {
-                                                const stopEventId = Tone.Transport.schedule((time) => {
-                                                    playerInstance.player.stop(time);
-                                                    console.log(`Audio track ${track.id} instance ${instance.id} stopped at trim end`);
-                                                }, `+${stopInSeconds}`);
-                                                this.scheduledEvents.push(stopEventId);
-                                            }
+                                        // Start the player at the correct offset within the trimmed region
+                                        const actualStartOffset = trimStartSec + startOffset;
+                                        playerInstance.player.start(0, actualStartOffset);
+                                        
+                                        // Schedule a stop at the exact time the trim should end
+                                        // This is critical for accurate trim end timing
+                                        if (trimmedDuration > 0) {
+                                            // Calculate the exact stop time using Tone.now() plus remaining duration
+                                            const stopTime = Tone.now() + remainingDuration;
+                                            playerInstance.player.stop(stopTime);
+                                            
+                                            // Track this active instance
+                                            this.activeInstances.set(instance.id, {
+                                                player: playerInstance.player,
+                                                stopTime: stopTime
+                                            });
+                                            
+                                            console.log(`Audio track ${track.id} instance ${instance.id} started at offset ${actualStartOffset}s, will stop in ${remainingDuration}s`);
+                                        } else {
+                                            // Track without stop time
+                                            this.activeInstances.set(instance.id, {
+                                                player: playerInstance.player
+                                            });
                                         }
-                                        
-                                        console.log(`Audio track ${track.id} instance ${instance.id} started immediately at offset ${startOffset}s`);
                                     } else {
-                                        console.log(`Audio track ${track.id} instance ${instance.id} already past its end, not starting`);
+                                        console.log(`Audio track ${track.id} instance ${instance.id} already past its trim end, not starting`);
                                     }
                                 } else {
                                     // Track should start in the future - schedule it
@@ -283,20 +310,19 @@ export class TransportController implements Transport {
                                         if (playerInstance.player.state === "started") {
                                             playerInstance.player.stop(time);
                                         }
-                                        playerInstance.player.start(time, trimStartSec);
-                                        console.log(`Audio track ${track.id} instance ${instance.id} started at scheduled time`);
                                         
-                                        // Schedule stop at trim end if there's a trim
-                                        if (trimEndTicks < track.duration_ticks) {
-                                            const trimmedDuration = trimEndSec - trimStartSec;
-                                            if (trimmedDuration > 0) {
-                                                // Schedule stop relative to when the track starts
-                                                const stopEventId = Tone.Transport.schedule((stopTime) => {
-                                                    playerInstance.player.stop(stopTime);
-                                                    console.log(`Audio track ${track.id} instance ${instance.id} stopped at trim end`);
-                                                }, `+${delaySeconds + trimmedDuration}`);
-                                                this.scheduledEvents.push(stopEventId);
-                                            }
+                                        // Calculate the trimmed duration
+                                        const trimmedDuration = trimEndSec - trimStartSec;
+                                        
+                                        // Start the player at the scheduled time from trim start
+                                        playerInstance.player.start(time, trimStartSec);
+                                        
+                                        // Schedule stop at the exact trim end time
+                                        // This ensures trim end is respected even for scheduled playback
+                                        if (trimmedDuration > 0) {
+                                            const stopTime = time + trimmedDuration;
+                                            playerInstance.player.stop(stopTime);
+                                            console.log(`Audio track ${track.id} instance ${instance.id} scheduled to start, will stop after ${trimmedDuration}s`);
                                         }
                                     }, `+${delaySeconds}`);
                                     
@@ -456,14 +482,28 @@ export class TransportController implements Transport {
         });
         this.scheduledEvents = [];
         
+        // Clear active instances - these are currently playing with scheduled stops
+        console.log(`Clearing ${this.activeInstances.size} active instances`);
+        this.activeInstances.forEach((info, instanceId) => {
+            // Force stop immediately to cancel any scheduled stops
+            if (info.player.state === "started") {
+                info.player.stop();
+            }
+            // Double-stop to ensure all schedules are cancelled
+            info.player.stop(Tone.now());
+        });
+        this.activeInstances.clear();
+        
         // Also stop any scheduled audio players
         console.log(`Clearing ${this.scheduledPlayers.size} scheduled audio players`);
         this.scheduledPlayers.forEach(player => {
+            // Stop the player immediately if it's playing
             if (player.state === "started") {
                 player.stop();
             }
-            // Cancel any scheduled starts
-            player.stop(); // Calling stop() on a scheduled player cancels the schedule
+            // Cancel any scheduled starts or stops
+            // Calling stop() with Tone.now() ensures immediate cancellation
+            player.stop(Tone.now());
         });
         this.scheduledPlayers.clear();
     }
@@ -625,10 +665,13 @@ export class TransportController implements Transport {
         // 4. Completely reset all player instances
         this.audioEngine.getAllPlayerInstances().forEach(instance => {
             if (instance.player) {
-                // Ensure player is fully stopped
+                // Ensure player is fully stopped - this cancels any scheduled stops
                 if (instance.player.state === "started") {
                     instance.player.stop();
                 }
+                
+                // Additional safety: explicitly stop at current time to cancel schedules
+                instance.player.stop(Tone.now());
                 
                 // Completely reset player state - unsync from transport
                 instance.player.unsync();
@@ -663,11 +706,18 @@ export class TransportController implements Transport {
         
         // If was playing, restart with the new position
         if (wasPlaying) {
+            // Get tracks from store to pass to play() method
+            let tracks: CombinedTrack[] | undefined;
+            if (this.getStoreState) {
+                const state = this.getStoreState();
+                tracks = state.tracks;
+            }
+            
             // Use a small delay to ensure Tone.js state is updated
             // This is a crucial step to ensure reliable seeking
             setTimeout(() => {
-                console.log(`Restarting playback from position: ${Tone.getTransport().seconds}s`);
-                this.play(); 
+                console.log(`Restarting playback from position: ${Tone.getTransport().seconds}s with ${tracks?.length || 0} tracks`);
+                this.play(tracks); 
             }, 30); // 30ms is a good compromise
         }
     }
@@ -818,10 +868,17 @@ export class TransportController implements Transport {
         
         // Now restart if needed
         if (wasPlaying) {
+            // Get tracks from store to pass to play() method
+            let tracks: CombinedTrack[] | undefined;
+            if (this.getStoreState) {
+                const state = this.getStoreState();
+                tracks = state.tracks;
+            }
+            
             // Use setTimeout to allow the UI to update before restarting
             setTimeout(() => {
                 console.log(`Restarting playback at position ${currentPosition}s with new track positions`);
-                this.play();
+                this.play(tracks);
             }, 20); // Small delay to ensure clean restart
         }
     }

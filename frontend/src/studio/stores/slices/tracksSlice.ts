@@ -1491,7 +1491,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         });
       });
       
-      baseOffsetX = maxRightPosition + pixelsToTicks(96, bpm, timeSignature); // 96px gap in ticks
+      baseOffsetX = maxRightPosition; // Place directly after the rightmost instance
     }
 
     // Find the leftmost instance position to calculate relative positions
