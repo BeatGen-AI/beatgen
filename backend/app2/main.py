@@ -82,6 +82,41 @@ async def warm_jwt_cache():
         # Don't fail startup if cache warming fails
         # This allows the app to start and potentially use other features
 
+@app.on_event("startup")
+async def init_pubsub_manager():
+    """Initialize the PubSub connection manager for distributed SSE"""
+    import os
+    if os.getenv("USE_DISTRIBUTED_REQUESTS", "false").lower() == "true":
+        logger.info("Initializing PubSub connection manager...")
+        try:
+            from app2.infrastructure.pubsub_manager import pubsub_manager
+            from app2.infrastructure.redis_client import redis_client
+            
+            # Set the Redis client for the manager
+            pubsub_manager.set_redis_client(redis_client.get_client())
+            
+            # Perform initial health check
+            await pubsub_manager.health_check()
+            
+            stats = await pubsub_manager.get_stats()
+            logger.info(f"PubSub manager initialized with {stats['total_connections']} connections")
+        except Exception as e:
+            logger.error(f"PubSub manager initialization failed: {str(e)}")
+            # Continue running - will create connections on demand
+
+@app.on_event("shutdown")
+async def shutdown_pubsub_manager():
+    """Gracefully shutdown PubSub connections"""
+    import os
+    if os.getenv("USE_DISTRIBUTED_REQUESTS", "false").lower() == "true":
+        logger.info("Shutting down PubSub connection manager...")
+        try:
+            from app2.infrastructure.pubsub_manager import pubsub_manager
+            await pubsub_manager.shutdown()
+            logger.info("PubSub manager shutdown complete")
+        except Exception as e:
+            logger.warning(f"PubSub manager shutdown error: {str(e)}")
+
 
 # Global exception handler for AppExceptions
 @app.exception_handler(AppException)
@@ -158,6 +193,16 @@ app.include_router(
     prefix="/credits",
     tags=["credits"],
 )
+
+# Add monitoring endpoints if using distributed mode
+import os
+if os.getenv("USE_DISTRIBUTED_REQUESTS", "false").lower() == "true":
+    from app2.api.routes import pubsub_monitor
+    app.include_router(
+        pubsub_monitor.router,
+        prefix="/monitor",
+        tags=["monitoring"],
+    )
 
 
 # Root endpoint

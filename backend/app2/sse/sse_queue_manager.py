@@ -61,8 +61,8 @@ class SSEQueueManager:
         
         if self._use_distributed:
             # Import here to avoid circular imports
-            from app2.sse.redis_sse_queue import RedisSSEQueue
-            self._redis_queue = RedisSSEQueue(request_id)
+            from app2.sse.redis_sse_queue_v2 import RedisSSEQueueV2
+            self._redis_queue = RedisSSEQueueV2(request_id)
 
         logger.debug(
             f"Created SSEEventQueue for request {request_id} with message {self.message_id} (distributed: {self._use_distributed})"

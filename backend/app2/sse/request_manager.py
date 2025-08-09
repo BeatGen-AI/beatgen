@@ -384,8 +384,8 @@ class RequestManager:
         """Get the queue for a request"""
         if self._use_distributed:
             # In distributed mode, create a Redis-based queue that subscribes to events
-            from app2.sse.redis_sse_queue import RedisSSEQueue
-            redis_queue = RedisSSEQueue(request_id)
+            from app2.sse.redis_sse_queue_v2 import RedisSSEQueueV2
+            redis_queue = RedisSSEQueueV2(request_id)
             return await redis_queue.create_queue_from_subscription()
         else:
             request = self._requests.get(request_id)
