@@ -1080,7 +1080,7 @@ async def process_generate_audio_request(
         
         # Upload audio to storage
         audio_track_id = str(uuid.uuid4())
-        storage_key = await file_service.upload_audio_file(
+        storage_key, _ = await file_service.upload_audio_file(
             audio_data, 
             generation_result.file_name,
             user_id
