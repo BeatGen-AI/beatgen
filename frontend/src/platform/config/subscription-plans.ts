@@ -6,12 +6,10 @@ export interface SubscriptionPlan {
   priceCents: number;
   billingPeriod: 'monthly' | 'yearly';
   features: {
-    projects: number | 'unlimited';
-    storage: string;
-    exports: number | 'unlimited';
-    collaboration?: boolean;
-    prioritySupport?: boolean;
-    advancedFeatures?: boolean;
+    credits: number | 'unlimited';
+    diffusionModels: boolean;
+    commercialRights: boolean;
+    privateMode: boolean;
   };
 }
 
@@ -52,9 +50,10 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceCents: 500, // $5.00
     billingPeriod: 'monthly',
     features: {
-      projects: 5,
-      storage: '1GB',
-      exports: 10,
+      credits: 500,
+      diffusionModels: false,
+      commercialRights: false,
+      privateMode: false,
     },
   },
   {
@@ -65,9 +64,10 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceCents: 5000, // $50.00
     billingPeriod: 'yearly',
     features: {
-      projects: 5,
-      storage: '1GB',
-      exports: 10,
+      credits: 500,
+      diffusionModels: false,
+      commercialRights: false,
+      privateMode: false,
     },
   },
   // Creator plans
@@ -79,10 +79,10 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceCents: 1000, // $10.00
     billingPeriod: 'monthly',
     features: {
-      projects: 20,
-      storage: '10GB',
-      exports: 50,
-      collaboration: true,
+      credits: 1500,
+      diffusionModels: true,
+      commercialRights: false,
+      privateMode: false,
     },
   },
   {
@@ -93,10 +93,10 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceCents: 10000, // $100.00
     billingPeriod: 'yearly',
     features: {
-      projects: 20,
-      storage: '10GB',
-      exports: 50,
-      collaboration: true,
+      credits: 1500,
+      diffusionModels: true,
+      commercialRights: false,
+      privateMode: false,
     },
   },
   // Pro plans
@@ -108,12 +108,10 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceCents: 3000, // $30.00
     billingPeriod: 'monthly',
     features: {
-      projects: 'unlimited',
-      storage: '100GB',
-      exports: 'unlimited',
-      collaboration: true,
-      prioritySupport: true,
-      advancedFeatures: true,
+      credits: 'unlimited',
+      diffusionModels: true,
+      commercialRights: true,
+      privateMode: true,
     },
   },
   {
@@ -124,12 +122,10 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceCents: 30000, // $300.00
     billingPeriod: 'yearly',
     features: {
-      projects: 'unlimited',
-      storage: '100GB',
-      exports: 'unlimited',
-      collaboration: true,
-      prioritySupport: true,
-      advancedFeatures: true,
+      credits: 'unlimited',
+      diffusionModels: true,
+      commercialRights: true,
+      privateMode: true,
     },
   },
 ];
