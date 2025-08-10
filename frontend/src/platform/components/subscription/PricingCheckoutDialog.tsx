@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, ArrowLeft } from 'lucide-react';
+import { Check, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -120,37 +120,33 @@ export const PricingCheckoutDialog: React.FC<PricingCheckoutDialogProps> = ({ op
                           <li className="flex items-start gap-2">
                             <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
                             <span className="text-sm">
-                              {features.projects === 'unlimited' ? 'Unlimited' : features.projects} projects
+                              {features.credits === 'unlimited' ? 'Unlimited credits' : `${features.credits} credits per month`}
                             </span>
                           </li>
                           <li className="flex items-start gap-2">
-                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
-                            <span className="text-sm">{features.storage} storage</span>
+                            {features.diffusionModels ? (
+                              <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
+                            ) : (
+                              <X className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+                            )}
+                            <span className="text-sm">Access to diffusion models</span>
                           </li>
                           <li className="flex items-start gap-2">
-                            <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
-                            <span className="text-sm">
-                              {features.exports === 'unlimited' ? 'Unlimited' : features.exports} exports per month
-                            </span>
+                            {features.commercialRights ? (
+                              <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
+                            ) : (
+                              <X className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+                            )}
+                            <span className="text-sm">Commercial rights to music</span>
                           </li>
-                          {features.collaboration && (
-                            <li className="flex items-start gap-2">
+                          <li className="flex items-start gap-2">
+                            {features.privateMode ? (
                               <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
-                              <span className="text-sm">Real-time collaboration</span>
-                            </li>
-                          )}
-                          {features.prioritySupport && (
-                            <li className="flex items-start gap-2">
-                              <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
-                              <span className="text-sm">Priority support</span>
-                            </li>
-                          )}
-                          {features.advancedFeatures && (
-                            <li className="flex items-start gap-2">
-                              <Check className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
-                              <span className="text-sm">Advanced effects & plugins</span>
-                            </li>
-                          )}
+                            ) : (
+                              <X className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+                            )}
+                            <span className="text-sm">Access to private mode</span>
+                          </li>
                         </ul>
                       </CardContent>
                       <CardFooter className="flex flex-col gap-2">
