@@ -22,7 +22,7 @@ export const Route = createFileRoute('/complete-profile')({
   beforeLoad: async ({ navigate }) => {
     const token = localStorage.getItem('access_token');
     if (!token) {
-      navigate({ to: '/login', replace: true });
+      navigate({ to: '/home', replace: true });
       return false;
     }
     return {};
@@ -45,7 +45,7 @@ function CompleteProfilePage() {
       try {
         const token = localStorage.getItem('access_token');
         if (!token) {
-          navigate({ to: '/login' });
+          navigate({ to: '/home' });
           return;
         }
 
@@ -126,7 +126,7 @@ function CompleteProfilePage() {
     try {
       const token = localStorage.getItem('access_token');
       if (!token) {
-        navigate({ to: '/login' });
+        navigate({ to: '/home' });
         return;
       }
 

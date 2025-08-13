@@ -1,32 +1,31 @@
 import { createFileRoute } from '@tanstack/react-router'
-import React, { useEffect } from 'react'
-import Projects from '../platform/pages/Projects'
+import React from 'react'
 import HomePage from '../platform/pages/HomePage'
-import { requireAuth, AuthErrorComponent } from '../platform/auth/auth-utils.tsx'
-import { usePageTheme } from '../lib/theme-provider'
+import AuthModal from '../components/AuthModal'
+import { useAuth } from '../platform/auth/auth-context'
 
-// Home/Projects route - this will render at the path '/home'
+// Home route - shows HomePage with auth modal overlay for unauthenticated users
 export const Route = createFileRoute('/home')({
-  // Use requireAuth utility to protect this route
-  ...requireAuth('/login'),
-  
-  // Component to render
-  component: HomePage,
-  
-  // Use shared error component for authentication failures
-  errorComponent: AuthErrorComponent,
+  component: HomePageWithAuth,
 })
 
-function HomePageDemo() {
-  // For demonstration, log that we've accessed this protected route
-  useEffect(() => {
-    console.log('Accessing protected home/projects page')
-  }, [])
-
-  // Render the Navbar and Projects component
+function HomePageWithAuth() {
+  const { user, loading } = useAuth();
+  
+  // Show loading state while checking auth
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+  
   return (
     <>
       <HomePage />
+      {/* Show auth modal if not authenticated */}
+      {!user && <AuthModal />}
     </>
-  )
+  );
 }

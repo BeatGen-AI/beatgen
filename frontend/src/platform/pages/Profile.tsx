@@ -175,7 +175,7 @@ const ProfilePage: React.FC = () => {
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>
             User not logged in or profile not found. Please{' '}
-            <Button variant="link" onClick={() => window.location.href = '/login'}>login</Button>.
+            <Button variant="link" onClick={() => window.location.href = '/home'}>login</Button>.
           </AlertDescription>
         </Alert>
       </div>
@@ -184,7 +184,7 @@ const ProfilePage: React.FC = () => {
   
   const handleLogout = async () => {
     await signOut();
-    window.location.href = '/login';
+    window.location.href = '/home';
   };
 
   return (

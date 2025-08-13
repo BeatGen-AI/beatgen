@@ -119,7 +119,7 @@ function RootLayout() {
           } catch (error) {
             console.error('OAuth callback processing failed:', error);
             // Redirect to login page on error
-            window.location.href = '/login?error=oauth_failed';
+            window.location.href = '/home?error=oauth_failed';
           }
         }
       }
@@ -144,10 +144,12 @@ function RootLayout() {
   }
   
   // Determine if the sidebar should be shown based on the route and authentication
-  // Hide navigation on studio, login, register routes and when user is not authenticated
-  const noSidebarRoutes = ['/studio', '/login', '/register', '/complete-profile', '/reset-password', '/oauth-callback'];
+  // Hide navigation on studio, complete-profile, reset-password, oauth-callback routes
+  const noSidebarRoutes = ['/studio', '/complete-profile', '/reset-password', '/oauth-callback'];
   const isPublicRoute = location.pathname === '/' || noSidebarRoutes.includes(location.pathname);
-  const shouldShowSidebar = !isPublicRoute && !loading && user;
+  // Show sidebar on /home even for unauthenticated users (they'll see auth modal)
+  const isHomePage = location.pathname === '/home';
+  const shouldShowSidebar = !isPublicRoute && !loading && (user || isHomePage);
 
   // No navbar in the root layout - each route will add its own navbar if needed
   return (

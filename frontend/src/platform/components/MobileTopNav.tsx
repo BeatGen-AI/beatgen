@@ -89,7 +89,7 @@ const MobileTopNav: React.FC = () => {
           <DropdownMenuItem 
             onClick={async () => {
               await signOut();
-              navigate({ to: '/login', replace: true });
+              navigate({ to: '/home', replace: true });
             }}
             className="flex items-center"
           >
@@ -156,7 +156,7 @@ const MobileTopNav: React.FC = () => {
           <DropdownMenuItem 
             onClick={async () => {
               await signOut();
-              navigate({ to: '/login', replace: true });
+              navigate({ to: '/home', replace: true });
             }}
           >
             <IconLogout className="mr-2 h-4 w-4" />

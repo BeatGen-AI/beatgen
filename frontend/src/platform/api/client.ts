@@ -60,16 +60,16 @@ apiClient.interceptors.response.use(
       
       // Don't redirect if we're already on login-related pages
       const currentPath = window.location.pathname;
-      if (currentPath === '/login' || currentPath === '/register') {
-        console.log('Already on authentication page, not redirecting');
+      if (currentPath === '/home') {
+        console.log('Already on home page, not redirecting');
         return Promise.reject(error);
       }
       
       // Check if we have a valid token but still getting 401
       const token = localStorage.getItem('access_token');
       if (!token) {
-        console.log('No token found, redirecting to login');
-        window.location.href = '/login';
+        console.log('No token found, redirecting to home');
+        window.location.href = '/home';
         return Promise.reject(error);
       }
       
@@ -81,7 +81,7 @@ apiClient.interceptors.response.use(
         if (isExpired) {
           console.log('Token is expired, clearing and redirecting');
           localStorage.removeItem('access_token');
-          window.location.href = '/login';
+          window.location.href = '/home';
         } else {
           console.log('Token appears valid but got 401 - API access issue');
           // Don't redirect on every request to prevent loops
@@ -91,7 +91,7 @@ apiClient.interceptors.response.use(
         console.error('Failed to parse token:', e);
         // Invalid token format - clear and redirect
         localStorage.removeItem('access_token');
-        window.location.href = '/login';
+        window.location.href = '/home';
       }
     }
     

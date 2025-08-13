@@ -23,7 +23,7 @@ export const safeRedirect = (path: string) => {
  * @param redirectTo - Path to redirect to if not authenticated
  * @returns An object with beforeLoad function for route config
  */
-export const requireAuth = (redirectTo: string = '/login') => {
+export const requireAuth = (redirectTo: string = '/home') => {
   return {
     beforeLoad: async ({ navigate, location }: { navigate: any, location: any }) => {
       console.group('Protected Route Check');
@@ -89,7 +89,7 @@ export const AuthErrorComponent = ({ error }: { error: Error }) => {
       <h2>Authentication Required</h2>
       <p>Please log in to access this page.</p>
       <button 
-        onClick={() => safeRedirect('/login')}
+        onClick={() => safeRedirect('/home')}
         style={{ 
           background: '#3f51b5', 
           color: 'white', 
