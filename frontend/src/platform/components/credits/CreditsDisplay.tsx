@@ -2,21 +2,28 @@ import React, { useEffect } from 'react';
 import { Coins, Infinity } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUser } from '../../context/UserContext';
+import { useAuth } from '../../auth/auth-context';
 
 interface CreditsDisplayProps {
   isExpanded?: boolean;
 }
 
 export const CreditsDisplay: React.FC<CreditsDisplayProps> = ({ isExpanded = true }) => {
+  const { user } = useAuth();
   const { credits, creditsLoading: isLoading, refreshCredits } = useUser();
 
-  // Fetch credits when the component mounts (since we don't auto-fetch anymore)
+  // Fetch credits when the component mounts (only for authenticated users)
   useEffect(() => {
-    if (!credits && !isLoading) {
+    if (user && !credits && !isLoading) {
       console.log('CreditsDisplay: fetching credits data...');
       refreshCredits();
     }
-  }, [credits, isLoading, refreshCredits]);
+  }, [user, credits, isLoading, refreshCredits]);
+
+  // Don't show credits display for unauthenticated users
+  if (!user) {
+    return null;
+  }
 
   if (isLoading) {
     return (

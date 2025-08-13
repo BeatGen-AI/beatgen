@@ -70,6 +70,12 @@ export const UserProvider: React.FC<UserProviderProps> = ({
 
   // Refresh profile data
   const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
+    // Don't fetch profile if no user is authenticated
+    if (!user) {
+      console.log('Skipping profile refresh - no authenticated user');
+      return null;
+    }
+    
     try {
       setProfileLoading(true);
       setProfileError(null);
@@ -85,10 +91,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({
     } finally {
       setProfileLoading(false);
     }
-  }, []);
+  }, [user]);
 
   // Refresh credits data
   const refreshCredits = useCallback(async (): Promise<CreditsStatus | null> => {
+    // Don't fetch credits if no user is authenticated
+    if (!user) {
+      console.log('Skipping credits refresh - no authenticated user');
+      return null;
+    }
+    
     try {
       setCreditsLoading(true);
       setCreditsError(null);
@@ -104,10 +116,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({
     } finally {
       setCreditsLoading(false);
     }
-  }, []);
+  }, [user]);
 
   // Refresh credits history
   const refreshCreditsHistory = useCallback(async (limit: number = 50): Promise<CreditTransaction[] | null> => {
+    // Don't fetch credits history if no user is authenticated
+    if (!user) {
+      console.log('Skipping credits history refresh - no authenticated user');
+      return null;
+    }
+    
     try {
       setCreditsHistoryLoading(true);
       setCreditsHistoryError(null);
@@ -123,10 +141,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({
     } finally {
       setCreditsHistoryLoading(false);
     }
-  }, []);
+  }, [user]);
 
   // Refresh subscription data
   const refreshSubscription = useCallback(async (): Promise<SubscriptionStatus | null> => {
+    // Don't fetch subscription if no user is authenticated
+    if (!user) {
+      console.log('Skipping subscription refresh - no authenticated user');
+      return null;
+    }
+    
     try {
       setSubscriptionLoading(true);
       setSubscriptionError(null);
@@ -142,7 +166,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({
     } finally {
       setSubscriptionLoading(false);
     }
-  }, []);
+  }, [user]);
 
   // Update profile
   const updateProfile = useCallback(async (profileData: Partial<UserProfile>): Promise<UserProfile | null> => {
@@ -189,6 +213,12 @@ export const UserProvider: React.FC<UserProviderProps> = ({
 
   // Refresh essential data only - no auto-credits fetching
   const refreshAll = useCallback(async (): Promise<void> => {
+    // Don't fetch anything if no user is authenticated
+    if (!user) {
+      console.log('Skipping data refresh - no authenticated user');
+      return;
+    }
+    
     console.log('Refreshing essential user data...');
     // Only refresh profile and subscription automatically
     await Promise.all([
@@ -196,7 +226,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({
       refreshSubscription()
     ]);
     // Credits will be fetched manually when needed via refreshCredits()
-  }, [refreshProfile, refreshSubscription]);
+  }, [user, refreshProfile, refreshSubscription]);
 
   // Reset state when user logs out
   useEffect(() => {
