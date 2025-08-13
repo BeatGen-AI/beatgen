@@ -75,6 +75,7 @@ export default function HomePage() {
 
   const [showSoundUploader, setShowSoundUploader] = useState(false);
   const [showGenerateSongModal, setShowGenerateSongModal] = useState(false);
+  const [showAudioTracksModal, setShowAudioTracksModal] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -374,16 +375,53 @@ export default function HomePage() {
           {/* My Sounds Section is now replaced by AudioTracksDisplay */}
           <FadeCard className="p-6 mt-8">
             <div className="mb-2">
-              <h2 
-                className="text-2xl font-medium"
-                style={{
-                  color: GRID_CONSTANTS.logoColors[2], // Audio Tracks
-                }}
-              >
-                Audio Tracks
-              </h2>
+              {/* Desktop layout - side by side */}
+              <div className="hidden md:flex justify-between items-center">
+                <h2 
+                  className="text-2xl font-medium"
+                  style={{
+                    color: GRID_CONSTANTS.logoColors[2], // Audio Tracks
+                  }}
+                >
+                  Audio Tracks
+                </h2>
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  onClick={() => setShowAudioTracksModal(true)}
+                >
+                  <AddIcon className="w-4 h-4" />
+                  Add Audio Track
+                </Button>
+              </div>
+
+              {/* Mobile layout - stacked */}
+              <div className="flex md:hidden flex-col gap-4">
+                <h2 
+                  className="text-2xl font-medium"
+                  style={{
+                    color: GRID_CONSTANTS.logoColors[2], // Audio Tracks
+                  }}
+                >
+                  Audio Tracks
+                </h2>
+                <Button
+                  variant="default"
+                  className="flex items-center gap-2 justify-center"
+                  onClick={() => setShowAudioTracksModal(true)}
+                >
+                  <AddIcon className="w-4 h-4" />
+                  Add Audio Track
+                </Button>
+              </div>
             </div>
-            <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={GRID_CONSTANTS.logoColors[2]} useUiMode={true} />
+            <AudioTracksDisplay 
+              onReloadSounds={fetchSounds} 
+              sectionColor={GRID_CONSTANTS.logoColors[2]} 
+              useUiMode={true}
+              modalOpen={showAudioTracksModal}
+              onModalClose={() => setShowAudioTracksModal(false)}
+            />
           </FadeCard>
 
           {/* Midi Tracks Section */}

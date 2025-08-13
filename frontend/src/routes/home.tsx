@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import React from 'react'
+import React, { useEffect } from 'react'
 import HomePage from '../platform/pages/HomePage'
 import AuthModal from '../components/AuthModal'
 import { useAuth } from '../platform/auth/auth-context'
@@ -11,6 +11,18 @@ export const Route = createFileRoute('/home')({
 
 function HomePageWithAuth() {
   const { user, loading } = useAuth();
+  
+  // Lock body scroll when auth modal is shown
+  useEffect(() => {
+    if (!user && !loading) {
+      // Add overflow hidden to body to prevent scrolling
+      document.body.style.overflow = 'hidden';
+      return () => {
+        // Cleanup: restore scroll when component unmounts or user logs in
+        document.body.style.overflow = '';
+      };
+    }
+  }, [user, loading]);
   
   // Show loading state while checking auth
   if (loading) {
