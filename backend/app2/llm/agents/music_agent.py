@@ -17,7 +17,6 @@ from app2.llm.music_gen_service.llm_schemas import (
     IntervalMelodyOutput,
     LLMDeterminedMusicalParameters, 
     SelectInstruments, 
-    SelectInstrumentsAndDescribeMelody,
     InstrumentSelectionItem,
     MelodyData, 
     Note, 
@@ -26,6 +25,8 @@ from app2.llm.music_gen_service.llm_schemas import (
     CreateDrumBeat,
     DrumBeatPatternItem,
     ChordProgressionOutput,
+    SelectInstrumentsAndDescribeStableAudioMelody,
+    SelectInstrumentsAndDescribeLyriaMelody,
     SongRequest
 )
 # Utilities from music_gen_service
@@ -105,7 +106,7 @@ class MusicGenerationContext:
     
     # Generated parameters
     musical_params: Optional[FullMusicalParameters] = None
-    selected_instruments: Optional[Union[SelectInstruments, SelectInstrumentsAndDescribeMelody]] = None
+    selected_instruments: Optional[Union[SelectInstruments, SelectInstrumentsAndDescribeStableAudioMelody, SelectInstrumentsAndDescribeLyriaMelody]] = None
     selected_drums: Optional[SelectDrumSounds] = None
     
     # Model configuration
@@ -556,7 +557,7 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
         logger.info(f"Step 'determine_musical_parameters' returning: {full_params.model_dump_json(indent=2)}")
         return full_params
 
-    async def select_instruments(self, determined_params: FullMusicalParameters) -> Union[SelectInstruments, SelectInstrumentsAndDescribeMelody]:
+    async def select_instruments(self, determined_params: FullMusicalParameters) -> Union[SelectInstruments, SelectInstrumentsAndDescribeStableAudioMelody, SelectInstrumentsAndDescribeLyriaMelody]:
         """Streams explanation, then selects specific instruments via LLM call."""
         logger.info(f"Step 'select_instruments' called for song: {determined_params.song_title if determined_params.song_title else 'Untitled'}")
         
@@ -617,7 +618,13 @@ Do NOT output JSON in this step, just your conversational reasoning."""
         
         # Determine which schema to use based on generation type
         is_audio_generation = self.context and self.context.generation_type == "audio"
-        schema_class = SelectInstrumentsAndDescribeMelody if is_audio_generation else SelectInstruments
+        if is_audio_generation:
+            if self.context and self.context.generation_type == "stable_audio":
+                schema_class = SelectInstrumentsAndDescribeStableAudioMelody
+            else:
+                schema_class = SelectInstrumentsAndDescribeLyriaMelody
+        else:
+            schema_class = SelectInstruments
         
         if is_audio_generation:
             focused_prompt = f"""
@@ -636,8 +643,8 @@ The melody_description should be very detailed and include:
 - The mood and character (e.g., "warm and intimate", "bright and energetic", "melancholic")
 - Any specific techniques or qualities (e.g., "with slight reverb", "clean tone", "with vibrato")
 
-Provide your response *only* in the 'SelectInstrumentsAndDescribeMelody' JSON structure.
-Example of desired JSON structure: {json.dumps(SelectInstrumentsAndDescribeMelody.model_json_schema(), indent=2)}
+Provide your response *only* in the 'SelectInstrumentsAndDescribeStableAudioMelody' JSON structure.
+Example of desired JSON structure: {json.dumps(schema_class.model_json_schema(), indent=2)}
 Output only the JSON object."""
         else:
             focused_prompt = f"""
@@ -666,7 +673,7 @@ Output only the JSON object."""
         if hasattr(instrument_selections_raw, 'instrument_selections') and instrument_selections_raw.instrument_selections is not None:
             instrument_selections = SelectInstruments(instrument_selections=instrument_selections_raw.instrument_selections)
             
-            # Extract melody description if using SelectInstrumentsAndDescribeMelody
+            # Extract melody description if using SelectInstrumentsAndDescribeStableAudioMelody or SelectInstrumentsAndDescribeLyriaMelody
             if is_audio_generation and hasattr(instrument_selections_raw, 'melody_description'):
                 melody_description = instrument_selections_raw.melody_description
                 logger.info(f"Extracted melody description for audio generation: {melody_description}")
@@ -712,10 +719,16 @@ Output only the JSON object."""
         
         # Create the appropriate return object based on generation type
         if is_audio_generation:
-            result = SelectInstrumentsAndDescribeMelody(
-                instrument_selections=validated_selections,
-                melody_description=melody_description
-            )
+            if self.context and self.context.generation_type == "stable_audio":
+                result = SelectInstrumentsAndDescribeStableAudioMelody(
+                    instrument_selections=validated_selections,
+                    melody_description=melody_description
+                )
+            else:
+                result = SelectInstrumentsAndDescribeLyriaMelody(
+                    instrument_selections=validated_selections,
+                    melody_description=melody_description
+                )
             # Update context with the full result
             if self.context:
                 self.context.selected_instruments = result
@@ -1646,7 +1659,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             logger.info(f"Using fallback user-style prompt: '{fallback_prompt}'")
             return fallback_prompt
 
-    async def generate_diffusion_melody_and_send_sse(self, params: FullMusicalParameters, selected_instruments: Union[SelectInstruments, SelectInstrumentsAndDescribeMelody]):
+    async def generate_diffusion_melody_and_send_sse(self, params: FullMusicalParameters, selected_instruments: Union[SelectInstruments, SelectInstrumentsAndDescribeStableAudioMelody, SelectInstrumentsAndDescribeLyriaMelody]):
         """
         Generate audio using FAL-AI diffusion model and send as audio track SSE action.
         
@@ -1661,7 +1674,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         logger.info("Starting diffusion-based melody generation with FAL-AI...")
         
         # Check if we have a melody description from SelectInstrumentsAndDescribeMelody
-        has_melody_description = isinstance(selected_instruments, SelectInstrumentsAndDescribeMelody) and selected_instruments.melody_description
+        has_melody_description = (isinstance(selected_instruments, SelectInstrumentsAndDescribeStableAudioMelody) or isinstance(selected_instruments, SelectInstrumentsAndDescribeLyriaMelody)) and selected_instruments.melody_description
         
         if has_melody_description:
             # Use the detailed melody description directly

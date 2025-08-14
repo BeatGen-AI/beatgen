@@ -2,6 +2,8 @@ import logging
 from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Any, Dict, Union, get_origin, Sequence, get_args
 
+from app2.llm.prompts.prompts import LYRIA_TWO_PROMPT, STABLE_AUDIO_TWO_PROMPT
+
 logger = logging.getLogger(__name__)
 
 # --- Base Model for Coercion ---
@@ -94,8 +96,11 @@ class SelectInstruments(BaseCoerceModel):
     """Schema for the select_instruments tool output."""
     instrument_selections: List[InstrumentSelectionItem] = Field(..., description="List of instrument selections with their roles and explanations.")
 
-class SelectInstrumentsAndDescribeMelody(SelectInstruments):
-    melody_description: Optional[str] = Field(None, description="A detailed description of the melody which will be passed to a diffusion model to create the melody. Include the instrument(s), genre, mood, and any other relevant details. Be as concise as possible. Do not include any information about notes or chords. Keep your response to 1-2 sentences, with just the genre, mood, and instrument(s). Do not ask the model to use detuned sounds.")
+class SelectInstrumentsAndDescribeStableAudioMelody(SelectInstruments):
+    melody_description: Optional[str] = Field(None, description=STABLE_AUDIO_TWO_PROMPT)
+    
+class SelectInstrumentsAndDescribeLyriaMelody(SelectInstruments):
+    melody_description: Optional[str] = Field(None, description=LYRIA_TWO_PROMPT)
 
 class SelectDrumSounds(BaseCoerceModel):
     """Schema for the select_drum_sounds tool output."""
