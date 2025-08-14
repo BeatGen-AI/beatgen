@@ -178,6 +178,27 @@
     @apply bg-background text-foreground font-sans;
     font-family: 'Sen', ui-sans-serif, system-ui, sans-serif;
   }
+  
+  /* Autofill styles for light theme */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: oklch(0.141 0.005 285.823);
+    transition: background-color 5000s ease-in-out 0s;
+    box-shadow: inset 0 0 20px 20px transparent;
+    font-family: 'Sen', ui-sans-serif, system-ui, sans-serif !important;
+  }
+  
+  /* Autofill styles for dark theme */
+  .dark input:-webkit-autofill,
+  .dark input:-webkit-autofill:hover,
+  .dark input:-webkit-autofill:focus,
+  .dark input:-webkit-autofill:active {
+    -webkit-text-fill-color: oklch(0.985 0 0);
+    font-family: 'Sen', ui-sans-serif, system-ui, sans-serif !important;
+  }
 }
 
 /* Global scrollbar styles - outside of layer for proper specificity */
