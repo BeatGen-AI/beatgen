@@ -74,7 +74,7 @@ Format: Band | Genre: Pop | Subgenre: Electronic | Instruments: Drum Machine, Ba
 </medium>
 
 <complex>
-Format: Band | Genre: Rock | Subgenre: Indie Rock | Instruments: echoing electric guitars with chorus, well recorded drum-kit, Electric Bass | Moods: Moving, Epic, Climactic | BPM: 125
+Format: Band | Genre: Rock | Subgenre: Indie Rock | Instruments: Electric Guitar,Electric Bass | Moods: Moving, Epic, Climactic | BPM: 125
 </complex>
 </examples>
 
