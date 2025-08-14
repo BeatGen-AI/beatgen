@@ -7,7 +7,8 @@ from pydantic import BaseModel, EmailStr
 from app2.api.dependencies import get_current_user, get_user_service
 from app2.services.user_service import UserService
 from app2.core.logging import get_api_logger
-from app2.core.exceptions import NotFoundException, UnauthorizedException
+from app2.core.exceptions import NotFoundException, UnauthorizedException, ValidationException
+from app2.utils.password_validation import validate_password
 
 router = APIRouter()
 logger = get_api_logger("users")
@@ -112,6 +113,11 @@ async def change_password(
     """
     logger.info(f"Changing password for user ID: {current_user['id']}")
     try:
+        # Validate new password
+        password_error = validate_password(password_data.new_password)
+        if password_error:
+            raise ValidationException(password_error)
+        
         await user_service.change_password(
             user_id=current_user["id"],
             current_password=password_data.current_password,
@@ -119,6 +125,12 @@ async def change_password(
         )
         logger.info(f"Password changed for user ID: {current_user['id']}")
         return {"message": "Password changed successfully"}
+    except ValidationException as e:
+        logger.warning(f"Password validation failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     except UnauthorizedException:
         logger.error(f"Invalid current password for user ID: {current_user['id']}")
         raise HTTPException(
