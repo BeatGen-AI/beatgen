@@ -619,7 +619,7 @@ Do NOT output JSON in this step, just your conversational reasoning."""
         # Determine which schema to use based on generation type
         is_audio_generation = self.context and self.context.generation_type == "audio"
         if is_audio_generation:
-            if self.context and self.context.generation_type == "stable_audio":
+            if self.context and self.context.request_context.get('audio_generation_model') == "stability/stable-audio-2":
                 schema_class = SelectInstrumentsAndDescribeStableAudioMelody
             else:
                 schema_class = SelectInstrumentsAndDescribeLyriaMelody
