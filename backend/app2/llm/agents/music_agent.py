@@ -5,8 +5,11 @@ import traceback
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict, Type
 import uuid
-from sqlmodel import Session
+from sqlmodel import Session, select
+from sqlalchemy import text
 from dataclasses import dataclass
+import torch
+from transformers import ClapModel, ClapProcessor
 
 
 # Import schemas from music_gen_service
@@ -22,6 +25,7 @@ from app2.llm.music_gen_service.llm_schemas import (
     Note, 
     Bar,
     SelectDrumSounds,
+    DrumSoundQueries,
     CreateDrumBeat,
     DrumBeatPatternItem,
     ChordProgressionOutput,
@@ -143,6 +147,11 @@ class MusicGenerationAgent:
         # Context for sharing info across stages
         self.context: Optional[MusicGenerationContext] = None
         
+        # Initialize CLAP model for semantic search (lazily loaded)
+        self._clap_model = None
+        self._clap_processor = None
+        self._clap_device = None
+        
         # Parallel execution - simplified with immediate emission
 
     def _track_stage_tokens(self, stage_name: str, tokens: Optional[Dict[str, int]] = None, append: bool = False):
@@ -197,6 +206,98 @@ class MusicGenerationAgent:
         
         # Initialize search service for AI-guided instrument selection
         self._search_service = SearchService()
+
+    def _init_clap_model(self):
+        """Initialize CLAP model for semantic search (lazy loading)"""
+        if self._clap_model is None:
+            logger.info("Loading CLAP model for semantic search...")
+            self._clap_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self._clap_model = ClapModel.from_pretrained("laion/clap-htsat-unfused")
+            self._clap_processor = ClapProcessor.from_pretrained("laion/clap-htsat-unfused")
+            self._clap_model.to(self._clap_device)
+            self._clap_model.eval()
+            logger.info(f"CLAP model loaded on device: {self._clap_device}")
+
+    def _generate_embedding(self, text: str) -> List[float]:
+        """Generate CLAP embedding for text description"""
+        self._init_clap_model()
+        
+        with torch.no_grad():
+            inputs = self._clap_processor(text=[text], return_tensors="pt", padding=True)
+            inputs = {k: v.to(self._clap_device) for k, v in inputs.items()}
+            
+            text_features = self._clap_model.get_text_features(**inputs)
+            text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
+            
+            # Convert to list
+            embedding = text_features.cpu().numpy()[0].tolist()
+            
+        return embedding
+
+    async def _semantic_search_drum_samples(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Perform semantic search for drum samples using CLAP embeddings
+        
+        Args:
+            query: Search query (e.g., "kick drum", "snare drum")
+            top_k: Number of results to return
+            
+        Returns:
+            List of drum samples with similarity scores
+        """
+        try:
+            # Generate embedding for the query
+            query_embedding = self._generate_embedding(query)
+            
+            # Convert to PostgreSQL vector format string
+            embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
+            
+            # Search database using cosine similarity (l2_distance for normalized vectors)
+            if not self.context or not self.context.session:
+                raise ValueError("Database session not available")
+                
+            from app2.models.public_models.drum_samples import DrumSamplePublic
+            
+            # Use raw SQL for vector similarity search
+            query_sql = text("""
+                SELECT id, file_name, display_name, category, description, genre, kit_name, storage_key,
+                       (description_embedding <=> CAST(:query_embedding AS vector)) as distance
+                FROM drum_samples_public 
+                WHERE description_embedding IS NOT NULL
+                ORDER BY description_embedding <=> CAST(:query_embedding AS vector)
+                LIMIT :top_k
+            """)
+            
+            results = self.context.session.execute(
+                query_sql, 
+                {"query_embedding": embedding_str, "top_k": top_k}
+            ).fetchall()
+            
+            # Convert to list of dicts with similarity scores
+            search_results = []
+            for row in results:
+                # Convert distance to similarity score (1 - distance for cosine)
+                similarity_score = 1.0 - row.distance
+                
+                search_results.append({
+                    'id': str(row.id),
+                    'name': row.display_name,
+                    'file_name': row.file_name,
+                    'category': row.category,
+                    'description': row.description,
+                    'genre': row.genre,
+                    'kit_name': row.kit_name,
+                    'storage_key': row.storage_key,
+                    'similarity_score': similarity_score,
+                    'query': query
+                })
+                
+            logger.info(f"Found {len(search_results)} drum samples for query '{query}'")
+            return search_results
+            
+        except Exception as e:
+            logger.error(f"Error in semantic search for drum samples: {e}")
+            return []
 
     def _create_fresh_chat_session(self, system_prompt: str) -> ChatSession:
         """Creates a new ChatSession with current model configuration."""
@@ -1213,14 +1314,15 @@ Respond with only the search queries, one per line."""
         drum_queries = [q.strip() for q in search_queries_response.strip().split('\n') if q.strip()]
         logger.info(f"Generated {len(drum_queries)} drum search queries")
         
-        # 2. Search for drum sounds using the search service
+        # 2. Perform semantic search for drum sounds using CLAP embeddings
         all_drum_candidates = []
         drum_search_results_by_query = {}
         
         try:
             for query in drum_queries:
                 if query:
-                    drum_results = await self._search_service.search_drum_samples(
+                    # Use semantic search with CLAP embeddings
+                    drum_results = await self._semantic_search_drum_samples(
                         query=query,
                         top_k=5  # Get top 5 for each drum type
                     )
@@ -1228,16 +1330,16 @@ Respond with only the search queries, one per line."""
                     
                     # Add valid results to candidates
                     for result in drum_results:
-                        if result.name in self._drum_sample_map:
+                        if result['name'] in self._drum_sample_map:
                             all_drum_candidates.append({
-                                'name': result.name,
+                                'name': result['name'],
                                 'query': query,
-                                'score': result.similarity_score
+                                'score': result['similarity_score']
                             })
             
-            logger.info(f"Found {len(all_drum_candidates)} total drum candidates from search")
+            logger.info(f"Found {len(all_drum_candidates)} total drum candidates from semantic search")
         except Exception as e:
-            logger.error(f"Error searching for drum sounds: {e}")
+            logger.error(f"Error in semantic search for drum sounds: {e}")
             # Fallback to original approach
             all_drum_candidates = []
         
@@ -1255,9 +1357,11 @@ Respond with only the search queries, one per line."""
             drum_sample_names = [ds.display_name for ds in self._available_drum_samples[:20]]
             search_context = f"Available Drum Samples: {json.dumps(drum_sample_names)}"
         else:
-            search_context = "Search Results for Drum Sounds:\n"
+            search_context = "Semantic Search Results for Drum Sounds (with similarity scores):\n"
             for query, names in candidates_by_query.items():
-                search_context += f"- For '{query}': {json.dumps(names[:5])}\n"
+                # Get scores for these names
+                query_scores = [(candidate['name'], candidate['score']) for candidate in all_drum_candidates if candidate['query'] == query]
+                search_context += f"- For '{query}': {json.dumps([f'{name} (score: {score:.3f})' for name, score in query_scores[:5]])}\n"
         
         explanation_context = f"For a song in {determined_params.key} {determined_params.mode} at {determined_params.tempo} BPM, with style hints from title '{determined_params.song_title}' and user prompt '{determined_params.original_user_prompt}'."
         if drum_research_result:
@@ -1267,7 +1371,9 @@ Respond with only the search queries, one per line."""
         explanation_prompt_drums = f"""Now I need to select specific drum sounds (e.g., kick, snare, hi-hat, cymbals).
 {explanation_context}
 
-Please explain your choices for 4-5 drum sounds from the search results that would fit the style. Describe the role each sound will play.
+I've used semantic search with AI embeddings to find the most relevant drum sounds for each type based on the musical style. The similarity scores show how well each sample matches the search query.
+
+Please explain your choices for 4-5 drum sounds from the semantic search results that would fit the style. Describe the role each sound will play.
 Do NOT output JSON in this step, just your conversational reasoning."""
 
         logger.info("Streaming explanation for drum sound selection...")
@@ -1315,12 +1421,13 @@ Do NOT output JSON in this step, just your conversational reasoning."""
         focused_prompt = f"""
 {focused_prompt_context}
 
-Search Results Summary:
+Semantic Search Results Summary:
 {search_context}
 
-Based on our prior discussion and the search results, select 4-5 appropriate drum sounds (e.g., kick, snare, hi-hat).
+Based on our prior discussion and the semantic search results with AI embeddings, select 4-5 appropriate drum sounds (e.g., kick, snare, hi-hat).
+The semantic search has found the most relevant drum samples based on musical style and content similarity.
 Provide your response *only* in the 'SelectDrumSounds' JSON structure (an object with a 'drum_sounds' list of strings, where each string is an exact name from the search results).
-<CRITICAL_INSTRUCTION>The sounds you choose MUST be from the search results listed above.</CRITICAL_INSTRUCTION>
+<CRITICAL_INSTRUCTION>The sounds you choose MUST be from the semantic search results listed above.</CRITICAL_INSTRUCTION>
 <CRITICAL_INSTRUCTION>Valid choices are: {json.dumps(all_candidate_names)}</CRITICAL_INSTRUCTION>
 Example of desired JSON structure: {json.dumps(SelectDrumSounds.model_json_schema())}
 Output only the JSON object."""

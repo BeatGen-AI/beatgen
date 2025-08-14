@@ -98,6 +98,11 @@ class SelectDrumSounds(BaseCoerceModel):
     drum_sounds: List[str] = Field(..., description="List of selected drum sound names (e.g., ['Metro Kick Drum', 'Snare Drum']).")
 
 
+class DrumSoundQueries(BaseCoerceModel):
+    """Schema for the drum_sound_queries tool output."""
+    drum_sound_queries: List[str] = Field(..., description="Queries for drum sounds (e.g., ['kick drum', 'snare drum']).")
+
+
 class DrumBeatPatternItem(BaseCoerceModel):
     """Schema for a single drum beat pattern."""
     drum_sound_id: str = Field(..., description="The ID of the drum sound this pattern is for.")
