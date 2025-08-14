@@ -542,6 +542,66 @@ class AuthService:
             logger.error(f"Error updating password: {str(e)}")
             raise ServiceException(f"Failed to update password: {str(e)}")
 
+    async def reset_password_with_recovery_token(
+        self, password: str, recovery_token: str
+    ) -> bool:
+        """
+        Reset password using a recovery token from password reset email.
+        This properly exchanges the recovery token for a session first.
+        
+        Args:
+            password: The new password
+            recovery_token: The recovery token from the password reset email
+            
+        Returns:
+            True if successful
+            
+        Raises:
+            UnauthorizedException: If the recovery token is invalid or expired
+            ServiceException: If the password update fails
+        """
+        try:
+            logger.info(f"Processing password reset with recovery token: {recovery_token[:10]}...")
+            
+            # First, exchange the recovery token for a session
+            # This is the critical step - recovery tokens must be exchanged for sessions
+            logger.info("Exchanging recovery token for session...")
+            
+            # Set the session with the recovery token
+            # Supabase's Python client handles this through set_session
+            auth_response = supabase.client.auth.set_session(recovery_token, recovery_token)
+            
+            if not auth_response.user:
+                logger.error("Failed to exchange recovery token for session - no user returned")
+                raise UnauthorizedException("Invalid or expired recovery token")
+            
+            logger.info(f"Successfully exchanged token for session, user: {auth_response.user.id}")
+            
+            # Now we have a valid session, update the password
+            logger.info("Updating password with active session...")
+            update_response = supabase.client.auth.update_user({
+                "password": password
+            })
+            
+            if update_response.user:
+                logger.info(f"Password successfully reset for user: {update_response.user.id}")
+                return True
+            else:
+                logger.error("Password update failed - no user returned")
+                raise ServiceException("Failed to update password")
+                
+        except Exception as e:
+            error_str = str(e)
+            logger.error(f"Password reset with recovery token failed: {error_str}")
+            
+            # Check for specific error conditions
+            if "invalid" in error_str.lower() or "expired" in error_str.lower() or "Auth session missing" in error_str:
+                raise UnauthorizedException("Invalid or expired recovery token. Please request a new password reset.")
+            elif "New password should be different" in error_str or "same_password" in error_str:
+                raise ServiceException("New password must be different from your current password")
+            else:
+                raise ServiceException(f"Failed to reset password: {error_str}")
+
 
     async def handle_google_callback(
         self, code: str, request: Request, response: Response

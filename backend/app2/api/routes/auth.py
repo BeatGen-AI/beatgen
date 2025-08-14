@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, status, HTTPException, Query, Request, Response, Header
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
 from typing import Any, Optional, Dict
@@ -187,33 +187,48 @@ async def forgot_password(
 @router.post("/reset-password", response_model=MessageResponse)
 async def reset_password(
     request: ResetPasswordRequest,
-    current_user: dict = Depends(get_current_user_with_token),
+    authorization: str = Header(None),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> Any:
     """
     Reset password using recovery token from email
     
-    The user must be authenticated with the recovery token from the email
+    The recovery token should be sent in the Authorization header
     """
-    user_id = current_user.get("id")
-    access_token = current_user.get("access_token")
+    # Extract the token from the Authorization header
+    if not authorization:
+        logger.error("No authorization header provided for password reset")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authorization token"
+        )
     
-    logger.info(f"Processing password reset for user: {user_id}")
+    # Remove "Bearer " prefix if present
+    token = authorization.replace("Bearer ", "").strip()
+    
+    if not token:
+        logger.error("Empty token in authorization header")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization token"
+        )
+    
+    logger.info(f"Processing password reset with recovery token: {token[:10]}...")
     
     try:
         # Validate password strength
         if len(request.password) < MIN_PASSWORD_LENGTH:
             raise ValidationException(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
         
-        # Update the password using the recovery token
-        success = await auth_service.update_password_with_token(
-            user_id=user_id,
+        # Exchange the recovery token for a session and update the password
+        # This is the proper way to handle recovery tokens in Supabase
+        success = await auth_service.reset_password_with_recovery_token(
             password=request.password,
-            access_token=access_token
+            recovery_token=token
         )
         
         if success:
-            logger.info(f"Password reset successful for user: {user_id}")
+            logger.info("Password reset successful")
             return {"message": "Password has been reset successfully"}
         else:
             raise ServiceException("Failed to reset password")
@@ -224,13 +239,21 @@ async def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         ) from e
+    except UnauthorizedException as e:
+        logger.error(f"Authorization error during password reset: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired recovery token. Please request a new password reset."
+        ) from e
     except Exception as e:
         logger.error(f"Password reset failed: {str(e)}")
         # Pass through the actual error message
         error_message = str(e)
         
         # Extract user-friendly message if it's buried in the exception
-        if "New password should be different" in error_message:
+        if "Auth session missing" in error_message:
+            error_message = "Invalid or expired recovery token. Please request a new password reset."
+        elif "New password should be different" in error_message:
             error_message = "New password must be different from your current password"
         elif "same_password" in error_message:
             error_message = "New password cannot be the same as your current password"
