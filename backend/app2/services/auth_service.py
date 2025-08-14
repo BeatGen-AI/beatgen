@@ -451,34 +451,7 @@ class AuthService:
             logger.error(f"Error checking profile completion: {str(e)}")
             raise ServiceException(f"Failed to check profile status: {str(e)}")
 
-    async def updateUser(self, password: str) -> bool:
-        """
-        Update user with password (standard Supabase pattern)
-        
-        This is the standard Supabase method for adding email/password authentication 
-        to an OAuth account: updateUser({ password: 'validpassword' })
-        
-        Args:
-            password: The password to set
-            
-        Returns:
-            True if successful
-        """
-        try:
-            logger.info("Updating user with password using Supabase updateUser method")
-            
-            # Use Supabase's native updateUser method
-            supabase.client.auth.update_user({
-                "password": password
-            })
-            
-            logger.info("Password updated successfully using updateUser method")
-            return True
-                
-        except Exception as e:
-            logger.error(f"Error in updateUser: {str(e)}")
-            raise ServiceException(f"Failed to update user: {str(e)}")
-    
+
     async def add_password_to_oauth_user(
         self, user_id: str, password: str, access_token: str
     ) -> bool:
@@ -511,36 +484,6 @@ class AuthService:
         except Exception as e:
             logger.error(f"Error adding password auth: {str(e)}")
             raise ServiceException(f"Failed to add password: {str(e)}")
-
-    async def update_password_with_token(
-        self, user_id: str, password: str, access_token: str
-    ) -> bool:
-        """
-        Update password using a recovery token from password reset email
-        
-        Args:
-            user_id: The user's ID
-            password: The new password
-            access_token: The recovery token from the password reset email
-            
-        Returns:
-            True if successful
-        """
-        try:
-            logger.info(f"Updating password for user {user_id} with recovery token")
-            
-            # Use Supabase's native updateUser method with recovery token
-            # The recovery token should be set as the session token
-            supabase.client.auth.update_user({
-                "password": password
-            })
-            
-            logger.info("Password updated successfully")
-            return True
-                
-        except Exception as e:
-            logger.error(f"Error updating password: {str(e)}")
-            raise ServiceException(f"Failed to update password: {str(e)}")
 
     async def reset_password_with_recovery_token(
         self, password: str, recovery_token: str
