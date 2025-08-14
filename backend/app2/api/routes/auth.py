@@ -10,6 +10,7 @@ from app2.services.auth_service import AuthService
 from app2.core.logging import get_api_logger
 from app2.core.exceptions import UnauthorizedException, ServiceException, ValidationException
 from app2.core.config import settings
+from app2.utils.password_validation import validate_password
 
 # Import the schemas for compatibility with the old API
 from app2.models.token import Token
@@ -17,9 +18,6 @@ from app2.models.user import UserCreate
 
 router = APIRouter()
 logger = get_api_logger("auth")
-
-# Password validation constants
-MIN_PASSWORD_LENGTH = 8
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -83,6 +81,11 @@ async def signup(
     """
     logger.info(f"Processing signup request for email: {user_data.email}, username: {user_data.username}")
     try:
+        # Validate password before creating user
+        password_error = validate_password(user_data.password)
+        if password_error:
+            raise ValidationException(password_error)
+        
         # Call Supabase auth service to create user
         result = await auth_service.create_user(
             email=user_data.email,
@@ -113,6 +116,12 @@ async def signup(
             "token_type": "bearer",
             "user_id": result.get("user_id"),
         }
+    except ValidationException as e:
+        logger.warning(f"Signup validation failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     except Exception as e:
         logger.error(f"Signup failed: {str(e)}")
         raise HTTPException(
@@ -217,8 +226,9 @@ async def reset_password(
     
     try:
         # Validate password strength
-        if len(request.password) < MIN_PASSWORD_LENGTH:
-            raise ValidationException(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
+        password_error = validate_password(request.password)
+        if password_error:
+            raise ValidationException(password_error)
         
         # Exchange the recovery token for a session and update the password
         # This is the proper way to handle recovery tokens in Supabase
@@ -512,8 +522,9 @@ async def add_password(
     
     try:
         # Validate password
-        if len(request.password) < MIN_PASSWORD_LENGTH:
-            raise ValidationException(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
+        password_error = validate_password(request.password)
+        if password_error:
+            raise ValidationException(password_error)
         
         # Add password to the user
         success = await auth_service.add_password_to_oauth_user(

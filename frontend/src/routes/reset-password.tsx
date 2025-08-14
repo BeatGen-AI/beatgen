@@ -198,6 +198,9 @@ function ResetPasswordPage() {
         errorMessage = err.message;
       }
       
+      // Remove status code prefix if present (e.g., "500: " or "400: ")
+      errorMessage = errorMessage.replace(/^\d{3}:\s*/, '');
+      
       // Make certain error messages more user-friendly
       if (errorMessage.toLowerCase().includes('expired')) {
         errorMessage = 'This password reset link has expired. Please request a new one.';
@@ -247,7 +250,7 @@ function ResetPasswordPage() {
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
+              <AlertTitle>Password Reset Failed</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
