@@ -9,9 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Loader2, AlertCircle } from 'lucide-react';
 import PasswordResetModal from '../platform/components/PasswordResetModal';
 
-export default function AuthModal() {
+interface AuthModalProps {
+  initialTab?: 'login' | 'register';
+}
+
+export default function AuthModal({ initialTab = 'login' }: AuthModalProps) {
   const { signIn, signUp, signInWithGoogle } = useAuth();
-  const [activeTab, setActiveTab] = useState('login');
+  const [activeTab, setActiveTab] = useState(initialTab);
   
   // Login state
   const [loginEmail, setLoginEmail] = useState('');

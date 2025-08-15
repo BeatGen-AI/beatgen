@@ -1,16 +1,35 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import React, { useEffect } from 'react'
 import HomePage from '../platform/pages/HomePage'
 import AuthModal from '../components/AuthModal'
 import { useAuth } from '../platform/auth/auth-context'
 
+// Define search params schema
+interface HomeSearchParams {
+  tab?: 'login' | 'signup'
+}
+
 // Home route - shows HomePage with auth modal overlay for unauthenticated users
 export const Route = createFileRoute('/home')({
   component: HomePageWithAuth,
+  validateSearch: (search: Record<string, unknown>): HomeSearchParams => {
+    return {
+      tab: search.tab as 'login' | 'signup' | undefined
+    }
+  }
 })
 
 function HomePageWithAuth() {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const { tab } = Route.useSearch();
+  
+  // If user is logged in and there are query params, redirect to clean /home
+  useEffect(() => {
+    if (user && !loading && tab) {
+      navigate({ to: '/home', replace: true });
+    }
+  }, [user, loading, tab, navigate]);
   
   // Lock body scroll when auth modal is shown
   useEffect(() => {
@@ -37,7 +56,7 @@ function HomePageWithAuth() {
     <>
       <HomePage />
       {/* Show auth modal if not authenticated */}
-      {!user && <AuthModal />}
+      {!user && <AuthModal initialTab={tab === 'signup' ? 'register' : 'login'} />}
     </>
   );
 }
