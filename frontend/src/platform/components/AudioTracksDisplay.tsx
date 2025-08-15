@@ -13,6 +13,8 @@ interface AudioTracksDisplayProps {
   onReloadSounds: () => void;
   sectionColor: string;
   useUiMode?: boolean; // When true, use UI mode; when false, use studio mode
+  modalOpen?: boolean;
+  onModalClose?: () => void;
   // If SoundUploader becomes active, we'll need more props:
   // showSoundUploader: boolean;
   // onToggleSoundUploader: () => void; // Or separate setShow for true/false
@@ -25,6 +27,8 @@ const AudioTracksDisplay: React.FC<AudioTracksDisplayProps> = ({
   onReloadSounds,
   sectionColor,
   useUiMode = true, // Default to UI mode for homepage
+  modalOpen,
+  onModalClose,
   // showSoundUploader,
   // onToggleSoundUploader,
   // onSoundUploaded,
@@ -32,12 +36,16 @@ const AudioTracksDisplay: React.FC<AudioTracksDisplayProps> = ({
   // showSnackbar,
 }) => {
   const queryClient = useQueryClient();
-  const [isAudioTracksModalOpen, setIsAudioTracksModalOpen] = useState(false);
+  const [internalModalOpen, setInternalModalOpen] = useState(false);
+  
+  // Use external control if provided, otherwise use internal state
+  const isAudioTracksModalOpen = modalOpen !== undefined ? modalOpen : internalModalOpen;
+  const handleModalClose = onModalClose || (() => setInternalModalOpen(false));
 
   const handleSelectTrack = (track: AudioTrackRead) => {
     // Track is already in the user's library, just close the modal
     // The SoundLibrary will automatically show the updated list
-    setIsAudioTracksModalOpen(false);
+    handleModalClose();
     onReloadSounds(); // Refresh the sound library to show any new tracks
   };
 
@@ -67,7 +75,7 @@ const AudioTracksDisplay: React.FC<AudioTracksDisplayProps> = ({
       });
       
       // 5. Close modal and refresh library
-      setIsAudioTracksModalOpen(false);
+      handleModalClose();
       
       // Invalidate the audioTracks query to force a refresh
       queryClient.invalidateQueries({ queryKey: ['audioTracks'] });
@@ -82,23 +90,11 @@ const AudioTracksDisplay: React.FC<AudioTracksDisplayProps> = ({
 
   return (
     <>
-      <div className="flex justify-between items-center mb-4">
-        <div></div> {/* Empty div to push button to the right */}
-        <Button
-          variant="outline"
-          className="flex items-center gap-2"
-          onClick={() => setIsAudioTracksModalOpen(true)}
-        >
-          <Plus className="w-4 h-4" />
-          Add Audio Track
-        </Button>
-      </div>
-      
       <SoundLibrary onReload={onReloadSounds} sectionColor={sectionColor} />
       
       <AudioTracksModal
         open={isAudioTracksModalOpen}
-        onClose={() => setIsAudioTracksModalOpen(false)}
+        onClose={handleModalClose}
         onSelectTrack={handleSelectTrack}
         onFileUpload={handleFileUpload}
         useUiMode={useUiMode}

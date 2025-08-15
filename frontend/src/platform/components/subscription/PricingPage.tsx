@@ -19,7 +19,7 @@ export const PricingPage: React.FC = () => {
   const handleSelectPlan = (priceId: string) => {
     if (!user) {
       // Redirect to login if not authenticated
-      navigate({ to: '/login', search: { redirect: '/pricing' } as any });
+      navigate({ to: '/home', search: { redirect: '/pricing' } as any });
       return;
     }
 

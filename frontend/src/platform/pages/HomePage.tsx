@@ -75,6 +75,7 @@ export default function HomePage() {
 
   const [showSoundUploader, setShowSoundUploader] = useState(false);
   const [showGenerateSongModal, setShowGenerateSongModal] = useState(false);
+  const [showAudioTracksModal, setShowAudioTracksModal] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -96,6 +97,7 @@ export default function HomePage() {
     placeholderData: (previousData) => previousData,
     staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
     gcTime: 1000 * 60 * 30, // Keep in cache for 30 minutes
+    enabled: userIsAuthenticated, // Only fetch if user is authenticated
   });
   
   const totalProjectsOnServer = projectsData?.total_items ?? 0;
@@ -225,7 +227,7 @@ export default function HomePage() {
     if (!userIsAuthenticated) {
       // Show signup prompt for guests
       if (window.confirm('You need to create an account to save your generated song. Would you like to sign up now?')) {
-        navigate({ to: '/register' });
+        // Auth modal will handle registration
       }
       return;
     }
@@ -270,59 +272,8 @@ export default function HomePage() {
     }
   };
 
-  // If user is not authenticated, show a simpler layout for guests
-  if (!userIsAuthenticated) {
-    return (
-      <div className="flex flex-col min-h-screen">
-        {/* Header for guests */}
-        <header className="px-8 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h1 className="text-xl font-bold" style={{ color: GRID_CONSTANTS.logoColors[3] }}>
-            BeatGen Studio
-          </h1>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate({ to: '/login' })}>
-              Login
-            </Button>
-            <Button variant="default" onClick={() => navigate({ to: '/register' })}>
-              Sign Up
-            </Button>
-          </div>
-        </header>
-
-        {/* Main content for guests */}
-        <main className="flex-1 p-8 flex flex-col items-center justify-center">
-          <FadeCard className="p-8 max-w-[600px] w-full text-center">
-            <h2 className="text-3xl font-medium mb-4" style={{ color: GRID_CONSTANTS.logoColors[1] }}>
-              Generate Your Song
-            </h2>
-            <p className="text-base mb-6 text-muted-foreground">
-              Create music instantly with AI. Try our song generator for free!
-            </p>
-            
-            <Button
-              variant="default"
-              size="lg"
-              onClick={() => setShowGenerateSongModal(true)}
-              className="mb-4"
-            >
-              Generate Song
-            </Button>
-            
-            <p className="text-sm text-muted-foreground">
-              Sign up to save your generated songs as projects
-            </p>
-          </FadeCard>
-        </main>
-
-        {/* Generate Song Modal */}
-        <GenerateSongModal
-          open={showGenerateSongModal}
-          onClose={() => setShowGenerateSongModal(false)}
-          onSaveAsProject={handleSaveGeneratedSong}
-        />
-      </div>
-    );
-  }
+  // Remove the special layout for unauthenticated users
+  // All users will see the same homepage interface
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -424,16 +375,53 @@ export default function HomePage() {
           {/* My Sounds Section is now replaced by AudioTracksDisplay */}
           <FadeCard className="p-6 mt-8">
             <div className="mb-2">
-              <h2 
-                className="text-2xl font-medium"
-                style={{
-                  color: GRID_CONSTANTS.logoColors[2], // Audio Tracks
-                }}
-              >
-                Audio Tracks
-              </h2>
+              {/* Desktop layout - side by side */}
+              <div className="hidden md:flex justify-between items-center">
+                <h2 
+                  className="text-2xl font-medium"
+                  style={{
+                    color: GRID_CONSTANTS.logoColors[2], // Audio Tracks
+                  }}
+                >
+                  Audio Tracks
+                </h2>
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  onClick={() => setShowAudioTracksModal(true)}
+                >
+                  <AddIcon className="w-4 h-4" />
+                  Add Audio Track
+                </Button>
+              </div>
+
+              {/* Mobile layout - stacked */}
+              <div className="flex md:hidden flex-col gap-4">
+                <h2 
+                  className="text-2xl font-medium"
+                  style={{
+                    color: GRID_CONSTANTS.logoColors[2], // Audio Tracks
+                  }}
+                >
+                  Audio Tracks
+                </h2>
+                <Button
+                  variant="default"
+                  className="flex items-center gap-2 justify-center"
+                  onClick={() => setShowAudioTracksModal(true)}
+                >
+                  <AddIcon className="w-4 h-4" />
+                  Add Audio Track
+                </Button>
+              </div>
             </div>
-            <AudioTracksDisplay onReloadSounds={fetchSounds} sectionColor={GRID_CONSTANTS.logoColors[2]} useUiMode={true} />
+            <AudioTracksDisplay 
+              onReloadSounds={fetchSounds} 
+              sectionColor={GRID_CONSTANTS.logoColors[2]} 
+              useUiMode={true}
+              modalOpen={showAudioTracksModal}
+              onModalClose={() => setShowAudioTracksModal(false)}
+            />
           </FadeCard>
 
           {/* Midi Tracks Section */}

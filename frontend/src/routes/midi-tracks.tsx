@@ -16,7 +16,7 @@ const logoColors = [
 export const Route = createFileRoute('/midi-tracks')({
   component: MidiTracksPage,
   // Use requireAuth to protect this route
-  ...requireAuth('/login'),
+  ...requireAuth('/home'),
 })
 
 function MidiTracksPage() {

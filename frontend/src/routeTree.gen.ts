@@ -15,13 +15,11 @@ import { Route as StudioImport } from './routes/studio'
 import { Route as SettingsImport } from './routes/settings'
 import { Route as SamplerTracksImport } from './routes/sampler-tracks'
 import { Route as ResetPasswordImport } from './routes/reset-password'
-import { Route as RegisterImport } from './routes/register'
 import { Route as ProjectsImport } from './routes/projects'
 import { Route as ProfileImport } from './routes/profile'
 import { Route as PricingImport } from './routes/pricing'
 import { Route as OauthCallbackImport } from './routes/oauth-callback'
 import { Route as MidiTracksImport } from './routes/midi-tracks'
-import { Route as LoginImport } from './routes/login'
 import { Route as HomeImport } from './routes/home'
 import { Route as DrumTracksImport } from './routes/drum-tracks'
 import { Route as CreditsImport } from './routes/credits'
@@ -60,12 +58,6 @@ const ResetPasswordRoute = ResetPasswordImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
-const RegisterRoute = RegisterImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => rootRoute,
-} as any)
-
 const ProjectsRoute = ProjectsImport.update({
   id: '/projects',
   path: '/projects',
@@ -93,12 +85,6 @@ const OauthCallbackRoute = OauthCallbackImport.update({
 const MidiTracksRoute = MidiTracksImport.update({
   id: '/midi-tracks',
   path: '/midi-tracks',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const LoginRoute = LoginImport.update({
-  id: '/login',
-  path: '/login',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -221,13 +207,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HomeImport
       parentRoute: typeof rootRoute
     }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginImport
-      parentRoute: typeof rootRoute
-    }
     '/midi-tracks': {
       id: '/midi-tracks'
       path: '/midi-tracks'
@@ -261,13 +240,6 @@ declare module '@tanstack/react-router' {
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsImport
-      parentRoute: typeof rootRoute
-    }
-    '/register': {
-      id: '/register'
-      path: '/register'
-      fullPath: '/register'
-      preLoaderRoute: typeof RegisterImport
       parentRoute: typeof rootRoute
     }
     '/reset-password': {
@@ -351,13 +323,11 @@ export interface FileRoutesByFullPath {
   '/credits': typeof CreditsRoute
   '/drum-tracks': typeof DrumTracksRoute
   '/home': typeof HomeRoute
-  '/login': typeof LoginRoute
   '/midi-tracks': typeof MidiTracksRoute
   '/oauth-callback': typeof OauthCallbackRoute
   '/pricing': typeof PricingRoute
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
-  '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sampler-tracks': typeof SamplerTracksRoute
   '/settings': typeof SettingsRoute
@@ -376,13 +346,11 @@ export interface FileRoutesByTo {
   '/credits': typeof CreditsRoute
   '/drum-tracks': typeof DrumTracksRoute
   '/home': typeof HomeRoute
-  '/login': typeof LoginRoute
   '/midi-tracks': typeof MidiTracksRoute
   '/oauth-callback': typeof OauthCallbackRoute
   '/pricing': typeof PricingRoute
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
-  '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sampler-tracks': typeof SamplerTracksRoute
   '/settings': typeof SettingsRoute
@@ -402,13 +370,11 @@ export interface FileRoutesById {
   '/credits': typeof CreditsRoute
   '/drum-tracks': typeof DrumTracksRoute
   '/home': typeof HomeRoute
-  '/login': typeof LoginRoute
   '/midi-tracks': typeof MidiTracksRoute
   '/oauth-callback': typeof OauthCallbackRoute
   '/pricing': typeof PricingRoute
   '/profile': typeof ProfileRoute
   '/projects': typeof ProjectsRoute
-  '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sampler-tracks': typeof SamplerTracksRoute
   '/settings': typeof SettingsRoute
@@ -429,13 +395,11 @@ export interface FileRouteTypes {
     | '/credits'
     | '/drum-tracks'
     | '/home'
-    | '/login'
     | '/midi-tracks'
     | '/oauth-callback'
     | '/pricing'
     | '/profile'
     | '/projects'
-    | '/register'
     | '/reset-password'
     | '/sampler-tracks'
     | '/settings'
@@ -453,13 +417,11 @@ export interface FileRouteTypes {
     | '/credits'
     | '/drum-tracks'
     | '/home'
-    | '/login'
     | '/midi-tracks'
     | '/oauth-callback'
     | '/pricing'
     | '/profile'
     | '/projects'
-    | '/register'
     | '/reset-password'
     | '/sampler-tracks'
     | '/settings'
@@ -477,13 +439,11 @@ export interface FileRouteTypes {
     | '/credits'
     | '/drum-tracks'
     | '/home'
-    | '/login'
     | '/midi-tracks'
     | '/oauth-callback'
     | '/pricing'
     | '/profile'
     | '/projects'
-    | '/register'
     | '/reset-password'
     | '/sampler-tracks'
     | '/settings'
@@ -503,13 +463,11 @@ export interface RootRouteChildren {
   CreditsRoute: typeof CreditsRoute
   DrumTracksRoute: typeof DrumTracksRoute
   HomeRoute: typeof HomeRoute
-  LoginRoute: typeof LoginRoute
   MidiTracksRoute: typeof MidiTracksRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
   PricingRoute: typeof PricingRoute
   ProfileRoute: typeof ProfileRoute
   ProjectsRoute: typeof ProjectsRoute
-  RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SamplerTracksRoute: typeof SamplerTracksRoute
   SettingsRoute: typeof SettingsRoute
@@ -527,13 +485,11 @@ const rootRouteChildren: RootRouteChildren = {
   CreditsRoute: CreditsRoute,
   DrumTracksRoute: DrumTracksRoute,
   HomeRoute: HomeRoute,
-  LoginRoute: LoginRoute,
   MidiTracksRoute: MidiTracksRoute,
   OauthCallbackRoute: OauthCallbackRoute,
   PricingRoute: PricingRoute,
   ProfileRoute: ProfileRoute,
   ProjectsRoute: ProjectsRoute,
-  RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SamplerTracksRoute: SamplerTracksRoute,
   SettingsRoute: SettingsRoute,
@@ -560,13 +516,11 @@ export const routeTree = rootRoute
         "/credits",
         "/drum-tracks",
         "/home",
-        "/login",
         "/midi-tracks",
         "/oauth-callback",
         "/pricing",
         "/profile",
         "/projects",
-        "/register",
         "/reset-password",
         "/sampler-tracks",
         "/settings",
@@ -600,9 +554,6 @@ export const routeTree = rootRoute
     "/home": {
       "filePath": "home.tsx"
     },
-    "/login": {
-      "filePath": "login.tsx"
-    },
     "/midi-tracks": {
       "filePath": "midi-tracks.tsx"
     },
@@ -617,9 +568,6 @@ export const routeTree = rootRoute
     },
     "/projects": {
       "filePath": "projects.tsx"
-    },
-    "/register": {
-      "filePath": "register.tsx"
     },
     "/reset-password": {
       "filePath": "reset-password.tsx"

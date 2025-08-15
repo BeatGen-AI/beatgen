@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PAGINATION_CONSTANTS } from '../constants/pagination';
 import { Page } from '../types/pagination';
+import { isAuthenticated } from '../auth/auth-utils';
 
 /**
  * Configuration options for the pagination hook
@@ -11,6 +12,7 @@ interface PaginationOptions {
   displayIncrement?: number;
   apiPageSize?: number;
   fetchThreshold?: number;
+  enabled?: boolean; // Allow overriding the enabled state
 }
 
 /**
@@ -55,6 +57,7 @@ export function usePagination<T>(
     displayIncrement = PAGINATION_CONSTANTS.DISPLAY_INCREMENT,
     apiPageSize = PAGINATION_CONSTANTS.API_PAGE_SIZE,
     fetchThreshold = PAGINATION_CONSTANTS.FETCH_THRESHOLD,
+    enabled,
   } = options;
 
   // State for pagination
@@ -62,7 +65,10 @@ export function usePagination<T>(
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [allFetchedItems, setAllFetchedItems] = useState<T[]>([]);
 
-  // React Query for API calls
+  // Check authentication status
+  const userIsAuthenticated = isAuthenticated();
+  
+  // React Query for API calls - only fetch if authenticated (unless explicitly overridden)
   const { 
     data: pageData,
     isLoading,
@@ -72,6 +78,7 @@ export function usePagination<T>(
     queryKey: [...queryKey, currentPage, apiPageSize],
     queryFn: () => fetchFn(currentPage, apiPageSize),
     placeholderData: (previousData) => previousData,
+    enabled: enabled !== undefined ? enabled : userIsAuthenticated, // Only fetch if authenticated unless explicitly overridden
   });
 
   const totalItems = pageData?.total_items ?? 0;
@@ -123,6 +130,9 @@ export function usePagination<T>(
   // Determine if we can show more
   const canShowMore = displayedCount < totalItems;
 
+  // Don't show loading state if query is disabled (unauthenticated)
+  const queryEnabled = enabled !== undefined ? enabled : userIsAuthenticated;
+  
   return {
     // Data
     allFetchedItems,
@@ -131,8 +141,8 @@ export function usePagination<T>(
     totalPages,
     
     // State
-    isLoading,
-    isFetching,
+    isLoading: queryEnabled ? isLoading : false, // Don't show loading if query is disabled
+    isFetching: queryEnabled ? isFetching : false,
     error: error?.message || null,
     
     // Actions

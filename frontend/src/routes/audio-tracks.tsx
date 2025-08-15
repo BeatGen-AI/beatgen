@@ -16,7 +16,7 @@ const logoColors = [
 export const Route = createFileRoute('/audio-tracks')({
   component: AudioTracksPage,
   // Use requireAuth to protect this route
-  ...requireAuth('/login'),
+  ...requireAuth('/home'),
 })
 
 function AudioTracksPage() {

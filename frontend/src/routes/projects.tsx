@@ -7,7 +7,7 @@ import { requireAuth, AuthErrorComponent } from '../platform/auth/auth-utils.tsx
 // Home/Projects route - this will render at the path '/home'
 export const Route = createFileRoute('/projects')({
   // Use requireAuth utility to protect this route
-  ...requireAuth('/login'),
+  ...requireAuth('/home'),
   
   // Component to render
   component: Projects,

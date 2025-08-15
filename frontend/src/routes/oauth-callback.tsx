@@ -50,7 +50,7 @@ function OAuthCallbackPage() {
         
         // Redirect to login page after showing error
         setTimeout(() => {
-          window.location.href = '/login?error=oauth_failed'
+          window.location.href = '/home?error=oauth_failed'
         }, 3000)
       }
     }

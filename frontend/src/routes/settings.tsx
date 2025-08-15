@@ -7,7 +7,7 @@ import { usePageTheme } from '../lib/theme-provider';
 export const Route = createFileRoute('/settings')({
   component: SettingsComponent,
 
-  ...requireAuth('/login'),
+  ...requireAuth('/home'),
 });
 
 function SettingsComponent() {

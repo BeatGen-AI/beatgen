@@ -30,7 +30,7 @@ export const Route = createFileRoute('/reset-password')({
     
     if (!isRecovery && !hasError && !hasStoredToken) {
       // No valid reason to be on this page
-      window.location.href = '/login';
+      window.location.href = '/home';
     }
   },
 })
@@ -164,7 +164,7 @@ function ResetPasswordPage() {
       
       // Redirect to login after 3 seconds
       setTimeout(() => {
-        navigate({ to: '/login' });
+        navigate({ to: '/home' });
       }, 3000);
     } catch (err: any) {
       console.error('Password reset error:', err);
@@ -330,7 +330,7 @@ function ResetPasswordPage() {
             <Button
               variant="link"
               className="text-primary hover:underline p-0"
-              onClick={() => navigate({ to: '/login' })}
+              onClick={() => navigate({ to: '/home' })}
             >
               Back to Login
             </Button>

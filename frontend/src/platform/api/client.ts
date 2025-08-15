@@ -60,38 +60,55 @@ apiClient.interceptors.response.use(
       
       // Don't redirect if we're already on login-related pages
       const currentPath = window.location.pathname;
-      if (currentPath === '/login' || currentPath === '/register') {
-        console.log('Already on authentication page, not redirecting');
+      if (currentPath === '/home') {
+        console.log('Already on home page, not redirecting');
         return Promise.reject(error);
       }
       
       // Check if we have a valid token but still getting 401
       const token = localStorage.getItem('access_token');
       if (!token) {
-        console.log('No token found, redirecting to login');
-        window.location.href = '/login';
+        console.log('No token found, redirecting to home');
+        window.location.href = '/home';
         return Promise.reject(error);
       }
       
       try {
-        // Try to parse the token and check if it's expired
-        const tokenData = JSON.parse(atob(token.split('.')[1]));
+        // Validate token format before parsing
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+          throw new Error('Invalid token format - expected 3 parts');
+        }
+        
+        // Try to parse the token payload
+        const payload = parts[1];
+        // Add padding if needed for base64 decoding
+        const paddedPayload = payload + '='.repeat((4 - payload.length % 4) % 4);
+        const tokenData = JSON.parse(atob(paddedPayload));
+        
+        // Check if token has expiration and if it's expired
+        if (!tokenData.exp) {
+          console.log('Token has no expiration field');
+          // Token without expiration - consider it invalid
+          throw new Error('Token missing expiration');
+        }
+        
         const isExpired = tokenData.exp * 1000 < Date.now();
         
         if (isExpired) {
           console.log('Token is expired, clearing and redirecting');
           localStorage.removeItem('access_token');
-          window.location.href = '/login';
+          window.location.href = '/home';
         } else {
           console.log('Token appears valid but got 401 - API access issue');
           // Don't redirect on every request to prevent loops
           // This may be an issue with specific endpoints only
         }
       } catch (e) {
-        console.error('Failed to parse token:', e);
+        console.error('Failed to parse or validate token:', e);
         // Invalid token format - clear and redirect
         localStorage.removeItem('access_token');
-        window.location.href = '/login';
+        window.location.href = '/home';
       }
     }
     

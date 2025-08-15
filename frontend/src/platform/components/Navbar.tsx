@@ -114,17 +114,7 @@ const Navbar = () => {
                   </Tooltip>
                 </TooltipProvider>
               </>
-            ) : (
-              <>
-                <Button variant="ghost" asChild>
-                  <RouterLink to="/login">Log In</RouterLink>
-                </Button>
-                
-                <Button asChild>
-                  <RouterLink to="/register">Sign Up</RouterLink>
-                </Button>
-              </>
-            )}
+            ) : null}
           </div>
         
           {/* Mobile Menu Button */}
@@ -205,21 +195,7 @@ const Navbar = () => {
                         </Button>
                       </div>
                     </>
-                  ) : (
-                    <>
-                      <Button variant="ghost" asChild className="justify-start">
-                        <RouterLink to="/login" onClick={() => setMobileMenuOpen(false)}>
-                          Log In
-                        </RouterLink>
-                      </Button>
-                      
-                      <Button asChild className="justify-start">
-                        <RouterLink to="/register" onClick={() => setMobileMenuOpen(false)}>
-                          Sign Up
-                        </RouterLink>
-                      </Button>
-                    </>
-                  )}
+                  ) : null}
                 </div>
               </SheetContent>
             </Sheet>
