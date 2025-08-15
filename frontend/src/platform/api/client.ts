@@ -74,8 +74,25 @@ apiClient.interceptors.response.use(
       }
       
       try {
-        // Try to parse the token and check if it's expired
-        const tokenData = JSON.parse(atob(token.split('.')[1]));
+        // Validate token format before parsing
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+          throw new Error('Invalid token format - expected 3 parts');
+        }
+        
+        // Try to parse the token payload
+        const payload = parts[1];
+        // Add padding if needed for base64 decoding
+        const paddedPayload = payload + '='.repeat((4 - payload.length % 4) % 4);
+        const tokenData = JSON.parse(atob(paddedPayload));
+        
+        // Check if token has expiration and if it's expired
+        if (!tokenData.exp) {
+          console.log('Token has no expiration field');
+          // Token without expiration - consider it invalid
+          throw new Error('Token missing expiration');
+        }
+        
         const isExpired = tokenData.exp * 1000 < Date.now();
         
         if (isExpired) {
@@ -88,7 +105,7 @@ apiClient.interceptors.response.use(
           // This may be an issue with specific endpoints only
         }
       } catch (e) {
-        console.error('Failed to parse token:', e);
+        console.error('Failed to parse or validate token:', e);
         // Invalid token format - clear and redirect
         localStorage.removeItem('access_token');
         window.location.href = '/home';

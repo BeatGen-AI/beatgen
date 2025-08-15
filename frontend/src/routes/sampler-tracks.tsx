@@ -16,7 +16,7 @@ const logoColors = [
 export const Route = createFileRoute('/sampler-tracks')({
   component: SamplerTracksPage,
   // Use requireAuth to protect this route
-  ...requireAuth('/login'),
+  ...requireAuth('/home'),
 })
 
 function SamplerTracksPage() {

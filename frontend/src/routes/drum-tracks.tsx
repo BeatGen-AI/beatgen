@@ -16,7 +16,7 @@ const logoColors = [
 export const Route = createFileRoute('/drum-tracks')({
   component: DrumTracksPage,
   // Use requireAuth to protect this route
-  ...requireAuth('/login'),
+  ...requireAuth('/home'),
 })
 
 function DrumTracksPage() {

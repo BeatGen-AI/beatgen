@@ -32,15 +32,11 @@ export const requireAuth = (redirectTo: string = '/home') => {
       
       if (!isAuthenticated()) {
         console.log('User is NOT authenticated, redirecting to', redirectTo);
-        // Prevent the auth error component from showing on initial load
-        // We need to delay slightly to ensure the redirect works properly
-        setTimeout(() => {
-          navigate({ to: redirectTo, replace: true });
-        }, 10);
-        
-        // Return false to prevent the route from loading
         console.groupEnd();
-        return false;
+        
+        // Properly throw a redirect to prevent the route from loading
+        // This is the recommended pattern for TanStack Router
+        throw navigate({ to: redirectTo, replace: true });
       }
       
       console.log('User is authenticated, allowing access to protected route');
