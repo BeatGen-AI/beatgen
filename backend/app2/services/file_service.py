@@ -215,8 +215,8 @@ class FileService:
         logger.info("Getting public instrument files")
         try:
             # Use get_all with is_public=True filter
-            instruments = await self.file_repository.get_all(
-                FileType.INSTRUMENT, is_public=True
+            instruments = await FileRepository.get_all(
+                self.session, FileType.INSTRUMENT, is_public=True
             )
 
             logger.info(f"Found {len(instruments)} public instrument files")

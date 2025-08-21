@@ -40,9 +40,7 @@ class ProjectService:
             session: The async database session for this request
         """
         self.session = session
-        # Create repositories within request scope
-        self.project_repository = ProjectRepository(session)
-        self.project_track_repository = ProjectTrackRepository(session)
+        # Note: All repositories are now stateless with static methods
         self.track_service = TrackService(session)
 
 
@@ -69,10 +67,10 @@ class ProjectService:
             import time
             service_start = time.time()
             
-            # Get projects with tracks from repository
+            # Get projects with tracks from repository using static method
             projects, total_items = (
-                await self.project_repository.get_by_user_id_paginated(
-                    user_id, page_params.page, page_params.size
+                await ProjectRepository.get_by_user_id_paginated(
+                    self.session, user_id, page_params.page, page_params.size
                 )
             )
             
@@ -148,8 +146,8 @@ class ProjectService:
         """
         logger.info(f"Getting project with ID: {project_id} for user ID: {user_id}")
         try:
-            # Get the project
-            project = await self.project_repository.get_by_id(project_id)
+            # Get the project using static method
+            project = await ProjectRepository.get_by_id(self.session, project_id)
             if not project:
                 logger.error(f"Project with ID {project_id} not found")
                 raise NotFoundException("Project", str(project_id))
@@ -163,7 +161,7 @@ class ProjectService:
 
             # Get all tracks with their project-specific settings (relationships pre-loaded)
             project_tracks = (
-                await self.project_track_repository.get_track_with_settings(project_id)
+                await ProjectTrackRepository.get_track_with_settings(self.session, project_id)
             )
             logger.info(f"Found {len(project_tracks)} project tracks")
             
@@ -279,8 +277,8 @@ class ProjectService:
             # Extract tracks data if present
             project_data.pop("tracks", None)
 
-            # Create the project
-            project = await self.project_repository.create(project_data)
+            # Create the project using static method
+            project = await ProjectRepository.create(self.session, project_data)
             logger.info(f"Created project with ID: {project.id} for user ID: {user_id}")
 
             # Get the project with its tracks
@@ -314,7 +312,7 @@ class ProjectService:
 
         try:
             # First get the project to verify ownership
-            project = await self.project_repository.get_by_id(project_id)
+            project = await ProjectRepository.get_by_id(self.session, project_id)
             if not project:
                 logger.error(f"Project with ID {project_id} not found")
                 raise NotFoundException("Project", str(project_id))
@@ -346,8 +344,8 @@ class ProjectService:
             # Add updated timestamp
             safe_data["updated_at"] = datetime.now(timezone.utc)
 
-            # Update the project
-            await self.project_repository.update(project_id, safe_data)
+            # Update the project using static method
+            await ProjectRepository.update(self.session, project_id, safe_data)
 
             # Update tracks if provided - this now uses proper transaction management
             if tracks_data is not None:
@@ -389,18 +387,14 @@ class ProjectService:
         
         try:
             # Get existing tracks to identify what to remove
-            existing_tracks = await self.project_track_repository.get_by_project_id(project_id)
+            existing_tracks = await ProjectTrackRepository.get_by_project_id(self.session, project_id)
             existing_track_ids = {str(track.track_id) for track in existing_tracks}
             logger.info(f"Existing tracks in project: {existing_track_ids}")
             
             # Track IDs that will be in the updated project
             new_track_ids = set()
             
-            # Use existing repositories that already share the same session
-            midi_repo = self.track_service.midi_repository
-            audio_repo = self.track_service.audio_repository
-            sampler_repo = self.track_service.sampler_repository
-            drum_repo = self.track_service.drum_repository
+            # Note: Track repositories are now stateless, we'll pass session directly
             
             # Process each track using upsert pattern
             for track_idx, track_data in enumerate(tracks_data):
@@ -444,7 +438,7 @@ class ProjectService:
                 
                 # Use upsert to safely create or update the project-track association
                 try:
-                    upserted_track = await self.project_track_repository.upsert(project_track_settings)
+                    upserted_track = await ProjectTrackRepository.upsert(self.session, project_track_settings)
                     logger.info(f"Successfully upserted track {track_id} to project {project_id}, result: {upserted_track}")
                 except Exception as upsert_error:
                     logger.error(f"FAILED to upsert track {track_id}: {str(upsert_error)}")
@@ -475,13 +469,13 @@ class ProjectService:
                             if 'notes' in midi_data:
                                 logger.info("Removing stale 'notes' field, using only 'midi_notes_json'")
                                 midi_data.pop('notes')
-                            await midi_repo.update(track_id, midi_data)
+                            await MidiTrackRepository.update(self.session, track_id, midi_data)
                         elif track_type == TrackType.AUDIO:
-                            await audio_repo.update(track_id, track_specific_data)
+                            await AudioTrackRepository.update(self.session, track_id, track_specific_data)
                         elif track_type == TrackType.SAMPLER:
-                            await sampler_repo.update(track_id, track_specific_data)
+                            await SamplerTrackRepository.update(self.session, track_id, track_specific_data)
                         elif track_type == TrackType.DRUM:
-                            await drum_repo.update(track_id, track_specific_data)
+                            await DrumTrackRepository.update(self.session, track_id, track_specific_data)
                         
                         logger.info(f"Successfully updated track {track_id} data")
                     except Exception as track_update_error:
@@ -492,7 +486,7 @@ class ProjectService:
             logger.info(f"Completed upserting all tracks. New track IDs: {new_track_ids}")
             
             # Verify the tracks were actually saved
-            verification_tracks = await self.project_track_repository.get_by_project_id(project_id)
+            verification_tracks = await ProjectTrackRepository.get_by_project_id(self.session, project_id)
             verification_track_ids = {str(track.track_id) for track in verification_tracks}
             logger.info(f"Verification: tracks now in project: {verification_track_ids}")
             
@@ -529,7 +523,7 @@ class ProjectService:
         logger.info(f"Deleting project with ID: {project_id} for user ID: {user_id}")
         try:
             # First get the project to verify ownership
-            project = await self.project_repository.get_by_id(project_id)
+            project = await ProjectRepository.get_by_id(self.session, project_id)
             if not project:
                 logger.error(f"Project with ID {project_id} not found")
                 raise NotFoundException("Project", str(project_id))
@@ -542,10 +536,10 @@ class ProjectService:
                 )
 
             # Delete all project-track associations
-            await self.project_track_repository.delete_by_project_id(project_id)
+            await ProjectTrackRepository.delete_by_project_id(self.session, project_id)
 
-            # Delete the project
-            result = await self.project_repository.delete(project_id)
+            # Delete the project using static method
+            result = await ProjectRepository.delete(self.session, project_id)
 
             logger.info(f"Deleted project with ID: {project_id}")
             return result
@@ -580,7 +574,7 @@ class ProjectService:
         )
         try:
             # First get the project to verify ownership
-            project = await self.project_repository.get_by_id(project_id)
+            project = await ProjectRepository.get_by_id(self.session, project_id)
             if not project:
                 logger.error(f"Project with ID {project_id} not found")
                 raise NotFoundException("Project", str(project_id))
@@ -696,8 +690,8 @@ class ProjectService:
             f"Updating {track_type.value} track with ID: {track_id} in project with ID: {project_id}"
         )
         try:
-            # Get the project to verify ownership
-            project = await self.project_repository.get(project_id)
+            # Get the project to verify ownership using static method
+            project = await ProjectRepository.get_by_id(self.session, project_id)
             if not project:
                 logger.error(f"Project with ID {project_id} not found")
                 raise NotFoundException("Project", str(project_id))
@@ -711,8 +705,8 @@ class ProjectService:
 
             # Check if the track is in the project
             project_track = (
-                await self.project_track_repository.get_by_project_and_track(
-                    project_id, track_type, track_id
+                await ProjectTrackRepository.get_by_project_and_track(
+                    self.session, project_id, track_type, track_id
                 )
             )
             if not project_track:
@@ -801,8 +795,8 @@ class ProjectService:
             f"Removing {track_type.value} track with ID: {track_id} from project with ID: {project_id}"
         )
         try:
-            # Get the project to verify ownership
-            project = await self.project_repository.get(project_id)
+            # Get the project to verify ownership using static method
+            project = await ProjectRepository.get_by_id(self.session, project_id)
             if not project:
                 logger.error(f"Project with ID {project_id} not found")
                 raise NotFoundException("Project", str(project_id))
@@ -816,8 +810,8 @@ class ProjectService:
 
             # Check if the track is in the project
             project_track = (
-                await self.project_track_repository.get_by_project_and_track(
-                    project_id, track_type, track_id
+                await ProjectTrackRepository.get_by_project_and_track(
+                    self.session, project_id, track_type, track_id
                 )
             )
             if not project_track:

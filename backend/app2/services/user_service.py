@@ -19,14 +19,14 @@ logger = get_service_logger("user")
 class UserService:
     """Service for user operations"""
 
-    def __init__(self, user_repository: UserRepository):
+    def __init__(self, session):
         """
-        Initialize the service with repositories
+        Initialize the service with database session
 
         Args:
-            user_repository: The repository for user operations
+            session: The database session for repository operations
         """
-        self.user_repository = user_repository
+        self.session = session
 
     async def get_profile_by_email(self, email: str) -> Optional[User]:
         """
@@ -43,7 +43,7 @@ class UserService:
         """
         logger.info(f"Getting profile for email: {email}")
         try:
-            profile = await self.user_repository.find_by_email(email)
+            profile = await UserRepository.find_by_email(self.session, email)
             if profile:
                 logger.info(f"Found profile for email: {email}")
                 return profile
@@ -71,7 +71,7 @@ class UserService:
         """
         logger.info(f"Getting profile for user ID: {user_id}")
         try:
-            profile = await self.user_repository.get_profile(uuid.UUID(user_id))
+            profile = await UserRepository.get_profile(self.session, uuid.UUID(user_id))
             logger.info(f"Found profile for user ID: {user_id}")
             return profile
         except Exception as e:
@@ -107,7 +107,7 @@ class UserService:
                 if k not in ["id", "email", "created_at"]
             }
 
-            profile = await self.user_repository.update_profile(uuid.UUID(user_id), safe_data)
+            profile = await UserRepository.update_profile(self.session, uuid.UUID(user_id), safe_data)
             logger.info(f"Updated profile for user ID: {user_id}")
             return profile
         except Exception as e:

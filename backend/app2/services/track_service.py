@@ -39,6 +39,7 @@ from app2.models.track_models.drum_track import (
     DrumTrackCreate,
 )
 from app2.dto.projects_dto import Page, PageParams
+from app2.infrastructure.database.sqlmodel_client import get_async_session
 
 logger = get_service_logger("track")
 
@@ -57,13 +58,8 @@ class TrackService:
             session: The async database session for this request
         """
         self.session = session
-        # Create repositories within request scope
-        self.audio_repository = AudioTrackRepository(session)
-        self.midi_repository = MidiTrackRepository(session)
-        self.sampler_repository = SamplerTrackRepository(session)
-        self.drum_repository = DrumTrackRepository(session)
-        self.project_track_repository = ProjectTrackRepository(session)
-        self.file_repository = FileRepository(session)
+        # Note: Repositories are now stateless and don't need initialization
+        # They will be called directly with the session parameter
 
     async def get_user_tracks(
         self, user_id: uuid.UUID, requested_track_type: TrackType = None
@@ -86,20 +82,21 @@ class TrackService:
         try:
             result: Dict[str, List[AnyTrackRead]] = {}
 
-            # Map TrackType to its repository and Pydantic read model
+            # Map TrackType to its repository class and Pydantic read model
             track_config = {
-                TrackType.AUDIO: (self.audio_repository, AudioTrackRead),
-                TrackType.MIDI: (self.midi_repository, MidiTrackRead),
-                TrackType.SAMPLER: (self.sampler_repository, SamplerTrackRead),
-                TrackType.DRUM: (self.drum_repository, DrumTrackRead),
+                TrackType.AUDIO: (AudioTrackRepository, AudioTrackRead),
+                TrackType.MIDI: (MidiTrackRepository, MidiTrackRead),
+                TrackType.SAMPLER: (SamplerTrackRepository, SamplerTrackRead),
+                TrackType.DRUM: (DrumTrackRepository, DrumTrackRead),
             }
 
             async def fetch_and_store_tracks(
                 track_type_enum: TrackType,
-                repository: Union[AudioTrackRepository, MidiTrackRepository, SamplerTrackRepository, DrumTrackRepository],
+                repository_class: type,
                 read_model: Union[Type[AudioTrackRead], Type[MidiTrackRead], Type[SamplerTrackRead], Type[DrumTrackRead]]
             ):
-                tracks = await repository.get_by_user_id(user_id)
+                # Call the repository's static method with session
+                tracks = await repository_class.get_by_user_id(self.session, user_id)
                 validated_tracks = [read_model.model_validate(track) for track in tracks]
                 result[track_type_enum.value] = validated_tracks
                 return len(validated_tracks)
@@ -139,7 +136,7 @@ class TrackService:
             limit = page_params.size
 
             audio_tracks_orm, total_items_count = (
-                await self.audio_repository.get_by_user_id_paginated(
+                await AudioTrackRepository.get_by_user_id_paginated(self.session,
                     user_id, skip=skip, limit=limit
                 )
             )
@@ -171,7 +168,7 @@ class TrackService:
             limit = page_params.size
 
             midi_tracks_orm, total_items_count = (
-                await self.midi_repository.get_by_user_id_paginated(
+                await MidiTrackRepository.get_by_user_id_paginated(self.session,
                     user_id, skip=skip, limit=limit
                 )
             )
@@ -203,7 +200,7 @@ class TrackService:
             limit = page_params.size
 
             sampler_tracks_orm, total_items_count = (
-                await self.sampler_repository.get_by_user_id_paginated(
+                await SamplerTrackRepository.get_by_user_id_paginated(self.session,
                     user_id, skip=skip, limit=limit
                 )
             )
@@ -235,7 +232,7 @@ class TrackService:
             limit = page_params.size
 
             drum_tracks_orm, total_items_count = (
-                await self.drum_repository.get_by_user_id_paginated(
+                await DrumTrackRepository.get_by_user_id_paginated(self.session,
                     user_id, skip=skip, limit=limit
                 )
             )
@@ -281,19 +278,19 @@ class TrackService:
             track = None
 
             if track_type == TrackType.AUDIO:
-                track = await self.audio_repository.get(track_id)
+                track = await AudioTrackRepository.get(self.session, track_id)
                 if track:
                     track_read = AudioTrackRead.model_validate(track)
             elif track_type == TrackType.MIDI:
-                track = await self.midi_repository.get(track_id)
+                track = await MidiTrackRepository.get(self.session, track_id)
                 if track:
                     track_read = MidiTrackRead.model_validate(track)
             elif track_type == TrackType.SAMPLER:
-                track = await self.sampler_repository.get(track_id)
+                track = await SamplerTrackRepository.get(self.session, track_id)
                 if track:
                     track_read = SamplerTrackRead.model_validate(track)
             elif track_type == TrackType.DRUM:
-                track = await self.drum_repository.get(track_id)
+                track = await DrumTrackRepository.get(self.session, track_id)
                 if track:
                     track_read = DrumTrackRead.model_validate(track)
             else:
@@ -324,11 +321,12 @@ class TrackService:
             logger.error(traceback.format_exc())
             raise ServiceException(f"Failed to get {track_type.value} track: {str(e)}")
 
+    @staticmethod
     async def create_audio_track(
-        self, user_id: uuid.UUID, track_data: Dict[str, Any]
+        user_id: uuid.UUID, track_data: Dict[str, Any]
     ) -> AudioTrackRead:
         """
-        Create a new audio track
+        Create a new audio track with self-managed session
 
         Args:
             user_id: The ID of the user
@@ -341,44 +339,52 @@ class TrackService:
             ServiceException: If the operation fails
         """
         logger.info(f"Creating audio track for user ID: {user_id}")
-        try:
-            # Add user ID
-            track_data["user_id"] = user_id
-            track_data["type"] = TrackType.AUDIO
-
-            # Create the track
+        
+        async with get_async_session() as session:
             try:
-                track = await self.audio_repository.create(track_data)
-            except Exception as e:
-                # Check if it's specifically a duplicate key error
-                if "duplicate key" in str(e) or "UniqueViolation" in str(e):
+                # Add user ID and type
+                track_data["user_id"] = user_id
+                track_data["type"] = TrackType.AUDIO
+
+                # Create the track using the stateless repository
+                try:
+                    track = await AudioTrackRepository.create(session, track_data)
+                    # Session will auto-commit when context exits
                     logger.info(
-                        f"Audio track already with ID: {track_data['id']} exists. Updating track."
+                        f"Created audio track with ID: {track.id} for user ID: {user_id}"
                     )
-                    track = await self.audio_repository.update(track_data["id"], track_data)
-                else:
-                    # Re-raise other types of errors
-                    logger.error(f"Error creating audio track: {str(e)}")
-                    raise
+                except Exception as e:
+                    # Check if it's specifically a duplicate key error
+                    if "duplicate key" in str(e) or "UniqueViolation" in str(e):
+                        logger.info(
+                            f"Audio track with ID: {track_data.get('id')} already exists. Updating track."
+                        )
+                        track = await AudioTrackRepository.update(session, track_data["id"], track_data)
+                        logger.info(
+                            f"Updated existing audio track with ID: {track.id} for user ID: {user_id}"
+                        )
+                    else:
+                        # Re-raise other types of errors
+                        logger.error(f"Error creating audio track: {str(e)}")
+                        raise
 
-            logger.info(
-                f"Created audio track with ID: {track.id} for user ID: {user_id}"
-            )
-            return AudioTrackRead.model_validate(track)
-        except Exception as e:
-            logger.error(f"Error creating audio track: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to create audio track: {str(e)}")
+                return AudioTrackRead.model_validate(track)
+                
+            except Exception as e:
+                logger.error(f"Error creating audio track: {str(e)}")
+                logger.error(traceback.format_exc())
+                raise ServiceException(f"Failed to create audio track: {str(e)}")
 
+    @staticmethod
     async def create_midi_track(
-        self, user_id: uuid.UUID, midi_track_data: MidiTrackCreate
+        user_id: uuid.UUID, midi_track_data: Dict[str, Any]
     ) -> MidiTrackRead:
         """
-        Create a new MIDI track
+        Create a new MIDI track with self-managed session
 
         Args:
             user_id: The ID of the user
-            track_data: The track data
+            midi_track_data: The track data
 
         Returns:
             The created MIDI track
@@ -387,55 +393,53 @@ class TrackService:
             ServiceException: If the operation fails
         """
         logger.info(f"Creating MIDI track for user ID: {user_id}")
-        try:
-            # Add user ID
-            midi_track_data["user_id"] = user_id
-            midi_track_data["type"] = TrackType.MIDI
-
-            # Validate required fields
-            if "instrument_id" not in midi_track_data:
-                raise ValueError("MIDI tracks require an instrument_id")
-
-            # Create the track
-            logger.info(f"Creating MIDI track with data: {midi_track_data}")
+        
+        async with get_async_session() as session:
             try:
-                track = await self.midi_repository.create(midi_track_data)
-                logger.info(f"✅ Created new MIDI track with ID: {track.id}")
-            except Exception as e:
-                # Check if it's specifically a duplicate key error
-                if "duplicate key" in str(e) or "UniqueViolation" in str(e):
-                    logger.info(
-                        f"🔄 MIDI track with ID: {midi_track_data['id']} already exists. Updating instead."
-                    )
-                    try:
-                        track = await self.midi_repository.update(
+                # Add user ID and type
+                midi_track_data["user_id"] = user_id
+                midi_track_data["type"] = TrackType.MIDI
+
+                # Validate required fields
+                if "instrument_id" not in midi_track_data:
+                    raise ValueError("MIDI tracks require an instrument_id")
+
+                # Create the track
+                logger.info(f"Creating MIDI track with data: {midi_track_data}")
+                try:
+                    track = await MidiTrackRepository.create(session, midi_track_data)
+                    logger.info(f"✅ Created new MIDI track with ID: {track.id}")
+                except Exception as e:
+                    # Check if it's specifically a duplicate key error
+                    if "duplicate key" in str(e) or "UniqueViolation" in str(e):
+                        logger.info(
+                            f"🔄 MIDI track with ID: {midi_track_data.get('id')} already exists. Updating instead."
+                        )
+                        track = await MidiTrackRepository.update(session,
                             midi_track_data["id"], midi_track_data
                         )
                         logger.info(f"✅ Updated existing MIDI track with ID: {track.id}")
-                    except Exception as update_error:
-                        logger.error(f"❌ Failed to update MIDI track: {str(update_error)}")
-                        raise update_error
-                else:
-                    # Re-raise other types of errors
-                    logger.error(f"❌ Error creating MIDI track: {str(e)}")
-                    raise
+                    else:
+                        # Re-raise other types of errors
+                        logger.error(f"❌ Error creating MIDI track: {str(e)}")
+                        raise
 
-            logger.info(
-                f"Created MIDI track with ID: {track.id} for user ID: {user_id}"
-            )
-            # Reload track with relationships for safe serialization
-            track_with_relationships = await self.midi_repository.get(track.id)
-            return MidiTrackRead.model_validate(track_with_relationships)
-        except Exception as e:
-            logger.error(f"Error creating MIDI track: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to create MIDI track: {str(e)}")
+                logger.info(
+                    f"Created MIDI track with ID: {track.id} for user ID: {user_id}"
+                )
+                return MidiTrackRead.model_validate(track)
+                
+            except Exception as e:
+                logger.error(f"Error creating MIDI track: {str(e)}")
+                logger.error(traceback.format_exc())
+                raise ServiceException(f"Failed to create MIDI track: {str(e)}")
 
+    @staticmethod
     async def create_sampler_track(
-        self, user_id: uuid.UUID, track_data: Dict[str, Any]
+        user_id: uuid.UUID, track_data: Dict[str, Any]
     ) -> SamplerTrackRead:
         """
-        Create a new sampler track
+        Create a new sampler track with self-managed session
 
         Args:
             user_id: The ID of the user
@@ -448,46 +452,50 @@ class TrackService:
             ServiceException: If the operation fails
         """
         logger.info(f"Creating sampler track for user ID: {user_id}")
-        try:
-            # Add user ID
-            track_data["user_id"] = user_id
-            track_data["type"] = TrackType.SAMPLER
-
-            # Validate required fields
-            if "audio_storage_key" not in track_data:
-                raise ValueError("Sampler tracks require audio_storage_key")
-
-            # Create the track
+        
+        async with get_async_session() as session:
             try:
-                track = await self.sampler_repository.create(track_data)
+                # Add user ID and type
+                track_data["user_id"] = user_id
+                track_data["type"] = TrackType.SAMPLER
+
+                # Validate required fields
+                if "audio_storage_key" not in track_data:
+                    raise ValueError("Sampler tracks require audio_storage_key")
+
+                # Create the track
+                try:
+                    track = await SamplerTrackRepository.create(session, track_data)
+                except Exception as e:
+                    # Check if it's specifically a duplicate key error
+                    if "duplicate key" in str(e) or "UniqueViolation" in str(e):
+                        logger.info(
+                            f"Sampler track already with ID: {track_data.get('id')} exists. Updating track."
+                        )
+                        track = await SamplerTrackRepository.update(session,
+                            track_data["id"], track_data
+                        )
+                    else:
+                        # Re-raise other types of errors
+                        logger.error(f"Error creating sampler track: {str(e)}")
+                        raise
+
+                logger.info(
+                    f"Created sampler track with ID: {track.id} for user ID: {user_id}"
+                )
+                return SamplerTrackRead.model_validate(track)
+                
             except Exception as e:
-                # Check if it's specifically a duplicate key error
-                if "duplicate key" in str(e) or "UniqueViolation" in str(e):
-                    logger.info(
-                        f"Sampler track already with ID: {track_data['id']} exists. Updating track."
-                    )
-                    track = await self.sampler_repository.update(
-                        track_data["id"], track_data
-                    )
-                else:
-                    # Re-raise other types of errors
-                    logger.error(f"Error creating sampler track: {str(e)}")
-                    raise
+                logger.error(f"Error creating sampler track: {str(e)}")
+                logger.error(traceback.format_exc())
+                raise ServiceException(f"Failed to create sampler track: {str(e)}")
 
-            logger.info(
-                f"Created sampler track with ID: {track.id} for user ID: {user_id}"
-            )
-            return SamplerTrackRead.model_validate(track)
-        except Exception as e:
-            logger.error(f"Error creating sampler track: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to create sampler track: {str(e)}")
-
+    @staticmethod
     async def create_drum_track(
-        self, user_id: uuid.UUID, track_data: Dict[str, Any]
+        user_id: uuid.UUID, track_data: Dict[str, Any]
     ) -> DrumTrackRead:
         """
-        Create a new drum track
+        Create a new drum track with self-managed session
 
         Args:
             user_id: The ID of the user
@@ -500,38 +508,40 @@ class TrackService:
             ServiceException: If the operation fails
         """
         logger.info(f"Creating drum track for user ID: {user_id}")
-        try:
-            # Add user ID
-            track_data["user_id"] = user_id
-            track_data["type"] = TrackType.DRUM
-
-            # Create the track
+        
+        async with get_async_session() as session:
             try:
-                track = await self.drum_repository.create(track_data)
-            except Exception as e:
-                # Check if it's specifically a duplicate key error
-                if "duplicate key" in str(e) or "UniqueViolation" in str(e):
-                    logger.info(
-                        f"Drum track already with ID: {track_data['id']} exists. Updating track."
-                    )
-                    track = await self.drum_repository.update(
-                        track_data["id"], track_data
-                    )
-                else:
-                    # Re-raise other types of errors
-                    logger.error(f"Error creating drum track: {str(e)}")
-                    raise
+                # Add user ID and type
+                track_data["user_id"] = user_id
+                track_data["type"] = TrackType.DRUM
 
-            logger.info(
-                f"Created drum track with ID: {track.id} for user ID: {user_id}"
-            )
-            # Reload track with relationships for safe serialization
-            track_with_relationships = await self.drum_repository.get(track.id)
-            return DrumTrackRead.model_validate(track_with_relationships)
-        except Exception as e:
-            logger.error(f"Error creating drum track: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise ServiceException(f"Failed to create drum track: {str(e)}")
+                # Create the track
+                try:
+                    track = await DrumTrackRepository.create(session, track_data)
+                except Exception as e:
+                    # Check if it's specifically a duplicate key error
+                    if "duplicate key" in str(e) or "UniqueViolation" in str(e):
+                        logger.info(
+                            f"Drum track already with ID: {track_data.get('id')} exists. Updating track."
+                        )
+                        track = await DrumTrackRepository.update(session,
+                            track_data["id"], track_data
+                        )
+                    else:
+                        # Re-raise other types of errors
+                        logger.error(f"Error creating drum track: {str(e)}")
+                        raise
+
+                logger.info(
+                    f"Created drum track with ID: {track.id} for user ID: {user_id}"
+                )
+                # Track is already loaded with relationships from create method
+                return DrumTrackRead.model_validate(track)
+                
+            except Exception as e:
+                logger.error(f"Error creating drum track: {str(e)}")
+                logger.error(traceback.format_exc())
+                raise ServiceException(f"Failed to create drum track: {str(e)}")
 
     async def update_track(
         self,
@@ -568,7 +578,7 @@ class TrackService:
             updated_track = None
 
             if track_type == TrackType.AUDIO:
-                updated_track = await self.audio_repository.update(track_id, track_data)
+                updated_track = await AudioTrackRepository.update(self.session, track_id, track_data)
                 track_read = AudioTrackRead.model_validate(updated_track)
             elif track_type == TrackType.MIDI:
                 # Remove any stale 'notes' field if it exists, only use midi_notes_json
@@ -577,15 +587,15 @@ class TrackService:
                     logger.info("Removing stale 'notes' field, using only 'midi_notes_json'")
                     midi_data.pop('notes')
                 
-                updated_track = await self.midi_repository.update(track_id, midi_data)
+                updated_track = await MidiTrackRepository.update(self.session, track_id, midi_data)
                 track_read = MidiTrackRead.model_validate(updated_track)
             elif track_type == TrackType.SAMPLER:
-                updated_track = await self.sampler_repository.update(
+                updated_track = await SamplerTrackRepository.update(self.session,
                     track_id, track_data
                 )
                 track_read = SamplerTrackRead.model_validate(updated_track)
             elif track_type == TrackType.DRUM:
-                updated_track = await self.drum_repository.update(track_id, track_data)
+                updated_track = await DrumTrackRepository.update(self.session, track_id, track_data)
                 track_read = DrumTrackRead.model_validate(updated_track)
             else:
                 raise ValueError(f"Invalid track type: {track_type}")
@@ -630,19 +640,19 @@ class TrackService:
             await self.get_track(track_id, track_type, user_id)
 
             # Delete all project associations for this track
-            await self.project_track_repository.delete_by_track(track_type, track_id)
+            await ProjectTrackRepository.delete_by_track(self.session, track_type, track_id)
 
             # Delete the track based on type
             result = False
 
             if track_type == TrackType.AUDIO:
-                result = await self.audio_repository.delete(track_id)
+                result = await AudioTrackRepository.delete(self.session, track_id)
             elif track_type == TrackType.MIDI:
-                result = await self.midi_repository.delete(track_id)
+                result = await MidiTrackRepository.delete(self.session, track_id)
             elif track_type == TrackType.SAMPLER:
-                result = await self.sampler_repository.delete(track_id)
+                result = await SamplerTrackRepository.delete(self.session, track_id)
             elif track_type == TrackType.DRUM:
-                result = await self.drum_repository.delete(track_id)
+                result = await DrumTrackRepository.delete(self.session, track_id)
             else:
                 raise ValueError(f"Invalid track type: {track_type}")
 
@@ -685,8 +695,8 @@ class TrackService:
             f"Creating upload URL for {file_type.value} file {file_name} for user ID: {user_id}"
         )
         try:
-            # Forward to the file repository to handle this
-            result = await self.file_repository.create_upload_url(
+            # Note: create_upload_url doesn't need a session
+            result = await FileRepository.create_upload_url(
                 file_name, file_id, user_id, file_type
             )
 
@@ -744,14 +754,14 @@ class TrackService:
 
             # Create the association with duplicate handling
             try:
-                project_track = await self.project_track_repository.create(
-                    project_track_data
+                project_track = await ProjectTrackRepository.create(
+                    self.session, project_track_data
                 )
             except Exception as e:
                 # If create fails due to duplicate, try upsert
                 logger.info(f"ProjectTrack create failed, trying upsert: {str(e)}")
-                project_track = await self.project_track_repository.upsert(
-                    project_track_data
+                project_track = await ProjectTrackRepository.upsert(
+                    self.session, project_track_data
                 )
 
             # Get track data with settings
@@ -807,8 +817,8 @@ class TrackService:
             await self.get_track(track_id, track_type, user_id)
 
             # Delete the association
-            result = await self.project_track_repository.delete(
-                project_id, track_type, track_id
+            result = await ProjectTrackRepository.delete(
+                self.session, project_id, track_type, track_id
             )
 
             logger.info(
@@ -856,8 +866,8 @@ class TrackService:
             track = await self.get_track(track_id, track_type, user_id)
 
             # Update the association
-            project_track = await self.project_track_repository.update(
-                project_id, track_type, track_id, settings
+            project_track = await ProjectTrackRepository.update(
+                self.session, project_id, track_type, track_id, settings
             )
 
             # Get track data with updated settings

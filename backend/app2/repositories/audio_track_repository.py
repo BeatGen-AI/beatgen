@@ -1,38 +1,50 @@
 """
-Repository for AudioTrack models
+Repository for AudioTrack models - Stateless implementation
 """
 
-from typing import List
+from typing import List, Dict, Any
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, func
+from app2.core.logging import get_repository_logger
 
-from app2.models.track_models.audio_track import (
-    AudioTrack,
-)
-from app2.repositories.base_repository import BaseRepository
+from app2.models.track_models.audio_track import AudioTrack
+
+logger = get_repository_logger("AudioTrack")
 
 
-class AudioTrackRepository(BaseRepository[AudioTrack]):
-    """Repository for audio track operations"""
+class AudioTrackRepository:
+    """Stateless repository for audio track operations"""
 
-    def __init__(self, session: AsyncSession):
-        super().__init__(AudioTrack, session)
+    @staticmethod
+    async def create(session: AsyncSession, track_data: Dict[str, Any]) -> AudioTrack:
+        """Create a new audio track"""
+        try:
+            audio_track = AudioTrack(**track_data)
+            session.add(audio_track)
+            await session.flush()  # Flush to get ID but don't commit
+            return audio_track
+        except Exception as e:
+            logger.error(f"Error creating audio track: {str(e)}")
+            raise
 
-    async def get(self, track_id: uuid.UUID) -> AudioTrack:
+    @staticmethod
+    async def get(session: AsyncSession, track_id: uuid.UUID) -> AudioTrack:
         """Get an audio track by ID"""
         query = select(AudioTrack).where(AudioTrack.id == track_id)
-        result = await self.session.execute(query)
+        result = await session.execute(query)
         return result.scalars().first()
 
-    async def get_by_user_id(self, user_id: uuid.UUID) -> List[AudioTrack]:
+    @staticmethod
+    async def get_by_user_id(session: AsyncSession, user_id: uuid.UUID) -> List[AudioTrack]:
         """Get all audio tracks for a specific user"""
         query = select(AudioTrack).where(AudioTrack.user_id == user_id)
-        result = await self.session.execute(query)
+        result = await session.execute(query)
         return result.scalars().all()
 
+    @staticmethod
     async def get_by_user_id_paginated(
-        self, user_id: uuid.UUID, skip: int, limit: int
+        session: AsyncSession, user_id: uuid.UUID, skip: int, limit: int
     ) -> tuple[List[AudioTrack], int]:
         """Get paginated audio tracks for a specific user."""
         # Query for items
@@ -43,17 +55,37 @@ class AudioTrackRepository(BaseRepository[AudioTrack]):
             .offset(skip)
             .limit(limit)
         )
-        items_result = await self.session.execute(items_query)
+        items_result = await session.execute(items_query)
         items = items_result.scalars().all()
 
         # Query for total count
-        # Ensure the count is performed on a unique, non-nullable column if possible, e.g., AudioTrack.id
         count_query = (
             select(func.count(AudioTrack.id))
             .select_from(AudioTrack)
             .where(AudioTrack.user_id == user_id)
         )
-        count_result = await self.session.execute(count_query)
-        total_count = count_result.scalar_one_or_none() or 0 # Use scalar_one_or_none() and default to 0
+        count_result = await session.execute(count_query)
+        total_count = count_result.scalar_one_or_none() or 0
 
         return items, total_count
+
+    @staticmethod
+    async def update(session: AsyncSession, track_id: uuid.UUID, track_data: Dict[str, Any]) -> AudioTrack:
+        """Update an audio track"""
+        track = await AudioTrackRepository.get(session, track_id)
+        if track:
+            for key, value in track_data.items():
+                if hasattr(track, key):
+                    setattr(track, key, value)
+            await session.flush()
+        return track
+
+    @staticmethod
+    async def delete(session: AsyncSession, track_id: uuid.UUID) -> bool:
+        """Delete an audio track"""
+        track = await AudioTrackRepository.get(session, track_id)
+        if track:
+            await session.delete(track)
+            await session.flush()
+            return True
+        return False
