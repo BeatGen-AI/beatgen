@@ -199,16 +199,19 @@ class MusicGenerationAgent:
                 logger.error(f"Failed to emit error event: {emit_error}")
             raise
         
-    async def _init_real_data(self, session: AsyncSession):
-        _drum_file_repository = get_drum_sample_public_repository(session)
-        _file_repository = get_file_repository(session)
-        drum_sample_service = get_drum_sample_service(_drum_file_repository)
-        file_service = get_file_service(_file_repository)
-        self._available_soundfonts = await file_service.get_public_instrument_files()
-        self._available_drum_samples = await drum_sample_service.get_all_samples()
-        self._soundfont_map = {sf.display_name: sf for sf in self._available_soundfonts}
-        self._drum_sample_map = {ds.display_name: ds for ds in self._available_drum_samples}
-        self._drum_sample_id_map = {str(ds.id): ds for ds in self._available_drum_samples}
+    async def _init_real_data(self):
+        # Create a temporary session just for initialization
+        from app2.infrastructure.database.sqlmodel_client import get_async_session
+        async with get_async_session() as session:
+            _drum_file_repository = get_drum_sample_public_repository(session)
+            _file_repository = get_file_repository(session)
+            drum_sample_service = get_drum_sample_service(_drum_file_repository)
+            file_service = get_file_service(_file_repository)
+            self._available_soundfonts = await file_service.get_public_instrument_files()
+            self._available_drum_samples = await drum_sample_service.get_all_samples()
+            self._soundfont_map = {sf.display_name: sf for sf in self._available_soundfonts}
+            self._drum_sample_map = {ds.display_name: ds for ds in self._available_drum_samples}
+            self._drum_sample_id_map = {str(ds.id): ds for ds in self._available_drum_samples}
 
     def _create_fresh_chat_session(self, system_prompt: str, step: Optional[str] = None) -> ChatSession:
         """Creates a new ChatSession with current model configuration."""
@@ -1720,24 +1723,17 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             from app2.services.audio_generation_service import get_audio_generation_service
             from app2.services.file_service import FileService
             from app2.repositories.file_repository import FileRepository
-            from app2.models.track_models.audio_track import AudioTrack
-            from app2.repositories.audio_track_repository import AudioTrackRepository
+            # No need for AudioTrack model anymore, using TrackService
             from app2.types.assistant_actions import AudioTrackData
             import uuid
             
-            # Get session and user_id from context
-            if not self.context or not self.context.session:
-                raise ValueError("Database session not available in music agent context")
-            
-            if not self.context.user_id:
+            # Get user_id from context
+            if not self.context or not self.context.user_id:
                 raise ValueError("User ID not available in music agent context")
             
-            session = self.context.session
             user_id = self.context.user_id
             
-            # Create file service instance
-            file_repository = FileRepository(session)
-            file_service = FileService(file_repository)
+            # We'll create file service when needed below
             
             # Create audio generation service instance
             # Get audio generation model from context if available (for Compose mode)
@@ -1811,12 +1807,16 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
                 description="Processing and storing generated audio..."
             )
             
-            # Upload audio to storage
-            storage_key, storage_type = await file_service.upload_audio_file(
-                audio_data, 
-                generation_result.file_name,
-                user_id
-            )
+            # Upload audio to storage using a temporary session
+            from app2.infrastructure.database.sqlmodel_client import get_async_session
+            async with get_async_session() as file_session:
+                file_repository = FileRepository(file_session)
+                file_service = FileService(file_repository)
+                storage_key, storage_type = await file_service.upload_audio_file(
+                    audio_data, 
+                    generation_result.file_name,
+                    user_id
+                )
             
             # Create placeholder waveform data
             waveform_data = [0.0] * 200  # Simple placeholder
@@ -1846,16 +1846,17 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
                 "user_id": user_id
             }
             
-            # Create AudioTrack model directly
-            audio_track = AudioTrack(**audio_track_data)
+            # Use TrackService to create the audio track atomically
+            from app2.services.track_service import TrackService
             
-            # Save to database
-            session.add(audio_track)
-            # Session will auto-commit when context manager exits - no manual commit needed
+            # Remove user_id from track_data as it will be added by the service
+            user_id_for_track = audio_track_data.pop("user_id")
             
-            # Convert to read model for the response
-            from app2.models.track_models.audio_track import AudioTrackRead
-            created_track = AudioTrackRead.model_validate(audio_track)
+            # Create the track using the service method
+            created_track = await TrackService.create_audio_track(
+                user_id=user_id_for_track,
+                track_data=audio_track_data
+            )
             
             # Create action to add the audio track to the frontend
             action = AssistantAction(
@@ -1882,7 +1883,7 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
         return key, mode.lower() if mode else "major"
 
     # --- Main Orchestration Method (Parallel Execution) ---
-    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, db_session: AsyncSession, user_id: str = None, generation_type: str = "midi", request_context: Dict[str, Any] = None):
+    async def run(self, request_id: str, request: SongRequest, model_info: ModelInfo, queue: SSEQueueManager, user_id: str = None, generation_type: str = "midi", request_context: Dict[str, Any] = None):
         """
         Main execution flow for the music generation agent with parallel execution.
         Processes the request through various stages, using LLM calls for decisions
@@ -1893,11 +1894,10 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             request: The user's song request details.
             model_info: Information about the LLM to be used.
             queue: The SSE queue manager for sending events to the client.
-            db_session: The database session for any database operations.
         """
         logger.info(f"MusicGenerationAgent run started (PARALLEL) for request_id: {request_id}, prompt: '{request.user_prompt}', duration: {request.duration_bars} bars")
         
-        await self._init_real_data(db_session) # Initialize soundfonts and drum samples
+        await self._init_real_data() # Initialize soundfonts and drum samples
 
         logger.info(f"Available soundfonts length: {len(self._available_soundfonts)}")
         logger.info(f"Available drum samples length: {len(self._available_drum_samples)}")
@@ -1913,7 +1913,6 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             drum_research=None,
             model_info=model_info,
             queue=queue,
-            session=db_session,
             user_id=user_id,
             generation_type=generation_type,
             request_context=request_context

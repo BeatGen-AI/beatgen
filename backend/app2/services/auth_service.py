@@ -22,14 +22,14 @@ logger = get_service_logger("auth")
 class AuthService:
     """Service for authentication operations"""
 
-    def __init__(self, user_repository: UserRepository):
+    def __init__(self, session):
         """
-        Initialize the service with repositories
+        Initialize the service with database session
 
         Args:
-            user_repository: The repository for user operations
+            session: The database session for repository operations
         """
-        self.user_repository = user_repository
+        self.session = session
         
         logger.info("🔐 AUTH SYSTEM: Native Supabase auth enabled")
         logger.info("   ✅ Using public.users.id = auth.users.id")
@@ -74,7 +74,8 @@ class AuthService:
 
             # Create user profile using the Supabase Auth ID directly
             try:
-                user_profile = await self.user_repository.create_profile(
+                user_profile = await UserRepository.create_profile(
+                    self.session,
                     user_id=uuid.UUID(user_id),
                     email=email,
                     username=username,
@@ -140,7 +141,7 @@ class AuthService:
             # If Supabase supports direct username login, this logic would change.
             logger.info(f"Attempting login with username: {email_or_username}. Looking up email.")
             try:
-                user_profile = await self.user_repository.get_user_by_username(username=email_or_username)
+                user_profile = await UserRepository.get_user_by_username(self.session, username=email_or_username)
                 if not user_profile or not user_profile.email:
                     logger.error(f"No user found with username: {email_or_username} or email is missing.")
                     raise UnauthorizedException("Invalid username or password")
@@ -311,7 +312,8 @@ class AuthService:
         """
         logger.info(f"Creating user profile for user ID: {user_id}")
         try:
-            profile = await self.user_repository.create_profile(
+            profile = await UserRepository.create_profile(
+                self.session,
                 uuid.UUID(user_id), email, username, display_name
             )
             logger.info(f"Created user profile for user ID: {user_id}")
@@ -385,7 +387,7 @@ class AuthService:
             True if available, False if taken
         """
         try:
-            existing_user = await self.user_repository.find_by_username(username)
+            existing_user = await UserRepository.find_by_username(self.session, username)
             return existing_user is None
         except Exception as e:
             logger.error(f"Error checking username availability: {str(e)}")
@@ -416,12 +418,13 @@ class AuthService:
                 raise ValidationException("Username can only contain letters, numbers, and underscores")
             
             # Check if username is already taken
-            existing_user = await self.user_repository.find_by_username(username)
+            existing_user = await UserRepository.find_by_username(self.session, username)
             if existing_user:
                 raise ValidationException("Username is already taken")
             
             # Update the user's profile with the username
-            return await self.user_repository.update_profile(
+            return await UserRepository.update_profile(
+                self.session,
                 user_id=user_id,
                 profile_data={"username": username}
             )
@@ -443,7 +446,7 @@ class AuthService:
             True if profile is complete (has username), False otherwise
         """
         try:
-            user = await self.user_repository.get_profile(user_id)
+            user = await UserRepository.get_profile(self.session, user_id)
             return user.username is not None
         except NotFoundException:
             return False
@@ -606,11 +609,12 @@ class AuthService:
                 # With native Supabase auth, check if user profile already exists
                 # If not, create it using the Supabase auth ID directly
                 try:
-                    existing_user = await self.user_repository.get_profile(session_user_id)
+                    existing_user = await UserRepository.get_profile(self.session, session_user_id)
                     logger.info(f"Profile already exists for User ID: {session_user_id}")
                 except NotFoundException:
                     # Create new user profile - convert string ID to UUID
-                    user_profile = await self.user_repository.create_profile(
+                    user_profile = await UserRepository.create_profile(
+                    self.session,
                         user_id=uuid.UUID(session_user_id),
                         email=email,
                         username=None,

@@ -1,5 +1,5 @@
 """
-Unified File Repository for database operations using SQLModel
+Unified File Repository for database operations using SQLModel - Stateless implementation
 Handles all file types (audio, MIDI, instrument) consistently
 """
 
@@ -18,48 +18,44 @@ from app2.infrastructure.storage.supabase_storage import SupabaseStorage
 # Generic type for file models
 FileModel = InstrumentFile
 
+logger = get_repository_logger("file")
+
 
 class FileRepository:
-    """Repository for operations on all file types (audio, MIDI, instrument)"""
+    """Stateless repository for operations on all file types (audio, MIDI, instrument)"""
 
-    def __init__(self, session: AsyncSession):
-        """
-        Initialize the repository with database session
+    # Map file types to their model classes
+    _file_models = {FileType.INSTRUMENT: InstrumentFile}
 
-        Args:
-            session: The SQLModel session for database operations
-        """
-        self.session = session
-        self.logger = get_repository_logger("file")
+    # Map file types to storage buckets
+    _storage_buckets = {
+        FileType.AUDIO: "tracks/audio",
+        FileType.INSTRUMENT: "instruments",
+    }
 
-        # Map file types to their model classes
-        self._file_models = {FileType.INSTRUMENT: InstrumentFile}
-
-        # Map file types to storage buckets
-        self._storage_buckets = {
-            FileType.AUDIO: "tracks/audio",
-            FileType.INSTRUMENT: "instruments",
-        }
-
-    def _get_model_class(self, file_type: FileType) -> Type:
+    @staticmethod
+    def _get_model_class(file_type: FileType) -> Type:
         """Get the model class for a file type"""
-        model_class = self._file_models.get(file_type)
+        model_class = FileRepository._file_models.get(file_type)
         if not model_class:
             raise ValueError(f"Unsupported file type: {file_type}")
         return model_class
 
-    def _get_storage_client(self, file_type: FileType) -> SupabaseStorage:
+    @staticmethod
+    def _get_storage_client(file_type: FileType) -> SupabaseStorage:
         """Get the storage client for a file type"""
-        bucket = self._storage_buckets.get(file_type)
+        bucket = FileRepository._storage_buckets.get(file_type)
         if not bucket:
             raise ValueError(f"Unsupported file type for storage: {file_type}")
         return SupabaseStorage(bucket)
 
-    async def get_by_id(self, file_id: uuid.UUID, file_type: FileType) -> Any:
+    @staticmethod
+    async def get_by_id(session: AsyncSession, file_id: uuid.UUID, file_type: FileType) -> Any:
         """
         Get a file by ID and type
 
         Args:
+            session: The database session
             file_id: The ID of the file
             file_type: The type of file
 
@@ -70,34 +66,36 @@ class FileRepository:
             NotFoundException: If the file is not found
             DatabaseException: If there's a database error
         """
-        self.logger.info(f"Getting {file_type.value} file with ID {file_id}")
+        logger.info(f"Getting {file_type.value} file with ID {file_id}")
         try:
-            model_class = self._get_model_class(file_type)
+            model_class = FileRepository._get_model_class(file_type)
 
             statement = select(model_class).where(model_class.id == file_id)
-            result_exec = await self.session.execute(statement)
+            result_exec = await session.execute(statement)
             result = result_exec.scalars().first()
 
             if result is None:
-                self.logger.error(
+                logger.error(
                     f"{file_type.value.capitalize()} file with ID {file_id} not found"
                 )
-                raise NotFoundException(f"{file_type.value.capitalize()} file", file_id)
+                raise NotFoundException(f"{file_type.value.capitalize()} file", str(file_id))
 
-            self.logger.info(f"Found {file_type.value} file with ID {file_id}")
+            logger.info(f"Found {file_type.value} file with ID {file_id}")
             return result
         except Exception as e:
             if isinstance(e, NotFoundException):
                 raise
-            self.logger.error(f"Error getting {file_type.value} file by ID: {str(e)}")
-            self.logger.error(traceback.format_exc())
+            logger.error(f"Error getting {file_type.value} file by ID: {str(e)}")
+            logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to get {file_type.value} file: {str(e)}")
 
-    async def get_all(self, file_type: FileType, **filters) -> List[Any]:
+    @staticmethod
+    async def get_all(session: AsyncSession, file_type: FileType, **filters) -> List[Any]:
         """
         Get all files of a specific type with optional filters
 
         Args:
+            session: The database session
             file_type: The type of file
             **filters: Optional filter criteria (e.g., user_id=uuid, is_public=True)
 
@@ -108,11 +106,11 @@ class FileRepository:
             DatabaseException: If there's a database error
         """
         filter_str = ", ".join(f"{k}={v}" for k, v in filters.items())
-        self.logger.info(
+        logger.info(
             f"Getting all {file_type.value} files with filters: {filter_str}"
         )
         try:
-            model_class = self._get_model_class(file_type)
+            model_class = FileRepository._get_model_class(file_type)
 
             # Build query with filters
             query = select(model_class)
@@ -121,23 +119,25 @@ class FileRepository:
                     query = query.where(getattr(model_class, key) == value)
 
             # Execute query
-            result_exec = await self.session.execute(query)
+            result_exec = await session.execute(query)
             results = result_exec.scalars().all()
 
-            self.logger.info(f"Found {len(results)} {file_type.value} files")
+            logger.info(f"Found {len(results)} {file_type.value} files")
             return results
         except Exception as e:
-            self.logger.error(f"Error getting {file_type.value} files: {str(e)}")
-            self.logger.error(traceback.format_exc())
+            logger.error(f"Error getting {file_type.value} files: {str(e)}")
+            logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to get {file_type.value} files: {str(e)}")
 
+    @staticmethod
     async def get_by_user_id(
-        self, user_id: uuid.UUID, file_type: FileType
+        session: AsyncSession, user_id: uuid.UUID, file_type: FileType
     ) -> List[Any]:
         """
         Get all files of a specific type for a user
 
         Args:
+            session: The database session
             user_id: The ID of the user
             file_type: The type of file
 
@@ -147,32 +147,34 @@ class FileRepository:
         Raises:
             DatabaseException: If there's a database error
         """
-        self.logger.info(f"Getting {file_type.value} files for user {user_id}")
+        logger.info(f"Getting {file_type.value} files for user {user_id}")
         try:
-            model_class = self._get_model_class(file_type)
+            model_class = FileRepository._get_model_class(file_type)
 
             # Check if model has user_id field
             if not hasattr(model_class, "user_id"):
-                self.logger.warning(
+                logger.warning(
                     f"{file_type.value.capitalize()} model doesn't have user_id field"
                 )
                 return []
 
-            return await self.get_all(file_type, user_id=user_id)
+            return await FileRepository.get_all(session, file_type, user_id=user_id)
         except Exception as e:
-            self.logger.error(
+            logger.error(
                 f"Error getting {file_type.value} files for user: {str(e)}"
             )
-            self.logger.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
             raise DatabaseException(
                 f"Failed to get {file_type.value} files for user: {str(e)}"
             )
 
-    async def create(self, file_data: Dict[str, Any], file_type: FileType) -> Any:
+    @staticmethod
+    async def create(session: AsyncSession, file_data: Dict[str, Any], file_type: FileType) -> Any:
         """
         Create a new file
 
         Args:
+            session: The database session
             file_data: The data for the new file
             file_type: The type of file
 
@@ -182,37 +184,37 @@ class FileRepository:
         Raises:
             DatabaseException: If there's a database error
         """
-        self.logger.info(f"Creating new {file_type.value} file")
+        logger.info(f"Creating new {file_type.value} file")
         try:
-            model_class = self._get_model_class(file_type)
+            model_class = FileRepository._get_model_class(file_type)
 
             # Create model instance
             file_instance = model_class(**file_data)
 
-            # Add to session
-            self.session.add(file_instance)
-            await self.session.commit()
-            await self.session.refresh(file_instance)
+            # Add to session and flush
+            session.add(file_instance)
+            await session.flush()
 
-            self.logger.info(
+            logger.info(
                 f"Created {file_type.value} file with ID {file_instance.id}"
             )
             return file_instance
         except Exception as e:
-            await self.session.rollback()
-            self.logger.error(f"Error creating {file_type.value} file: {str(e)}")
-            self.logger.error(traceback.format_exc())
+            logger.error(f"Error creating {file_type.value} file: {str(e)}")
+            logger.error(traceback.format_exc())
             raise DatabaseException(
                 f"Failed to create {file_type.value} file: {str(e)}"
             )
 
+    @staticmethod
     async def update(
-        self, file_id: uuid.UUID, file_data: Dict[str, Any], file_type: FileType
+        session: AsyncSession, file_id: uuid.UUID, file_data: Dict[str, Any], file_type: FileType
     ) -> Any:
         """
         Update an existing file
 
         Args:
+            session: The database session
             file_id: The ID of the file to update
             file_data: The updated data
             file_type: The type of file
@@ -224,38 +226,37 @@ class FileRepository:
             NotFoundException: If the file is not found
             DatabaseException: If there's a database error
         """
-        self.logger.info(f"Updating {file_type.value} file with ID {file_id}")
+        logger.info(f"Updating {file_type.value} file with ID {file_id}")
         try:
             # First check if file exists
-            file_instance = await self.get_by_id(file_id, file_type)
+            file_instance = await FileRepository.get_by_id(session, file_id, file_type)
 
             # Update fields
             for key, value in file_data.items():
                 if hasattr(file_instance, key):
                     setattr(file_instance, key, value)
 
-            # Commit changes
-            self.session.add(file_instance)
-            await self.session.commit()
-            await self.session.refresh(file_instance)
+            # Flush changes
+            await session.flush()
 
-            self.logger.info(f"Updated {file_type.value} file with ID {file_id}")
+            logger.info(f"Updated {file_type.value} file with ID {file_id}")
             return file_instance
         except Exception as e:
-            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
-            self.logger.error(f"Error updating {file_type.value} file: {str(e)}")
-            self.logger.error(traceback.format_exc())
+            logger.error(f"Error updating {file_type.value} file: {str(e)}")
+            logger.error(traceback.format_exc())
             raise DatabaseException(
                 f"Failed to update {file_type.value} file: {str(e)}"
             )
 
-    async def delete(self, file_id: uuid.UUID, file_type: FileType) -> bool:
+    @staticmethod
+    async def delete(session: AsyncSession, file_id: uuid.UUID, file_type: FileType) -> bool:
         """
         Delete a file
 
         Args:
+            session: The database session
             file_id: The ID of the file to delete
             file_type: The type of file
 
@@ -266,32 +267,33 @@ class FileRepository:
             NotFoundException: If the file is not found
             DatabaseException: If there's a database error
         """
-        self.logger.info(f"Deleting {file_type.value} file with ID {file_id}")
+        logger.info(f"Deleting {file_type.value} file with ID {file_id}")
         try:
             # First check if file exists
-            file_instance = await self.get_by_id(file_id, file_type)
+            file_instance = await FileRepository.get_by_id(session, file_id, file_type)
 
             # Delete from database
-            self.session.delete(file_instance)
-            await self.session.commit()
+            await session.delete(file_instance)
+            await session.flush()
 
-            self.logger.info(f"Deleted {file_type.value} file with ID {file_id}")
+            logger.info(f"Deleted {file_type.value} file with ID {file_id}")
             return True
         except Exception as e:
-            await self.session.rollback()
             if isinstance(e, NotFoundException):
                 raise
-            self.logger.error(f"Error deleting {file_type.value} file: {str(e)}")
-            self.logger.error(traceback.format_exc())
+            logger.error(f"Error deleting {file_type.value} file: {str(e)}")
+            logger.error(traceback.format_exc())
             raise DatabaseException(
                 f"Failed to delete {file_type.value} file: {str(e)}"
             )
 
-    async def find_by_name(self, name: str, file_type: FileType) -> Optional[Any]:
+    @staticmethod
+    async def find_by_name(session: AsyncSession, name: str, file_type: FileType) -> Optional[Any]:
         """
         Find a file by name
 
         Args:
+            session: The database session
             name: The name to search for
             file_type: The type of file
 
@@ -301,25 +303,25 @@ class FileRepository:
         Raises:
             DatabaseException: If there's a database error
         """
-        self.logger.info(f"Finding {file_type.value} file with name: {name}")
+        logger.info(f"Finding {file_type.value} file with name: {name}")
         try:
-            results = await self.get_all(file_type, name=name)
+            results = await FileRepository.get_all(session, file_type, name=name)
 
             if results:
-                self.logger.info(f"Found {file_type.value} file with name: {name}")
+                logger.info(f"Found {file_type.value} file with name: {name}")
                 return results[0]
             else:
-                self.logger.info(f"No {file_type.value} file found with name: {name}")
+                logger.info(f"No {file_type.value} file found with name: {name}")
                 return None
         except Exception as e:
-            self.logger.error(f"Error finding {file_type.value} file by name: {str(e)}")
-            self.logger.error(traceback.format_exc())
+            logger.error(f"Error finding {file_type.value} file by name: {str(e)}")
+            logger.error(traceback.format_exc())
             raise DatabaseException(
                 f"Failed to find {file_type.value} file by name: {str(e)}"
             )
 
+    @staticmethod
     async def create_upload_url(
-        self,
         file_name: str,
         file_id: uuid.UUID,
         user_id: uuid.UUID,
@@ -327,6 +329,7 @@ class FileRepository:
     ) -> Dict[str, str]:
         """
         Create a signed upload URL for a file
+        Note: This doesn't need a session as it only interacts with storage
 
         Args:
             file_name: The name of the file
@@ -340,10 +343,10 @@ class FileRepository:
         Raises:
             StorageException: If there's an error creating the upload URL
         """
-        self.logger.info(f"Creating upload URL for {file_type.value} file: {file_name}")
+        logger.info(f"Creating upload URL for {file_type.value} file: {file_name}")
         try:
             # Get storage client
-            storage = self._get_storage_client(file_type)
+            storage = FileRepository._get_storage_client(file_type)
 
             # Create storage path
             file_extension = file_name.split(".")[-1] if "." in file_name else ""
@@ -355,11 +358,11 @@ class FileRepository:
             # Add file ID to result
             result["id"] = str(file_id)
 
-            self.logger.info(
+            logger.info(
                 f"Created upload URL for {file_type.value} file: {file_name}"
             )
             return result
         except Exception as e:
-            self.logger.error(f"Error creating upload URL: {str(e)}")
-            self.logger.error(traceback.format_exc())
+            logger.error(f"Error creating upload URL: {str(e)}")
+            logger.error(traceback.format_exc())
             raise StorageException(f"Failed to create upload URL: {str(e)}")

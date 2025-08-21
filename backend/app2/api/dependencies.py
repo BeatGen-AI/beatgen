@@ -11,9 +11,6 @@ from app2.infrastructure.database.sqlmodel_client import get_session
 
 
 from app2.repositories.user_repository import UserRepository
-from app2.repositories.project_repository import ProjectRepository
-from app2.repositories.project_track_repository import ProjectTrackRepository
-from app2.repositories.file_repository import FileRepository
 from app2.repositories.drum_sample_public_repository import DrumSamplePublicRepository
 
 from app2.services.auth_service import AuthService
@@ -34,28 +31,9 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 # Repository instances
-def get_user_repository(session: SessionDep) -> UserRepository:
-    """Get the user repository instance"""
-    return UserRepository(session)
-
-
-
-
-def get_project_repository(session: SessionDep) -> ProjectRepository:
-    """Get the project repository instance"""
-    return ProjectRepository(session)
-
-
-def get_file_repository(session: SessionDep) -> FileRepository:
-    """Get the file repository instance"""
-    return FileRepository(session)
-
-
-
-
-def get_project_track_repository(session: SessionDep) -> ProjectTrackRepository:
-    """Get the project-track repository instance"""
-    return ProjectTrackRepository(session)
+# Note: Most repositories now use static methods and don't need instantiation
+# The session is passed directly to static methods when called
+# Only repositories that haven't been refactored yet still need instantiation
 
 
 def get_drum_sample_public_repository(
@@ -66,18 +44,14 @@ def get_drum_sample_public_repository(
 
 
 # Service instances
-def get_auth_service(
-    user_repository: Annotated[UserRepository, Depends(get_user_repository)],
-) -> AuthService:
-    """Get the auth service instance"""
-    return AuthService(user_repository)
+def get_auth_service(session: SessionDep) -> AuthService:
+    """Get the auth service instance with session"""
+    return AuthService(session)
 
 
-def get_user_service(
-    user_repository: Annotated[UserRepository, Depends(get_user_repository)],
-) -> UserService:
-    """Get the user service instance"""
-    return UserService(user_repository)
+def get_user_service(session: SessionDep) -> UserService:
+    """Get the user service instance with session"""
+    return UserService(session)
 
 
 def get_track_service(session: SessionDep) -> TrackService:
@@ -90,11 +64,9 @@ def get_project_service(session: SessionDep) -> ProjectService:
     return ProjectService(session)
 
 
-def get_file_service(
-    file_repository: Annotated[FileRepository, Depends(get_file_repository)],
-) -> FileService:
-    """Get the file service instance"""
-    return FileService(file_repository)
+def get_file_service(session: SessionDep) -> FileService:
+    """Get the file service instance with session"""
+    return FileService(session)
 
 
 def get_drum_sample_service(
@@ -175,7 +147,7 @@ async def get_current_user_with_token(
 async def get_current_user_model(
     request: Request,
     user_info: Dict[str, Any] = Depends(get_current_user),
-    user_repository: UserRepository = Depends(get_user_repository),
+    session: SessionDep = None,
 ):
     """
     Get the current authenticated user as a User model with request-scoped caching
@@ -183,7 +155,7 @@ async def get_current_user_model(
     Args:
         request: The FastAPI request object (for caching)
         user_info: The user info from the token
-        user_repository: The user repository
+        session: The database session
 
     Returns:
         The User model
@@ -204,7 +176,8 @@ async def get_current_user_model(
         return getattr(request.state, cache_key)
     
     try:
-        user = await user_repository.find_by_id(user_id)
+        # Use static method with session
+        user = await UserRepository.find_by_id(session, user_id)
         # Cache the result in request state
         setattr(request.state, cache_key, user)
         return user

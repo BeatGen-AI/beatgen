@@ -52,7 +52,7 @@ from app2.models.assistant import (
 )
 from app2.models.assistant_message import GenerationStep
 from app2.models.subscription import SubscriptionPlan, BillingPeriod
-from app2.models.track_models.audio_track import AudioTrack, AudioTrackCreate, AudioTrackRead
+from app2.models.track_models.audio_track import AudioTrackRead
 from app2.models.user import User
 from app2.repositories.audio_track_repository import AudioTrackRepository
 from app2.repositories.file_repository import FileRepository
@@ -675,7 +675,6 @@ async def process_generate_request(
                         duration_bars=4),
             model_info=selected_model_info,
             queue=wrapped_queue,
-            db_session=session,
             user_id=user_id,
             generation_type=enhanced_context.get('generation_type', 'midi'),
             request_context=enhanced_context
@@ -1103,15 +1102,17 @@ async def process_generate_audio_request(
             "user_id": user_id
         }
         
-        # Create AudioTrack model directly
-        audio_track = AudioTrack(**audio_track_data)
+        # Use TrackService to create the audio track atomically
+        from app2.services.track_service import TrackService
         
-        # Save to database
-        session.add(audio_track)
-        # Session will auto-commit when context manager exits - no manual commit needed
+        # Remove user_id from track_data as it will be added by the service
+        user_id_for_track = audio_track_data.pop("user_id")
         
-        # Convert to read model for the response
-        created_track = AudioTrackRead.model_validate(audio_track)
+        # Create the track using the service method
+        created_track = await TrackService.create_audio_track(
+            user_id=user_id_for_track,
+            track_data=audio_track_data
+        )
         
         
         await sse_queue.stage(
