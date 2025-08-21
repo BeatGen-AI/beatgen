@@ -1108,7 +1108,8 @@ async def process_generate_audio_request(
         
         # Save to database
         session.add(audio_track)
-        # Session will auto-commit when context manager exits - no manual commit needed
+        await session.commit()
+        await session.refresh(audio_track)
         
         # Convert to read model for the response
         created_track = AudioTrackRead.model_validate(audio_track)

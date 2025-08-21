@@ -1851,7 +1851,8 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
             
             # Save to database
             session.add(audio_track)
-            # Session will auto-commit when context manager exits - no manual commit needed
+            await session.commit()
+            await session.refresh(audio_track)
             
             # Convert to read model for the response
             from app2.models.track_models.audio_track import AudioTrackRead
