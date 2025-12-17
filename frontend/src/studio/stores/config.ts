@@ -1,6 +1,7 @@
 import { Store } from '../core/state/store';
 import { TrackType, GetFn, AudioTrackOptions, MidiTrackOptions, SamplerTrackOptions, TrackOptions } from './types';
 import { db } from '../core/db/dexie-client';
+import { getAudioEngine } from '../core/audio-engine/AudioEngine';
 
 // Default configuration for samplers
 export const DEFAULT_SAMPLER_CONFIG = {
@@ -24,8 +25,17 @@ export const TRACK_CONFIG: Record<TrackType, {
     initEngine: async (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => {
       const file = options && (options as AudioTrackOptions).audioFile;
       if (!file) return Promise.resolve();
-      
+
       console.log(`TRACK_CONFIG[audio].initEngine: Loading file for track ${trackId}...`);
+
+      // Load into new AudioEngine (Phase 6 migration)
+      const newEngine = getAudioEngine();
+      if (newEngine.isReady()) {
+        await newEngine.loadAudioBuffer(trackId, file);
+        console.log(`TRACK_CONFIG[audio].initEngine: Loaded buffer into new AudioEngine for ${trackId}`);
+      }
+
+      // Load into legacy engine (kept for compatibility during migration)
       await store.loadAudioFile(trackId, file);
       console.log(`TRACK_CONFIG[audio].initEngine: File loaded for track ${trackId}. Fetching metadata...`);
 
@@ -43,8 +53,8 @@ export const TRACK_CONFIG: Record<TrackType, {
 
       console.log(`TRACK_CONFIG[audio].initEngine: Metadata for ${trackId}:`, { duration, sampleRate, format, size });
 
-      const { _updateNestedTrackData } = get(); 
-      
+      const { _updateNestedTrackData } = get();
+
       if (_updateNestedTrackData) {
         _updateNestedTrackData(trackId, {
           audio_file_duration: duration,
@@ -128,6 +138,15 @@ export const TRACK_CONFIG: Record<TrackType, {
       try {
         console.log(`Connecting sampler ${trackId} to controller using retrieved blob`);
         const file = new File([sampleFile.data], trackName || sampleFile.name, { type: sampleFile.type });
+
+        // Load into new AudioEngine (Phase 6 migration)
+        const newEngine = getAudioEngine();
+        if (newEngine.isReady()) {
+          await newEngine.loadAudioBuffer(trackId, file);
+          console.log(`TRACK_CONFIG[sampler].initEngine: Loaded buffer into new AudioEngine for ${trackId}`);
+        }
+
+        // Load into legacy sampler controller (kept for compatibility during migration)
         await samplerController.connectTrackToSampler(
           trackId,
           file,

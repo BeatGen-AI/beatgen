@@ -22,7 +22,6 @@ import {
   AudioResources,
   MidiResources,
   SamplerResources,
-  DrumResources,
 } from '../audio-engine/types';
 import { CombinedTrackEntity } from '@/platform/types/entities/project';
 import {
@@ -51,6 +50,13 @@ export interface BuildPlaybackStateOptions {
  * Transforms application state into playback state.
  * This is the single point where all data transformations happen.
  *
+ * Key behaviors for drum tracks:
+ * - Drum tracks are containers and do NOT go to the audio engine
+ * - Drum track mute/solo/volume state is propagated to child sampler tracks
+ * - If drum is muted, all children are effectively muted
+ * - If drum is soloed, all children play (and other non-soloed tracks are muted)
+ * - Child volume is multiplied by parent drum volume
+ *
  * @param options - Application state to transform
  * @returns PlaybackState ready for the AudioEngine
  */
@@ -75,10 +81,26 @@ export function buildPlaybackState(options: BuildPlaybackStateOptions): Playback
     };
   }
 
-  // Check if any track is soloed - affects effectiveMute for all tracks
+  // 1. Build parent-child map for drum tracks (samplerTrackId -> drumTrackId)
+  const drumChildMap = new Map<string, string>();
+  for (const track of tracks) {
+    if (track.track_type === 'DRUM') {
+      const drumTrack = track.track as DrumTrackRead;
+      for (const childId of drumTrack?.sampler_track_ids ?? []) {
+        drumChildMap.set(childId, track.id);
+      }
+    }
+  }
+
+  // 2. Build drum track lookup (drumTrackId -> track)
+  const drumTrackMap = new Map<string, CombinedTrackEntity>(
+    tracks.filter(t => t.track_type === 'DRUM').map(t => [t.id, t])
+  );
+
+  // 3. Check if any track (including drum tracks) is soloed
   const hasSoloedTrack = tracks.some(t => t.solo);
 
-  // Transform each track, filtering out any nulls from unknown types
+  // 4. Transform tracks, applying parent drum state to children
   const playbackTracks: PlaybackTrack[] = [];
 
   for (const track of tracks) {
@@ -88,8 +110,35 @@ export function buildPlaybackState(options: BuildPlaybackStateOptions): Playback
       continue;
     }
 
+    // Skip drum tracks - they are containers and don't go to the engine
+    // Their state is propagated to child sampler tracks below
+    if (track.track_type === 'DRUM') {
+      continue;
+    }
+
     try {
-      const playbackTrack = transformTrack(track, midiManager, hasSoloedTrack);
+      // Check if this track is a drum child
+      const parentDrumId = drumChildMap.get(track.id);
+      const parentDrum = parentDrumId ? drumTrackMap.get(parentDrumId) : undefined;
+
+      // Compute effective mute considering parent drum track
+      // Muted if: explicit mute OR parent muted OR (any solo AND neither this nor parent soloed)
+      const effectiveMute =
+        track.mute ||
+        (parentDrum?.mute ?? false) ||
+        (hasSoloedTrack && !track.solo && !(parentDrum?.solo ?? false));
+
+      // Compute effective volume (multiply with parent drum volume)
+      const effectiveVolume = parentDrum
+        ? ((track.volume ?? 80) / 100) * ((parentDrum.volume ?? 80) / 100) * 100
+        : (track.volume ?? 80);
+
+      const playbackTrack = transformTrack(
+        track,
+        midiManager,
+        effectiveMute,
+        effectiveVolume
+      );
       if (playbackTrack !== null) {
         playbackTracks.push(playbackTrack);
       }
@@ -116,16 +165,18 @@ export function buildPlaybackState(options: BuildPlaybackStateOptions): Playback
 /**
  * Transform a single track to playback format.
  * Returns null for unknown track types.
+ *
+ * @param track - The track to transform
+ * @param midiManager - MidiManager for note transformation
+ * @param effectiveMute - Pre-computed effective mute (considers solo + parent drum state)
+ * @param effectiveVolume - Pre-computed effective volume (considers parent drum state)
  */
 function transformTrack(
   track: CombinedTrackEntity,
   midiManager: MidiManager,
-  hasSoloedTrack: boolean
+  effectiveMute: boolean,
+  effectiveVolume: number
 ): PlaybackTrack | null {
-  // Compute effective mute (considering solo)
-  // Muted if explicitly muted OR (any track is soloed AND this track isn't soloed)
-  const effectiveMute = track.mute || (hasSoloedTrack && !track.solo);
-
   // Get instances - handle both Entity (instances) and DTO (instance_metadata) property names
   const instances: TrackInstance[] = track.instances || track.instance_metadata || [];
 
@@ -146,7 +197,7 @@ function transformTrack(
     id: track.id,
     type,
     name: track.name,
-    volume: track.volume ?? 80,
+    volume: effectiveVolume,
     pan: track.pan ?? 0,
     mute: track.mute ?? false,
     solo: track.solo ?? false,
@@ -202,7 +253,7 @@ function buildResources(
   track: CombinedTrackEntity,
   midiManager: MidiManager,
   instances: TrackInstance[]
-): AudioResources | MidiResources | SamplerResources | DrumResources | null {
+): AudioResources | MidiResources | SamplerResources | null {
   switch (track.track_type) {
     case 'AUDIO':
       return buildAudioResources(track);
@@ -211,7 +262,9 @@ function buildResources(
     case 'SAMPLER':
       return buildSamplerResources(track, midiManager, instances);
     case 'DRUM':
-      return buildDrumResources(track);
+      // Drum tracks are skipped in buildPlaybackState() - they don't go to the engine.
+      // If we reach here, something is wrong.
+      throw new Error(`buildResources: DRUM tracks should be filtered out before this point`);
     default:
       console.warn(`buildPlaybackState: Unknown track type: ${track.track_type}`);
       return null;
@@ -344,17 +397,3 @@ function buildSamplerResources(
   };
 }
 
-/**
- * Build drum track resources.
- * Drum tracks are just containers - their child sampler tracks are
- * separate entries in the tracks array and handled independently.
- */
-function buildDrumResources(track: CombinedTrackEntity): DrumResources {
-  const drumTrack = track.track as DrumTrackRead;
-
-  return {
-    type: 'drum',
-    samplerTrackIds: drumTrack?.sampler_track_ids ?? [],
-    pattern: [], // Pattern for UI purposes only, not used in playback
-  };
-}

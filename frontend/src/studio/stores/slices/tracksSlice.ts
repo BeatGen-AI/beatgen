@@ -158,6 +158,13 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             }
         }
     }));
+
+    // Sync engine state for playback-relevant changes (volume, pan, mute, solo, instances)
+    const playbackRelevantKeys = ['volume', 'pan', 'mute', 'solo', 'instances', 'position', 'x_position'];
+    const hasPlaybackChange = playbackRelevantKeys.some(key => key in updates);
+    if (hasPlaybackChange) {
+        rootGet().syncEngineState?.();
+    }
   };
 
   // Update all tracks and recalculate indices
@@ -206,6 +213,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               }
           });
       }
+
+      // Sync the new AudioEngine with updated track state (Phase 6 migration)
+      rootGet().syncEngineState?.();
   };
 
   // Action to recalculate and add/update the index property for UI ordering
@@ -315,6 +325,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               }
           });
       }
+
+      // Sync the new AudioEngine with updated track state (Phase 6 migration)
+      rootGet().syncEngineState?.();
   };
 
   // --- Selectors Implementation --- 
@@ -527,12 +540,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
 
       // Create action, passing the serializable trackData AND the separate file object
-      const action = new Actions.AddTrack(get, finalTrackData, file); 
-      
-      // Execute history action 
+      const action = new Actions.AddTrack(get, finalTrackData, file);
+
+      // Execute history action
       await rootGet().executeHistoryAction(action);
-      
-      return finalTrackData; 
+
+      // Sync the new AudioEngine after track creation (Phase 6 migration)
+      rootGet().syncEngineState?.();
+
+      return finalTrackData;
     };
 
     return _withErrorHandling(async () => _withStore(createLogic)(), `createTrackAndRegisterWithHistory: ${type}`)();
@@ -727,6 +743,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
           // Execute history action AFTER state change (or consider order)
           await executeHistoryAction(action);
+
+          // Sync the new AudioEngine after track deletion (Phase 6 migration)
+          rootGet().syncEngineState?.();
       };
 
       await _withErrorHandling(async () => _withStore(deleteLogic)(), `handleTrackDelete: ${trackId}`)();

@@ -5,6 +5,7 @@ import { getProject } from '../../../platform/api/projects';
 import { StorageType } from '../../../platform/types/storage';
 import { Actions } from '../../core/state/history/actions';
 import { DEFAULT_SAMPLER_CONFIG, TRACK_CONFIG } from '../config';
+import { getAudioEngine } from '../../core/audio-engine/AudioEngine';
 import { 
   RootState, 
   SetFn, 
@@ -79,6 +80,9 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     store.projectManager.setTempo(bpm);
     Tone.getTransport().bpm.value = bpm;
     await store.getTransport().setTempo(bpm);
+
+    // Sync the new AudioEngine after BPM change (Phase 6 migration)
+    rootGet().syncEngineState?.();
   };
 
   // Refactored helper using Immer
@@ -471,7 +475,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                   }
               }
               
-              // --- Audio Connection --- 
+              // --- Audio Connection ---
               else if (track.track_type === 'AUDIO') {
                   console.log(`Attempting to connect audio track ${track.id}... checking Dexie.`);
                   const fileFromDb = await db.getAudioFile(track.id);
@@ -483,8 +487,15 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                           fileFromDb.name || track.name || `${track.id}_audio`, // Use name from DB or track
                           { type: fileFromDb.data.type } // Use blob's type
                       );
-                      
-                      // Load the audio buffer and create channel (shared by all instances)
+
+                      // Load into new AudioEngine (Phase 6 migration)
+                      const newEngine = getAudioEngine();
+                      if (newEngine.isReady()) {
+                          await newEngine.loadAudioBuffer(track.id, audioFile);
+                          console.log(`connectTracksToEngines: Loaded audio buffer into new AudioEngine for ${track.id}`);
+                      }
+
+                      // Load the audio buffer and create channel (shared by all instances) - legacy engine
                       const audioEngine = store.getAudioEngine();
                       await audioEngine.loadAudioBuffer(track.id, audioFile);
                       await audioEngine.createTrackChannel(track.id, track.name);
@@ -530,6 +541,15 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                   if (sampleFile) {
                       // Convert Blob to File if necessary for connectTrackToSampler
                       const fileToConnect = new File([sampleFile], track.name || 'sampler_audio', { type: sampleFile.type });
+
+                      // Load into new AudioEngine (Phase 6 migration)
+                      const newEngine = getAudioEngine();
+                      if (newEngine.isReady()) {
+                          await newEngine.loadAudioBuffer(track.id, fileToConnect);
+                          console.log(`connectTracksToEngines: Loaded sampler buffer into new AudioEngine for ${track.id}`);
+                      }
+
+                      // Load into legacy sampler controller
                       console.log(`Connecting sampler ${track.id} with cached file...`);
                       await samplerController.connectTrackToSampler(
                           track.id, fileToConnect, midiManager, baseMidiNote, grainSize, overlap
@@ -729,7 +749,10 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         
         // 6. Connect tracks to engines (will load audio from Dexie)
         await connectTracksToEngines(trackStates);
-                
+
+        // Sync the new AudioEngine after project load (Phase 6 migration)
+        rootGet().syncEngineState?.();
+
         return projectDataWithTracks; 
     }
     return _withErrorHandling(loadLogic, 'loadProject')();

@@ -7,7 +7,7 @@ import { immer } from 'zustand/middleware/immer';
 import { createCoreSlice, CoreSlice } from './slices/coreSlice';
 import { createProjectSlice, ProjectSlice } from './slices/projectSlice';
 import { createTracksSlice, TracksSlice } from './slices/tracksSlice';
-import { createTransportSlice, TransportSlice } from './slices/transportSlice';
+import { createAudioEngineSlice, AudioEngineSlice } from './slices/audioEngineSlice';
 import { createHistorySlice, HistorySlice } from './slices/historySlice';
 import { createUISlice, UISlice } from './slices/uiSlice';
 import { createMidiSlice, MidiSlice } from './slices/midiSlice';
@@ -116,7 +116,7 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
     ...createCoreSlice(set, get),
     ...createProjectSlice(set, get),
     ...createTracksSlice(set, get),
-    ...createTransportSlice(set, get),
+    ...createAudioEngineSlice(set, get),
     ...createHistorySlice(set, get),
     ...createUISlice(set, get),
     ...createMidiSlice(set, get),

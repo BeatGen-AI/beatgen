@@ -102,6 +102,9 @@ function Studio({ projectId }: StudioProps) {
     handleTrackResizeEnd,
     handleTrackNameChange,
     handleInstrumentChange,
+    // New AudioEngine methods
+    seekToSeconds,
+    syncEngineState,
     // Group operations for clipboard functionality
     duplicateTrack,
     duplicateMultipleTracks,
@@ -720,12 +723,10 @@ function Studio({ projectId }: StudioProps) {
               onTimeChange={(newTime) => {
                 // Update global state only when user explicitly changes time
                 setCurrentTime(newTime);
-                
-                // Update transport position
-                if (store && store.getTransport()) {
-                  store.getTransport().setPosition(newTime);
-                }
-                
+
+                // Seek the new AudioEngine to the new position (in seconds)
+                seekToSeconds(newTime);
+
                 // Use imperative API to update cursor position
                 if (scrollRef.current?.playbackCursor) {
                   scrollRef.current.playbackCursor.seek(newTime);
