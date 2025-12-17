@@ -32,21 +32,8 @@ export abstract class BaseAction implements Action {
         const emoji = operation === 'Execute' ? '🔄' : '↩️';
         console.log(`${emoji} ${operation} ${this.type}:`, message);
     }
-    
-    /**
-     * Synchronizes a track with the current transport state
-     */
-    protected syncTrackWithTransport(trackId: string, positionX: number): void {
-        const isPlaying = this.get().isPlaying;
-        
-        if (isPlaying && this.store.getTransport().handleTrackPositionChange) {
-            console.log(`Playback active - syncing track ${trackId} with transport`);
-            setTimeout(() => {
-                this.store.getTransport().handleTrackPositionChange(trackId, positionX);
-            }, 10);
-        }
-    }
-    
+    // Note: Track position sync is handled by new AudioEngine via setState()
+
     abstract execute(): Promise<void>;
     abstract undo(): Promise<void>;
 }
