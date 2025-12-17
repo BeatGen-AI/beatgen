@@ -396,6 +396,9 @@ function Studio({ projectId }: StudioProps) {
   };
 
   // Control playback cursor directly when playback state changes
+  // NOTE: currentTime is intentionally NOT in the dependency array.
+  // We only want to react to isPlaying changes, not every time update.
+  // Time updates are handled by the cursor's internal animation loop.
   useEffect(() => {
     if (!scrollRef.current?.playbackCursor) {
       return;
@@ -410,13 +413,15 @@ function Studio({ projectId }: StudioProps) {
       cursor.play();
     } else {
       // isPlaying is false. This could be a pause or a stop.
-      if (currentTime < 0.01) { // Check if time is (near) zero, indicating a stop
+      // Use a ref to check current time to avoid dependency issues
+      const storeTime = useStudioStore.getState().currentTime;
+      if (storeTime < 0.01) { // Check if time is (near) zero, indicating a stop
         cursor.stop();
       } else {
         cursor.pause();
       }
     }
-    
+
     // Clean up any stray animation frames
     return () => {
       if (animationFrameRef.current) {
@@ -424,7 +429,7 @@ function Studio({ projectId }: StudioProps) {
         animationFrameRef.current = null;
       }
     };
-  }, [isPlaying, currentTime, store]); // Added currentTime to dependencies
+  }, [isPlaying, store]); // Removed currentTime - only react to play/pause state changes
 
   // Handle infinite scrolling for the timeline
   const handleScroll = React.useCallback(() => {
@@ -721,6 +726,14 @@ function Studio({ projectId }: StudioProps) {
               onTrackPositionChange={handleTrackPositionChange}
               onZoomChange={setZoomLevel}
               onTimeChange={(newTime) => {
+                // [DEBUG] Log ruler click time
+                console.log('[DEBUG] Studio.onTimeChange called', {
+                  newTime,
+                  newTimeFormatted: `${Math.floor(newTime / 60)}:${(newTime % 60).toFixed(2)}`,
+                  bpm,
+                  zoomLevel,
+                });
+
                 // Update global state only when user explicitly changes time
                 setCurrentTime(newTime);
 

@@ -104,18 +104,21 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
   };
 
   /**
-   * Initialize the audio engine and set up event subscriptions.
+   * Set up event subscriptions to connect AudioEngine to Zustand store.
+   * This function is idempotent - it cleans up existing subscriptions before creating new ones.
+   * Engine initialization is handled by coreSlice.initializeAudio().
    */
   const initializeAudioEngine = async () => {
-    if (engine.isReady()) {
-      console.log('audioEngineSlice: Engine already initialized');
-      setAudioEngineState({ isAudioEngineReady: true });
-      return;
+    // Clean up existing subscriptions first (makes this idempotent)
+    cleanupFunctions.forEach(fn => fn());
+    cleanupFunctions = [];
+
+    // Engine must be initialized before setting up subscriptions
+    if (!engine.isReady()) {
+      throw new Error('audioEngineSlice.initializeAudioEngine: Engine must be initialized first. Call coreSlice.initializeAudio() before this.');
     }
 
     try {
-      await engine.initialize();
-
       // Subscribe to time updates
       const unsubTime = engine.onTimeUpdate((ticks, seconds) => {
         setAudioEngineState({
@@ -148,12 +151,12 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
         },
       });
 
-      console.log('audioEngineSlice: Engine initialized successfully');
+      console.log('audioEngineSlice: Engine subscriptions set up successfully');
 
       // Initial state update
       updateEngineState();
     } catch (error) {
-      console.error('audioEngineSlice: Failed to initialize engine:', error);
+      console.error('audioEngineSlice: Failed to set up engine subscriptions:', error);
       throw error;
     }
   };
@@ -241,6 +244,16 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
       const bpm = state.bpm ?? 120;
       const ppq = 480; // MUSIC_CONSTANTS.pulsesPerQuarterNote
       const ticks = Math.round(seconds * (bpm / 60) * ppq);
+
+      // [DEBUG] Log seek conversion
+      console.log('[DEBUG] audioEngineSlice.seekToSeconds', {
+        inputSeconds: seconds,
+        bpm,
+        ppq,
+        outputTicks: ticks,
+        backToSeconds: ticks / ((bpm / 60) * ppq),
+      });
+
       handlePlaybackCommand('seek', ticks);
     },
 

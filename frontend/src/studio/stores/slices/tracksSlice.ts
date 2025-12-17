@@ -25,7 +25,7 @@ export interface TracksSlice {
   
   // Basic state manipulation
   setTracks: (tracks: CombinedTrack[]) => void;
-  updateTracks: (newTracks: CombinedTrack[], skipEngineSync?: boolean) => void;
+  updateTracks: (newTracks: CombinedTrack[]) => void;
   updateTrackState: (trackId: string, updates: Partial<CombinedTrack & TrackParameter>) => void;
   updateTrack: (trackId: string, updates: Partial<CombinedTrack>) => void; // Alias for updateTrackState
   findTrackById: (trackId: string) => CombinedTrack | undefined;
@@ -160,16 +160,17 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     }));
 
     // Sync engine state for playback-relevant changes (volume, pan, mute, solo, instances)
+    // Only sync if currently playing - engine gets latest state on play
     const playbackRelevantKeys = ['volume', 'pan', 'mute', 'solo', 'instances', 'position', 'x_position'];
     const hasPlaybackChange = playbackRelevantKeys.some(key => key in updates);
-    if (hasPlaybackChange) {
+    if (hasPlaybackChange && rootGet().isPlaying) {
         rootGet().syncEngineState?.();
     }
   };
 
   // Update all tracks and recalculate indices
-  // skipEngineSync: Set to true when loading a project to avoid premature sync before buffers are loaded
-  const updateTracks = (newTracks: CombinedTrack[], skipEngineSync: boolean = false) => {
+  // No engine sync here - engine gets latest state when play is pressed
+  const updateTracks = (newTracks: CombinedTrack[]) => {
       set(produce((draft: RootState) => {
           // Create a fresh array with cloned tracks to avoid frozen object issues
           draft.tracks = newTracks.map((track, index) => ({
@@ -215,11 +216,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           });
       }
 
-      // Sync the new AudioEngine with updated track state (Phase 6 migration)
-      // Skip during project load - buffers must be loaded first via connectTracksToEngines
-      if (!skipEngineSync) {
-          rootGet().syncEngineState?.();
-      }
+      // No engine sync here - engine gets latest state when play is pressed
   };
 
   // Action to recalculate and add/update the index property for UI ordering
@@ -330,8 +327,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           });
       }
 
-      // Sync the new AudioEngine with updated track state (Phase 6 migration)
-      rootGet().syncEngineState?.();
+      // No engine sync here - engine gets latest state when play is pressed
   };
 
   // --- Selectors Implementation --- 
@@ -549,8 +545,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       // Execute history action
       await rootGet().executeHistoryAction(action);
 
-      // Sync the new AudioEngine after track creation (Phase 6 migration)
-      rootGet().syncEngineState?.();
+      // Sync the AudioEngine after track creation (only if currently playing)
+      if (rootGet().isPlaying) {
+          rootGet().syncEngineState?.();
+      }
 
       return finalTrackData;
     };
@@ -748,8 +746,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           // Execute history action AFTER state change (or consider order)
           await executeHistoryAction(action);
 
-          // Sync the new AudioEngine after track deletion (Phase 6 migration)
-          rootGet().syncEngineState?.();
+          // Sync the AudioEngine after track deletion (only if currently playing)
+          if (rootGet().isPlaying) {
+              rootGet().syncEngineState?.();
+          }
       };
 
       await _withErrorHandling(async () => _withStore(deleteLogic)(), `handleTrackDelete: ${trackId}`)();

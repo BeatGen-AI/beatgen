@@ -81,8 +81,10 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     Tone.getTransport().bpm.value = bpm;
     await store.getTransport().setTempo(bpm);
 
-    // Sync the new AudioEngine after BPM change (Phase 6 migration)
-    rootGet().syncEngineState?.();
+    // Sync the AudioEngine after BPM change (only if currently playing)
+    if (rootGet().isPlaying) {
+        rootGet().syncEngineState?.();
+    }
   };
 
   // Refactored helper using Immer
@@ -760,14 +762,13 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         const trackStates = (await Promise.all(trackProcessingPromises)).filter(Boolean) as CombinedTrack[];
         
         // 5. Update Zustand state with initial track data
-        // Skip engine sync here - buffers must be loaded first via connectTracksToEngines
-        get().updateTracks(trackStates, true);
+        // Update tracks in store (no engine sync here - engine gets latest state on play)
+        get().updateTracks(trackStates);
 
         // 6. Connect tracks to engines (will load audio from Dexie)
         await connectTracksToEngines(trackStates);
 
-        // Sync the new AudioEngine after project load (Phase 6 migration)
-        rootGet().syncEngineState?.();
+        // No engine sync here - engine gets latest state when play is pressed
 
         return projectDataWithTracks; 
     }
