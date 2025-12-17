@@ -30,10 +30,11 @@ export const TRACK_CONFIG: Record<TrackType, {
 
       // Load into new AudioEngine (Phase 6 migration)
       const newEngine = getAudioEngine();
-      if (newEngine.isReady()) {
-        await newEngine.loadAudioBuffer(trackId, file);
-        console.log(`TRACK_CONFIG[audio].initEngine: Loaded buffer into new AudioEngine for ${trackId}`);
+      if (!newEngine.isReady()) {
+        throw new Error(`TRACK_CONFIG[audio].initEngine: New AudioEngine not ready when loading buffer for ${trackId}`);
       }
+      await newEngine.loadAudioBuffer(trackId, file);
+      console.log(`TRACK_CONFIG[audio].initEngine: Loaded buffer into new AudioEngine for ${trackId}`);
 
       // Load into legacy engine (kept for compatibility during migration)
       await store.loadAudioFile(trackId, file);
@@ -141,10 +142,11 @@ export const TRACK_CONFIG: Record<TrackType, {
 
         // Load into new AudioEngine (Phase 6 migration)
         const newEngine = getAudioEngine();
-        if (newEngine.isReady()) {
-          await newEngine.loadAudioBuffer(trackId, file);
-          console.log(`TRACK_CONFIG[sampler].initEngine: Loaded buffer into new AudioEngine for ${trackId}`);
+        if (!newEngine.isReady()) {
+          throw new Error(`TRACK_CONFIG[sampler].initEngine: New AudioEngine not ready when loading buffer for ${trackId}`);
         }
+        await newEngine.loadAudioBuffer(trackId, file);
+        console.log(`TRACK_CONFIG[sampler].initEngine: Loaded buffer into new AudioEngine for ${trackId}`);
 
         // Load into legacy sampler controller (kept for compatibility during migration)
         await samplerController.connectTrackToSampler(

@@ -77,6 +77,19 @@ export class AudioTrackRenderer implements ITrackRenderer {
     prevTracks: PlaybackTrack[] | undefined,
     state: PlaybackState
   ): void {
+    // [DEBUG] Log update call
+    console.log('[DEBUG] AudioTrackRenderer.update called', {
+      trackCount: tracks.length,
+      tracks: tracks.map(t => ({
+        id: t.id,
+        name: t.name,
+        effectiveMute: t.effectiveMute,
+        regionsCount: t.regions.length,
+        regions: t.regions.map(r => ({ id: r.id, startTicks: r.startTicks, endTicks: r.endTicks })),
+      })),
+      availableBuffers: Array.from(this.buffers.keys()),
+    });
+
     // Cache state values
     this.currentBpm = state.bpm;
     this.currentPpq = state.ppq;
@@ -118,6 +131,14 @@ export class AudioTrackRenderer implements ITrackRenderer {
    * Start playback from a position.
    */
   play(positionTicks: number): void {
+    // [DEBUG] Log play call
+    console.log('[DEBUG] AudioTrackRenderer.play called', {
+      positionTicks,
+      currentTracksCount: this.currentTracks.length,
+      regionPlayersCount: this.regionPlayers.size,
+      trackChannelsCount: this.trackChannels.size,
+    });
+
     this.isPlaying = true;
 
     // Clear any previously scheduled events
@@ -136,14 +157,35 @@ export class AudioTrackRenderer implements ITrackRenderer {
     this.activePlayers.clear();
 
     // Schedule each region
+    let scheduledCount = 0;
+    let skippedMuted = 0;
+    let skippedNoRegions = 0;
     for (const track of this.currentTracks) {
       // Skip muted tracks
-      if (track.effectiveMute) continue;
+      if (track.effectiveMute) {
+        skippedMuted++;
+        console.log(`[DEBUG] AudioTrackRenderer.play: Skipping muted track ${track.id}`);
+        continue;
+      }
+
+      if (track.regions.length === 0) {
+        skippedNoRegions++;
+        console.log(`[DEBUG] AudioTrackRenderer.play: Track ${track.id} has no regions`);
+        continue;
+      }
 
       for (const region of track.regions) {
         this.scheduleRegion(track, region, positionTicks);
+        scheduledCount++;
       }
     }
+
+    console.log('[DEBUG] AudioTrackRenderer.play finished', {
+      scheduledCount,
+      skippedMuted,
+      skippedNoRegions,
+      activePlayersCount: this.activePlayers.size,
+    });
   }
 
   /**
@@ -352,6 +394,15 @@ export class AudioTrackRenderer implements ITrackRenderer {
     const resources = track.resources as AudioResources;
     const buffer = this.buffers.get(resources.bufferId);
 
+    // [DEBUG] Log player creation attempt
+    console.log('[DEBUG] AudioTrackRenderer.createRegionPlayer', {
+      trackId: track.id,
+      regionId: region.id,
+      bufferId: resources.bufferId,
+      bufferExists: !!buffer,
+      availableBuffers: Array.from(this.buffers.keys()),
+    });
+
     if (!buffer) {
       // Buffer not loaded yet - skip this region
       // This is not an error since buffers may load after tracks are added
@@ -390,6 +441,8 @@ export class AudioTrackRenderer implements ITrackRenderer {
       trackId: track.id,
       regionId: region.id,
     });
+
+    console.log(`[DEBUG] AudioTrackRenderer.createRegionPlayer: Created player for region ${region.id}`);
   }
 
   /**
@@ -429,6 +482,7 @@ export class AudioTrackRenderer implements ITrackRenderer {
     const regionPlayer = this.regionPlayers.get(region.id);
     if (!regionPlayer) {
       // Player might not exist if buffer wasn't loaded
+      console.log(`[DEBUG] AudioTrackRenderer.scheduleRegion: No player for region ${region.id}`);
       return;
     }
 
@@ -441,8 +495,26 @@ export class AudioTrackRenderer implements ITrackRenderer {
     const regionDurationSec = regionEndSec - regionStartSec;
     const positionSec = this.ticksToSeconds(positionTicks);
 
+    // [DEBUG] Log scheduling calculation
+    console.log('[DEBUG] AudioTrackRenderer.scheduleRegion', {
+      regionId: region.id,
+      trackId: track.id,
+      positionTicks,
+      positionSec,
+      regionStartTicks: region.startTicks,
+      regionStartSec,
+      regionEndTicks: region.endTicks,
+      regionEndSec,
+      regionDurationSec,
+      sourceOffsetTicks: region.sourceOffsetTicks,
+      sourceOffsetSec,
+      playerLoaded: player.loaded,
+      playerState: player.state,
+    });
+
     if (positionSec >= regionEndSec) {
       // Already past this region - don't play
+      console.log(`[DEBUG] AudioTrackRenderer.scheduleRegion: Skipping region ${region.id} - already past (position ${positionSec} >= end ${regionEndSec})`);
       return;
     }
 
@@ -452,6 +524,12 @@ export class AudioTrackRenderer implements ITrackRenderer {
       const actualSourceOffset = sourceOffsetSec + offsetIntoRegion;
       const remainingDuration = regionDurationSec - offsetIntoRegion;
 
+      console.log(`[DEBUG] AudioTrackRenderer.scheduleRegion: Starting region ${region.id} IMMEDIATELY`, {
+        offsetIntoRegion,
+        actualSourceOffset,
+        remainingDuration,
+      });
+
       // Start immediately
       player.start(Tone.now(), actualSourceOffset, remainingDuration);
 
@@ -460,9 +538,17 @@ export class AudioTrackRenderer implements ITrackRenderer {
       // Region is in the future - schedule it
       const delaySeconds = regionStartSec - positionSec;
 
+      console.log(`[DEBUG] AudioTrackRenderer.scheduleRegion: Scheduling region ${region.id} for future`, {
+        delaySeconds,
+        sourceOffsetSec,
+        regionDurationSec,
+      });
+
       const eventId = Tone.getTransport().schedule((time) => {
         // Only play if we're still supposed to be playing
         if (!this.isPlaying) return;
+
+        console.log(`[DEBUG] AudioTrackRenderer: Transport callback triggered for region ${region.id}`);
 
         // Start from source offset for full duration
         player.start(time, sourceOffsetSec, regionDurationSec);

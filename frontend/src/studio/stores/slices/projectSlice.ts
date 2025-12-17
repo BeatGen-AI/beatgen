@@ -479,6 +479,8 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
               else if (track.track_type === 'AUDIO') {
                   console.log(`Attempting to connect audio track ${track.id}... checking Dexie.`);
                   const fileFromDb = await db.getAudioFile(track.id);
+                  const audioTrackData = track.track as AudioTrackRead | undefined;
+
                   if (fileFromDb?.data) {
                       console.log(`Found audio for track ${track.id} in Dexie. Loading into engine...`);
                       // Fix: Convert Blob from Dexie back to a File object
@@ -490,16 +492,17 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
 
                       // Load into new AudioEngine (Phase 6 migration)
                       const newEngine = getAudioEngine();
-                      if (newEngine.isReady()) {
-                          await newEngine.loadAudioBuffer(track.id, audioFile);
-                          console.log(`connectTracksToEngines: Loaded audio buffer into new AudioEngine for ${track.id}`);
+                      if (!newEngine.isReady()) {
+                          throw new Error(`connectTracksToEngines: New AudioEngine not ready when loading audio buffer for ${track.id}`);
                       }
+                      await newEngine.loadAudioBuffer(track.id, audioFile);
+                      console.log(`connectTracksToEngines: Loaded audio buffer into new AudioEngine for ${track.id}`);
 
                       // Load the audio buffer and create channel (shared by all instances) - legacy engine
                       const audioEngine = store.getAudioEngine();
                       await audioEngine.loadAudioBuffer(track.id, audioFile);
                       await audioEngine.createTrackChannel(track.id, track.name);
-                      
+
                       // Create all instances for this track
                       if (track.instances && track.instances.length > 0) {
                           for (const instance of track.instances) {
@@ -513,7 +516,12 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                           await audioEngine.createInstance(track.id, instanceId);
                       }
                   } else {
-                      console.warn(`Audio file for track ${track.id} not found in Dexie cache.`);
+                      // Check if this audio track SHOULD have audio (has storage key)
+                      const storageKey = audioTrackData?.audio_file_storage_key;
+                      if (storageKey) {
+                          throw new Error(`connectTracksToEngines: Audio track ${track.id} has audio_file_storage_key (${storageKey}) but no audio file was found in cache`);
+                      }
+                      console.warn(`Audio file for track ${track.id} not found in Dexie cache (no storage key).`);
                   }
               }
 
@@ -544,10 +552,11 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
 
                       // Load into new AudioEngine (Phase 6 migration)
                       const newEngine = getAudioEngine();
-                      if (newEngine.isReady()) {
-                          await newEngine.loadAudioBuffer(track.id, fileToConnect);
-                          console.log(`connectTracksToEngines: Loaded sampler buffer into new AudioEngine for ${track.id}`);
+                      if (!newEngine.isReady()) {
+                          throw new Error(`connectTracksToEngines: New AudioEngine not ready when loading sampler buffer for ${track.id}`);
                       }
+                      await newEngine.loadAudioBuffer(track.id, fileToConnect);
+                      console.log(`connectTracksToEngines: Loaded sampler buffer into new AudioEngine for ${track.id}`);
 
                       // Load into legacy sampler controller
                       console.log(`Connecting sampler ${track.id} with cached file...`);
@@ -555,7 +564,13 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                           track.id, fileToConnect, midiManager, baseMidiNote, grainSize, overlap
                       );
                   } else {
-                      console.log(`Initializing empty sampler for ${track.id}...`);
+                      // Check if this sampler SHOULD have audio (has storage key)
+                      const storageKey = samplerTrackData?.audio_storage_key;
+                      if (storageKey) {
+                          throw new Error(`connectTracksToEngines: Sampler track ${track.id} has audio_storage_key (${storageKey}) but no audio file was found in cache`);
+                      }
+                      // Only allow empty sampler if there's no storage key (truly empty/new sampler)
+                      console.log(`Initializing empty sampler for ${track.id} (no audio_storage_key)...`);
                       await samplerController.initializeSampler(
                           track.id, undefined, baseMidiNote, grainSize, overlap
                       );
@@ -745,8 +760,9 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         const trackStates = (await Promise.all(trackProcessingPromises)).filter(Boolean) as CombinedTrack[];
         
         // 5. Update Zustand state with initial track data
-        get().updateTracks(trackStates);
-        
+        // Skip engine sync here - buffers must be loaded first via connectTracksToEngines
+        get().updateTracks(trackStates, true);
+
         // 6. Connect tracks to engines (will load audio from Dexie)
         await connectTracksToEngines(trackStates);
 

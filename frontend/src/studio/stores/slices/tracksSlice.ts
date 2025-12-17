@@ -25,7 +25,7 @@ export interface TracksSlice {
   
   // Basic state manipulation
   setTracks: (tracks: CombinedTrack[]) => void;
-  updateTracks: (newTracks: CombinedTrack[]) => void;
+  updateTracks: (newTracks: CombinedTrack[], skipEngineSync?: boolean) => void;
   updateTrackState: (trackId: string, updates: Partial<CombinedTrack & TrackParameter>) => void;
   updateTrack: (trackId: string, updates: Partial<CombinedTrack>) => void; // Alias for updateTrackState
   findTrackById: (trackId: string) => CombinedTrack | undefined;
@@ -168,15 +168,16 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   };
 
   // Update all tracks and recalculate indices
-  const updateTracks = (newTracks: CombinedTrack[]) => {
+  // skipEngineSync: Set to true when loading a project to avoid premature sync before buffers are loaded
+  const updateTracks = (newTracks: CombinedTrack[], skipEngineSync: boolean = false) => {
       set(produce((draft: RootState) => {
           // Create a fresh array with cloned tracks to avoid frozen object issues
           draft.tracks = newTracks.map((track, index) => ({
               ...track,
               track_number: index,
               // Ensure each track has instances
-              instances: track.instances 
-                  // ? track.instances 
+              instances: track.instances
+                  // ? track.instances
                   // : [{
                   //     id: `${track.id}_instance_1`,
                   //     x_position: track.x_position || 0,
@@ -186,7 +187,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   // }]
           }));
       }));
-      
+
       // After updating tracks, register instances with MidiManager
       const midiManager = rootGet().store?.getMidiManager();
       console.log('[updateTracks] MidiManager available:', !!midiManager);
@@ -200,13 +201,13 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   if (!midiManager.hasTrack(track.id)) {
                       midiManager.createTrack(track.id, track.track_type.toLowerCase(), track.name);
                   }
-                  
+
                   // Register all instances
                   if (track.instances && track.instances.length > 0) {
                       track.instances.forEach(instance => {
                           midiManager.registerInstance(track.id, instance.id);
                       });
-                      
+
                       // Migrate notes without instance IDs to the first instance
                       midiManager.migrateNotesToFirstInstance(track.id, track.instances[0].id);
                   }
@@ -215,7 +216,10 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
 
       // Sync the new AudioEngine with updated track state (Phase 6 migration)
-      rootGet().syncEngineState?.();
+      // Skip during project load - buffers must be loaded first via connectTracksToEngines
+      if (!skipEngineSync) {
+          rootGet().syncEngineState?.();
+      }
   };
 
   // Action to recalculate and add/update the index property for UI ordering

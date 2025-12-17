@@ -208,7 +208,7 @@ export interface RootState {
   tracks: CombinedTrack[];
   findTrackById: (trackId: string) => CombinedTrack | undefined;
   updateTrackState: (trackId: string, updates: Partial<CombinedTrack & TrackParameter>) => void;
-  updateTracks: (newTracks: CombinedTrack[]) => void;
+  updateTracks: (newTracks: CombinedTrack[], skipEngineSync?: boolean) => void;
   setTracks: (tracks: CombinedTrack[]) => void;
   updateTrackIndices: () => void;
   // Expose internal helper for nested updates
