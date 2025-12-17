@@ -4,6 +4,7 @@ import { db } from '../db/dexie-client';
 import { Midi } from '@tonejs/midi';
 import { Note } from '../../../types/note';
 import { TrackPlayer } from './trackPlayer';
+import { getAudioEngine } from './AudioEngine';
 
 /**
  * Controller for the MidiSoundfontPlayer that integrates with the app's architecture
@@ -282,7 +283,14 @@ export class SoundfontEngineController implements TrackPlayer{
             if (!soundfontResult) {
                 throw new Error(`No soundfont data found for instrument ${instrumentId}`);
             }
-            
+
+            // Load into new AudioEngine (Phase 6 migration)
+            const newEngine = getAudioEngine();
+            if (newEngine.isReady() && !newEngine.hasSoundfont(instrumentId)) {
+                await newEngine.loadSoundfont(instrumentId, soundfontResult.data);
+                console.log(`SoundfontEngineController: Loaded soundfont ${instrumentId} into new AudioEngine`);
+            }
+
             // Add to SoundfontPlayer with detailed logging
             console.log(`About to add track ${trackId} to player, current tracks:`, this.midiPlayer.getTrackIds());
             try {
