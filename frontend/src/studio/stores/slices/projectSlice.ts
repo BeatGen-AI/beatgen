@@ -79,7 +79,6 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     // Update all audio systems
     store.projectManager.setTempo(bpm);
     Tone.getTransport().bpm.value = bpm;
-    await store.getTransport().setTempo(bpm);
 
     // Sync the AudioEngine after BPM change (only if currently playing)
     if (rootGet().isPlaying) {
@@ -279,10 +278,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
         // 3. Update Tone.js Transport
         Tone.Transport.bpm.value = projectData.bpm;
         Tone.Transport.timeSignature = [ projectData.time_signature_numerator, projectData.time_signature_denominator ];
-        
-        // 4. Update TransportController and SoundfontEngineController BPM
-        await passedStore.getTransport().setTempo(projectData.bpm);
-        
+
         // Return the instance obtained from the manager
         return currentProjectInstance; // Return the instance we retrieved/created
      }
@@ -374,16 +370,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           
           const finalCombinedTrack = { ...combinedTrackData, track: nestedTrackData } as CombinedTrack;
 
-          // 3. Perform necessary ENGINE setup (NO HISTORY)
-          const audioEngine = store.getAudioEngine();
-          // Create the channel for the track (shared by all instances)
-          await audioEngine.createTrackChannel(finalCombinedTrack.id, finalCombinedTrack.name);
-          audioEngine.setTrackVolume(finalCombinedTrack.id, finalCombinedTrack.volume);
-          audioEngine.setTrackPan(finalCombinedTrack.id, finalCombinedTrack.pan);
-          audioEngine.setTrackMute(finalCombinedTrack.id, finalCombinedTrack.mute);
-          // Note: Position is now per-instance, not per-track
-          
-          // Load audio file specifically for audio tracks during initial processing
+          // 3. Load audio buffer for audio tracks (new AudioEngine gets parameters via setState)
           if (trackType === 'AUDIO' && finalCombinedTrack.track && 'audio_file_storage_key' in finalCombinedTrack.track) {
               const storageKey = finalCombinedTrack.track.audio_file_storage_key;
               if (storageKey) {
@@ -393,26 +380,13 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                       const audioBlob = await sampleManager.getSampleBlob(finalCombinedTrack.id, storageKey, 'audio_track', finalCombinedTrack.name);
                       if (audioBlob) {
                           const audioFile = new File([audioBlob.data], finalCombinedTrack.name || 'audio_track', { type: audioBlob.type });
-                          
-                          // Load the audio buffer and create channel (shared by all instances)
-                          const audioEngine = store.getAudioEngine();
-                          await audioEngine.loadAudioBuffer(finalCombinedTrack.id, audioFile);
-                          await audioEngine.createTrackChannel(finalCombinedTrack.id, finalCombinedTrack.name);
-                          
-                          // Create all instances for this track
-                          if (finalCombinedTrack.instances && finalCombinedTrack.instances.length > 0) {
-                              for (const instance of finalCombinedTrack.instances) {
-                                  console.log(`Creating audio instance ${instance.id} for track ${finalCombinedTrack.id}`);
-                                  await audioEngine.createInstance(finalCombinedTrack.id, instance.id);
-                              }
-                          } else {
-                              // Create default instance for backward compatibility
-                              const instanceId = `${finalCombinedTrack.id}_instance_1`;
-                              console.log(`Creating default audio instance ${instanceId} for track ${finalCombinedTrack.id}`);
-                              await audioEngine.createInstance(finalCombinedTrack.id, instanceId);
+
+                          // Load audio buffer into new AudioEngine
+                          const newEngine = getAudioEngine();
+                          if (newEngine.isReady()) {
+                              await newEngine.loadAudioBuffer(finalCombinedTrack.id, audioFile);
+                              console.log(`Loaded audio buffer for track ${finalCombinedTrack.id} into new AudioEngine`);
                           }
-                          
-                          console.log(`Loaded audio and created instances for track ${finalCombinedTrack.id}`);
                       } else {
                           console.warn(`Downloaded audio blob was null or undefined for track ${finalCombinedTrack.id}`);
                       }
@@ -423,7 +397,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                    console.warn(`Audio track ${finalCombinedTrack.id} has no audio_file_storage_key.`);
               }
           }
-          
+
           return finalCombinedTrack;
       };
       
@@ -444,7 +418,6 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           console.log('Store initialized during track connection');
         }
         
-        const samplerController = store.getTransport().getSamplerController();
         const midiManager = store.getMidiManager();
 
         for (const track of tracks) {
@@ -492,31 +465,13 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                           { type: fileFromDb.data.type } // Use blob's type
                       );
 
-                      // Load into new AudioEngine (Phase 6 migration)
+                      // Load into new AudioEngine
                       const newEngine = getAudioEngine();
                       if (!newEngine.isReady()) {
                           throw new Error(`connectTracksToEngines: New AudioEngine not ready when loading audio buffer for ${track.id}`);
                       }
                       await newEngine.loadAudioBuffer(track.id, audioFile);
-                      console.log(`connectTracksToEngines: Loaded audio buffer into new AudioEngine for ${track.id}`);
-
-                      // Load the audio buffer and create channel (shared by all instances) - legacy engine
-                      const audioEngine = store.getAudioEngine();
-                      await audioEngine.loadAudioBuffer(track.id, audioFile);
-                      await audioEngine.createTrackChannel(track.id, track.name);
-
-                      // Create all instances for this track
-                      if (track.instances && track.instances.length > 0) {
-                          for (const instance of track.instances) {
-                              console.log(`Creating audio instance ${instance.id} for track ${track.id}`);
-                              await audioEngine.createInstance(track.id, instance.id);
-                          }
-                      } else {
-                          // Create default instance for backward compatibility
-                          const instanceId = `${track.id}_instance_1`;
-                          console.log(`Creating default audio instance ${instanceId} for track ${track.id}`);
-                          await audioEngine.createInstance(track.id, instanceId);
-                      }
+                      console.log(`connectTracksToEngines: Loaded audio buffer into new AudioEngine for ${track.id}`)
                   } else {
                       // Check if this audio track SHOULD have audio (has storage key)
                       const storageKey = audioTrackData?.audio_file_storage_key;
@@ -527,60 +482,42 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
                   }
               }
 
-              // --- Sampler Connection --- 
+              // --- Sampler Connection ---
               else if (track.track_type === 'SAMPLER') {
-                  if (!samplerController || !midiManager) {
-                      console.warn(`SamplerController/MidiManager missing for sampler track ${track.id}`);
+                  if (!midiManager) {
+                      console.warn(`MidiManager missing for sampler track ${track.id}`);
                       continue;
                   }
                   const samplerTrackData = track.track as SamplerTrackRead | undefined;
-                  const baseMidiNote = samplerTrackData?.base_midi_note ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote;
-                  const grainSize = samplerTrackData?.grain_size ?? DEFAULT_SAMPLER_CONFIG.grainSize;
-                  const overlap = samplerTrackData?.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap;
-                  let sampleFile: Blob | undefined = undefined; // Expect Blob from Dexie
 
                   console.log(`Attempting to connect sampler track ${track.id}... checking Dexie.`);
                   const fileFromDb = await db.getAudioFile(track.id);
+
                   if (fileFromDb?.data) {
-                       console.log(`Found audio for sampler ${track.id} in Dexie.`);
-                       sampleFile = fileFromDb.data; 
-                  } else {
-                      console.warn(`Audio file for sampler track ${track.id} not found in Dexie cache.`);
-                  }
+                      console.log(`Found audio for sampler ${track.id} in Dexie.`);
+                      const fileToConnect = new File([fileFromDb.data], track.name || 'sampler_audio', { type: fileFromDb.data.type });
 
-                  if (sampleFile) {
-                      // Convert Blob to File if necessary for connectTrackToSampler
-                      const fileToConnect = new File([sampleFile], track.name || 'sampler_audio', { type: sampleFile.type });
-
-                      // Load into new AudioEngine (Phase 6 migration)
+                      // Load into new AudioEngine
                       const newEngine = getAudioEngine();
                       if (!newEngine.isReady()) {
                           throw new Error(`connectTracksToEngines: New AudioEngine not ready when loading sampler buffer for ${track.id}`);
                       }
                       await newEngine.loadAudioBuffer(track.id, fileToConnect);
                       console.log(`connectTracksToEngines: Loaded sampler buffer into new AudioEngine for ${track.id}`);
-
-                      // Load into legacy sampler controller
-                      console.log(`Connecting sampler ${track.id} with cached file...`);
-                      await samplerController.connectTrackToSampler(
-                          track.id, fileToConnect, midiManager, baseMidiNote, grainSize, overlap
-                      );
                   } else {
                       // Check if this sampler SHOULD have audio (has storage key)
                       const storageKey = samplerTrackData?.audio_storage_key;
                       if (storageKey) {
                           throw new Error(`connectTracksToEngines: Sampler track ${track.id} has audio_storage_key (${storageKey}) but no audio file was found in cache`);
                       }
-                      // Only allow empty sampler if there's no storage key (truly empty/new sampler)
-                      console.log(`Initializing empty sampler for ${track.id} (no audio_storage_key)...`);
-                      await samplerController.initializeSampler(
-                          track.id, undefined, baseMidiNote, grainSize, overlap
-                      );
+                      // Empty sampler with no storage key is allowed
+                      console.log(`Sampler ${track.id} has no audio file (no audio_storage_key).`);
                   }
+
+                  // Load notes into MidiManager
                   const convertedNotes = convertJsonToNotes(samplerTrackData?.midi_notes_json, track.id);
                   midiManager.updateTrack(track.id, convertedNotes);
-                  samplerController.registerTrackSubscription(track.id, midiManager);
-                  
+
                   // Register all instances with MidiManager
                   if (track.instances) {
                       track.instances.forEach((instance, index) => {
@@ -592,43 +529,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
           } catch (error) {
                console.error(`Error connecting track ${track.id} (type: ${track.track_type}):`, error);
           }
-          
-          // Apply track parameters (volume, pan, mute) after connection
-          try {
-              const audioEngine = store.getAudioEngine();
-              const soundfontController = store.getSoundfontController();
-              const samplerController = store.getSamplerController();
-              
-              // Set volume
-              const volume = track.volume ?? 80;
-              audioEngine.setTrackVolume(track.id, volume);
-              soundfontController?.setTrackVolume?.(track.id, volume);
-              samplerController?.setTrackVolume?.(track.id, volume);
-              
-              // Set pan
-              const pan = track.pan ?? 0;
-              audioEngine.setTrackPan(track.id, pan);
-              
-              // Set mute state
-              const muted = track.mute ?? false;
-              audioEngine.setTrackMute(track.id, muted);
-              soundfontController?.muteTrack?.(track.id, muted);
-              samplerController?.muteTrack?.(track.id, muted);
-              
-              // Set position based on first instance if available
-              const firstInstance = track.instances?.[0];
-              if (firstInstance) {
-                  audioEngine.setTrackPosition(
-                      track.id,
-                      firstInstance.x_position ?? 0,
-                      firstInstance.y_position ?? 0
-                  );
-              }
-              
-              console.log(`Applied parameters to track ${track.id}: volume=${volume}, pan=${pan}, muted=${muted}`);
-          } catch (paramError) {
-              console.error(`Error applying parameters to track ${track.id}:`, paramError);
-          }
+          // Track parameters (volume, pan, mute) are applied via new AudioEngine's setState()
         }
       }
       await _withErrorHandling(async () => _withStore(connectLogic)(loadedTracks), 'connectTracksToEngines')();

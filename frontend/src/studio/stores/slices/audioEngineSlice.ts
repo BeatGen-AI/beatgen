@@ -66,17 +66,8 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
   const updateEngineState = () => {
     const state = rootGet();
 
-    // [DEBUG] Log state sync attempt
-    console.log('[DEBUG] audioEngineSlice.updateEngineState called', {
-      engineReady: engine.isReady(),
-      storeExists: !!state.store,
-      trackCount: state.tracks?.length ?? 0,
-      bpm: state.bpm,
-    });
-
     // Don't update if engine isn't ready or store not initialized
     if (!engine.isReady() || !state.store) {
-      console.log('[DEBUG] audioEngineSlice.updateEngineState: Skipping - engine not ready or store not initialized');
       return;
     }
 
@@ -87,7 +78,6 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
     }
 
     try {
-      console.log('[DEBUG] audioEngineSlice.updateEngineState: Building playback state');
       const playbackState = buildPlaybackState({
         tracks: state.tracks ?? [],
         midiManager,
@@ -96,7 +86,6 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
         masterVolume: 100,
       });
 
-      console.log('[DEBUG] audioEngineSlice.updateEngineState: Setting engine state');
       engine.setState(playbackState);
     } catch (error) {
       console.error('audioEngineSlice: Error building playback state:', error);
@@ -151,8 +140,6 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
         },
       });
 
-      console.log('audioEngineSlice: Engine subscriptions set up successfully');
-
       // Initial state update
       updateEngineState();
     } catch (error) {
@@ -165,13 +152,6 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
    * Handle playback commands (play, pause, stop, seek).
    */
   const handlePlaybackCommand = async (command: PlaybackCommand, arg?: any) => {
-    // [DEBUG] Log command handling
-    console.log('[DEBUG] audioEngineSlice.handlePlaybackCommand', {
-      command,
-      arg,
-      engineReady: engine.isReady(),
-    });
-
     if (!engine.isReady()) {
       console.error('audioEngineSlice: Engine not ready for command:', command);
       return;
@@ -179,13 +159,11 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
 
     // Update engine state before playing to ensure latest track state
     if (command === 'play') {
-      console.log('[DEBUG] audioEngineSlice: Updating engine state before play');
       updateEngineState();
     }
 
     switch (command) {
       case 'play':
-        console.log('[DEBUG] audioEngineSlice: Calling engine.play()');
         engine.play();
         break;
       case 'pause':
@@ -244,16 +222,6 @@ export const createAudioEngineSlice: StoreSliceCreator<AudioEngineSlice> = (set,
       const bpm = state.bpm ?? 120;
       const ppq = 480; // MUSIC_CONSTANTS.pulsesPerQuarterNote
       const ticks = Math.round(seconds * (bpm / 60) * ppq);
-
-      // [DEBUG] Log seek conversion
-      console.log('[DEBUG] audioEngineSlice.seekToSeconds', {
-        inputSeconds: seconds,
-        bpm,
-        ppq,
-        outputTicks: ticks,
-        backToSeconds: ticks / ((bpm / 60) * ppq),
-      });
-
       handlePlaybackCommand('seek', ticks);
     },
 

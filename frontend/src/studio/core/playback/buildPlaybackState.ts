@@ -69,27 +69,6 @@ export function buildPlaybackState(options: BuildPlaybackStateOptions): Playback
     masterVolume = 100,
   } = options;
 
-  // [DEBUG] Log input
-  console.log('[DEBUG] buildPlaybackState called', {
-    inputTrackCount: tracks.length,
-    inputTracks: tracks.map(t => ({
-      id: t.id,
-      name: t.name,
-      track_type: t.track_type,
-      mute: t.mute,
-      solo: t.solo,
-      instanceCount: (t.instances || t.instance_metadata || []).length,
-      instances: (t.instances || t.instance_metadata || []).map((i: TrackInstance) => ({
-        id: i.id,
-        x_position: i.x_position,
-        trim_start_ticks: i.trim_start_ticks,
-        trim_end_ticks: i.trim_end_ticks,
-      })),
-    })),
-    bpm,
-    hasMidiManager: !!midiManager,
-  });
-
   // Handle null MidiManager - can happen during initialization
   if (!midiManager) {
     console.warn('buildPlaybackState: MidiManager not available, returning empty state');
@@ -169,26 +148,6 @@ export function buildPlaybackState(options: BuildPlaybackStateOptions): Playback
       console.error(`buildPlaybackState: Error transforming track ${track.id}:`, error);
     }
   }
-
-  // [DEBUG] Log output
-  console.log('[DEBUG] buildPlaybackState output', {
-    bpm,
-    outputTrackCount: playbackTracks.length,
-    outputTracks: playbackTracks.map(t => ({
-      id: t.id,
-      name: t.name,
-      type: t.type,
-      effectiveMute: t.effectiveMute,
-      regionsCount: t.regions.length,
-      regions: t.regions.map(r => ({
-        id: r.id,
-        startTicks: r.startTicks,
-        endTicks: r.endTicks,
-        sourceOffsetTicks: r.sourceOffsetTicks,
-        durationTicks: r.durationTicks,
-      })),
-    })),
-  });
 
   return {
     bpm,

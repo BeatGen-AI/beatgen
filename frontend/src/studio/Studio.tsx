@@ -190,43 +190,17 @@ function Studio({ projectId }: StudioProps) {
   });
 
   // Real-time volume change handler (doesn't go through history)
-  const handleTrackVolumeChangeLive = useCallback((trackId: string, volume: number) => {
-    if (!store) return;
-    
-    // Update audio engines directly without history
-    const audioEngine = store.getAudioEngine();
-    const soundfontController = store.getSoundfontController();
-    const samplerController = store.getSamplerController();
-    
-    // Set volume on all audio engines
-    audioEngine.setTrackVolume(trackId, volume);
-    soundfontController?.setTrackVolume?.(trackId, volume);
-    samplerController?.setTrackVolume?.(trackId, volume);
-    
-    // Handle drum track volume propagation to sampler tracks
-    const track = tracks.find(t => t.id === trackId);
-    if (track?.track_type === 'DRUM') {
-      const samplerTracks = tracks.filter(t => 
-        t.track_type === 'SAMPLER' && 
-        t.track && 
-        'drum_track_id' in t.track && 
-        (t.track as any).drum_track_id === trackId
-      );
-      samplerTracks.forEach(samplerTrack => {
-        audioEngine.setTrackVolume(samplerTrack.id, volume);
-        samplerController?.setTrackVolume?.(samplerTrack.id, volume);
-      });
-    }
-  }, [store, tracks]);
+  // Note: Live audio feedback during slider drag is not supported with the new AudioEngine.
+  // Audio updates when slider is released (via history action -> store update -> syncEngineState).
+  const handleTrackVolumeChangeLive = useCallback((_trackId: string, _volume: number) => {
+    // No-op - new AudioEngine receives state via setState() only
+    // Live feedback can be added in a future optimization
+  }, []);
 
   // Real-time pan change handler (doesn't go through history)
-  const handleTrackPanChangeLive = useCallback((trackId: string, pan: number) => {
-    if (!store) return;
-    
-    // Update audio engine directly without history
-    const audioEngine = store.getAudioEngine();
-    audioEngine.setTrackPan(trackId, pan);
-  }, [store]);
+  const handleTrackPanChangeLive = useCallback((_trackId: string, _pan: number) => {
+    // No-op - new AudioEngine receives state via setState() only
+  }, []);
 
   // Effect to measure control bar height
   useLayoutEffect(() => {
@@ -726,14 +700,6 @@ function Studio({ projectId }: StudioProps) {
               onTrackPositionChange={handleTrackPositionChange}
               onZoomChange={setZoomLevel}
               onTimeChange={(newTime) => {
-                // [DEBUG] Log ruler click time
-                console.log('[DEBUG] Studio.onTimeChange called', {
-                  newTime,
-                  newTimeFormatted: `${Math.floor(newTime / 60)}:${(newTime % 60).toFixed(2)}`,
-                  bpm,
-                  zoomLevel,
-                });
-
                 // Update global state only when user explicitly changes time
                 setCurrentTime(newTime);
 

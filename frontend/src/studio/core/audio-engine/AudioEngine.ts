@@ -25,8 +25,6 @@ import {
   DEFAULT_ENGINE_CONFIG,
   EnginePlaybackState,
   Unsubscribe,
-  MidiResources,
-  SamplerResources,
 } from './types';
 import { AudioTrackRenderer } from './renderers/AudioTrackRenderer';
 import { MidiTrackRenderer } from './renderers/MidiTrackRenderer';
@@ -182,27 +180,10 @@ export class AudioEngine {
     const prevMidiTracks = prevState?.tracks.filter(t => t.type === 'midi');
     const prevSamplerTracks = prevState?.tracks.filter(t => t.type === 'sampler');
 
-    // [DEBUG] Log detailed track info
-    console.log('[DEBUG] AudioEngine.setState: Processing tracks', {
-      totalTracks: state.tracks.length,
-      audioTracks: audioTracks.map(t => ({ id: t.id, mute: t.mute, effectiveMute: t.effectiveMute, regions: t.regions.length })),
-      midiTracks: midiTracks.map(t => ({ id: t.id, mute: t.mute, effectiveMute: t.effectiveMute, notes: (t.resources as MidiResources).notes?.length })),
-      samplerTracks: samplerTracks.map(t => ({ id: t.id, mute: t.mute, effectiveMute: t.effectiveMute, notes: (t.resources as SamplerResources).notes?.length })),
-      loadedBufferIds: Array.from(this.loadedBuffers.keys()),
-    });
-
-    // Update renderers (no-op until implemented in later phases)
+    // Update renderers
     this.audioRenderer?.update(audioTracks, prevAudioTracks, state);
     this.midiRenderer?.update(midiTracks, prevMidiTracks, state);
     this.samplerRenderer?.update(samplerTracks, prevSamplerTracks, state);
-
-    console.log('AudioEngine: State updated', {
-      bpm: state.bpm,
-      trackCount: state.tracks.length,
-      audioTracks: audioTracks.length,
-      midiTracks: midiTracks.length,
-      samplerTracks: samplerTracks.length,
-    });
   }
 
   /**
@@ -310,23 +291,6 @@ export class AudioEngine {
     }
 
     const positionTicks = Tone.getTransport().ticks;
-
-    // [DEBUG] Log state before play
-    const audioTracks = this.currentState.tracks.filter(t => t.type === 'audio');
-    console.log('[DEBUG] AudioEngine.play: Starting playback', {
-      positionTicks,
-      bpm: this.currentState.bpm,
-      totalTracks: this.currentState.tracks.length,
-      audioTracksCount: audioTracks.length,
-      audioTrackDetails: audioTracks.map(t => ({
-        id: t.id,
-        name: t.name,
-        effectiveMute: t.effectiveMute,
-        regionsCount: t.regions.length,
-        regions: t.regions.map(r => ({ startTicks: r.startTicks, endTicks: r.endTicks, durationTicks: r.durationTicks })),
-      })),
-      loadedBufferIds: Array.from(this.loadedBuffers.keys()),
-    });
 
     // Start renderers
     this.audioRenderer?.play(positionTicks);

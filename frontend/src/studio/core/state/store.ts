@@ -1,20 +1,13 @@
 import { ProjectManager } from './project';
-import { TransportController } from './transport';
 import { MidiManager } from '../midi/MidiManagerNew';
 import { InstrumentManager } from '../instruments/InstrumentManager';
-import AudioFilePlayer from '../audio-engine/audioFilePlayer/audioEngine';
 import * as Tone from 'tone';
-import { SoundfontEngineController } from '../audio-engine/soundfontEngineController';
-import { SamplerController } from '../audio-engine/samplerController';
-import { Note } from '../../../types/note'; // Added for Note type
-import { NoteActions } from './history/actions/NoteActions'; // Added for NoteActions
-import { HistoryManager, historyManager } from './history/HistoryManager'; // Added for historyManager
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
-import { DEFAULT_MEASURE_WIDTH, useGridStore } from './gridStore';
-import { CombinedTrack } from 'src/platform/types/project';
-import { BeatGenDB, db } from '../db/dexie-client'; // Import BeatGenDB and db instance
-import SampleManager from '../samples/sampleManager'; // Import SampleManager
-import { audioContextManager } from '../audio/audioContextManager'; // Import AudioContextManager
+import { DEFAULT_MEASURE_WIDTH } from './gridStore';
+import { db } from '../db/dexie-client';
+import SampleManager from '../samples/sampleManager';
+import { audioContextManager } from '../audio/audioContextManager';
+import { getAudioEngine } from '../audio-engine/AudioEngine';
 /**
  * Interface for a drum pad in the drum machine grid
  */
@@ -25,57 +18,43 @@ interface DrumPad {
 }
 
 export interface StoreInterface {
-  getTransport(): TransportController;
   projectManager: ProjectManager;
   initializeAudio(): Promise<void>;
-  // createTrack(
-  //   combinedTrack: CombinedTrack
-  // ): Promise<CombinedTrack>;
   getInstrumentManager(): InstrumentManager;
   getMidiManager(): MidiManager;
   connectTrackToSoundfont(trackId: string, instrumentId: string): Promise<void>;
-  connectTrackToSampler(trackId: string, file: File, baseMidiNote?: number, grainSize?: number, overlap?: number): Promise<void>;
+  connectTrackToSampler(trackId: string, baseMidiNote?: number): Promise<void>;
 }
 
 export class Store implements StoreInterface {
   public projectManager: ProjectManager;
-  private transportController: TransportController;
   private initialized: boolean = false;
   private midiManager: MidiManager;
   private instrumentManager: InstrumentManager;
-  private sampleManager: SampleManager; // Add sampleManager property
+  private sampleManager: SampleManager;
   // Map to store runtime data associated with track IDs
-  private runtimeTrackData: Map<string, { channel: Tone.Channel; player?: Tone.Player; /* Add other runtime-specific state here if needed */ }> = new Map();
+  private runtimeTrackData: Map<string, { channel: Tone.Channel; player?: Tone.Player }> = new Map();
 
   constructor() {
     this.projectManager = new ProjectManager();
     this.midiManager = new MidiManager();
     this.instrumentManager = new InstrumentManager();
-    // Initialize SampleManager with the db instance
-    this.sampleManager = SampleManager.getInstance(db); 
-    
-    // Initialize with default BPM, will be updated when project loads
-    this.transportController = new TransportController(120);
-    // Set MidiManager reference in transport for instance-aware playback
-    this.transportController.setMidiManager(this.midiManager);
+    this.sampleManager = SampleManager.getInstance(db);
   }
 
   public async initializeAudio(): Promise<void> {
     if (this.initialized) return;
-    
+
     try {
-      // Initialize audio engine
-      await this.getAudioEngine().initialize();
-      
+      // Initialize new AudioEngine
+      const audioEngine = getAudioEngine();
+      await audioEngine.initialize();
+
       // Initialize the centralized AudioContextManager
-      const audioContext = await audioContextManager.initialize();
+      await audioContextManager.initialize();
       console.log('Store: AudioContextManager initialized successfully');
 
-      // Initialize the soundfont controller with the managed context
-      await this.getSoundfontController().initialize(audioContext);
-
       this.initialized = true;
-      // Removed syncTracksFromProjectManager call
       // Initialize runtime data for existing tracks if a project is loaded
       this.initializeRuntimeTrackData();
     } catch (error) {
@@ -101,132 +80,6 @@ export class Store implements StoreInterface {
     console.log(`Runtime data initialized for ${this.runtimeTrackData.size} tracks.`);
   }
 
-  public getTransport(): TransportController {
-    return this.transportController;
-  }
-
-  // public async createTrack(
-  //   combinedTrack: CombinedTrack
-  // ): Promise<CombinedTrack> {
-  //   if (!this.initialized) {
-  //     throw new Error('Store must be initialized before creating tracks');
-  //   }
-    
-  //   console.log(`Store: Creating ${combinedTrack.type} track with name: ${combinedTrack.name}`);
-    
-    
-  //   console.log(`Store: Track created through ProjectManager:`, track);
-    
-  //   // Create runtime data (channel, etc.) for the new track
-  //   //this.createRuntimeTrackData(track.id);
-
-  //   // Note: No need to notify listeners here, UI should react to ProjectManager changes
-
-  //   return track;
-  // }
-
-  //  * Creates the runtime data entry for a track (e.g., Tone.Channel).
-  //  * Should be called when a track is added or loaded.
-  //  * @param trackId The ID of the track.
-  //  */
-  // private createRuntimeTrackData(trackId: string): void {
-  //   if (this.runtimeTrackData.has(trackId)) {
-  //     console.warn(`Store: Runtime data already exists for track ${trackId}`);
-  //     return;
-  //   }
-
-  //   // Create a channel for the track
-  //   const channel = new Tone.Channel().toDestination();
-
-  //   // Set initial volume/pan/mute from ProjectManager's track data
-  //   const trackData = this.projectManager.getTrackById(trackId);
-  //   if (trackData) {
-  //     channel.volume.value = Tone.gainToDb(trackData.volume / 100); // Assuming volume is 0-100
-  //     channel.pan.value = trackData.pan / 100; // Assuming pan is -100 to 100
-  //     channel.mute = trackData.mute;
-  //     // Solo logic needs coordination across tracks, often handled in AudioEngine/Transport
-  //     // We don't set solo here, as it depends on other tracks' states.
-  //   }
-
-  //   this.runtimeTrackData.set(trackId, { channel });
-  //   console.log(`Store: Created runtime data for track ${trackId}`);
-  // }
-
-
-  public async loadAudioFile(trackId: string, file: File, position?: { x: number, y: number }): Promise<void> {
-    // Pass the position directly to the transport controller
-    // TransportController will handle setting the position in AudioEngine
-    await this.transportController.loadAudioFile(trackId, file, position);
-  }
-  
-  public async loadAudioFileFromUrl(trackId: string, url: string, position?: { x: number, y: number }): Promise<void> {
-    try {
-      console.log(`Fetching audio file from ${url} for track ${trackId}`);
-      
-      // Fetch the audio file
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch audio file: ${response.status} ${response.statusText}`);
-      }
-      
-      // Convert the response to a blob
-      const blob = await response.blob();
-      
-      // Create a File object from the blob
-      const fileName = url.split('/').pop() || 'audio.mp3';
-      const file = new File([blob], fileName, { 
-        type: blob.type || 'audio/mpeg' 
-      });
-      
-      // Load the file using the existing method with position if provided
-      console.log(`Loading fetched audio file (${file.size} bytes) for track ${trackId}${position ? ` at position x:${position.x}, y:${position.y}` : ''}`);
-      await this.loadAudioFile(trackId, file, position);
-      
-      console.log(`Successfully loaded audio file from URL for track ${trackId}`);
-    } catch (error) {
-      console.error(`Failed to load audio file from URL for track ${trackId}:`, error);
-      throw error;
-    }
-  }
-
-  // public async removeTrack(trackId: string): Promise<void> {
-  //   // Get track type from ProjectManager *before* removing it
-  //   const track = this.projectManager.getTrackById(trackId);
-  //   const trackType = track?.type;
-
-  //   // Clean up MIDI resources if it's a MIDI, drum or sampler track
-  //   if (trackType === 'midi' || trackType === 'drum' || trackType === 'sampler') {
-  //     // Ensure MidiManager has the track before attempting deletion
-  //     if (this.midiManager.hasTrack(trackId)) {
-  //       await this.midiManager.deleteTrackWithPersistence(trackId);
-  //     } else {
-  //       console.warn(`Store.removeTrack: Track ${trackId} not found in MidiManager during cleanup.`);
-  //     }
-  //   }
-
-  //   // Remove track from project manager (this should be the source of truth)
-  //   this.projectManager.removeTrack(trackId);
-
-  //   // Clean up runtime data (channel, player etc.)
-  //   const runtimeData = this.runtimeTrackData.get(trackId);
-  //   if (runtimeData) {
-  //     runtimeData.channel.dispose(); // Dispose Tone.js resources
-  //     runtimeData.player?.dispose();
-  //     this.runtimeTrackData.delete(trackId);
-  //     console.log(`Store: Cleaned up runtime data for track ${trackId}`);
-  //   }
-
-  //   // Remove from audio engine (AudioEngine might need refactoring to not rely on Store._tracks)
-  //   // Assuming AudioEngine uses trackId
-  //   this.getAudioEngine().removeTrack(trackId);
-
-  //   // Note: No need to notify listeners here, UI should react to ProjectManager changes
-  // }
-
-  public getAudioEngine(): AudioFilePlayer {
-    return this.getTransport().getAudioEngine();
-  }
-
   public getInstrumentManager(): InstrumentManager {
     return this.instrumentManager;
   }
@@ -234,79 +87,79 @@ export class Store implements StoreInterface {
   public getMidiManager(): MidiManager {
     return this.midiManager;
   }
-  
-  public getSoundfontController(): SoundfontEngineController {
-    return this.getTransport().getSoundfontController();
-  }
 
-  public getSamplerController(): SamplerController {
-    return this.getTransport().getSamplerController();
+  /**
+   * Helper method to load soundfont data
+   */
+  private async loadSoundfontData(instrumentId: string): Promise<ArrayBuffer> {
+    const { default: SoundfontManager } = await import('../soundfont/soundfontManager');
+    const soundfontManager = SoundfontManager.getInstance(db);
+    const result = await soundfontManager.getSoundfont(instrumentId);
+    return result.data;
   }
   
   /**
    * Connect a MIDI track to a soundfont instrument
-   * This adds the track to the SoundfontPlayer and sets up subscription for updates
+   * Loads the soundfont into the new AudioEngine and ensures track exists in MidiManager
    * @param trackId The track ID to connect
    * @param instrumentId The instrument ID for the soundfont
    */
   public async connectTrackToSoundfont(
-    trackId: string, 
+    trackId: string,
     instrumentId: string
   ): Promise<void> {
     if (!this.initialized) {
       console.error(`Store not initialized when connecting track ${trackId} to soundfont ${instrumentId}`);
-      console.error('Store state:', { initialized: this.initialized });
       throw new Error(`Store must be initialized before connecting tracks to soundfonts. TrackId: ${trackId}, InstrumentId: ${instrumentId}`);
     }
-    
+
     try {
       console.log(`Store: Connecting track ${trackId} to soundfont ${instrumentId}`);
-      
-      await this.getSoundfontController().connectTrackToSoundfont(
-        trackId, 
-        instrumentId, 
-        this.midiManager
-      );
-      
+
+      // Load soundfont into new AudioEngine
+      const audioEngine = getAudioEngine();
+      if (!audioEngine.hasSoundfont(instrumentId)) {
+        const soundfontData = await this.loadSoundfontData(instrumentId);
+        await audioEngine.loadSoundfont(instrumentId, soundfontData);
+        console.log(`Store: Loaded soundfont ${instrumentId} into AudioEngine`);
+      }
+
+      // Ensure track exists in MidiManager
+      if (!this.midiManager.hasTrack(trackId)) {
+        this.midiManager.createTrack(trackId, instrumentId);
+        console.log(`Store: Created track ${trackId} in MidiManager`);
+      }
+
       console.log(`Store: Successfully connected track ${trackId} to soundfont ${instrumentId}`);
     } catch (error) {
       console.error(`Store: Failed to connect track ${trackId} to soundfont ${instrumentId}:`, error);
       throw error;
     }
   }
-  
+
   /**
    * Connect a track to a sampler
-   * This initializes the sampler and sets up MidiManager subscription
+   * Ensures track exists in MidiManager (audio buffer loaded by config.ts initEngine)
    * @param trackId The track ID to connect
-   * @param file The audio file to use as the sample source
    * @param baseMidiNote The MIDI note that represents the sample's original pitch
-   * @param grainSize Granular synthesis grain size (seconds)
-   * @param overlap Granular synthesis overlap amount (0-1)
    */
   public async connectTrackToSampler(
     trackId: string,
-    file: File,
-    baseMidiNote?: number,
-    grainSize?: number,
-    overlap?: number
+    baseMidiNote?: number
   ): Promise<void> {
     if (!this.initialized) {
       throw new Error('Store must be initialized before connecting tracks to samplers');
     }
-    
+
     try {
-      console.log(`Store: Connecting track ${trackId} to sampler with file ${file.name} and baseMidiNote ${baseMidiNote} and grainSize ${grainSize} and overlap ${overlap}`);
-      
-      await this.getSamplerController().connectTrackToSampler(
-        trackId,
-        file,
-        this.midiManager,
-        baseMidiNote,
-        grainSize,
-        overlap
-      );
-      
+      console.log(`Store: Connecting track ${trackId} to sampler with baseMidiNote ${baseMidiNote}`);
+
+      // Ensure track exists in MidiManager
+      if (!this.midiManager.hasTrack(trackId)) {
+        this.midiManager.createTrack(trackId, 'sampler');
+        console.log(`Store: Created track ${trackId} in MidiManager for sampler`);
+      }
+
       console.log(`Store: Successfully connected track ${trackId} to sampler`);
     } catch (error) {
       console.error(`Store: Failed to connect track ${trackId} to sampler:`, error);

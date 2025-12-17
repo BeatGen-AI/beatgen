@@ -85,7 +85,7 @@ describe('SamplerChannelPlayer', () => {
 
     // Reset the mock implementations
     (Tone.getTransport as Mock).mockReturnValue(mockTransport);
-    (Tone.GrainPlayer as Mock).mockImplementation(() => {
+    (Tone.GrainPlayer as unknown as Mock).mockImplementation(() => {
       const instance = createMockGrainPlayer();
       mockGrainPlayerInstances.push(instance);
       return instance;

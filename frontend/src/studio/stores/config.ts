@@ -22,37 +22,27 @@ export const TRACK_CONFIG: Record<TrackType, {
   AUDIO: {
     getDefaultName: (count: number, instrumentName?: string) => instrumentName || `Audio Track ${count}`,
     initTrack: (id: string, file?: File) => ({ type: 'AUDIO' as const, audioFile: file }),
-    initEngine: async (store: Store, trackId: string, get: GetFn, options?: TrackOptions) => {
+    initEngine: async (_store: Store, trackId: string, get: GetFn, options?: TrackOptions) => {
       const file = options && (options as AudioTrackOptions).audioFile;
       if (!file) return Promise.resolve();
 
-      console.log(`TRACK_CONFIG[audio].initEngine: Loading file for track ${trackId}...`);
-
-      // Load into new AudioEngine (Phase 6 migration)
+      // Load into new AudioEngine
       const newEngine = getAudioEngine();
       if (!newEngine.isReady()) {
         throw new Error(`TRACK_CONFIG[audio].initEngine: New AudioEngine not ready when loading buffer for ${trackId}`);
       }
       await newEngine.loadAudioBuffer(trackId, file);
-      console.log(`TRACK_CONFIG[audio].initEngine: Loaded buffer into new AudioEngine for ${trackId}`);
 
-      // Load into legacy engine (kept for compatibility during migration)
-      await store.loadAudioFile(trackId, file);
-      console.log(`TRACK_CONFIG[audio].initEngine: File loaded for track ${trackId}. Fetching metadata...`);
-
-      const engineTrack = store.getAudioEngine().getAllTracks().find(t => t.id === trackId);
-      if (!engineTrack?.player?.buffer) {
-        console.error(`Failed to get audio buffer after loading for track ${trackId}`);
-        return;
+      // Get metadata from the new engine's loaded buffer
+      const buffer = newEngine.getAudioBuffer(trackId);
+      if (!buffer) {
+        throw new Error(`TRACK_CONFIG[audio].initEngine: Failed to get audio buffer after loading for track ${trackId}`);
       }
 
-      const buffer = engineTrack.player.buffer;
       const duration = buffer.duration;
       const sampleRate = buffer.sampleRate;
       const format = file.type;
       const size = file.size;
-
-      console.log(`TRACK_CONFIG[audio].initEngine: Metadata for ${trackId}:`, { duration, sampleRate, format, size });
 
       const { _updateNestedTrackData } = get();
 
@@ -64,7 +54,6 @@ export const TRACK_CONFIG: Record<TrackType, {
           audio_file_size: size,
           audio_file_name: file.name,
         });
-        console.log(`TRACK_CONFIG[audio].initEngine: Dispatched nested state update for ${trackId}.`);
       } else {
         console.error(`TRACK_CONFIG[audio].initEngine: _updateNestedTrackData function not found!`);
       }
@@ -94,8 +83,7 @@ export const TRACK_CONFIG: Record<TrackType, {
       grainSize: DEFAULT_SAMPLER_CONFIG.grainSize,
       overlap: DEFAULT_SAMPLER_CONFIG.overlap
     }),
-    initEngine: async (store: Store, trackId: string, get: GetFn, options?: SamplerTrackOptions) => {
-      console.log(`[SAMPLER initEngine] track ${trackId}, options:`, options);
+    initEngine: async (store: Store, trackId: string, _get: GetFn, options?: SamplerTrackOptions) => {
       const sampleManager = store.getSampleManager();
       if (!sampleManager) {
         console.error(`SampleManager not available on Store instance for sampler initEngine (track: ${trackId})`);
@@ -107,59 +95,32 @@ export const TRACK_CONFIG: Record<TrackType, {
       const trackName = options?.name;
 
       if (!storageKey) {
-          console.warn(`TRACK_CONFIG[sampler].initEngine: No storage_key or audio_storage_key provided in options for track ${trackId}. Cannot load sample.`);
+          console.warn(`TRACK_CONFIG[sampler].initEngine: No storage_key provided for track ${trackId}. Trying fallback.`);
           const existingBlob = await sampleManager.getSampleBlob(trackId, '', 'sample');
           if (!existingBlob) {
-              console.error(`Failed to get blob via ID ${trackId} either.`);
+              console.error(`TRACK_CONFIG[sampler].initEngine: Failed to get blob for track ${trackId}`);
               return Promise.resolve();
           }
-          console.log(`Found cached blob for ID ${trackId} despite missing storageKey in options.`);
       }
-      
-      console.log(`TRACK_CONFIG[sampler].initEngine: Getting sample blob for track ${trackId} (storageKey: ${storageKey})`);
+
       const sampleFile = await sampleManager.getSampleBlob(trackId, storageKey!, 'sample', trackName);
 
       if (!sampleFile) {
-        console.error(`TRACK_CONFIG[sampler].initEngine: Failed to get sample blob for track ${trackId} using storageKey ${storageKey}`);
+        console.error(`TRACK_CONFIG[sampler].initEngine: Failed to get sample blob for track ${trackId}`);
         return Promise.resolve();
       }
-
-      const samplerController = store.getTransport().getSamplerController();
-      const midiManager = store.getMidiManager();
-      if (!samplerController || !midiManager) {
-        console.warn('SamplerController or MidiManager not available for sampler initEngine');
-        return Promise.resolve();
-      }
-      
-      const trackData = get().findTrackById(trackId);
-      const baseMidiNote = options?.baseMidiNote ?? (trackData?.track as any)?.baseMidiNote ?? DEFAULT_SAMPLER_CONFIG.baseMidiNote;
-      const grainSize = options?.grainSize ?? (trackData?.track as any)?.grainSize ?? DEFAULT_SAMPLER_CONFIG.grainSize;
-      const overlap = options?.overlap ?? (trackData?.track as any)?.overlap ?? DEFAULT_SAMPLER_CONFIG.overlap;
 
       try {
-        console.log(`Connecting sampler ${trackId} to controller using retrieved blob`);
         const file = new File([sampleFile.data], trackName || sampleFile.name, { type: sampleFile.type });
 
-        // Load into new AudioEngine (Phase 6 migration)
+        // Load into new AudioEngine
         const newEngine = getAudioEngine();
         if (!newEngine.isReady()) {
           throw new Error(`TRACK_CONFIG[sampler].initEngine: New AudioEngine not ready when loading buffer for ${trackId}`);
         }
         await newEngine.loadAudioBuffer(trackId, file);
-        console.log(`TRACK_CONFIG[sampler].initEngine: Loaded buffer into new AudioEngine for ${trackId}`);
-
-        // Load into legacy sampler controller (kept for compatibility during migration)
-        await samplerController.connectTrackToSampler(
-          trackId,
-          file,
-          midiManager,
-          baseMidiNote,
-          grainSize,
-          overlap
-        );
-        samplerController.registerTrackSubscription(trackId, midiManager);
       } catch (connectError) {
-        console.error(`Error connecting sampler track ${trackId} in initEngine:`, connectError);
+        console.error(`Error loading sampler track ${trackId} in initEngine:`, connectError);
       }
       return Promise.resolve();
     },
