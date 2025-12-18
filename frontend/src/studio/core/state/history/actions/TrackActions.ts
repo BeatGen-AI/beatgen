@@ -1,7 +1,4 @@
 import { Store } from '../../store';
-// import { useGridStore } from '../../gridStore'; // Assuming unused
-// Remove import for old store
-// import { useStudioStore } from '../../../../stores/useStudioStore'; 
 import { BaseAction, TrackAction } from './BaseAction';
 import { pixelsToTicks, ticksToPixels } from '../../../../constants/gridConstants';
 // Fix Position import path
