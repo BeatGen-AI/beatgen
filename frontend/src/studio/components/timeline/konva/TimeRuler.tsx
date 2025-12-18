@@ -50,7 +50,6 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
   
   // Handle click
   const handleClick = (e: any) => {
-    if (!onClick) return;
     
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();

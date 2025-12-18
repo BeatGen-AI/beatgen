@@ -190,7 +190,7 @@ export const VirtualInstrumentsModal = ({ open, onClose, onSelect }: VirtualInst
                 
                 {/* Quick access - Common instruments */}
                 <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Common Instruments</h3>
+                    {/* <h3 className="text-lg font-medium">Common Instruments</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                         {instruments.map((instrument) => (
                             <div
@@ -209,7 +209,7 @@ export const VirtualInstrumentsModal = ({ open, onClose, onSelect }: VirtualInst
                                 </h4>
                             </div>
                         ))}
-                    </div>
+                    </div> */}
                     
                     {/* Explore All Virtual Instruments section */}
                     <Accordion type="single" collapsible value={expanded ? "instruments" : ""} onValueChange={(value) => setExpanded(value === "instruments")}>

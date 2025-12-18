@@ -273,15 +273,22 @@ export interface RootState {
   resizeMultipleInstances: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
   deleteMultipleInstances: (instanceDeletions: Array<{trackId: string, instanceId: string}>) => Promise<void>;
 
-  // Playback / Transport
+  // Playback / Transport (AudioEngine)
   isPlaying: boolean;
   currentTime: number;
+  currentTicks: number;
+  isAudioEngineReady: boolean;
   setIsPlaying: (isPlaying: boolean) => void;
   setCurrentTime: (time: number) => void;
+  setCurrentTicks: (ticks: number) => void;
   handlePlaybackCommand: (command: PlaybackCommand, arg?: any) => Promise<void>;
   playPause: () => Promise<void>;
   stop: () => Promise<void>;
-  seekToPosition: (position: number) => void;
+  seekToPosition: (ticks: number) => void;
+  seekToSeconds: (seconds: number) => void;
+  syncEngineState: () => void;
+  initializeAudioEngine: () => Promise<void>;
+  getAudioEngineInstance: () => any; // AudioEngine type
 
   // History (Undo/Redo)
   canUndo: boolean;

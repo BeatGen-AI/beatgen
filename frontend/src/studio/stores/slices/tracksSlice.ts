@@ -158,9 +158,18 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             }
         }
     }));
+
+    // Sync engine state for playback-relevant changes (volume, pan, mute, solo, instances)
+    // Only sync if currently playing - engine gets latest state on play
+    const playbackRelevantKeys = ['volume', 'pan', 'mute', 'solo', 'instances', 'position', 'x_position'];
+    const hasPlaybackChange = playbackRelevantKeys.some(key => key in updates);
+    if (hasPlaybackChange && rootGet().isPlaying) {
+        rootGet().syncEngineState?.();
+    }
   };
 
   // Update all tracks and recalculate indices
+  // No engine sync here - engine gets latest state when play is pressed
   const updateTracks = (newTracks: CombinedTrack[]) => {
       set(produce((draft: RootState) => {
           // Create a fresh array with cloned tracks to avoid frozen object issues
@@ -168,8 +177,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               ...track,
               track_number: index,
               // Ensure each track has instances
-              instances: track.instances 
-                  // ? track.instances 
+              instances: track.instances
+                  // ? track.instances
                   // : [{
                   //     id: `${track.id}_instance_1`,
                   //     x_position: track.x_position || 0,
@@ -179,7 +188,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   // }]
           }));
       }));
-      
+
       // After updating tracks, register instances with MidiManager
       const midiManager = rootGet().store?.getMidiManager();
       console.log('[updateTracks] MidiManager available:', !!midiManager);
@@ -193,19 +202,21 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                   if (!midiManager.hasTrack(track.id)) {
                       midiManager.createTrack(track.id, track.track_type.toLowerCase(), track.name);
                   }
-                  
+
                   // Register all instances
                   if (track.instances && track.instances.length > 0) {
                       track.instances.forEach(instance => {
                           midiManager.registerInstance(track.id, instance.id);
                       });
-                      
+
                       // Migrate notes without instance IDs to the first instance
                       midiManager.migrateNotesToFirstInstance(track.id, track.instances[0].id);
                   }
               }
           });
       }
+
+      // No engine sync here - engine gets latest state when play is pressed
   };
 
   // Action to recalculate and add/update the index property for UI ordering
@@ -315,6 +326,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               }
           });
       }
+
+      // No engine sync here - engine gets latest state when play is pressed
   };
 
   // --- Selectors Implementation --- 
@@ -384,8 +397,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         }
       }
 
-      await passedStore.getAudioEngine().createTrack(trackId, name); 
-      
       // Calculate defaults
       const beatsPerBar = timeSignature[0]; 
       const defaultBars = 4;
@@ -527,12 +538,17 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
 
       // Create action, passing the serializable trackData AND the separate file object
-      const action = new Actions.AddTrack(get, finalTrackData, file); 
-      
-      // Execute history action 
+      const action = new Actions.AddTrack(get, finalTrackData, file);
+
+      // Execute history action
       await rootGet().executeHistoryAction(action);
-      
-      return finalTrackData; 
+
+      // Sync the AudioEngine after track creation (only if currently playing)
+      if (rootGet().isPlaying) {
+          rootGet().syncEngineState?.();
+      }
+
+      return finalTrackData;
     };
 
     return _withErrorHandling(async () => _withStore(createLogic)(), `createTrackAndRegisterWithHistory: ${type}`)();
@@ -710,23 +726,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               }
           }));
 
-          try {
-              await passedStore.getAudioEngine().removeTrack(trackId);
-          } catch (engineError) {
-              console.error(`Error removing track ${trackId} from audio engine:`, engineError);
-          }
-
-          try {
-              if (trackToDelete.track_type === 'SAMPLER') {
-              }
-              if (trackToDelete.track_type === 'MIDI') {
-              }
-          } catch (disconnectError) {
-              console.error(`Error during track disconnection for ${trackId}:`, disconnectError);
-          }
+          // Track removal is handled by state update - new AudioEngine receives updated state via setState()
 
           // Execute history action AFTER state change (or consider order)
           await executeHistoryAction(action);
+
+          // Sync the AudioEngine after track deletion (only if currently playing)
+          if (rootGet().isPlaying) {
+              rootGet().syncEngineState?.();
+          }
       };
 
       await _withErrorHandling(async () => _withStore(deleteLogic)(), `handleTrackDelete: ${trackId}`)();
@@ -839,19 +847,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         (updateObj as any)[paramName] = newValue;
       }
 
-      // Update State
+      // Update State - this triggers syncEngineState() which updates new AudioEngine
       updateTrackState(trackId, updateObj);
-      
-      // Update Audio Engine 
-      if (engineUpdateNeeded) {
-        const audioEngine = passedStore.getAudioEngine();
-        switch (paramName) {
-          case 'volume': audioEngine.setTrackVolume(trackId, newValue as number); break;
-          case 'pan': audioEngine.setTrackPan(trackId, newValue as number); break;
-          // Mute/Solo handled by specific handlers
-        }
-      }
-      
+
       // Create and Execute History Action
       const convertToActionValue = (val: any): number => {
         if (typeof val === 'boolean' ) return val ? 1 : 0;
@@ -935,15 +933,12 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             updatedInstance: updatedInstances[0]
         });
         
-        // Update track state with new instances array
-        updateTrackState(trackId, { 
+        // Update track state with new instances array - triggers syncEngineState()
+        updateTrackState(trackId, {
             instances: updatedInstances,
             dirty: true
         });
-        
-        // Update audio engine
-        storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
-        
+
         if (isDragEnd) {
             // Use instance action for history
             const action = new InstanceMove(
@@ -956,10 +951,6 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                 newPosition.y
             );
             await executeHistoryAction(action);
-            
-            if (isPlaying && storeInstance.getTransport()?.handleTrackPositionChange) {
-              storeInstance.getTransport().handleTrackPositionChange(trackId, newPosition.x);
-            }
         }
     };
     
@@ -987,9 +978,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         if (!targetTrack) return; // Should not happen if updateTrackState worked
         
         // Re-evaluate solo status based on the *current* state of all tracks
-        const isAnyTrackSoloed = currentTracks.some(t => (t as any).soloed); 
-
-        const audioEngine = passedStore.getAudioEngine();
+        const isAnyTrackSoloed = currentTracks.some(t => (t as any).soloed);
         const historyActions = [];
 
         // Helper function to check if a track should be unmuted based on solo relationships
@@ -1017,9 +1006,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
             const shouldBeMuted = !shouldTrackBeUnmuted(track);
             
             if (oldMuteState !== shouldBeMuted) {
-                updateTrackState(track.id, { mute: shouldBeMuted }); // Use local helper
-                audioEngine.setTrackMute(track.id, shouldBeMuted);
-                
+                // Update store state - triggers syncEngineState() for new AudioEngine
+                updateTrackState(track.id, { mute: shouldBeMuted });
+
                 const action = new Actions.ParameterChange( get, track.id, 'muted', oldMuteState ? 1 : 0, shouldBeMuted ? 1 : 0 );
                 historyActions.push(action);
             }
@@ -1820,20 +1809,9 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
     }
     
-    // Create audio player instance for audio tracks
-    if (track.track_type === 'AUDIO') {
-      const audioEngine = rootGet().store?.getAudioEngine();
-      if (audioEngine) {
-        try {
-          // Create the new player instance in the audio engine
-          await audioEngine.createInstance(trackId, instanceId);
-          console.log(`Created audio player instance ${instanceId} for track ${trackId}`);
-        } catch (error) {
-          console.error(`Failed to create audio player instance ${instanceId}:`, error);
-        }
-      }
-    }
-    
+    // Note: Audio instance creation is handled by new AudioEngine via setState()
+    // which receives all instances through buildPlaybackState()
+
     // Create history action for adding instance
     const action = new Actions.InstanceAdd(get, trackId, newInstance);
     await executeHistoryAction(action);
@@ -1880,15 +1858,8 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
     }
     
-    // Remove audio player instance for audio tracks
-    if (track.track_type === 'AUDIO') {
-      const audioEngine = rootGet().store?.getAudioEngine();
-      if (audioEngine) {
-        audioEngine.removeInstance(instanceId);
-        console.log(`Removed audio player instance ${instanceId} for track ${trackId}`);
-      }
-    }
-    
+    // Note: Audio instance removal is handled by new AudioEngine via setState()
+
     // Create and execute the delete action
     const action = new Actions.InstanceDelete(
       get,
@@ -1983,20 +1954,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                     midiManager.moveInstance(trackId, instanceId, deltaX);
                 }
             }
-            
-            if (isPlaying && storeInstance.getTransport()?.handleTrackPositionChange) {
-              storeInstance.getTransport().handleTrackPositionChange(trackId, newPosition.x);
-            }
+            // State update triggers syncEngineState() for new AudioEngine
         } else {
             // During drag, update position directly without history
-            updateTrackInstance(trackId, instanceId, { 
-                x_position: newPosition.x, 
+            // State update triggers syncEngineState() for new AudioEngine
+            updateTrackInstance(trackId, instanceId, {
+                x_position: newPosition.x,
                 y_position: newPosition.y
             });
-            
-            // Update audio engine for this specific instance
-            // TODO: Audio engine needs to support instance-based positioning
-            storeInstance.getAudioEngine().setTrackPosition(trackId, newPosition.x, newPosition.y);
         }
     };
     

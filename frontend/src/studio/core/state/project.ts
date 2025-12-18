@@ -34,28 +34,6 @@ export class ProjectManager {
     return this.currentProject;
   }
 
-  // public addTrack(track: CombinedTrack): CombinedTrack {
-  //   if (!this.currentProject) {
-  //     throw new Error('No project loaded');
-  //   }
-
-  //   this.currentProject.tracks.push(track);
-  //   return track;
-  // }
-  
-
-  // public getTrackById(id: string): CombinedTrack | undefined {
-  //   return this.currentProject?.tracks.find(track => track.id === id);
-  // }
-
-  // public removeTrack(id: string): void {
-  //   if (!this.currentProject) return;
-    
-  //   this.currentProject.tracks = this.currentProject.tracks.filter(
-  //     track => track.id !== id
-  //   );
-  // }
-
   public getTempo(): number {
     return this.currentProject.bpm;
   }

@@ -102,6 +102,9 @@ function Studio({ projectId }: StudioProps) {
     handleTrackResizeEnd,
     handleTrackNameChange,
     handleInstrumentChange,
+    // New AudioEngine methods
+    seekToSeconds,
+    syncEngineState,
     // Group operations for clipboard functionality
     duplicateTrack,
     duplicateMultipleTracks,
@@ -187,43 +190,17 @@ function Studio({ projectId }: StudioProps) {
   });
 
   // Real-time volume change handler (doesn't go through history)
-  const handleTrackVolumeChangeLive = useCallback((trackId: string, volume: number) => {
-    if (!store) return;
-    
-    // Update audio engines directly without history
-    const audioEngine = store.getAudioEngine();
-    const soundfontController = store.getSoundfontController();
-    const samplerController = store.getSamplerController();
-    
-    // Set volume on all audio engines
-    audioEngine.setTrackVolume(trackId, volume);
-    soundfontController?.setTrackVolume?.(trackId, volume);
-    samplerController?.setTrackVolume?.(trackId, volume);
-    
-    // Handle drum track volume propagation to sampler tracks
-    const track = tracks.find(t => t.id === trackId);
-    if (track?.track_type === 'DRUM') {
-      const samplerTracks = tracks.filter(t => 
-        t.track_type === 'SAMPLER' && 
-        t.track && 
-        'drum_track_id' in t.track && 
-        (t.track as any).drum_track_id === trackId
-      );
-      samplerTracks.forEach(samplerTrack => {
-        audioEngine.setTrackVolume(samplerTrack.id, volume);
-        samplerController?.setTrackVolume?.(samplerTrack.id, volume);
-      });
-    }
-  }, [store, tracks]);
+  // Note: Live audio feedback during slider drag is not supported with the new AudioEngine.
+  // Audio updates when slider is released (via history action -> store update -> syncEngineState).
+  const handleTrackVolumeChangeLive = useCallback((_trackId: string, _volume: number) => {
+    // No-op - new AudioEngine receives state via setState() only
+    // Live feedback can be added in a future optimization
+  }, []);
 
   // Real-time pan change handler (doesn't go through history)
-  const handleTrackPanChangeLive = useCallback((trackId: string, pan: number) => {
-    if (!store) return;
-    
-    // Update audio engine directly without history
-    const audioEngine = store.getAudioEngine();
-    audioEngine.setTrackPan(trackId, pan);
-  }, [store]);
+  const handleTrackPanChangeLive = useCallback((_trackId: string, _pan: number) => {
+    // No-op - new AudioEngine receives state via setState() only
+  }, []);
 
   // Effect to measure control bar height
   useLayoutEffect(() => {
@@ -393,6 +370,9 @@ function Studio({ projectId }: StudioProps) {
   };
 
   // Control playback cursor directly when playback state changes
+  // NOTE: currentTime is intentionally NOT in the dependency array.
+  // We only want to react to isPlaying changes, not every time update.
+  // Time updates are handled by the cursor's internal animation loop.
   useEffect(() => {
     if (!scrollRef.current?.playbackCursor) {
       return;
@@ -407,13 +387,15 @@ function Studio({ projectId }: StudioProps) {
       cursor.play();
     } else {
       // isPlaying is false. This could be a pause or a stop.
-      if (currentTime < 0.01) { // Check if time is (near) zero, indicating a stop
+      // Use a ref to check current time to avoid dependency issues
+      const storeTime = useStudioStore.getState().currentTime;
+      if (storeTime < 0.01) { // Check if time is (near) zero, indicating a stop
         cursor.stop();
       } else {
         cursor.pause();
       }
     }
-    
+
     // Clean up any stray animation frames
     return () => {
       if (animationFrameRef.current) {
@@ -421,7 +403,7 @@ function Studio({ projectId }: StudioProps) {
         animationFrameRef.current = null;
       }
     };
-  }, [isPlaying, currentTime, store]); // Added currentTime to dependencies
+  }, [isPlaying, store]); // Removed currentTime - only react to play/pause state changes
 
   // Handle infinite scrolling for the timeline
   const handleScroll = React.useCallback(() => {
@@ -720,12 +702,10 @@ function Studio({ projectId }: StudioProps) {
               onTimeChange={(newTime) => {
                 // Update global state only when user explicitly changes time
                 setCurrentTime(newTime);
-                
-                // Update transport position
-                if (store && store.getTransport()) {
-                  store.getTransport().setPosition(newTime);
-                }
-                
+
+                // Seek the new AudioEngine to the new position (in seconds)
+                seekToSeconds(newTime);
+
                 // Use imperative API to update cursor position
                 if (scrollRef.current?.playbackCursor) {
                   scrollRef.current.playbackCursor.seek(newTime);

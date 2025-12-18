@@ -892,18 +892,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
                 actions.push({
                   execute: async () => {
                     console.log(`Muting existing track ${track.id}`);
-                    store.getAudioEngine().setTrackMute(track.id, true);
+                    // State update triggers syncEngineState() for new AudioEngine
                     useStudioStore.setState({
-                      tracks: useStudioStore.getState().tracks.map(t => 
+                      tracks: useStudioStore.getState().tracks.map(t =>
                         t.id === track.id ? { ...t, muted: true } : t
                       )
                     });
                   },
                   undo: async () => {
                     console.log(`Unmuting existing track ${track.id}`);
-                    store.getAudioEngine().setTrackMute(track.id, false);
+                    // State update triggers syncEngineState() for new AudioEngine
                     useStudioStore.setState({
-                      tracks: useStudioStore.getState().tracks.map(t => 
+                      tracks: useStudioStore.getState().tracks.map(t =>
                         t.id === track.id ? { ...t, muted: false } : t
                       )
                     });

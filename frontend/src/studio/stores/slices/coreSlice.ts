@@ -1,5 +1,6 @@
 import { Store } from '../../core/state/store';
 import { RootState, SetFn, GetFn, StoreSliceCreator } from '../types';
+import { getAudioEngine } from '../../core/audio-engine/AudioEngine';
 
 // Define the state properties for this slice
 export interface CoreSlice {
@@ -47,12 +48,20 @@ export const createCoreSlice: StoreSliceCreator<CoreSlice> = (set, get) => {
       }
       
       await store.initializeAudio();
-      
-      // Set up the store getter for the transport and audio engine
-      // This allows them to access track/instance data from the Zustand store
-      const transport = store.getTransport();
-      transport.setStoreGetter(() => rootGet());
-      
+
+      // Initialize the new AudioEngine (Phase 6 migration)
+      // The new engine receives state via setState() instead of store getter
+      const audioEngine = getAudioEngine();
+      if (!audioEngine.isReady()) {
+        await audioEngine.initialize();
+        console.log('CoreSlice: New AudioEngine initialized');
+      }
+
+      // Set up engine event subscriptions (time updates, state changes, errors)
+      // This connects the engine to the Zustand store so UI updates when engine state changes
+      await rootGet().initializeAudioEngine();
+      console.log('CoreSlice: AudioEngine subscriptions set up');
+
       setCoreState({ isInitialized: true });
       
       // Keep this for debugging if needed, but generally avoid window assignment

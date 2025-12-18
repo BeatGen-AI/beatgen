@@ -13,10 +13,7 @@ import {
 } from './types';
 import { WavEncoder } from './wavEncoder';
 import { CombinedTrack } from '../../../platform/types/project';
-import { AudioTrack } from '../../../platform/types/dto/track_models/audio_track';
-import { MidiTrack } from '../../../platform/types/dto/track_models/midi_track';
-import { SamplerTrack } from '../../../platform/types/dto/track_models/sampler_track';
-import AudioFilePlayer from '../audio-engine/audioFilePlayer/audioEngine';
+import { getAudioEngine, AudioEngine } from '../audio-engine/AudioEngine';
 import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
 import { BaseExportEngine } from './BaseExportEngine';
 import { MidiExportEngineOffline } from './MidiExportEngineOffline';
@@ -26,18 +23,18 @@ import { SamplerExportEngine } from './SamplerExportEngine';
  * Export engine for Tone.js audio tracks
  */
 export class ToneExportEngine extends BaseExportEngine {
-  private audioEngine: AudioFilePlayer;
-  
+  private audioEngine: AudioEngine;
+
   constructor(progressCallback?: ExportProgressCallback) {
     super(progressCallback);
-    this.audioEngine = AudioFilePlayer.getInstance();
+    this.audioEngine = getAudioEngine();
   }
-  
+
   async renderTrack(track: CombinedTrack, options: ExportOptions): Promise<RenderResult> {
     if (track.track_type !== 'AUDIO') {
       throw new Error('ToneExportEngine can only render AUDIO tracks');
     }
-    
+
     // Get the audio buffer for this track (shared by all instances)
     const audioBuffer = this.audioEngine.getAudioBuffer(track.id);
     if (!audioBuffer) {
@@ -47,11 +44,11 @@ export class ToneExportEngine extends BaseExportEngine {
         track.id
       );
     }
-    
-    // Get the channel for volume/pan settings
-    const channel = this.audioEngine.getTrackChannel(track.id);
-    const channelVolume = channel?.volume.value ?? 0;
-    const channelPan = channel?.pan.value ?? 0;
+
+    // Get volume/pan from track state (converted to dB for Tone.js)
+    const trackVolume = track.volume ?? 80;
+    const channelVolume = trackVolume === 0 ? -Infinity : 20 * Math.log10(trackVolume / 100);
+    const channelPan = (track.pan ?? 0) / 100; // Convert -100..100 to -1..1
     
     this.checkCancelled();
     
