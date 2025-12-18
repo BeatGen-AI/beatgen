@@ -12,14 +12,6 @@ vi.mock('js-synthesizer', () => ({
 
 vi.mock('tone', () => mocks.Tone);
 
-vi.mock('../studio/core/audio-engine/midiSamplePlayer/sampler', () => ({
-  default: mocks.MidiSampler
-}));
-
-vi.mock('../studio/core/audio-engine/midiSoundfontPlayer/sequencerWrapper', () => ({
-  SequencerWrapper: mocks.SequencerWrapper
-}));
-
 // Mock Web Audio API if not available
 beforeAll(() => {
   // Mock performance.now if not available
