@@ -213,17 +213,12 @@ function transformTrack(
 
 /**
  * Build playback regions from track instances.
+ * Returns empty array if no instances - tracks without instances don't play.
  */
 function buildRegions(track: CombinedTrackEntity, instances: TrackInstance[]): PlaybackRegion[] {
   if (instances.length === 0) {
-    // Create a default region at position 0 with full track duration
-    return [{
-      id: `${track.id}_default`,
-      startTicks: 0,
-      endTicks: track.duration_ticks ?? 0,
-      sourceOffsetTicks: 0,
-      durationTicks: track.duration_ticks ?? 0,
-    }];
+    // No instances = no playback regions
+    return [];
   }
 
   return instances.map(instance => {
@@ -287,6 +282,7 @@ function buildAudioResources(track: CombinedTrackEntity): AudioResources {
 
 /**
  * Build MIDI track resources with pre-transformed notes.
+ * Only processes actual instances - no instances means no notes.
  */
 function buildMidiResources(
   track: CombinedTrackEntity,
@@ -296,16 +292,8 @@ function buildMidiResources(
   const midiTrack = track.track as MidiTrackRead;
   const allNotes: PlaybackNote[] = [];
 
-  // Get notes for each instance
-  const effectiveInstances = instances.length > 0 ? instances : [{
-    id: `${track.id}_default`,
-    x_position: 0,
-    y_position: 0,
-    trim_start_ticks: 0,
-    trim_end_ticks: track.duration_ticks ?? 0,
-  }];
-
-  for (const instance of effectiveInstances) {
+  // Only process actual instances - no instances = no playback
+  for (const instance of instances) {
     try {
       // MidiManager.getInstanceNotesForPlayback() returns notes with
       // absolute timeline positions (column already adjusted by x_position)
@@ -345,6 +333,7 @@ function buildMidiResources(
 
 /**
  * Build sampler track resources with pre-transformed notes.
+ * Only processes actual instances - no instances means no notes.
  */
 function buildSamplerResources(
   track: CombinedTrackEntity,
@@ -354,15 +343,8 @@ function buildSamplerResources(
   const samplerTrack = track.track as SamplerTrackRead;
   const allNotes: PlaybackNote[] = [];
 
-  const effectiveInstances = instances.length > 0 ? instances : [{
-    id: `${track.id}_default`,
-    x_position: 0,
-    y_position: 0,
-    trim_start_ticks: 0,
-    trim_end_ticks: track.duration_ticks ?? 0,
-  }];
-
-  for (const instance of effectiveInstances) {
+  // Only process actual instances - no instances = no playback
+  for (const instance of instances) {
     try {
       const instanceNotes = midiManager.getInstanceNotesForPlayback(
         track.id,

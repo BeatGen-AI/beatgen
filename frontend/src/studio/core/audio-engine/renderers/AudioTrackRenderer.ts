@@ -548,6 +548,27 @@ export class AudioTrackRenderer implements ITrackRenderer {
         // Only play if we're still supposed to be playing
         if (!this.isPlaying) return;
 
+        // CRITICAL: Check that the region player still exists (track may have been deleted)
+        const currentRegionPlayer = this.regionPlayers.get(region.id);
+        if (!currentRegionPlayer) {
+          console.log(`[DEBUG] AudioTrackRenderer: Region ${region.id} no longer exists, skipping playback`);
+          return;
+        }
+
+        // CRITICAL: Verify the track is still in currentTracks (not deleted)
+        const trackStillExists = this.currentTracks.some(t => t.id === track.id);
+        if (!trackStillExists) {
+          console.log(`[DEBUG] AudioTrackRenderer: Track ${track.id} no longer exists, skipping playback`);
+          return;
+        }
+
+        // CRITICAL: Check if track is now muted
+        const currentTrack = this.currentTracks.find(t => t.id === track.id);
+        if (currentTrack?.effectiveMute) {
+          console.log(`[DEBUG] AudioTrackRenderer: Track ${track.id} is now muted, skipping playback`);
+          return;
+        }
+
         console.log(`[DEBUG] AudioTrackRenderer: Transport callback triggered for region ${region.id}`);
 
         // Start from source offset for full duration
