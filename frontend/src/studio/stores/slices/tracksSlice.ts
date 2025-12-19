@@ -1345,17 +1345,41 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     }
 
     const addSamplerLogic = async (): Promise<CombinedTrack | null> => {
-        // 1. Prepare Sampler Options, linking to parent
+        // 1. Get the drum track to sync instance position
+        const drumTrack = findTrackById(drumTrackId);
+        if (!drumTrack) {
+            console.error(`addSamplerTrackToDrumTrack: Drum track ${drumTrackId} not found`);
+            return null;
+        }
+
+        // Get the drum track's first instance position to sync sampler instance
+        const drumInstances = drumTrack.instances || [];
+        const drumFirstInstance = drumInstances[0];
+        const syncedPosition: Position = drumFirstInstance
+            ? { x: drumFirstInstance.x_position, y: drumFirstInstance.y_position }
+            : { x: 0, y: 0 };
+
+        // Also sync trim values from the drum track instance
+        const syncedTrimStart = drumFirstInstance?.trim_start_ticks ?? 0;
+        const syncedTrimEnd = drumFirstInstance?.trim_end_ticks ?? drumTrack.duration_ticks ?? 1920;
+
+        console.log('[addSamplerTrackToDrumTrack] Syncing position from drum instance:', syncedPosition);
+
+        // 2. Prepare Sampler Options, linking to parent and syncing position
         console.log('[addSamplerTrackToDrumTrack] sampleData:', sampleData);
-        
+
         // Get additional metadata from the drum sample if available
         const drumSample = sampleData as any; // Cast to access all properties
-        
+
         const samplerOptions: SamplerTrackOptions = {
             name: sampleData.display_name,          // Use sample name for track name initially
             storage_key: sampleData.storage_key,    // Pass storage key
             storage_type: "PUBLIC_DRUM",            // Mark as public drum sample
             drum_track_id: drumTrackId,             // **Link to parent**
+            // Sync position and trim from drum track instance
+            position: syncedPosition,
+            trim_start_ticks: syncedTrimStart,
+            trim_end_ticks: syncedTrimEnd,
             // Add drum sample metadata if available
             audio_file_format: drumSample.file_format || 'wav',
             audio_file_size: drumSample.file_size || 0,
@@ -1369,7 +1393,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         const samplerTrackName = sampleData.display_name; // Or generate a more unique name
 
 
-        // 2. Create the Sampler Track (handles its own history for creation)
+        // 3. Create the Sampler Track (handles its own history for creation)
         const newSamplerTrack = await createTrackAndRegisterWithHistory('SAMPLER', samplerTrackName, samplerOptions);
 
         if (!newSamplerTrack || !newSamplerTrack.id) {
@@ -1379,7 +1403,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         const newSamplerTrackId = newSamplerTrack.id;
 
 
-        // 3. Update Parent Drum Track's State
+        // 4. Update Parent Drum Track's State
         const parentDrumTrack = selectDrumTrackById(drumTrackId); // Use the selector
         if (!parentDrumTrack) {
             console.error(`Parent drum track ${drumTrackId} not found in state after creating sampler.`);
@@ -1395,7 +1419,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         _updateNestedTrackData(drumTrackId, { sampler_track_ids: newSamplerIds } as Partial<DrumTrackRead>);
 
 
-        // 4. Add History Action for the Parent Update
+        // 5. Add History Action for the Parent Update
         // **ASSUMES Actions.UpdateDrumTrackSamplers exists and takes (get, drumTrackId, oldIds, newIds)**
         try {
             const parentUpdateAction = new Actions.UpdateDrumTrackSamplers(
@@ -1451,36 +1475,54 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     const finalTrackIds = expandDrumSelection(trackIds);
     const { tracks, bpm, timeSignature, executeHistoryAction } = rootGet();
     const updatedTracks: CombinedTrack[] = [];
-    
-    // Calculate base offset if not provided
+
+    // Build a map of sampler track ID -> parent drum track ID for position syncing
+    const samplerToParentDrum = new Map<string, string>();
+    const drumTrackIds = new Set<string>();
+
+    for (const trackId of finalTrackIds) {
+      const track = tracks.find(t => t.id === trackId);
+      if (track?.track_type === 'DRUM' && track.track) {
+        drumTrackIds.add(trackId);
+        const drumTrack = track.track as DrumTrackRead;
+        for (const samplerId of drumTrack.sampler_track_ids ?? []) {
+          samplerToParentDrum.set(samplerId, trackId);
+        }
+      }
+    }
+
+    // Calculate base offset if not provided - use ONLY non-sampler tracks (drum/midi/audio)
+    // This prevents sampler tracks at wrong positions from affecting the calculation
     let baseOffsetX = offsetX;
     if (baseOffsetX === 0) {
-      // Find the rightmost instance position among selected tracks
       const selectedTracks = tracks.filter(t => finalTrackIds.includes(t.id));
       let maxRightPosition = 0;
-      
+
       selectedTracks.forEach(track => {
-        // Get instances - skip tracks without instances
-        const instances = track.instances && track.instances.length > 0 
-          ? track.instances 
+        // Skip sampler tracks that are children of drum tracks - they should sync with drum
+        if (samplerToParentDrum.has(track.id)) return;
+
+        const instances = track.instances && track.instances.length > 0
+          ? track.instances
           : [];
-        
-        // Find rightmost instance
+
         instances.forEach(instance => {
           const instanceEnd = instance.x_position + (instance.trim_end_ticks - instance.trim_start_ticks);
           maxRightPosition = Math.max(maxRightPosition, instanceEnd);
         });
       });
-      
-      baseOffsetX = maxRightPosition; // Place directly after the rightmost instance
+
+      baseOffsetX = maxRightPosition;
     }
 
-    // Find the leftmost instance position to calculate relative positions
+    // Find the leftmost instance position - use ONLY non-sampler tracks for drum children
     const selectedTracks = tracks.filter(t => finalTrackIds.includes(t.id));
     let minX = Infinity;
 
-    // Collect instances from each track - skip tracks without instances
     selectedTracks.forEach(track => {
+      // Skip sampler tracks that are children of drum tracks - they should sync with drum
+      if (samplerToParentDrum.has(track.id)) return;
+
       const instances = getTrackInstancesOrDefault(track);
 
       if (instances.length > 0) {
@@ -1488,55 +1530,60 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           minX = Math.min(minX, instance.x_position);
         });
       } else {
-        // Track has no instances - this is valid, just skip it for duplication
         console.log(`duplicateMultipleTracks: Track ${track.id} has no instances, skipping`);
       }
     });
 
-    // Fallback if no instances found at all
     if (minX === Infinity) {
       minX = 0;
     }
 
+    // Build a map of drum track instance positions for syncing samplers
+    // Key: drumTrackId -> Array of new instance positions (indexed by iteration order)
+    const drumNewInstancePositions = new Map<string, Array<{ x: number; y: number; trimStart: number; trimEnd: number }>>();
+
     // Collect all instance add actions
     const instanceAddActions: InstanceAdd[] = [];
 
-    // Create instances for each track
+    // FIRST PASS: Process drum tracks to record their new instance positions
     for (const trackId of finalTrackIds) {
       const track = tracks.find(t => t.id === trackId);
-      if (!track) continue;
+      if (!track || track.track_type !== 'DRUM') continue;
 
-      // Get instances for this track - skip if none
       const originalInstances = getTrackInstancesOrDefault(track);
       if (originalInstances.length === 0) {
-        console.log(`duplicateMultipleTracks: Track ${track.id} has no instances, skipping`);
+        console.log(`duplicateMultipleTracks: Drum track ${track.id} has no instances, skipping`);
         continue;
       }
 
-      // Determine the starting number for new instances of this track
       let maxInstanceNum = 0;
       originalInstances.forEach(instance => {
         const match = instance.id.match(/_instance_(\d+)$/);
         if (match && match[1]) {
-          const num = parseInt(match[1], 10);
-          if (num > maxInstanceNum) {
-            maxInstanceNum = num;
-          }
+          maxInstanceNum = Math.max(maxInstanceNum, parseInt(match[1], 10));
         }
       });
       let nextInstanceNum = maxInstanceNum + 1;
 
+      // Store positions as array for sampler syncing (indexed by iteration order)
+      const positions: Array<{ x: number; y: number; trimStart: number; trimEnd: number }> = [];
+
       for (const originalInstance of originalInstances) {
-        // Calculate relative position
         const relativeX = originalInstance.x_position - minX;
         const newPosition = {
           x: baseOffsetX + relativeX,
           y: originalInstance.y_position
         };
 
-        // Create new instance object with a sequential ID
         const instanceId = `${trackId}_instance_${nextInstanceNum}`;
-        nextInstanceNum++; // Increment for the next instance of this track
+
+        // Record this position for sampler syncing
+        positions.push({
+          x: newPosition.x,
+          y: newPosition.y,
+          trimStart: originalInstance.trim_start_ticks ?? 0,
+          trimEnd: originalInstance.trim_end_ticks ?? track.duration_ticks ?? 1920
+        });
 
         const newInstance: TrackInstance = {
           id: instanceId,
@@ -1546,11 +1593,139 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           trim_end_ticks: originalInstance.trim_end_ticks
         };
 
-        // Create the action but don't execute it yet
+        instanceAddActions.push(new InstanceAdd(get, trackId, newInstance));
+        nextInstanceNum++;
+      }
+
+      drumNewInstancePositions.set(trackId, positions);
+      updatedTracks.push(track);
+    }
+
+    // SECOND PASS: Process sampler tracks, syncing positions with their parent drum tracks
+    for (const trackId of finalTrackIds) {
+      const track = tracks.find(t => t.id === trackId);
+      if (!track || track.track_type !== 'SAMPLER') continue;
+
+      const parentDrumId = samplerToParentDrum.get(trackId);
+
+      // If this is a drum child, sync with drum's new instances
+      if (parentDrumId) {
+        const drumPositions = drumNewInstancePositions.get(parentDrumId);
+        if (!drumPositions || drumPositions.length === 0) {
+          console.log(`duplicateMultipleTracks: No drum positions for sampler ${trackId}, skipping`);
+          continue;
+        }
+
+        // Get sampler's max instance num for new IDs
+        const existingInstances = getTrackInstancesOrDefault(track);
+        let maxInstanceNum = 0;
+        existingInstances.forEach(instance => {
+          const match = instance.id.match(/_instance_(\d+)$/);
+          if (match && match[1]) {
+            maxInstanceNum = Math.max(maxInstanceNum, parseInt(match[1], 10));
+          }
+        });
+        let nextInstanceNum = maxInstanceNum + 1;
+
+        // Create same number of instances as the drum, using drum positions
+        for (const drumPos of drumPositions) {
+          const instanceId = `${trackId}_instance_${nextInstanceNum}`;
+
+          const newInstance: TrackInstance = {
+            id: instanceId,
+            x_position: drumPos.x,
+            y_position: drumPos.y,
+            trim_start_ticks: drumPos.trimStart,
+            trim_end_ticks: drumPos.trimEnd
+          };
+
+          instanceAddActions.push(new InstanceAdd(get, trackId, newInstance));
+          nextInstanceNum++;
+        }
+
+        updatedTracks.push(track);
+      } else {
+        // Non-drum-child sampler: use relative position calculation
+        const originalInstances = getTrackInstancesOrDefault(track);
+        if (originalInstances.length === 0) {
+          console.log(`duplicateMultipleTracks: Sampler track ${track.id} has no instances, skipping`);
+          continue;
+        }
+
+        let maxInstanceNum = 0;
+        originalInstances.forEach(instance => {
+          const match = instance.id.match(/_instance_(\d+)$/);
+          if (match && match[1]) {
+            maxInstanceNum = Math.max(maxInstanceNum, parseInt(match[1], 10));
+          }
+        });
+        let nextInstanceNum = maxInstanceNum + 1;
+
+        for (const originalInstance of originalInstances) {
+          const relativeX = originalInstance.x_position - minX;
+          const newPosition = { x: baseOffsetX + relativeX, y: originalInstance.y_position };
+          const trimStart = originalInstance.trim_start_ticks ?? 0;
+          const trimEnd = originalInstance.trim_end_ticks ?? track.duration_ticks ?? 1920;
+
+          const instanceId = `${trackId}_instance_${nextInstanceNum}`;
+
+          const newInstance: TrackInstance = {
+            id: instanceId,
+            x_position: newPosition.x,
+            y_position: newPosition.y,
+            trim_start_ticks: trimStart,
+            trim_end_ticks: trimEnd
+          };
+
+          instanceAddActions.push(new InstanceAdd(get, trackId, newInstance));
+          nextInstanceNum++;
+        }
+
+        updatedTracks.push(track);
+      }
+    }
+
+    // THIRD PASS: Process other track types (MIDI, AUDIO)
+    for (const trackId of finalTrackIds) {
+      const track = tracks.find(t => t.id === trackId);
+      if (!track || track.track_type === 'DRUM' || track.track_type === 'SAMPLER') continue;
+
+      const originalInstances = getTrackInstancesOrDefault(track);
+      if (originalInstances.length === 0) {
+        console.log(`duplicateMultipleTracks: Track ${track.id} has no instances, skipping`);
+        continue;
+      }
+
+      let maxInstanceNum = 0;
+      originalInstances.forEach(instance => {
+        const match = instance.id.match(/_instance_(\d+)$/);
+        if (match && match[1]) {
+          maxInstanceNum = Math.max(maxInstanceNum, parseInt(match[1], 10));
+        }
+      });
+      let nextInstanceNum = maxInstanceNum + 1;
+
+      for (const originalInstance of originalInstances) {
+        const relativeX = originalInstance.x_position - minX;
+        const newPosition = {
+          x: baseOffsetX + relativeX,
+          y: originalInstance.y_position
+        };
+
+        const instanceId = `${trackId}_instance_${nextInstanceNum}`;
+        nextInstanceNum++;
+
+        const newInstance: TrackInstance = {
+          id: instanceId,
+          x_position: newPosition.x,
+          y_position: newPosition.y,
+          trim_start_ticks: originalInstance.trim_start_ticks,
+          trim_end_ticks: originalInstance.trim_end_ticks
+        };
+
         instanceAddActions.push(new InstanceAdd(get, trackId, newInstance));
       }
 
-      // Track will be updated when the group action executes
       updatedTracks.push(track);
     }
     
@@ -1563,7 +1738,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       );
       await executeHistoryAction(groupAction);
     }
-    
+
     // Return the updated tracks
     return finalTrackIds.map(id => findTrackById(id)).filter(Boolean) as CombinedTrack[];
   };

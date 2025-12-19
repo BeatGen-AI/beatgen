@@ -69,9 +69,6 @@ export class SamplerChannelPlayer {
    */
   setNotes(notes: PlaybackNote[]): void {
     this.notes = notes;
-    console.log(
-      `SamplerChannelPlayer: Set ${notes.length} notes for track ${this.trackId}`
-    );
   }
 
   /**
@@ -144,10 +141,6 @@ export class SamplerChannelPlayer {
       }
     }
 
-    console.log(
-      `SamplerChannelPlayer: Playing track ${this.trackId} from tick ${fromTick} ` +
-        `(${immediateCount} immediate, ${scheduledCount} scheduled)`
-    );
   }
 
   /**
