@@ -6,7 +6,6 @@ Handles basic CRUD operations for track entities
 from typing import Dict, Any, List, Union
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 import traceback
 import uuid
 
@@ -88,49 +87,6 @@ class TrackRepository:
             self.logger.error(f"Error getting track: {str(e)}")
             self.logger.error(traceback.format_exc())
             raise DatabaseException(f"Failed to get track: {str(e)}")
-
-    async def get_with_files(
-        self, track_id: uuid.UUID
-    ) -> Union[AudioTrack, MidiTrack, SamplerTrack, DrumTrack]:
-        """
-        Get a track by ID with its files loaded
-
-        Args:
-            track_id: The ID of the track
-
-        Returns:
-            The track with files loaded
-
-        Raises:
-            NotFoundException: If the track is not found
-            DatabaseException: If there's a database error
-        """
-        self.logger.info(f"Getting track with ID: {track_id} with files")
-        try:
-            statement = (
-                select(Track)
-                .options(
-                    joinedload(Track.audio_file),
-                    joinedload(Track.instrument_file),
-                )
-                .where(Track.id == track_id)
-            )
-
-            result = await self.session.execute(statement)
-            track = result.scalars().first()
-
-            if not track:
-                self.logger.error(f"Track with ID {track_id} not found")
-                raise NotFoundException("Track", track_id)
-
-            self.logger.info(f"Found track with ID: {track_id} with files")
-            return track
-        except Exception as e:
-            if isinstance(e, NotFoundException):
-                raise
-            self.logger.error(f"Error getting track with files: {str(e)}")
-            self.logger.error(traceback.format_exc())
-            raise DatabaseException(f"Failed to get track with files: {str(e)}")
 
     async def get_all(
         self, **filters

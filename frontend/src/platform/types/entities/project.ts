@@ -15,11 +15,11 @@ import {
 export interface CombinedTrackEntity extends CombinedTrackDTO {
   dirty?: boolean; // Client-side only: true if track has unsaved changes
   instances?: TrackInstance[]; // Client-side only: array of track instances on timeline
-  
+
   // Additional client-side properties for compatibility
   solo?: boolean;
   soloed?: boolean;
-  position?: { x: number; y: number };
+  // Note: Tracks do NOT have position - only instances have position (x_position, y_position)
 }
 
 /**

@@ -31,6 +31,7 @@ export class SamplerChannelPlayer {
   private scheduledEvents: Set<number> = new Set();
   private activePlayers: Map<string, Tone.GrainPlayer> = new Map();
   private isPlaying: boolean = false;
+  private isDisposed: boolean = false;
 
   // Timing (updated via setBpm/setPpq)
   private currentBpm: number = 120;
@@ -130,6 +131,11 @@ export class SamplerChannelPlayer {
         // Note is in future - schedule via Transport
         const delay = noteStartSec - positionSec;
         const eventId = Tone.getTransport().schedule((time) => {
+          // CRITICAL: Check if player was disposed (track may have been deleted)
+          if (this.isDisposed) {
+            console.log(`SamplerChannelPlayer: Track ${this.trackId} disposed, skipping note`);
+            return;
+          }
           if (!this.isPlaying) return;
           this.playNote(note, i, time, noteDurationSec);
         }, `+${delay}`);
@@ -217,6 +223,7 @@ export class SamplerChannelPlayer {
    * Dispose all resources.
    */
   dispose(): void {
+    this.isDisposed = true; // CRITICAL: Set first to prevent scheduled callbacks from firing
     this.isPlaying = false;
     this.clearScheduledEvents();
 

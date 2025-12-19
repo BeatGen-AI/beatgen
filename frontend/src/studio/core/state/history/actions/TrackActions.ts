@@ -177,6 +177,16 @@ export class DeleteTrackAction extends BaseAction {
         this.get()._updateState('tracks', state => state.filter(t => t.id !== this.trackData.id));
         this.get().updateTrackIndices();
 
+        // CRITICAL: Unload audio buffer for AUDIO and SAMPLER tracks to prevent zombie audio
+        if (this.trackData.track_type === 'AUDIO' || this.trackData.track_type === 'SAMPLER') {
+            const { getAudioEngine } = await import('../../../../core/audio-engine/AudioEngine');
+            const engine = getAudioEngine();
+            if (engine.isReady()) {
+                engine.unloadAudioBuffer(this.trackData.id);
+                console.log(`DeleteTrackAction.execute: Unloaded audio buffer for ${this.trackData.track_type} track ${this.trackData.id}`);
+            }
+        }
+
         this.log('Execute', {
             trackId: this.trackData.id,
             name: this.trackData.name,

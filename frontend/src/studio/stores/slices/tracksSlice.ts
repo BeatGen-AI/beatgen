@@ -176,16 +176,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           draft.tracks = newTracks.map((track, index) => ({
               ...track,
               track_number: index,
-              // Ensure each track has instances
               instances: track.instances
-                  // ? track.instances
-                  // : [{
-                  //     id: `${track.id}_instance_1`,
-                  //     x_position: track.x_position || 0,
-                  //     y_position: track.y_position || 0,
-                  //     trim_start_ticks: track.trim_start_ticks || 0,
-                  //     trim_end_ticks: track.trim_end_ticks || track.duration_ticks || 1920
-                  // }]
           }));
       }));
 
@@ -711,7 +702,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       }
 
       const deleteLogic = async (passedStore: Store) => {
-          
+
           // Create history action BEFORE modifying state
           const action = new Actions.DeleteTrack(get, { ...trackToDelete });
 
@@ -719,14 +710,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
               const initialLength = draft.tracks.length;
               draft.tracks = draft.tracks.filter(t => t.id !== trackId);
               if (draft.tracks.length < initialLength) { // Only re-index if deletion occurred
-                  draft.tracks.forEach((track, index) => { 
+                  draft.tracks.forEach((track, index) => {
                       // !! IMPORTANT: Ensure CombinedTrack has track_number !!
-                      track.track_number = index; 
-                  }); 
+                      track.track_number = index;
+                  });
               }
           }));
 
           // Track removal is handled by state update - new AudioEngine receives updated state via setState()
+          // Note: Audio buffer cleanup is handled in DeleteTrackAction.execute()
 
           // Execute history action AFTER state change (or consider order)
           await executeHistoryAction(action);
@@ -1430,7 +1422,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   const duplicateTrack = async (trackId: string, newPosition?: Position): Promise<CombinedTrack | null> => {
     const { tracks } = rootGet();
     const track = tracks.find(t => t.id === trackId);
-    
+
     if (!track) {
       console.error(`Track with id ${trackId} not found for duplication`);
       return null;
@@ -1442,15 +1434,15 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const duplicatedTracks = await duplicateMultipleTracks([trackId], offsetX);
       return duplicatedTracks.find(t => t.track_type === 'DRUM') || null;
     }
-    
+
     // Create a new instance instead of a new track
     const instanceId = await addTrackInstance(trackId, newPosition);
-    
+
     if (!instanceId) {
       console.error(`Failed to create instance for track ${trackId}`);
       return null;
     }
-    
+
     // Return the track with updated instances
     return findTrackById(trackId) || null;
   };
@@ -1486,29 +1478,44 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     // Find the leftmost instance position to calculate relative positions
     const selectedTracks = tracks.filter(t => finalTrackIds.includes(t.id));
     let minX = Infinity;
-    
+
+    // Collect instances from each track - skip tracks without instances
     selectedTracks.forEach(track => {
       const instances = getTrackInstancesOrDefault(track);
-      instances.forEach(instance => {
-        minX = Math.min(minX, instance.x_position);
-      });
+
+      if (instances.length > 0) {
+        instances.forEach(instance => {
+          minX = Math.min(minX, instance.x_position);
+        });
+      } else {
+        // Track has no instances - this is valid, just skip it for duplication
+        console.log(`duplicateMultipleTracks: Track ${track.id} has no instances, skipping`);
+      }
     });
-    
+
+    // Fallback if no instances found at all
+    if (minX === Infinity) {
+      minX = 0;
+    }
+
     // Collect all instance add actions
     const instanceAddActions: InstanceAdd[] = [];
-    
+
     // Create instances for each track
     for (const trackId of finalTrackIds) {
       const track = tracks.find(t => t.id === trackId);
       if (!track) continue;
-      
-      // Get instances for this track
+
+      // Get instances for this track - skip if none
       const originalInstances = getTrackInstancesOrDefault(track);
-      
+      if (originalInstances.length === 0) {
+        console.log(`duplicateMultipleTracks: Track ${track.id} has no instances, skipping`);
+        continue;
+      }
+
       // Determine the starting number for new instances of this track
-      const allInstances = getTrackInstancesOrDefault(track);
       let maxInstanceNum = 0;
-      allInstances.forEach(instance => {
+      originalInstances.forEach(instance => {
         const match = instance.id.match(/_instance_(\d+)$/);
         if (match && match[1]) {
           const num = parseInt(match[1], 10);
@@ -1518,7 +1525,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         }
       });
       let nextInstanceNum = maxInstanceNum + 1;
-      
+
       for (const originalInstance of originalInstances) {
         // Calculate relative position
         const relativeX = originalInstance.x_position - minX;
@@ -1526,7 +1533,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           x: baseOffsetX + relativeX,
           y: originalInstance.y_position
         };
-        
+
         // Create new instance object with a sequential ID
         const instanceId = `${trackId}_instance_${nextInstanceNum}`;
         nextInstanceNum++; // Increment for the next instance of this track
@@ -1538,11 +1545,11 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
           trim_start_ticks: originalInstance.trim_start_ticks,
           trim_end_ticks: originalInstance.trim_end_ticks
         };
-        
+
         // Create the action but don't execute it yet
         instanceAddActions.push(new InstanceAdd(get, trackId, newInstance));
       }
-      
+
       // Track will be updated when the group action executes
       updatedTracks.push(track);
     }
@@ -1913,14 +1920,24 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
                 const deltaX = newPosition.x - oldPosition.x;
                 const deltaY = newPosition.y - oldPosition.y;
                 const allTrackIds = expandDrumSelection([trackId]);
-                
-                // Create instance updates for all tracks
+
+                // Extract instance number from the dragged instance ID (e.g., "trackId_instance_2" -> 2)
+                const instanceMatch = instanceId.match(/_instance_(\d+)$/);
+                const instanceNum = instanceMatch ? instanceMatch[1] : '1';
+
+                // Create instance updates for all tracks, using the SAME instance number
                 const instanceUpdates = allTrackIds.map(tId => {
                     const targetTrack = findTrackById(tId);
-                    if (targetTrack?.instances?.[0]) {
+                    if (!targetTrack?.instances) return null;
+
+                    // Find the instance with the matching number
+                    const targetInstanceId = `${tId}_instance_${instanceNum}`;
+                    const targetInstance = targetTrack.instances.find(inst => inst.id === targetInstanceId);
+
+                    if (targetInstance) {
                         return {
                             trackId: tId,
-                            instanceId: targetTrack.instances[0].id,
+                            instanceId: targetInstance.id,
                             deltaX,
                             deltaY
                         };
@@ -2011,14 +2028,24 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
         // If this is a drum track, resize it together with all its samplers
         if (track.track_type === 'DRUM') {
             const allTrackIds = expandDrumSelection([trackId]);
-            
-            // Create instance updates for all tracks
+
+            // Extract instance number from the resized instance ID (e.g., "trackId_instance_2" -> 2)
+            const instanceMatch = instanceId.match(/_instance_(\d+)$/);
+            const instanceNum = instanceMatch ? instanceMatch[1] : '1';
+
+            // Create instance updates for all tracks, using the SAME instance number
             const instanceUpdates = allTrackIds.map(tId => {
                 const targetTrack = findTrackById(tId);
-                if (targetTrack?.instances?.[0]) {
+                if (!targetTrack?.instances) return null;
+
+                // Find the instance with the matching number
+                const targetInstanceId = `${tId}_instance_${instanceNum}`;
+                const targetInstance = targetTrack.instances.find(inst => inst.id === targetInstanceId);
+
+                if (targetInstance) {
                     return {
                         trackId: tId,
-                        instanceId: targetTrack.instances[0].id,
+                        instanceId: targetInstance.id,
                         widthDelta: deltaPixels,
                         anchor: resizeDirection
                     };
