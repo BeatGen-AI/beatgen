@@ -1497,9 +1497,6 @@ Create rhythmic patterns that fit the composition style."""
         logger.info(f"LLM generated drum patterns JSON: {drum_beat_data.model_dump_json() if drum_beat_data else 'None'}")
         # Further validation of patterns can be added here if needed (e.g., ensuring all patterns are 32 booleans)
         
-        logger.info(f"Drum sound keys: {[beat_data.drum_sound_id for beat_data in drum_beat_data.drum_beats]}")
-        logger.info(f"Drum sound map keys: {[key for key in self._drum_sample_id_map.keys()]}")
-        
         drum_track_id = uuid.uuid4()
         drum_track = DrumTrackRead(
             id=drum_track_id,

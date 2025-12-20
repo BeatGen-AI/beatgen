@@ -70,7 +70,7 @@ class StabilityAIService:
         negative_prompt: str = None  # Added for compatibility
     ) -> AudioGenerationResult:
         """
-        Generate audio using Stability AI Stable Audio 2.0 API
+        Generate audio using Stability AI Stable Audio 2.5 API
         
         Args:
             prompt: Text description of the audio to generate
@@ -102,7 +102,8 @@ class StabilityAIService:
         
         data = {
             "prompt": (None, enhanced_prompt),
-            "duration": (None, str(float(duration)))
+            "duration": (None, str(float(duration))),
+            "model": (None, "stable-audio-2.5"),
         }
         
         if seed is not None:
