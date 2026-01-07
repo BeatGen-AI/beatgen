@@ -5,7 +5,7 @@ import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTr
 import { Note } from '../../../types/note';
 import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions';
-import type { Action } from '../../core/state/history/actions'; 
+import type { Action } from '../../core/state/history/actions';
 import { InstanceAdd, InstanceMove, InstanceResize, InstanceDelete } from '../../core/state/history/actions/InstanceActions';
 import { TRACK_CONFIG, DEFAULT_SAMPLER_CONFIG } from '../config';
 import { GRID_CONSTANTS, ticksToPixels, pixelsToTicks } from '../../constants/gridConstants';
@@ -18,6 +18,7 @@ import SampleManager from '../../core/samples/sampleManager';
 import { db } from '../../core/db/dexie-client';
 import { processAudioFile } from '../../utils/audioProcessing';
 import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
+import { getProjectController } from '../../core/controller';
 
 // Define the state properties and actions for this slice
 export interface TracksSlice {
@@ -877,151 +878,72 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     _withErrorHandling(async () => _withStore(changeLogic)(), `handleTrackParameterChange: ${String(paramName)}`)(); 
   };
 
+  // Track position change - uses controller for history on drag end
+  // Store the initial drag position per track to compute proper old position for undo
+  const dragStartPositions = new Map<string, { x: number; y: number }>();
+
   const handleTrackPositionChange = (trackId: string, newPosition: Position, isDragEnd: boolean) => {
-    const { bpm, timeSignature, isPlaying, executeHistoryAction, _withErrorHandling } = rootGet();
-    const storeInstance = rootGet().store; // Get the Store instance
-
-    if (!storeInstance) {
-        console.error("_withErrorHandling is not available in handleTrackPositionChange");
-        return;
-    }
-    if (!_withErrorHandling) {
-        console.error("_withErrorHandling is not available in handleTrackPositionChange");
-        return;
-    }
-
-    // Fix 3: Make changeLogic async
-    const changeLogic = async () => {
-        if (!storeInstance) {
-            console.error('Store not available in handleTrackPositionChange');
-            return;
-        }
-        
-        const track = findTrackById(trackId);
-        if (!track) {
-            console.error(`Track ${trackId} not found in handleTrackPositionChange`);
-            return;
-        }
-        
-        // Get the first instance (for now we're working with single instances)
-        const instances = track.instances || [];
-        if (instances.length === 0) {
-            console.error(`Track ${trackId} has no instances`);
-            return;
-        }
-        
-        const firstInstance = instances[0];
-        const oldPosition = { x: firstInstance.x_position, y: firstInstance.y_position };
-
-        // Skip if nothing changed at drag end
-        if (isDragEnd && 
-            oldPosition.x === newPosition.x && 
-            oldPosition.y === newPosition.y) {
-            console.log('No position change detected - skipping update');
-            return;
-        }
-        
-        // Update the instance position
-        const updatedInstances = instances.map((instance, idx) => 
-            idx === 0 
-                ? { ...instance, x_position: newPosition.x, y_position: newPosition.y }
-                : instance
-        );
-        
-        console.log('[Instance Update] Position change:', {
-            trackId,
-            instanceId: firstInstance.id,
-            oldPosition,
-            newPosition,
-            updatedInstance: updatedInstances[0]
-        });
-        
-        // Update track state with new instances array - triggers syncEngineState()
-        updateTrackState(trackId, {
-            instances: updatedInstances,
-            dirty: true
-        });
-
-        if (isDragEnd) {
-            // Use instance action for history
-            const action = new InstanceMove(
-                get,
-                trackId,
-                firstInstance.id,
-                oldPosition.x,
-                oldPosition.y,
-                newPosition.x,
-                newPosition.y
-            );
-            await executeHistoryAction(action);
-        }
-    };
-    
-    _withErrorHandling(changeLogic, 'handleTrackPositionChange')(); // Pass async function directly
-  };
-
-  const handleTrackSoloToggle = (trackId: string, soloed: boolean) => {
-    const { tracks, executeHistoryAction, _withStore, _withErrorHandling } = rootGet();
-    const storeInstance = rootGet().store; // Get the Store instance
-
-    if (!storeInstance) {
-      console.error("_withStore or _withErrorHandling not available for solo toggle");
-      return;
-    }
-    if (!_withStore || !_withErrorHandling) {
-      console.error("_withStore or _withErrorHandling not available for solo toggle");
+    const track = findTrackById(trackId);
+    if (!track) {
+      console.error(`Track ${trackId} not found in handleTrackPositionChange`);
       return;
     }
 
-    const soloLogic = (passedStore: Store) => {
-        updateTrackState(trackId, { soloed: soloed, solo: soloed }); // Use local helper
+    const instances = track.instances || [];
+    if (instances.length === 0) {
+      console.error(`Track ${trackId} has no instances`);
+      return;
+    }
 
-        const currentTracks = rootGet().tracks;
-        const targetTrack = currentTracks.find(t => t.id === trackId);
-        if (!targetTrack) return; // Should not happen if updateTrackState worked
-        
-        // Re-evaluate solo status based on the *current* state of all tracks
-        const isAnyTrackSoloed = currentTracks.some(t => (t as any).soloed);
-        const historyActions = [];
+    const firstInstance = instances[0];
+    const currentPosition = { x: firstInstance.x_position, y: firstInstance.y_position };
 
-        // Helper function to check if a track should be unmuted based on solo relationships
-        const shouldTrackBeUnmuted = (track: CombinedTrack): boolean => {
-            if (!isAnyTrackSoloed) return true; // If nothing is soloed, unmute all
-            if ((track as any).soloed) return true; // If this track itself is soloed
-            
-            // Special handling for drum tracks and their samplers
-            if (track.track_type === 'SAMPLER' && track.track) {
-                const samplerData = track.track as SamplerTrackRead;
-                if (samplerData.drum_track_id) {
-                    // Check if the parent drum track is soloed
-                    const parentDrumTrack = currentTracks.find(t => t.id === samplerData.drum_track_id);
-                    if (parentDrumTrack && (parentDrumTrack as any).soloed) {
-                        return true; // Keep sampler tracks unmuted if their drum track is soloed
-                    }
-                }
-            }
-            
-            return false; // Mute everything else
-        };
+    // On first move (not drag end), store the starting position
+    if (!isDragEnd && !dragStartPositions.has(trackId)) {
+      dragStartPositions.set(trackId, { ...currentPosition });
+    }
 
-        for (const track of currentTracks) {
-            const oldMuteState = track.mute;
-            const shouldBeMuted = !shouldTrackBeUnmuted(track);
-            
-            if (oldMuteState !== shouldBeMuted) {
-                // Update store state - triggers syncEngineState() for new AudioEngine
-                updateTrackState(track.id, { mute: shouldBeMuted });
+    // Skip if nothing changed at drag end
+    if (isDragEnd) {
+      const startPos = dragStartPositions.get(trackId) || currentPosition;
+      if (startPos.x === newPosition.x && startPos.y === newPosition.y) {
+        dragStartPositions.delete(trackId);
+        return;
+      }
+    }
 
-                const action = new Actions.ParameterChange( get, track.id, 'muted', oldMuteState ? 1 : 0, shouldBeMuted ? 1 : 0 );
-                historyActions.push(action);
-            }
-        }
-        // Use get() to call historySlice action
-        historyActions.forEach(action => rootGet().executeHistoryAction(action));
-    };
+    if (isDragEnd) {
+      // At drag end, use controller for history
+      const oldPosition = dragStartPositions.get(trackId) || currentPosition;
+      dragStartPositions.delete(trackId);
 
-    _withErrorHandling(async () => _withStore(soloLogic)(), `handleTrackSoloToggle: ${trackId}`)();
+      getProjectController().execute({
+        type: 'TRACK_POSITION_CHANGE',
+        payload: {
+          trackId,
+          oldPosition,
+          newPosition,
+        },
+      });
+    } else {
+      // During drag, update state directly without history
+      const updatedInstances = instances.map((instance, idx) =>
+        idx === 0
+          ? { ...instance, x_position: newPosition.x, y_position: newPosition.y }
+          : instance
+      );
+
+      updateTrackState(trackId, {
+        instances: updatedInstances,
+        position: newPosition,
+        x_position: newPosition.x,
+        y_position: newPosition.y,
+      });
+    }
   };
+
+  // NOTE: handleTrackSoloToggle moved to controller (TRACK_SOLO_TOGGLE command)
+  // The implementation in the return object at the end of this slice routes through getProjectController()
 
   // Implementation for uploadAudioFile
   const uploadAudioFile = async (
@@ -2579,17 +2501,26 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     (rootGet() as any).incrementNoteVersion?.();
   };
 
+  // Stable empty array for tracks without notes - prevents creating new references
+  const EMPTY_NOTES: Note[] = [];
+
   /**
    * Get all notes for a track
-   * Returns an empty array if the track has no notes
+   * Returns a stable empty array if the track has no notes
+   *
+   * NOTE: Returns the actual array reference, NOT a copy. This is intentional:
+   * - Zustand+Immer already protects state from mutation during updates
+   * - Returning copies breaks Zustand's selector equality checks
+   * - Creating copies on every call caused infinite re-render loops
+   *
+   * If you need to mutate notes, use the proper state actions (setTrackNotes, etc.)
    */
   const getTrackNotes = (trackId: string): Note[] => {
     const track = findTrackById(trackId);
     if (!track) {
-      return [];
+      return EMPTY_NOTES;
     }
-    // Return a copy to prevent external mutation
-    return (track.notes || []).map(note => ({ ...note }));
+    return track.notes ?? EMPTY_NOTES;
   };
 
   /**
@@ -2631,11 +2562,33 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     // Parameter change handlers
     handleTrackParameterChange,
-    handleTrackVolumeChange: (trackId, volume) => handleTrackParameterChange(trackId, 'volume', volume),
-    handleTrackPanChange: (trackId, pan) => handleTrackParameterChange(trackId, 'pan', pan),
-    handleTrackMuteToggle: (trackId, muted) => handleTrackParameterChange(trackId, 'muted', muted),
-    handleTrackSoloToggle,
+    // Use controller for volume, pan, mute changes (centralized side effects)
+    handleTrackVolumeChange: (trackId: string, volume: number) => {
+      getProjectController().execute({
+        type: 'TRACK_VOLUME_CHANGE',
+        payload: { trackId, volume },
+      });
+    },
+    handleTrackPanChange: (trackId: string, pan: number) => {
+      getProjectController().execute({
+        type: 'TRACK_PAN_CHANGE',
+        payload: { trackId, pan },
+      });
+    },
+    handleTrackMuteToggle: (trackId: string, muted: boolean) => {
+      getProjectController().execute({
+        type: 'TRACK_MUTE_TOGGLE',
+        payload: { trackId, muted },
+      });
+    },
+    handleTrackSoloToggle: (trackId: string, soloed: boolean) => {
+      getProjectController().execute({
+        type: 'TRACK_SOLO_TOGGLE',
+        payload: { trackId, soloed },
+      });
+    },
     handleTrackPositionChange,
+    // Name changes still use old system (not playback-relevant, no need for controller)
     handleTrackNameChange: (trackId, name) => handleTrackParameterChange(trackId, 'name', name),
 
     // Add definition for uploadAudioFile
