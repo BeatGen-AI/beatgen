@@ -278,6 +278,7 @@ export interface RootState {
 
   // Note management (Phase 1 - Unified State Migration)
   // These methods manage MIDI notes directly in Zustand state instead of MidiManager
+  noteVersion: number; // Increments whenever notes change - used for reactivity
   setTrackNotes: (trackId: string, notes: Note[]) => void;
   addNoteToTrack: (trackId: string, note: Note) => number;
   removeNoteFromTrack: (trackId: string, noteId: number) => void;
