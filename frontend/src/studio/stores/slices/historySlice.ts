@@ -2,6 +2,7 @@ import { Store } from '../../core/state/store';
 import { RootState, SetFn, GetFn, StoreSliceCreator } from '../types';
 import { historyManager } from '../../core/state/history/HistoryManager';
 import { Action } from '../../core/state/history/actions/BaseAction';
+import { getProjectController } from '../../core/controller';
 
 // Define the state properties and actions for this slice
 export interface HistorySlice {
@@ -22,17 +23,20 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
   // Utility to set state within this slice
   const setHistoryState = (partial: Partial<HistorySlice> | ((state: HistorySlice) => Partial<HistorySlice>)) => set(partial);
 
-  // Update canUndo/canRedo state based on the HistoryManager
+  // Update canUndo/canRedo state based on BOTH controller and HistoryManager
+  // During migration, commands are split between the two systems
   const _updateHistoryState = () => {
-    if (historyManager) {
-      setHistoryState({
-        canUndo: historyManager.canUndo(),
-        canRedo: historyManager.canRedo()
-      });
-    } else {
-       console.error("Critical: HistoryManager singleton instance not available!");
-       setHistoryState({ canUndo: false, canRedo: false });
-    }
+    const controller = getProjectController();
+    const controllerCanUndo = controller.canUndo();
+    const controllerCanRedo = controller.canRedo();
+    const historyCanUndo = historyManager?.canUndo() ?? false;
+    const historyCanRedo = historyManager?.canRedo() ?? false;
+
+    // Can undo/redo if EITHER system has something
+    setHistoryState({
+      canUndo: controllerCanUndo || historyCanUndo,
+      canRedo: controllerCanRedo || historyCanRedo
+    });
   };
 
   // Execute a history action and update state
@@ -58,23 +62,29 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
 
   const undo = async () => {
     const { _withErrorHandling } = rootGet();
+    const controller = getProjectController();
 
-     if (!historyManager) {
-        console.error("Critical: HistoryManager singleton instance not available for undo!");
-        return;
-    }
-     if (!_withErrorHandling) {
-        console.error("_withErrorHandling not available for undo");
-        return; 
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available for undo");
+      return;
     }
 
     const undoAction = async () => {
-        if (historyManager.canUndo()) {
-             await historyManager.undo();
-            _updateHistoryState();
-        } else {
-            console.warn("Undo called but nothing to undo.");
-        }
+      // Try controller first (for migrated commands: volume, pan, mute, solo)
+      if (controller.canUndo()) {
+        await controller.undo();
+        _updateHistoryState();
+        return;
+      }
+
+      // Fall back to old HistoryManager (for non-migrated commands)
+      if (historyManager?.canUndo()) {
+        await historyManager.undo();
+        _updateHistoryState();
+        return;
+      }
+
+      console.warn("Undo called but nothing to undo in either system.");
     };
 
     await _withErrorHandling(undoAction, 'undo')();
@@ -82,27 +92,46 @@ export const createHistorySlice: StoreSliceCreator<HistorySlice> = (set, get) =>
 
   const redo = async () => {
     const { _withErrorHandling } = rootGet();
+    const controller = getProjectController();
 
-     if (!historyManager) {
-        console.error("Critical: HistoryManager singleton instance not available for redo!");
-        return;
-    }
-     if (!_withErrorHandling) {
-        console.error("_withErrorHandling not available for redo");
-        return; 
+    if (!_withErrorHandling) {
+      console.error("_withErrorHandling not available for redo");
+      return;
     }
 
     const redoAction = async () => {
-        if (historyManager.canRedo()) {
-            await historyManager.redo();
-            _updateHistoryState();
-        } else {
-             console.warn("Redo called but nothing to redo.");
-        }
+      // Try controller first (for migrated commands)
+      if (controller.canRedo()) {
+        await controller.redo();
+        _updateHistoryState();
+        return;
+      }
+
+      // Fall back to old HistoryManager (for non-migrated commands)
+      if (historyManager?.canRedo()) {
+        await historyManager.redo();
+        _updateHistoryState();
+        return;
+      }
+
+      console.warn("Redo called but nothing to redo in either system.");
     };
 
-     await _withErrorHandling(redoAction, 'redo')();
+    await _withErrorHandling(redoAction, 'redo')();
   };
+
+  // Subscribe to controller state changes to keep canUndo/canRedo in sync
+  // Use setTimeout to ensure controller is initialized before subscribing
+  setTimeout(() => {
+    try {
+      const controller = getProjectController();
+      controller.subscribe(() => {
+        _updateHistoryState();
+      });
+    } catch (error) {
+      console.warn('Failed to subscribe to ProjectController:', error);
+    }
+  }, 0);
 
   return {
     // Initial state

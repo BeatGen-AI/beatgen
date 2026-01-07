@@ -781,11 +781,4 @@ function Studio({ projectId }: StudioProps) {
   );
 }
 
-// Always wrap with PianoRollModule for backward compatibility
-const StudioWithPianoRoll = (props: StudioProps) => {
-  return (
-      <Studio {...props} />
-  );
-};
-
-export default StudioWithPianoRoll;
+export default Studio;
