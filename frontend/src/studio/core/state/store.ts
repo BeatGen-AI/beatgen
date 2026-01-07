@@ -1,31 +1,26 @@
-import { ProjectManager } from './project';
-import { MidiManager } from '../midi/MidiManagerNew';
+import { MidiManager, ZustandStoreAccessor } from '../midi/MidiManagerNew';
 import { InstrumentManager } from '../instruments/InstrumentManager';
-import { MUSIC_CONSTANTS } from '../../constants/musicConstants';
-import { DEFAULT_MEASURE_WIDTH } from './gridStore';
 import { db } from '../db/dexie-client';
 import SampleManager from '../samples/sampleManager';
 import { audioContextManager } from '../audio/audioContextManager';
 import { getAudioEngine } from '../audio-engine/AudioEngine';
 
 export interface StoreInterface {
-  projectManager: ProjectManager;
   initializeAudio(): Promise<void>;
   getInstrumentManager(): InstrumentManager;
   getMidiManager(): MidiManager;
   connectTrackToSoundfont(trackId: string, instrumentId: string): Promise<void>;
   connectTrackToSampler(trackId: string, baseMidiNote?: number): Promise<void>;
+  connectMidiManagerToZustand(accessor: ZustandStoreAccessor): void;
 }
 
 export class Store implements StoreInterface {
-  public projectManager: ProjectManager;
   private initialized: boolean = false;
   private midiManager: MidiManager;
   private instrumentManager: InstrumentManager;
   private sampleManager: SampleManager;
 
   constructor() {
-    this.projectManager = new ProjectManager();
     this.midiManager = new MidiManager();
     this.instrumentManager = new InstrumentManager();
     this.sampleManager = SampleManager.getInstance(db);
@@ -137,51 +132,19 @@ export class Store implements StoreInterface {
     }
   }
 
-  public getProjectManager(): ProjectManager {
-    return this.projectManager;
-  }
-
-  /**
-   * Gets the ticks per pixel conversion rate based on current BPM and grid settings
-   * Used for converting between pixel measurements and musical time
-   * @returns Number of ticks per pixel at current settings
-   */
-  public getTicksPerPixel(): number {
-    const bpm = this.projectManager.getTempo();
-    const [beatsPerMeasure] = this.projectManager.getTimeSignature();
-    
-    // Standard MIDI ticks per beat (quarter note) is typically 480 or 960
-    // We'll use 480 as it's common for DAWs
-    const TICKS_PER_BEAT = MUSIC_CONSTANTS.pulsesPerQuarterNote;
-    
-    // Calculate measure width in pixels from grid constants
-    const MEASURE_WIDTH = DEFAULT_MEASURE_WIDTH; // Matches GRID_CONSTANTS.measureWidth
-    
-    // Calculate beats per measure from time signature
-    const beatWidth = MEASURE_WIDTH / beatsPerMeasure;
-    
-    // Calculate ticks per beat
-    const ticksPerBeat = TICKS_PER_BEAT;
-    
-    // Calculate ticks per pixel
-    const ticksPerPixel = ticksPerBeat / beatWidth;
-    
-    return ticksPerPixel;
-  }
-
-  /**
-   * Gets the pixels per tick conversion rate based on current BPM and grid settings
-   * Inverse of getTicksPerPixel() - used for converting from ticks to pixel measurements
-   * @returns Number of pixels per tick at current settings
-   */
-  public getPixelsPerTick(): number {
-    const ticksPerPixel = this.getTicksPerPixel();
-    // Return the inverse of ticks per pixel
-    return 1 / ticksPerPixel;
-  }
-
   // Add getter for SampleManager
   public getSampleManager(): SampleManager {
     return this.sampleManager;
+  }
+
+  /**
+   * Connect the MidiManager to a Zustand store accessor
+   * This enables the MidiManager to read/write notes from Zustand state
+   * instead of its internal Map, enabling unified state management.
+   * @param accessor The Zustand store accessor with note management methods
+   */
+  public connectMidiManagerToZustand(accessor: ZustandStoreAccessor): void {
+    this.midiManager.setStoreAccessor(accessor);
+    console.log('Store: MidiManager connected to Zustand store');
   }
 }

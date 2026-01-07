@@ -421,10 +421,13 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
   
   // Effect to fetch the sampler track IDs when tracks change
   
-  // Get live MIDI notes from MidiManager for all sampler tracks
-  const { store } = useStudioStore();
-  const midiManager = store?.getMidiManager();
-  
+  // Subscribe to noteVersion to trigger re-renders when notes change
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _noteVersion = useStudioStore(state => state.noteVersion);
+
+  // Get notes function from Zustand store
+  const getTrackNotes = useStudioStore(state => state.getTrackNotes);
+
   // Get all tracks to find available sampler tracks
   const allTracks = useStudioStore(state => state.tracks);
   
@@ -438,43 +441,14 @@ const DrumMachine: React.FC<DrumMachineProps> = ({
       .map(track => track.track as SamplerTrackRead);
   }, [allTracks]);
   
-  // Subscribe to MIDI notes for all sampler tracks and compute grid from live data
-  const [allTrackNotes, setAllTrackNotes] = useState<{ [trackId: string]: Note[] }>({});
-  
-  useEffect(() => {
-    if (!midiManager || samplerTracks.length === 0) {
-      setAllTrackNotes({});
-      return;
-    }
-    
-    const unsubscribers: (() => void)[] = [];
+  // Build notes map from Zustand store for all sampler tracks
+  const allTrackNotes = useMemo(() => {
     const notesMap: { [trackId: string]: Note[] } = {};
-    
-    // Subscribe to each sampler track's notes
     samplerTracks.forEach(track => {
-      const trackId = track.id;
-      
-      // Get initial notes
-      const initialNotes = midiManager.getTrackNotes(trackId) || [];
-      notesMap[trackId] = initialNotes;
-      
-      // Subscribe to updates
-      const unsubscribe = midiManager.subscribeToTrack(trackId, (_, updatedNotes) => {
-        setAllTrackNotes(prev => ({
-          ...prev,
-          [trackId]: updatedNotes
-        }));
-      });
-      
-      unsubscribers.push(unsubscribe);
+      notesMap[track.id] = getTrackNotes(track.id) || [];
     });
-    
-    setAllTrackNotes(notesMap);
-    
-    return () => {
-      unsubscribers.forEach(unsub => unsub());
-    };
-  }, [midiManager, samplerTracks]);
+    return notesMap;
+  }, [samplerTracks, getTrackNotes, _noteVersion]);
   
   // Compute grid from live MIDI notes
   const grid = useMemo(() => {

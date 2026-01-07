@@ -2,6 +2,7 @@ import { TrackInstance } from 'src/platform/types/project';
 import { CombinedTrackEntity as CombinedTrack } from 'src/platform/types/entities/project';
 import { Position } from '../../components/track';
 import { RootState, SetFn, GetFn, TrackParameter, TrackType, TrackOptions, AddTrackPayload, DrumTrackPayload, MidiTrackPayload, AudioTrackPayload, AudioTrackOptions, SamplerTrackOptions, MidiTrackOptions, AnyTrackRead, MidiTrack, AudioTrack, SamplerTrack, AudioTrackRead, MidiTrackRead, SamplerTrackRead, DrumTrackRead, DrumTrackOptions } from '../types';
+import { Note } from '../../../types/note';
 import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions';
 import type { Action } from '../../core/state/history/actions'; 
@@ -95,6 +96,16 @@ export interface TracksSlice {
   updateMultipleInstancePositions: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
   resizeMultipleInstances: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
   deleteMultipleInstances: (instanceDeletions: Array<{trackId: string, instanceId: string}>) => Promise<void>;
+
+  // Note management (Phase 1 - Unified State Migration)
+  // These methods manage MIDI notes directly in Zustand state instead of MidiManager
+  setTrackNotes: (trackId: string, notes: Note[]) => void;
+  addNoteToTrack: (trackId: string, note: Note) => number; // Returns the assigned note ID
+  removeNoteFromTrack: (trackId: string, noteId: number) => void;
+  updateNoteInTrack: (trackId: string, note: Note) => void;
+  getTrackNotes: (trackId: string) => Note[];
+  initializeTrackNotes: (trackId: string) => void; // Initialize empty notes array for a track
+  hasTrackById: (trackId: string) => boolean; // Check if track exists
 }
 
 // Remove local type alias if it causes confusion
@@ -2428,12 +2439,177 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
   // Get count of visible tracks (excludes sampler tracks that are part of drum tracks)
   const getVisibleTrackCount = (): number => {
     const state = rootGet();
-    const count = state.tracks.filter(track => 
-      !(track.track_type === 'SAMPLER' && 
-        track.track && 
+    const count = state.tracks.filter(track =>
+      !(track.track_type === 'SAMPLER' &&
+        track.track &&
         (track.track as SamplerTrackRead).drum_track_id)
     ).length;
     return count;
+  };
+
+  // ============================================================================
+  // NOTE MANAGEMENT (Phase 1 - Unified State Migration)
+  // These methods manage MIDI notes directly in Zustand state instead of MidiManager
+  // ============================================================================
+
+  // Internal counter for generating unique note IDs
+  let nextNoteId = 1;
+
+  /**
+   * Set all notes for a track (replaces existing notes)
+   * Used for loading notes from saved projects or bulk updates
+   */
+  const setTrackNotes = (trackId: string, notes: Note[]): void => {
+    set(produce((draft: RootState) => {
+      const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
+      if (trackIndex === -1) {
+        throw new Error(`Cannot set notes for track ${trackId}: track does not exist`);
+      }
+      // Make a defensive copy of the notes array
+      draft.tracks[trackIndex].notes = notes.map(note => ({ ...note }));
+      draft.tracks[trackIndex].dirty = true;
+
+      // Update nextNoteId to be higher than any existing note ID
+      notes.forEach(note => {
+        if (note.id >= nextNoteId) {
+          nextNoteId = note.id + 1;
+        }
+      });
+    }));
+
+    // Increment noteVersion to trigger re-renders (defined in midiSlice)
+    (rootGet() as any).incrementNoteVersion?.();
+  };
+
+  /**
+   * Add a single note to a track
+   * Assigns a unique ID if the note has id -1 or undefined
+   * Returns the assigned note ID
+   */
+  const addNoteToTrack = (trackId: string, note: Note): number => {
+    let assignedId = note.id;
+
+    set(produce((draft: RootState) => {
+      const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
+      if (trackIndex === -1) {
+        throw new Error(`Cannot add note to track ${trackId}: track does not exist`);
+      }
+
+      // Initialize notes array if it doesn't exist
+      if (!draft.tracks[trackIndex].notes) {
+        draft.tracks[trackIndex].notes = [];
+      }
+
+      // Assign a unique ID if needed
+      const noteToAdd = { ...note };
+      if (noteToAdd.id === -1 || noteToAdd.id === undefined || noteToAdd.id === null) {
+        noteToAdd.id = nextNoteId++;
+      } else {
+        // Ensure nextNoteId stays ahead of any explicitly provided IDs
+        if (noteToAdd.id >= nextNoteId) {
+          nextNoteId = noteToAdd.id + 1;
+        }
+      }
+
+      assignedId = noteToAdd.id;
+      draft.tracks[trackIndex].notes!.push(noteToAdd);
+      draft.tracks[trackIndex].dirty = true;
+    }));
+
+    // Increment noteVersion to trigger re-renders (defined in midiSlice)
+    (rootGet() as any).incrementNoteVersion?.();
+
+    return assignedId;
+  };
+
+  /**
+   * Remove a note from a track by its ID
+   */
+  const removeNoteFromTrack = (trackId: string, noteId: number): void => {
+    set(produce((draft: RootState) => {
+      const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
+      if (trackIndex === -1) {
+        throw new Error(`Cannot remove note from track ${trackId}: track does not exist`);
+      }
+
+      const notes = draft.tracks[trackIndex].notes;
+      if (!notes) {
+        throw new Error(`Cannot remove note ${noteId} from track ${trackId}: no notes array`);
+      }
+
+      const noteIndex = notes.findIndex(n => n.id === noteId);
+      if (noteIndex === -1) {
+        throw new Error(`Cannot remove note ${noteId} from track ${trackId}: note not found`);
+      }
+
+      notes.splice(noteIndex, 1);
+      draft.tracks[trackIndex].dirty = true;
+    }));
+
+    // Increment noteVersion to trigger re-renders (defined in midiSlice)
+    (rootGet() as any).incrementNoteVersion?.();
+  };
+
+  /**
+   * Update an existing note in a track
+   */
+  const updateNoteInTrack = (trackId: string, note: Note): void => {
+    set(produce((draft: RootState) => {
+      const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
+      if (trackIndex === -1) {
+        throw new Error(`Cannot update note in track ${trackId}: track does not exist`);
+      }
+
+      const notes = draft.tracks[trackIndex].notes;
+      if (!notes) {
+        throw new Error(`Cannot update note ${note.id} in track ${trackId}: no notes array`);
+      }
+
+      const noteIndex = notes.findIndex(n => n.id === note.id);
+      if (noteIndex === -1) {
+        throw new Error(`Cannot update note ${note.id} in track ${trackId}: note not found`);
+      }
+
+      // Update the note with new values
+      notes[noteIndex] = { ...note };
+      draft.tracks[trackIndex].dirty = true;
+    }));
+
+    // Increment noteVersion to trigger re-renders (defined in midiSlice)
+    (rootGet() as any).incrementNoteVersion?.();
+  };
+
+  /**
+   * Get all notes for a track
+   * Returns an empty array if the track has no notes
+   */
+  const getTrackNotes = (trackId: string): Note[] => {
+    const track = findTrackById(trackId);
+    if (!track) {
+      return [];
+    }
+    // Return a copy to prevent external mutation
+    return (track.notes || []).map(note => ({ ...note }));
+  };
+
+  /**
+   * Initialize empty notes array for a track
+   * Used when creating a new track to ensure it has a notes array
+   */
+  const initializeTrackNotes = (trackId: string): void => {
+    set(produce((draft: RootState) => {
+      const trackIndex = draft.tracks.findIndex(t => t.id === trackId);
+      if (trackIndex !== -1 && !draft.tracks[trackIndex].notes) {
+        draft.tracks[trackIndex].notes = [];
+      }
+    }));
+  };
+
+  /**
+   * Check if a track exists by ID
+   */
+  const hasTrackById = (trackId: string): boolean => {
+    return findTrackById(trackId) !== undefined;
   };
 
   // --- Initial State & Return --- 
@@ -2504,5 +2680,14 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
     updateMultipleInstancePositions,
     resizeMultipleInstances,
     deleteMultipleInstances,
+
+    // Note management (Phase 1 - Unified State Migration)
+    setTrackNotes,
+    addNoteToTrack,
+    removeNoteFromTrack,
+    updateNoteInTrack,
+    getTrackNotes,
+    initializeTrackNotes,
+    hasTrackById,
   };
 };

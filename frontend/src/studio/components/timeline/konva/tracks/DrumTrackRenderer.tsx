@@ -4,7 +4,6 @@ import { CombinedTrack } from 'src/platform/types/project';
 import { DrumTrackRead, SamplerTrackRead } from 'src/platform/types/dto/track_models/drum_track';
 import { MUSIC_CONSTANTS } from '../../../../constants/musicConstants';
 import { useStudioStore } from '../../../../stores/studioStore';
-import { Note } from '../../../../../types/note';
 import DrumPatternPreview from '../components/DrumPatternPreview';
 import { getVisibleTimeRange } from '../../../../utils/timelinePositioning';
 
@@ -73,46 +72,21 @@ export const DrumTrackRenderer: React.FC<DrumTrackRendererProps> = ({
     return [];
   }, [track]);
   
-  // Get live MIDI notes from MidiManager
-  const { store } = useStudioStore();
-  const midiManager = store?.getMidiManager();
-  const [allTrackNotes, setAllTrackNotes] = useState<{ [trackId: string]: Note[] }>({});
-  
-  // Subscribe to MIDI notes for all sampler tracks
-  useEffect(() => {
-    if (!midiManager || samplerTracks.length === 0) {
-      setAllTrackNotes({});
-      return;
-    }
-    
-    const unsubscribers: (() => void)[] = [];
-    const notesMap: { [trackId: string]: Note[] } = {};
-    
-    // Subscribe to each sampler track's notes
+  // Subscribe to noteVersion to trigger re-renders when notes change
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _noteVersion = useStudioStore(state => state.noteVersion);
+
+  // Get notes from Zustand store for all sampler tracks
+  const getTrackNotes = useStudioStore(state => state.getTrackNotes);
+
+  // Build notes map from Zustand store
+  const allTrackNotes = useMemo(() => {
+    const notesMap: { [trackId: string]: ReturnType<typeof getTrackNotes> } = {};
     samplerTracks.forEach(track => {
-      const trackId = track.id;
-      
-      // Get initial notes
-      const initialNotes = midiManager.getTrackNotes(trackId) || [];
-      notesMap[trackId] = initialNotes;
-      
-      // Subscribe to updates
-      const unsubscribe = midiManager.subscribeToTrack(trackId, (_, updatedNotes) => {
-        setAllTrackNotes(prev => ({
-          ...prev,
-          [trackId]: updatedNotes
-        }));
-      });
-      
-      unsubscribers.push(unsubscribe);
+      notesMap[track.id] = getTrackNotes(track.id) || [];
     });
-    
-    setAllTrackNotes(notesMap);
-    
-    return () => {
-      unsubscribers.forEach(unsub => unsub());
-    };
-  }, [midiManager, samplerTracks]);
+    return notesMap;
+  }, [samplerTracks, getTrackNotes, _noteVersion]);
 
   // Compute pattern from live MIDI notes as fallback
   const fallbackPattern = useMemo(() => {

@@ -3,11 +3,12 @@
  * These types add client-side properties and behavior
  */
 
-import { 
+import {
   CombinedTrack as CombinedTrackDTO,
   ProjectWithTracks as ProjectWithTracksDTO,
   TrackInstance
 } from '../dto/project';
+import { Note } from '../../../types/note';
 
 /**
  * Extended CombinedTrack with client-side properties
@@ -15,6 +16,7 @@ import {
 export interface CombinedTrackEntity extends CombinedTrackDTO {
   dirty?: boolean; // Client-side only: true if track has unsaved changes
   instances?: TrackInstance[]; // Client-side only: array of track instances on timeline
+  notes?: Note[]; // Client-side only: MIDI notes for this track (source of truth for note data)
 
   // Additional client-side properties for compatibility
   solo?: boolean;

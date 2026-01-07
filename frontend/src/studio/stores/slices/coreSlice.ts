@@ -34,19 +34,13 @@ export const createCoreSlice: StoreSliceCreator<CoreSlice> = (set, get) => {
     const initLogic = async () => {
       if (!store) {
         console.error("Store instance is null during initialization");
-        // Optionally create a new store instance here if needed
-        // setCoreState({ store: new Store() }); 
-        // store = get().store;
-        // if (!store) throw new Error("Failed to create store instance");
         throw new Error("Store instance not available");
       }
 
-      if (!store.projectManager.getCurrentProject()) {
-        console.log('Creating a new project in coreSlice');
-        const project = store.projectManager.createProject(projectTitle);
-        console.log('Project created:', project);
-      }
-      
+      // Project state is now managed by Zustand (projectId, projectTitle, bpm, etc.)
+      // No need for ProjectManager - Zustand state is initialized with defaults
+      console.log('Initializing audio with project:', projectTitle);
+
       await store.initializeAudio();
 
       // Initialize the new AudioEngine (Phase 6 migration)
@@ -74,23 +68,19 @@ export const createCoreSlice: StoreSliceCreator<CoreSlice> = (set, get) => {
   };
 
   // Ensure project exists (for manual track addition)
+  // Note: With Zustand as source of truth, project state is always initialized
   const ensureProjectExists = async () => {
     const rootGet = get as GetFn;
     const { store, projectTitle, _withErrorHandling } = rootGet();
-    
+
     const ensureLogic = async () => {
       if (!store) {
         throw new Error("Store instance not available");
       }
 
-      if (!store.projectManager.getCurrentProject()) {
-        console.log('Creating project for manual track addition');
-        const project = store.projectManager.createProject(projectTitle);
-        console.log('Project created:', project);
-        
-        // The auto-save system will automatically save the project when tracks become dirty
-        // No need to manually trigger auto-save here
-      }
+      // Project state is managed by Zustand (projectId, projectTitle, bpm, etc.)
+      // Zustand state is always initialized with defaults, so project always "exists"
+      console.log('Project state ready for track addition:', projectTitle);
     };
 
     const safeEnsureProject = _withErrorHandling(ensureLogic, 'ensureProjectExists');

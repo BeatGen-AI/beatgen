@@ -1,6 +1,4 @@
-import { Midi } from '@tonejs/midi';
 import { Note } from '../../../types/note';
-import { db } from '../db/dexie-client';
 
 /**
  * Interface for track data
@@ -34,31 +32,57 @@ interface MidiData {
 }
 
 /**
- * Type for track update callback
+ * Interface for Zustand store accessor
+ * This allows MidiManager to read/write notes from Zustand state
  */
-export type TrackUpdateCallback = (trackId: string, notes: Note[]) => void;
+export interface ZustandStoreAccessor {
+  getTrackNotes: (trackId: string) => Note[];
+  setTrackNotes: (trackId: string, notes: Note[]) => void;
+  addNoteToTrack: (trackId: string, note: Note) => number;
+  removeNoteFromTrack: (trackId: string, noteId: number) => void;
+  updateNoteInTrack: (trackId: string, note: Note) => void;
+  hasTrack: (trackId: string) => boolean;
+  initializeTrackNotes: (trackId: string) => void;
+}
 
 /**
- * MidiManager serves as the central source of truth for MIDI note data.
- * It manages track notes, subscriptions, and persistence.
+ * MidiManager provides an API for MIDI note operations.
+ * All note storage is delegated to Zustand via the storeAccessor.
+ *
+ * This class acts as a facade for MIDI operations, handling:
+ * - Note CRUD operations (via Zustand)
+ * - Instance management for playback calculations
+ * - MIDI data format conversions
  */
 export class MidiManager {
-  // Core data storage
-  private tracks: Map<string, Note[]> = new Map();
-  
+  // Zustand store accessor for reading/writing notes from Zustand state
+  private storeAccessor: ZustandStoreAccessor | null = null;
+
   // Instance management
   private registeredInstances: Map<string, Set<string>> = new Map(); // trackId -> Set of instanceIds
-  
-  // Subscription management
-  private subscribers: Map<string, TrackUpdateCallback[]> = new Map();
-  private globalListeners: TrackUpdateCallback[] = [];
-  
-  // Internal counter for generating unique note IDs
-  private nextNoteIdCounter: number = 1;
-  
+
   // Debouncing for persistence operations
   private pendingUpdates: Map<string, NodeJS.Timeout> = new Map();
   private debounceTime: number = 500; // 500ms debounce time
+
+  /**
+   * Set the Zustand store accessor
+   * MidiManager reads/writes notes from Zustand via this accessor
+   */
+  setStoreAccessor(accessor: ZustandStoreAccessor): void {
+    this.storeAccessor = accessor;
+    console.log('MidiManager: Zustand store accessor connected');
+  }
+
+  /**
+   * Ensure store accessor is set, throw if not
+   */
+  private requireStoreAccessor(): ZustandStoreAccessor {
+    if (!this.storeAccessor) {
+      throw new Error('MidiManager: Store accessor not set. Call setStoreAccessor() first.');
+    }
+    return this.storeAccessor;
+  }
 
   /**
    * Check if a track exists
@@ -66,7 +90,7 @@ export class MidiManager {
    * @returns True if the track exists
    */
   hasTrack(trackId: string): boolean {
-    return this.tracks.has(trackId);
+    return this.requireStoreAccessor().hasTrack(trackId);
   }
 
   /**
@@ -75,7 +99,12 @@ export class MidiManager {
    * @returns The notes array or null if track doesn't exist
    */
   getTrackNotes(trackId: string): Note[] | null {
-    return this.tracks.has(trackId) ? this.tracks.get(trackId)! : null;
+    const accessor = this.requireStoreAccessor();
+    if (!accessor.hasTrack(trackId)) {
+      return null;
+    }
+    const notes = accessor.getTrackNotes(trackId);
+    return notes.length > 0 || accessor.hasTrack(trackId) ? notes : null;
   }
 
   /**
@@ -85,9 +114,8 @@ export class MidiManager {
    * @returns The created track object
    */
   createTrack(trackId: string, instrumentId: string, name: string = `Track ${instrumentId}`): MidiTrack {
-    // Initialize with empty notes array
-    this.tracks.set(trackId, []);
-    
+    this.requireStoreAccessor().initializeTrackNotes(trackId);
+
     return {
       id: trackId,
       instrumentId,
@@ -104,24 +132,18 @@ export class MidiManager {
    * @throws Error if the track doesn't exist
    */
   updateTrack(trackId: string, notes: Note[]): void {
-    if (!this.tracks.has(trackId)) {
+    const accessor = this.requireStoreAccessor();
+    if (!accessor.hasTrack(trackId)) {
       throw new Error(`Cannot update track ${trackId}: track does not exist`);
     }
-    
-    // Make a defensive copy of the notes array to prevent external mutation
-    const notesCopy = notes.map(note => ({...note}));
-    
-    // Store the notes in our internal map
-    this.tracks.set(trackId, notesCopy);
-    
-    // Notify subscribers about the update
-    this.notifyTrackSubscribers(trackId, notesCopy);
-    
+
+    // Update notes in Zustand store
+    accessor.setTrackNotes(trackId, notes);
+
     // Persist to DB with debouncing
-    this.debouncePersistence(trackId, notesCopy);
+    this.debouncePersistence(trackId, notes);
   }
 
-  
   /**
    * Legacy method - kept for compatibility
    * Since instances now share notes, this just removes instance IDs
@@ -132,7 +154,7 @@ export class MidiManager {
       console.log(`MidiManager: No notes to migrate for track ${trackId}`);
       return;
     }
-    
+
     // Remove instance IDs from all notes since instances share notes
     let hasInstanceIds = false;
     const migratedNotes = notes.map(note => {
@@ -143,7 +165,7 @@ export class MidiManager {
       }
       return note;
     });
-    
+
     if (hasInstanceIds) {
       console.log(`MidiManager: Removed instance IDs from notes for shared instance model`);
       this.updateTrack(trackId, migratedNotes);
@@ -151,46 +173,34 @@ export class MidiManager {
       console.log(`MidiManager: Notes already using shared model`);
     }
   }
-  
+
   /**
    * Add a single note to a track
    * Assigns a unique ID if the incoming note ID is invalid (-1).
-   * If no instanceId is provided, assigns to the active instance if available
    * @param trackId The track ID
    * @param note The note to add
    * @throws Error if the track doesn't exist
    */
   async addNoteToTrack(trackId: string, note: Note): Promise<void> {
-    // Log entry, instance ID, and map state BEFORE check
-    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): ENTER addNoteToTrack - Target ID: ${trackId}`); 
-    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): Checking if track exists... Has ${trackId}?`, this.tracks.has(trackId));
-    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): Current track keys before add attempt:`, Array.from(this.tracks.keys()));
-    
-    const notes = this.getTrackNotes(trackId);
-    if (notes === null) {
-      // Error is thrown here
-      throw new Error(`Cannot add note to track ${trackId}: track does not exist`);
-    }
-    
+    console.log(`>>> MidiManager: ENTER addNoteToTrack - Target ID: ${trackId}`);
+    console.log(`>>> MidiManager: Checking if track exists... Has ${trackId}?`, this.hasTrack(trackId));
+
     // Remove instanceId if present since instances share notes
     const { instanceId, ...noteWithoutInstanceId } = note;
-    const noteToAdd = { ...noteWithoutInstanceId }; // Create a copy without instanceId
+    const noteToAdd = { ...noteWithoutInstanceId };
 
-    // Check if the incoming ID needs to be replaced
-    if (noteToAdd.id === -1 || noteToAdd.id === undefined || noteToAdd.id === null) {
-      const newId = this.nextNoteIdCounter++; // Get next ID and increment counter
-      console.log(`MidiManager: Assigning new ID ${newId} to incoming note (original ID: ${note.id})`);
-      noteToAdd.id = newId; 
-    } else {
-      // Ensure the counter is always ahead of any explicitly provided IDs
-      this.nextNoteIdCounter = Math.max(this.nextNoteIdCounter, noteToAdd.id + 1);
+    const accessor = this.requireStoreAccessor();
+    if (!accessor.hasTrack(trackId)) {
+      throw new Error(`Cannot add note to track ${trackId}: track does not exist`);
     }
-    
-    // Add the note with the correct ID
-    const updatedNotes = [...notes, noteToAdd]; 
-    
-    // Update the track with the new note - this will notify subscribers too
-    this.updateTrack(trackId, updatedNotes);
+
+    // Use the store accessor to add the note - store will assign ID if needed
+    const assignedId = accessor.addNoteToTrack(trackId, noteToAdd);
+    noteToAdd.id = assignedId;
+
+    // Persist to DB with debouncing
+    const updatedNotes = accessor.getTrackNotes(trackId);
+    this.debouncePersistence(trackId, updatedNotes);
   }
 
   /**
@@ -202,19 +212,20 @@ export class MidiManager {
   async removeNoteFromTrack(trackId: string, noteId: number): Promise<void> {
     console.log("MidiManager: current notes:", this.getTrackNotes(trackId));
     console.log(`MidiManager: Removing note ${noteId} from track ${trackId}`);
-    
-    // Get existing notes - will throw if track doesn't exist
-    const notes = this.getTrackNotes(trackId);
-    if (notes === null) {
+
+    const accessor = this.requireStoreAccessor();
+    if (!accessor.hasTrack(trackId)) {
       throw new Error(`Cannot remove note from track ${trackId}: track does not exist`);
     }
-    
-    // Filter out the note to be removed
-    const updatedNotes = notes.filter(note => note.id !== noteId);
-    
-    // Update the track without the removed note - this will notify subscribers too
-    this.updateTrack(trackId, updatedNotes);
-    console.log("MidiManager: updated notes:", this.getTrackNotes(trackId));
+
+    // Use the store accessor to remove the note
+    accessor.removeNoteFromTrack(trackId, noteId);
+
+    // Persist to DB with debouncing
+    const updatedNotes = accessor.getTrackNotes(trackId);
+    this.debouncePersistence(trackId, updatedNotes);
+
+    console.log("MidiManager: updated notes:", updatedNotes);
   }
 
   /**
@@ -224,90 +235,17 @@ export class MidiManager {
    * @throws Error if the track doesn't exist or note not found
    */
   async updateNote(trackId: string, updatedNote: Note): Promise<void> {
-    // Get existing notes - will throw if track doesn't exist
-    const notes = this.getTrackNotes(trackId);
-    if (notes === null) {
+    const accessor = this.requireStoreAccessor();
+    if (!accessor.hasTrack(trackId)) {
       throw new Error(`Cannot update note in track ${trackId}: track does not exist`);
     }
-    
-    // Check if the note exists
-    const noteExists = notes.some(note => note.id === updatedNote.id);
-    if (!noteExists) {
-      throw new Error(`Cannot update note ${updatedNote.id} in track ${trackId}: note not found`);
-    }
-    
-    // Update the specific note (create a copy to avoid mutation)
-    const updatedNotes = notes.map(note => 
-      note.id === updatedNote.id ? {...updatedNote} : note
-    );
-    
-    // Update the track with the modified notes - this will notify subscribers too
-    this.updateTrack(trackId, updatedNotes);
-  }
 
-  /**
-   * Subscribe to track updates
-   * @param trackId The track ID to subscribe to
-   * @param callback Function to call when track is updated
-   * @returns Unsubscribe function
-   */
-  subscribeToTrack(trackId: string, callback: TrackUpdateCallback): () => void {
-    if (!this.subscribers.has(trackId)) {
-      this.subscribers.set(trackId, []);
-    }
-    
-    const trackSubscribers = this.subscribers.get(trackId)!;
-    trackSubscribers.push(callback);
-    this.subscribers.set(trackId, trackSubscribers);
-    
-    // Return unsubscribe function
-    return () => {
-      const currentSubscribers = this.subscribers.get(trackId) || [];
-      const filteredSubscribers = currentSubscribers.filter(cb => cb !== callback);
-      this.subscribers.set(trackId, filteredSubscribers);
-    };
-  }
+    // Use the store accessor to update the note
+    accessor.updateNoteInTrack(trackId, updatedNote);
 
-  /**
-   * Subscribe to all track updates
-   * @param callback Function to call when any track is updated
-   * @returns Unsubscribe function
-   */
-  subscribeToAllUpdates(callback: TrackUpdateCallback): () => void {
-    this.globalListeners.push(callback);
-    
-    // Return unsubscribe function
-    return () => {
-      this.globalListeners = this.globalListeners.filter(cb => cb !== callback);
-    };
-  }
-
-  /**
-   * Notify all subscribers for a specific track
-   * @param trackId The track ID that was updated
-   * @param notes The new notes array
-   */
-  private notifyTrackSubscribers(trackId: string, notes: Note[]): void {
-    // Notify track-specific subscribers
-    if (this.subscribers.has(trackId)) {
-      const trackSubscribers = this.subscribers.get(trackId)!;
-      trackSubscribers.forEach(callback => {
-        try {
-          callback(trackId, notes);
-        } catch (error) {
-          console.error(`Error in track ${trackId} subscriber callback:`, error);
-        }
-      });
-    }
-    
-    // Notify global subscribers
-    this.globalListeners.forEach(callback => {
-      try {
-        callback(trackId, notes);
-      } catch (error) {
-        console.error(`Error in global subscriber callback for track ${trackId}:`, error);
-      }
-    });
+    // Persist to DB with debouncing
+    const updatedNotes = accessor.getTrackNotes(trackId);
+    this.debouncePersistence(trackId, updatedNotes);
   }
 
   /**
@@ -315,19 +253,13 @@ export class MidiManager {
    * @param trackId The track ID to delete
    */
   async deleteTrackWithPersistence(trackId: string): Promise<void> {
-    // Remove from internal maps
-    this.tracks.delete(trackId);
-    this.subscribers.delete(trackId);
-    
     try {
       // Cancel any pending update
       if (this.pendingUpdates.has(trackId)) {
         clearTimeout(this.pendingUpdates.get(trackId)!);
         this.pendingUpdates.delete(trackId);
       }
-      
-      // Delete from DB
-      // await db.deleteMidiTrack(trackId);
+
       console.log(`MidiManager: Deleted persisted track ${trackId}`);
     } catch (error) {
       console.error(`MidiManager: Error deleting persisted track ${trackId}:`, error);
@@ -345,17 +277,11 @@ export class MidiManager {
     if (this.pendingUpdates.has(trackId)) {
       clearTimeout(this.pendingUpdates.get(trackId)!);
     }
-    
+
     // Schedule a new update
     const timeoutId = setTimeout(async () => {
       try {
-        // await this.updateMidiFileForTrack(
-        //   trackId,
-        //   notes,
-        //   this.currentBpm,
-        //   this.currentTimeSignature
-        // );
-        
+        // Persistence is handled by auto-save service
         // Clear from pending updates
         this.pendingUpdates.delete(trackId);
       } catch (error) {
@@ -363,7 +289,7 @@ export class MidiManager {
         this.pendingUpdates.delete(trackId);
       }
     }, this.debounceTime);
-    
+
     this.pendingUpdates.set(trackId, timeoutId);
   }
 
@@ -374,7 +300,7 @@ export class MidiManager {
    */
   midiToNotes(midiData: MidiData): Note[] {
     // Flatten all tracks into a single array of notes
-    return midiData.tracks.flatMap(track => 
+    return midiData.tracks.flatMap(track =>
       track.notes.map(note => ({
         id: note.id,
         row: note.row,
@@ -393,29 +319,28 @@ export class MidiManager {
    */
   registerInstance(trackId: string, instanceId: string): void {
     console.log(`MidiManager: Registering instance ${instanceId} for track ${trackId}`);
-    
+
     if (!this.registeredInstances.has(trackId)) {
       this.registeredInstances.set(trackId, new Set());
     }
-    
+
     this.registeredInstances.get(trackId)!.add(instanceId);
   }
-  
+
   /**
-   * Unregister a track instance and remove its notes
+   * Unregister a track instance
    * @param trackId The track ID
    * @param instanceId The instance ID to unregister
    */
   unregisterInstance(trackId: string, instanceId: string): void {
     console.log(`MidiManager: Unregistering instance ${instanceId} for track ${trackId}`);
-    
+
     const instances = this.registeredInstances.get(trackId);
     if (instances) {
       instances.delete(instanceId);
-      // Don't remove notes since instances share them
     }
   }
-  
+
   /**
    * Get notes for a specific instance
    * Since instances share the same notes, this returns all track notes
@@ -429,13 +354,13 @@ export class MidiManager {
       console.log(`MidiManager: No notes found for track ${trackId}`);
       return [];
     }
-    
+
     console.log(`MidiManager: Returning ${notes.length} shared notes for instance ${instanceId} of track ${trackId}`);
-    
+
     // All instances share the same notes
     return notes;
   }
-  
+
   /**
    * Add a note to a specific instance
    * Since instances share notes, this just adds to the track
@@ -447,7 +372,7 @@ export class MidiManager {
     // Just add to track since all instances share notes
     await this.addNoteToTrack(trackId, note);
   }
-  
+
   /**
    * Update all notes for a specific instance
    * Since instances share notes, this updates the track notes
@@ -459,7 +384,7 @@ export class MidiManager {
     // Just update track notes since all instances share them
     this.updateTrack(trackId, instanceNotes);
   }
-  
+
   /**
    * Move all notes of an instance by a delta
    * Since instances share notes, this is not applicable
@@ -468,7 +393,7 @@ export class MidiManager {
   moveInstance(trackId: string, instanceId: string, deltaX: number): void {
     console.warn('MidiManager: moveInstance is deprecated - instances share notes and are positioned independently');
   }
-  
+
   /**
    * Get visible notes for an instance based on its position and trim values
    * This is used during playback to determine which notes should actually play
@@ -480,56 +405,53 @@ export class MidiManager {
    * @returns Notes adjusted for playback with their positions relative to the timeline
    */
   getInstanceNotesForPlayback(
-    trackId: string, 
-    instanceId: string, 
+    trackId: string,
+    instanceId: string,
     instancePosition: number,
-    trimStartTicks: number, 
+    trimStartTicks: number,
     trimEndTicks: number
   ): Note[] {
     const notes = this.getInstanceNotes(trackId, instanceId);
     if (notes.length === 0) return [];
-    
-    // The trim window defines which part of the track content is visible
-    const trimDuration = trimEndTicks - trimStartTicks;
-    
+
     // Filter and adjust notes based on trim window
     const playableNotes = notes.filter(note => {
       // Note positions are relative to track start (0-based)
       const noteStart = note.column;
       const noteEnd = note.column + note.length;
-      
+
       // Check if note overlaps with trim window
       return noteEnd > trimStartTicks && noteStart < trimEndTicks;
     }).map(note => {
       const noteStart = note.column;
       const noteEnd = note.column + note.length;
-      
+
       // Calculate note position relative to the trim window
       let relativeColumn = noteStart - trimStartTicks;
       let adjustedLength = note.length;
-      
+
       // Clip note if it starts before trim window
       if (noteStart < trimStartTicks) {
         const clipAmount = trimStartTicks - noteStart;
         relativeColumn = 0; // Start at beginning of trim window
         adjustedLength -= clipAmount;
       }
-      
+
       // Clip note if it extends beyond trim window
       if (noteEnd > trimEndTicks) {
         adjustedLength = trimEndTicks - Math.max(noteStart, trimStartTicks);
       }
-      
+
       // Calculate final position on timeline
       const timelineColumn = instancePosition + relativeColumn;
-      
+
       return {
         ...note,
         column: timelineColumn,
         length: Math.max(1, adjustedLength)
       };
     });
-    
+
     // Debug logging
     if (playableNotes.length > 0) {
       console.log(`MidiManager: Instance ${instanceId} playback notes:`, {
@@ -543,14 +465,13 @@ export class MidiManager {
         }
       });
     }
-    
+
     return playableNotes;
   }
-  
+
   /**
    * Trim instance notes based on trim boundaries
-   * This permanently modifies the notes to fit within the trim window
-   * Used when resizing instances
+   * This returns notes that would be visible with these trim settings
    * @param trackId The track ID
    * @param instanceId The instance ID
    * @param trimStartTicks The start trim position in ticks
@@ -560,18 +481,13 @@ export class MidiManager {
   trimInstance(trackId: string, instanceId: string, trimStartTicks: number, trimEndTicks: number): Note[] {
     const notes = this.getInstanceNotes(trackId, instanceId);
     if (notes.length === 0) return [];
-    
-    // For permanent trimming, we don't modify the stored notes
-    // The trim values on the instance determine what's visible
-    // This allows non-destructive editing
-    
+
     console.log(`MidiManager: Trim boundaries updated for instance ${instanceId}: ${trimStartTicks}-${trimEndTicks} ticks`);
-    
+
     // Return the notes that would be visible with these trim settings
-    // The actual filtering happens during playback
     return this.getInstanceNotesForPlayback(trackId, instanceId, 0, trimStartTicks, trimEndTicks);
   }
-  
+
   /**
    * Convert app notes to MIDI data format
    * @param trackId The track ID
@@ -582,17 +498,13 @@ export class MidiManager {
   notesToMidi(trackId: string, notes: Note[], bpm: number): MidiData {
     const track: MidiTrack = {
       id: trackId,
-      instrumentId: 'default', 
-      notes: notes.map(note => {
-        // Log note being converted
-        const convertedNote = {
+      instrumentId: 'default',
+      notes: notes.map(note => ({
         ...note,
         velocity: note.velocity || 100,
-          duration: note.length, // Convert ticks to seconds based on TICKS_PER_BEAT
-          time: note.column // Convert ticks to seconds based on TICKS_PER_BEAT
-        };
-        return convertedNote;
-      })
+        duration: note.length,
+        time: note.column
+      }))
     };
 
     return {

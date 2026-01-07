@@ -193,12 +193,15 @@ export interface RootState {
   ensureProjectExists: () => Promise<void>;
 
   // Project Settings (Refactored)
-  projectTitle: string; 
+  projectId: string | null;
+  projectTitle: string;
   bpm: number;
   timeSignature: [number, number];
-  keySignature: string; 
+  keySignature: string;
   handleProjectParamChange: (param: ProjectParam, value: any) => Promise<void>;
   updateBPMState: (bpm: number) => Promise<void>;
+  setProjectId: (id: string) => void;
+  getKeyNotes: () => number[];
 
   // Fix: Use ProjectWithTracks directly
   loadProject: (projectId: string) => Promise<ProjectWithTracks | null>; 
@@ -272,6 +275,16 @@ export interface RootState {
   updateMultipleInstancePositions: (instanceUpdates: Array<{trackId: string, instanceId: string, deltaX: number, deltaY: number}>) => void;
   resizeMultipleInstances: (instanceUpdates: Array<{trackId: string, instanceId: string, widthDelta: number, anchor: 'left' | 'right'}>) => void;
   deleteMultipleInstances: (instanceDeletions: Array<{trackId: string, instanceId: string}>) => Promise<void>;
+
+  // Note management (Phase 1 - Unified State Migration)
+  // These methods manage MIDI notes directly in Zustand state instead of MidiManager
+  noteVersion: number; // Increments whenever notes change - used for reactivity
+  setTrackNotes: (trackId: string, notes: Note[]) => void;
+  addNoteToTrack: (trackId: string, note: Note) => number;
+  removeNoteFromTrack: (trackId: string, noteId: number) => void;
+  updateNoteInTrack: (trackId: string, note: Note) => void;
+  initializeTrackNotes: (trackId: string) => void;
+  hasTrackById: (trackId: string) => boolean;
 
   // Playback / Transport (AudioEngine)
   isPlaying: boolean;

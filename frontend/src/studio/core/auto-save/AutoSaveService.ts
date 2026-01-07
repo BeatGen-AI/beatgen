@@ -162,7 +162,7 @@ export class AutoSaveService {
 
       // Prepare project data (similar to SaveProjectButton logic)
       const projectData = {
-        id: projectState.projectId, // Include project ID from ProjectManager 
+        id: projectState.projectId, // Project ID from Zustand store 
         name: projectState.projectTitle,
         bpm: projectState.bpm,
         time_signature_numerator: projectState.timeSignature[0],
