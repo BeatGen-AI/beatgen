@@ -1,342 +1,345 @@
+/**
+ * ProjectController - Central orchestrator for track mutations with undo/redo.
+ *
+ * Stores serializable command data for future collaboration/persistence support,
+ * while using efficient closures for immediate undo/redo execution.
+ */
+
 import { useStudioStore } from '../../stores/studioStore';
 import { getAudioEngine } from '../audio-engine/AudioEngine';
-import {
-  Command,
-  CommandHandler,
-  CommandContext,
-  CommandType,
-  Patch,
-  PatchOperation,
-  SideEffect,
-  ControllerListener,
-  Unsubscribe,
-} from './types';
+import { buildPlaybackState } from '../playback/buildPlaybackState';
 
-/**
- * ProjectController - Central orchestrator for all state mutations.
- *
- * All mutations flow through controller.execute(command), which:
- * 1. Executes the appropriate handler to generate a Patch
- * 2. Applies the patch to Zustand state
- * 3. Pushes to undo stack
- * 4. Runs registered side effects (audio engine sync, auto-save, etc.)
- *
- * This centralizes side effects that were previously scattered across
- * action classes, store slices, and hooks.
- */
+// ============================================================================
+// TYPES - Serializable for future collab/persistence
+// ============================================================================
+
+type CommandType = 'volume' | 'pan' | 'mute' | 'solo' | 'position';
+
+interface CommandData {
+  type: CommandType;
+  trackId: string;
+  oldValue: unknown;
+  newValue: unknown;
+  timestamp: number;
+  // For drum track propagation
+  childTrackIds?: string[];
+  childOldValues?: unknown[];
+}
+
+interface UndoEntry {
+  command: CommandData;  // Serializable data for future collab/persistence
+  undo: () => void;      // Efficient closure for immediate execution
+  redo: () => void;
+}
+
+type Listener = () => void;
+
+// ============================================================================
+// CONTROLLER
+// ============================================================================
+
 export class ProjectController {
-  private handlers: Map<CommandType, CommandHandler> = new Map();
-  private sideEffects: SideEffect[] = [];
-  private undoStack: Patch[] = [];
-  private redoStack: Patch[] = [];
-  private listeners: Set<ControllerListener> = new Set();
-  private maxUndoStackSize = 100;
+  private undoStack: UndoEntry[] = [];
+  private redoStack: UndoEntry[] = [];
+  private listeners = new Set<Listener>();
+  private maxStackSize = 100;
 
-  // ============================================================================
-  // HANDLER REGISTRATION
-  // ============================================================================
+  // ==========================================================================
+  // TRACK MUTATIONS
+  // ==========================================================================
 
-  /**
-   * Register a command handler for a specific command type.
-   */
-  registerHandler<T extends Command>(
-    type: T['type'],
-    handler: CommandHandler<T>
-  ): void {
-    this.handlers.set(type, handler as CommandHandler);
+  changeVolume(trackId: string, volume: number): void {
+    const state = useStudioStore.getState();
+    const trackIndex = state.tracks.findIndex(t => t.id === trackId);
+    if (trackIndex === -1) throw new Error(`Track not found: ${trackId}`);
+
+    const track = state.tracks[trackIndex];
+    const oldVolume = track.volume;
+    const childIndices = this.getChildSamplerIndices(trackId);
+    const childTrackIds = childIndices.map(i => state.tracks[i].id);
+    const oldChildVolumes = childIndices.map(i => state.tracks[i].volume);
+
+    this.applyVolumeChange(trackIndex, volume, childIndices);
+
+    this.pushUndo({
+      command: {
+        type: 'volume',
+        trackId,
+        oldValue: oldVolume,
+        newValue: volume,
+        timestamp: Date.now(),
+        childTrackIds,
+        childOldValues: oldChildVolumes,
+      },
+      undo: () => this.applyVolumeChange(trackIndex, oldVolume, childIndices, oldChildVolumes),
+      redo: () => this.applyVolumeChange(trackIndex, volume, childIndices),
+    });
+
+    this.syncAudioIfPlaying();
   }
 
-  /**
-   * Register a side effect that runs after patches are applied.
-   */
-  registerSideEffect(effect: SideEffect): void {
-    this.sideEffects.push(effect);
+  changePan(trackId: string, pan: number): void {
+    const state = useStudioStore.getState();
+    const trackIndex = state.tracks.findIndex(t => t.id === trackId);
+    if (trackIndex === -1) throw new Error(`Track not found: ${trackId}`);
+
+    const oldPan = state.tracks[trackIndex].pan;
+
+    useStudioStore.setState(s => {
+      s.tracks[trackIndex].pan = pan;
+      s.tracks[trackIndex].dirty = true;
+    });
+
+    this.pushUndo({
+      command: {
+        type: 'pan',
+        trackId,
+        oldValue: oldPan,
+        newValue: pan,
+        timestamp: Date.now(),
+      },
+      undo: () => useStudioStore.setState(s => { s.tracks[trackIndex].pan = oldPan; }),
+      redo: () => useStudioStore.setState(s => { s.tracks[trackIndex].pan = pan; s.tracks[trackIndex].dirty = true; }),
+    });
+
+    this.syncAudioIfPlaying();
   }
 
-  // ============================================================================
-  // COMMAND EXECUTION
-  // ============================================================================
+  toggleMute(trackId: string, muted: boolean): void {
+    const state = useStudioStore.getState();
+    const trackIndex = state.tracks.findIndex(t => t.id === trackId);
+    if (trackIndex === -1) throw new Error(`Track not found: ${trackId}`);
 
-  /**
-   * Execute a command and return the resulting patch.
-   * This is the single entry point for all state mutations.
-   */
-  async execute(command: Command): Promise<Patch> {
-    const handler = this.handlers.get(command.type);
-    if (!handler) {
-      throw new Error(`No handler registered for command type: ${command.type}`);
-    }
+    const track = state.tracks[trackIndex];
+    const oldMuted = track.mute;
+    const childIndices = this.getChildSamplerIndices(trackId);
+    const childTrackIds = childIndices.map(i => state.tracks[i].id);
+    const oldChildMuted = childIndices.map(i => state.tracks[i].mute);
 
-    const context = this.createContext();
+    this.applyMuteChange(trackIndex, muted, childIndices);
 
-    // 1. Execute handler to get patch
-    const patch = await handler(command, context);
+    this.pushUndo({
+      command: {
+        type: 'mute',
+        trackId,
+        oldValue: oldMuted,
+        newValue: muted,
+        timestamp: Date.now(),
+        childTrackIds,
+        childOldValues: oldChildMuted,
+      },
+      undo: () => this.applyMuteChange(trackIndex, oldMuted, childIndices, oldChildMuted),
+      redo: () => this.applyMuteChange(trackIndex, muted, childIndices),
+    });
 
-    // 2. Apply patch to state
-    this.applyPatch(patch);
-
-    // 3. Push to undo stack (unless skipped)
-    if (!command.metadata?.skipHistory) {
-      this.pushToUndoStack(patch);
-    }
-
-    // 4. Run side effects (unless skipped)
-    if (!command.metadata?.skipSideEffects) {
-      await this.runSideEffects(patch, command, context);
-    }
-
-    return patch;
+    this.syncAudioIfPlaying();
   }
 
-  // ============================================================================
+  toggleSolo(trackId: string, soloed: boolean): void {
+    const state = useStudioStore.getState();
+    const trackIndex = state.tracks.findIndex(t => t.id === trackId);
+    if (trackIndex === -1) throw new Error(`Track not found: ${trackId}`);
+
+    const oldSoloed = (state.tracks[trackIndex] as any).soloed ?? false;
+
+    useStudioStore.setState(s => {
+      s.tracks[trackIndex].solo = soloed;
+      (s.tracks[trackIndex] as any).soloed = soloed;
+    });
+
+    this.pushUndo({
+      command: {
+        type: 'solo',
+        trackId,
+        oldValue: oldSoloed,
+        newValue: soloed,
+        timestamp: Date.now(),
+      },
+      undo: () => useStudioStore.setState(s => {
+        s.tracks[trackIndex].solo = oldSoloed;
+        (s.tracks[trackIndex] as any).soloed = oldSoloed;
+      }),
+      redo: () => useStudioStore.setState(s => {
+        s.tracks[trackIndex].solo = soloed;
+        (s.tracks[trackIndex] as any).soloed = soloed;
+      }),
+    });
+
+    this.syncAudioIfPlaying();
+  }
+
+  changePosition(trackId: string, oldPos: { x: number; y: number }, newPos: { x: number; y: number }): void {
+    const state = useStudioStore.getState();
+    const trackIndex = state.tracks.findIndex(t => t.id === trackId);
+    if (trackIndex === -1) throw new Error(`Track not found: ${trackId}`);
+
+    this.applyPositionChange(trackIndex, newPos);
+
+    this.pushUndo({
+      command: {
+        type: 'position',
+        trackId,
+        oldValue: oldPos,
+        newValue: newPos,
+        timestamp: Date.now(),
+      },
+      undo: () => this.applyPositionChange(trackIndex, oldPos),
+      redo: () => this.applyPositionChange(trackIndex, newPos),
+    });
+  }
+
+  // ==========================================================================
   // UNDO / REDO
-  // ============================================================================
+  // ==========================================================================
 
-  /**
-   * Undo the last command by applying the inverse patch.
-   */
-  async undo(): Promise<void> {
-    const patch = this.undoStack.pop();
-    if (!patch) return;
+  undo(): void {
+    const entry = this.undoStack.pop();
+    if (!entry) return;
 
-    // Create inverse patch
-    const inversePatch: Patch = {
-      operations: patch.inverse,
-      inverse: patch.operations,
-      affectedPaths: patch.affectedPaths,
-    };
-
-    // Apply inverse
-    this.applyPatch(inversePatch);
-
-    // Move to redo stack
-    this.redoStack.push(patch);
-
-    // Run side effects (to sync audio engine, etc.)
-    const context = this.createContext();
-    await this.runSideEffects(inversePatch, {
-      type: 'GROUP_COMMAND' as CommandType,
-      payload: null,
-      metadata: { skipHistory: true, description: 'Undo' },
-    }, context);
-
+    entry.undo();
+    this.redoStack.push(entry);
     this.notifyListeners();
+    this.syncAudioIfPlaying();
   }
 
-  /**
-   * Redo the last undone command by re-applying the patch.
-   */
-  async redo(): Promise<void> {
-    const patch = this.redoStack.pop();
-    if (!patch) return;
+  redo(): void {
+    const entry = this.redoStack.pop();
+    if (!entry) return;
 
-    // Re-apply original patch
-    this.applyPatch(patch);
-
-    // Move back to undo stack
-    this.undoStack.push(patch);
-
-    // Run side effects
-    const context = this.createContext();
-    await this.runSideEffects(patch, {
-      type: 'GROUP_COMMAND' as CommandType,
-      payload: null,
-      metadata: { skipHistory: true, description: 'Redo' },
-    }, context);
-
+    entry.redo();
+    this.undoStack.push(entry);
     this.notifyListeners();
+    this.syncAudioIfPlaying();
   }
 
-  /**
-   * Check if undo is available.
-   */
-  canUndo(): boolean {
-    return this.undoStack.length > 0;
-  }
+  canUndo(): boolean { return this.undoStack.length > 0; }
+  canRedo(): boolean { return this.redoStack.length > 0; }
+  getUndoStackSize(): number { return this.undoStack.length; }
+  getRedoStackSize(): number { return this.redoStack.length; }
 
-  /**
-   * Check if redo is available.
-   */
-  canRedo(): boolean {
-    return this.redoStack.length > 0;
-  }
-
-  /**
-   * Get the current undo stack size.
-   */
-  getUndoStackSize(): number {
-    return this.undoStack.length;
-  }
-
-  /**
-   * Get the current redo stack size.
-   */
-  getRedoStackSize(): number {
-    return this.redoStack.length;
-  }
-
-  /**
-   * Clear all undo/redo history.
-   */
   clearHistory(): void {
     this.undoStack = [];
     this.redoStack = [];
     this.notifyListeners();
   }
 
-  // ============================================================================
-  // STATE SUBSCRIPTION
-  // ============================================================================
-
-  /**
-   * Subscribe to controller state changes (undo/redo availability).
-   */
-  subscribe(listener: ControllerListener): Unsubscribe {
+  subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  // ============================================================================
-  // PRIVATE HELPERS
-  // ============================================================================
+  // ==========================================================================
+  // SERIALIZATION (for future collab/persistence)
+  // ==========================================================================
 
-  private createContext(): CommandContext {
-    const state = useStudioStore.getState();
-    return {
-      getState: () => useStudioStore.getState(),
-      audioEngine: getAudioEngine(),
-      midiManager: state.store?.getMidiManager() ?? null,
-    };
+  /** Get serializable command history for persistence/sync */
+  getCommandHistory(): CommandData[] {
+    return this.undoStack.map(e => e.command);
   }
 
-  /**
-   * Apply a patch to Zustand state.
-   * Uses Zustand's set function with direct mutation (Immer handles immutability).
-   */
-  private applyPatch(patch: Patch): void {
-    useStudioStore.setState((state) => {
-      for (const op of patch.operations) {
-        this.applyOperation(state, op);
+  // ==========================================================================
+  // PRIVATE HELPERS
+  // ==========================================================================
+
+  private getChildSamplerIndices(drumTrackId: string): number[] {
+    const state = useStudioStore.getState();
+    const indices: number[] = [];
+    state.tracks.forEach((track, index) => {
+      if (track.track_type === 'SAMPLER' && track.track) {
+        const samplerData = track.track as any;
+        if (samplerData.drum_track_id === drumTrackId) {
+          indices.push(index);
+        }
       }
-      return state;
+    });
+    return indices;
+  }
+
+  private applyVolumeChange(trackIndex: number, volume: number, childIndices: number[], childVolumes?: number[]): void {
+    useStudioStore.setState(s => {
+      s.tracks[trackIndex].volume = volume;
+      s.tracks[trackIndex].dirty = true;
+      childIndices.forEach((ci, i) => {
+        s.tracks[ci].volume = childVolumes ? childVolumes[i] : volume;
+        s.tracks[ci].dirty = true;
+      });
     });
   }
 
-  /**
-   * Apply a single patch operation to the state draft.
-   */
-  private applyOperation(state: any, op: PatchOperation): void {
-    const { path, value } = op;
-
-    if (path.length === 0) {
-      throw new Error('Patch operation path cannot be empty');
-    }
-
-    // Navigate to the parent of the target
-    let current = state;
-    for (let i = 0; i < path.length - 1; i++) {
-      const key = path[i];
-      if (current[key] === undefined) {
-        throw new Error(`Path not found: ${path.slice(0, i + 1).join('.')}`);
-      }
-      current = current[key];
-    }
-
-    const lastKey = path[path.length - 1];
-
-    switch (op.op) {
-      case 'add':
-        if (Array.isArray(current) && typeof lastKey === 'number') {
-          current.splice(lastKey, 0, value);
-        } else {
-          current[lastKey] = value;
-        }
-        break;
-
-      case 'remove':
-        if (Array.isArray(current) && typeof lastKey === 'number') {
-          current.splice(lastKey, 1);
-        } else {
-          delete current[lastKey];
-        }
-        break;
-
-      case 'replace':
-        current[lastKey] = value;
-        break;
-
-      default:
-        throw new Error(`Unknown patch operation: ${op.op}`);
-    }
+  private applyMuteChange(trackIndex: number, muted: boolean, childIndices: number[], childMuted?: boolean[]): void {
+    useStudioStore.setState(s => {
+      s.tracks[trackIndex].mute = muted;
+      (s.tracks[trackIndex] as any).muted = muted;
+      s.tracks[trackIndex].dirty = true;
+      childIndices.forEach((ci, i) => {
+        s.tracks[ci].mute = childMuted ? childMuted[i] : muted;
+        (s.tracks[ci] as any).muted = childMuted ? childMuted[i] : muted;
+        s.tracks[ci].dirty = true;
+      });
+    });
   }
 
-  private pushToUndoStack(patch: Patch): void {
-    this.undoStack.push(patch);
+  private applyPositionChange(trackIndex: number, pos: { x: number; y: number }): void {
+    useStudioStore.setState(s => {
+      const track = s.tracks[trackIndex] as any;
+      track.position = { ...pos };
+      track.x_position = pos.x;
+      track.y_position = pos.y;
+      track.dirty = true;
+      if (track.instances?.length) {
+        track.instances[0].x_position = pos.x;
+      }
+    });
+  }
 
-    // Trim stack if it exceeds max size
-    if (this.undoStack.length > this.maxUndoStackSize) {
+  private pushUndo(entry: UndoEntry): void {
+    this.undoStack.push(entry);
+    if (this.undoStack.length > this.maxStackSize) {
       this.undoStack.shift();
     }
-
-    // Clear redo stack on new command
     this.redoStack = [];
-
     this.notifyListeners();
   }
 
-  private async runSideEffects(
-    patch: Patch,
-    command: Command,
-    context: CommandContext
-  ): Promise<void> {
-    for (const effect of this.sideEffects) {
-      // Check if effect should run
-      if (effect.shouldRun && !effect.shouldRun(patch, command)) {
-        continue;
-      }
+  private notifyListeners(): void {
+    this.listeners.forEach(l => l());
+  }
 
-      try {
-        await effect.afterPatch(patch, command, context);
-      } catch (error) {
-        // Log but don't throw - side effects shouldn't break the mutation
-        console.error(`Side effect "${effect.name}" failed:`, error);
-      }
+  private syncAudioIfPlaying(): void {
+    const state = useStudioStore.getState();
+    if (!state.isPlaying) return;
+
+    const engine = getAudioEngine();
+    if (!engine.isReady()) return;
+
+    try {
+      const playbackState = buildPlaybackState({
+        tracks: state.tracks ?? [],
+        midiManager: state.store?.getMidiManager() ?? null,
+        bpm: state.bpm ?? 120,
+        timeSignature: state.timeSignature ?? [4, 4],
+        masterVolume: 100,
+      });
+      engine.setState(playbackState);
+    } catch (error) {
+      console.error('Controller: Error syncing audio state:', error);
     }
   }
-
-  private notifyListeners(): void {
-    this.listeners.forEach((listener) => listener());
-  }
 }
 
 // ============================================================================
-// SINGLETON INSTANCE
+// SINGLETON
 // ============================================================================
 
-let controllerInstance: ProjectController | null = null;
+let instance: ProjectController | null = null;
 
-/**
- * Get the singleton ProjectController instance.
- * This should be used outside of React components (e.g., in slice code).
- */
 export function getProjectController(): ProjectController {
-  if (!controllerInstance) {
-    controllerInstance = new ProjectController();
+  if (!instance) {
+    instance = new ProjectController();
   }
-  return controllerInstance;
+  return instance;
 }
 
-/**
- * Initialize the controller with handlers and side effects.
- * Should be called once at app startup.
- */
-export function initializeController(controller: ProjectController): void {
-  controllerInstance = controller;
-}
-
-/**
- * Reset the controller instance (for testing).
- */
 export function resetController(): void {
-  controllerInstance = null;
+  instance = null;
 }

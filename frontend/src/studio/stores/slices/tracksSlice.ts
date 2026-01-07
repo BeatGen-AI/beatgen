@@ -917,14 +917,7 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
       const oldPosition = dragStartPositions.get(trackId) || currentPosition;
       dragStartPositions.delete(trackId);
 
-      getProjectController().execute({
-        type: 'TRACK_POSITION_CHANGE',
-        payload: {
-          trackId,
-          oldPosition,
-          newPosition,
-        },
-      });
+      getProjectController().changePosition(trackId, oldPosition, newPosition);
     } else {
       // During drag, update state directly without history
       const updatedInstances = instances.map((instance, idx) =>
@@ -2562,30 +2555,18 @@ export const createTracksSlice = (set: SetFn, get: GetFn): TracksSlice => {
 
     // Parameter change handlers
     handleTrackParameterChange,
-    // Use controller for volume, pan, mute changes (centralized side effects)
+    // Use controller for volume, pan, mute changes (centralized undo/redo + audio sync)
     handleTrackVolumeChange: (trackId: string, volume: number) => {
-      getProjectController().execute({
-        type: 'TRACK_VOLUME_CHANGE',
-        payload: { trackId, volume },
-      });
+      getProjectController().changeVolume(trackId, volume);
     },
     handleTrackPanChange: (trackId: string, pan: number) => {
-      getProjectController().execute({
-        type: 'TRACK_PAN_CHANGE',
-        payload: { trackId, pan },
-      });
+      getProjectController().changePan(trackId, pan);
     },
     handleTrackMuteToggle: (trackId: string, muted: boolean) => {
-      getProjectController().execute({
-        type: 'TRACK_MUTE_TOGGLE',
-        payload: { trackId, muted },
-      });
+      getProjectController().toggleMute(trackId, muted);
     },
     handleTrackSoloToggle: (trackId: string, soloed: boolean) => {
-      getProjectController().execute({
-        type: 'TRACK_SOLO_TOGGLE',
-        payload: { trackId, soloed },
-      });
+      getProjectController().toggleSolo(trackId, soloed);
     },
     handleTrackPositionChange,
     // Name changes still use old system (not playback-relevant, no need for controller)

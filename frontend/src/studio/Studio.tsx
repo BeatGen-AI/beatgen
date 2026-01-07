@@ -19,9 +19,6 @@ import { useStudioDBSession } from './hooks/useStudioDBSession';
 import { useHistorySync } from './hooks/useHistorySync';
 import { useAutoSave } from './hooks/useAutoSave';
 
-// Import controller
-import { ProjectControllerProvider } from './core/controller';
-
 import StudioControlBar from './components/control-bar/ControlBar';
 import { DEFAULT_MEASURE_WIDTH, useGridStore } from './core/state/gridStore';
 import ChatWindow from './components/ai-assistant/ChatWindow';
@@ -784,13 +781,4 @@ function Studio({ projectId }: StudioProps) {
   );
 }
 
-// Wrap with ProjectControllerProvider for centralized state mutation handling
-const StudioWithPianoRoll = (props: StudioProps) => {
-  return (
-    <ProjectControllerProvider>
-      <Studio {...props} />
-    </ProjectControllerProvider>
-  );
-};
-
-export default StudioWithPianoRoll;
+export default Studio;
