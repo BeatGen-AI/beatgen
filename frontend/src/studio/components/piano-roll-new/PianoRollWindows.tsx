@@ -7,7 +7,6 @@ import { diffNotes } from '../../utils/noteDiffing';
 import { getTrackColor } from '../../constants/gridConstants';
 import { MidiTrack } from 'src/platform/types/dto/track_models/midi_track';
 import { CombinedTrack } from 'src/platform/types/project';
-import { Store } from '../../core/state/store';
 import { Actions } from '../../core/state/history/actions';
 import { convertFromNoteState } from '../../utils/noteConversion'; 
 
