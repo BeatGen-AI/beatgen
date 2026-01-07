@@ -4,6 +4,9 @@
  * for consistent viewport behavior across different track types.
  */
 
+import { MUSIC_CONSTANTS } from '../constants/musicConstants';
+import { DEFAULT_MEASURE_WIDTH } from '../core/state/gridStore';
+
 export interface VisibleTimeRange {
   startTicks: number;
   endTicks: number;
@@ -132,4 +135,30 @@ export function getVisiblePatternSteps(
   }
   
   return steps;
+}
+
+/**
+ * Calculate the number of ticks per pixel for the given time signature.
+ * This is a pure utility function - pass in the time signature parameters.
+ *
+ * @param beatsPerMeasure - Number of beats per measure (e.g., 4 for 4/4)
+ * @returns Ticks per pixel at current settings
+ */
+export function getTicksPerPixel(beatsPerMeasure: number): number {
+  const TICKS_PER_BEAT = MUSIC_CONSTANTS.pulsesPerQuarterNote;
+  const MEASURE_WIDTH = DEFAULT_MEASURE_WIDTH;
+  const beatWidth = MEASURE_WIDTH / beatsPerMeasure;
+  const ticksPerPixel = TICKS_PER_BEAT / beatWidth;
+  return ticksPerPixel;
+}
+
+/**
+ * Calculate the number of pixels per tick for the given time signature.
+ * This is a pure utility function - pass in the time signature parameters.
+ *
+ * @param beatsPerMeasure - Number of beats per measure (e.g., 4 for 4/4)
+ * @returns Pixels per tick at current settings
+ */
+export function getPixelsPerTick(beatsPerMeasure: number): number {
+  return 1 / getTicksPerPixel(beatsPerMeasure);
 }

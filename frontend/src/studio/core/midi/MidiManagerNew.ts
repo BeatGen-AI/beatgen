@@ -39,26 +39,63 @@ interface MidiData {
 export type TrackUpdateCallback = (trackId: string, notes: Note[]) => void;
 
 /**
+ * Interface for Zustand store accessor
+ * This allows MidiManager to read/write notes from Zustand state
+ */
+export interface ZustandStoreAccessor {
+  getTrackNotes: (trackId: string) => Note[];
+  setTrackNotes: (trackId: string, notes: Note[]) => void;
+  addNoteToTrack: (trackId: string, note: Note) => number;
+  removeNoteFromTrack: (trackId: string, noteId: number) => void;
+  updateNoteInTrack: (trackId: string, note: Note) => void;
+  hasTrack: (trackId: string) => boolean;
+  initializeTrackNotes: (trackId: string) => void;
+}
+
+/**
  * MidiManager serves as the central source of truth for MIDI note data.
  * It manages track notes, subscriptions, and persistence.
+ *
+ * Phase 1 Migration: MidiManager now supports a "Zustand mode" where it
+ * reads/writes notes from/to the Zustand store instead of its internal Map.
+ * This allows gradual migration of consumers while maintaining the same API.
  */
 export class MidiManager {
-  // Core data storage
+  // Core data storage (legacy - used when Zustand accessor is not set)
   private tracks: Map<string, Note[]> = new Map();
-  
+
+  // Zustand store accessor for reading/writing notes from Zustand state
+  private storeAccessor: ZustandStoreAccessor | null = null;
+
   // Instance management
   private registeredInstances: Map<string, Set<string>> = new Map(); // trackId -> Set of instanceIds
-  
+
   // Subscription management
   private subscribers: Map<string, TrackUpdateCallback[]> = new Map();
   private globalListeners: TrackUpdateCallback[] = [];
-  
+
   // Internal counter for generating unique note IDs
   private nextNoteIdCounter: number = 1;
-  
+
   // Debouncing for persistence operations
   private pendingUpdates: Map<string, NodeJS.Timeout> = new Map();
   private debounceTime: number = 500; // 500ms debounce time
+
+  /**
+   * Set the Zustand store accessor
+   * When set, MidiManager will read/write notes from Zustand instead of internal Map
+   */
+  setStoreAccessor(accessor: ZustandStoreAccessor): void {
+    this.storeAccessor = accessor;
+    console.log('MidiManager: Zustand store accessor connected');
+  }
+
+  /**
+   * Check if Zustand mode is enabled
+   */
+  isZustandMode(): boolean {
+    return this.storeAccessor !== null;
+  }
 
   /**
    * Check if a track exists
@@ -66,6 +103,9 @@ export class MidiManager {
    * @returns True if the track exists
    */
   hasTrack(trackId: string): boolean {
+    if (this.storeAccessor) {
+      return this.storeAccessor.hasTrack(trackId);
+    }
     return this.tracks.has(trackId);
   }
 
@@ -75,6 +115,13 @@ export class MidiManager {
    * @returns The notes array or null if track doesn't exist
    */
   getTrackNotes(trackId: string): Note[] | null {
+    if (this.storeAccessor) {
+      if (!this.storeAccessor.hasTrack(trackId)) {
+        return null;
+      }
+      const notes = this.storeAccessor.getTrackNotes(trackId);
+      return notes.length > 0 || this.storeAccessor.hasTrack(trackId) ? notes : null;
+    }
     return this.tracks.has(trackId) ? this.tracks.get(trackId)! : null;
   }
 
@@ -85,9 +132,14 @@ export class MidiManager {
    * @returns The created track object
    */
   createTrack(trackId: string, instrumentId: string, name: string = `Track ${instrumentId}`): MidiTrack {
-    // Initialize with empty notes array
-    this.tracks.set(trackId, []);
-    
+    if (this.storeAccessor) {
+      // In Zustand mode, initialize the track's notes array in the store
+      this.storeAccessor.initializeTrackNotes(trackId);
+    } else {
+      // Legacy mode: use internal Map
+      this.tracks.set(trackId, []);
+    }
+
     return {
       id: trackId,
       instrumentId,
@@ -104,21 +156,37 @@ export class MidiManager {
    * @throws Error if the track doesn't exist
    */
   updateTrack(trackId: string, notes: Note[]): void {
-    if (!this.tracks.has(trackId)) {
-      throw new Error(`Cannot update track ${trackId}: track does not exist`);
+    if (this.storeAccessor) {
+      if (!this.storeAccessor.hasTrack(trackId)) {
+        throw new Error(`Cannot update track ${trackId}: track does not exist`);
+      }
+
+      // Update notes in Zustand store
+      this.storeAccessor.setTrackNotes(trackId, notes);
+
+      // Notify subscribers about the update
+      this.notifyTrackSubscribers(trackId, notes);
+
+      // Persist to DB with debouncing
+      this.debouncePersistence(trackId, notes);
+    } else {
+      // Legacy mode
+      if (!this.tracks.has(trackId)) {
+        throw new Error(`Cannot update track ${trackId}: track does not exist`);
+      }
+
+      // Make a defensive copy of the notes array to prevent external mutation
+      const notesCopy = notes.map(note => ({...note}));
+
+      // Store the notes in our internal map
+      this.tracks.set(trackId, notesCopy);
+
+      // Notify subscribers about the update
+      this.notifyTrackSubscribers(trackId, notesCopy);
+
+      // Persist to DB with debouncing
+      this.debouncePersistence(trackId, notesCopy);
     }
-    
-    // Make a defensive copy of the notes array to prevent external mutation
-    const notesCopy = notes.map(note => ({...note}));
-    
-    // Store the notes in our internal map
-    this.tracks.set(trackId, notesCopy);
-    
-    // Notify subscribers about the update
-    this.notifyTrackSubscribers(trackId, notesCopy);
-    
-    // Persist to DB with debouncing
-    this.debouncePersistence(trackId, notesCopy);
   }
 
   
@@ -162,35 +230,54 @@ export class MidiManager {
    */
   async addNoteToTrack(trackId: string, note: Note): Promise<void> {
     // Log entry, instance ID, and map state BEFORE check
-    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): ENTER addNoteToTrack - Target ID: ${trackId}`); 
-    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): Checking if track exists... Has ${trackId}?`, this.tracks.has(trackId));
-    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): Current track keys before add attempt:`, Array.from(this.tracks.keys()));
-    
-    const notes = this.getTrackNotes(trackId);
-    if (notes === null) {
-      // Error is thrown here
-      throw new Error(`Cannot add note to track ${trackId}: track does not exist`);
-    }
-    
+    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): ENTER addNoteToTrack - Target ID: ${trackId}`);
+    console.log(`>>> MidiManager (${/*this.instanceId?.substring(0, 4)*/''}): Checking if track exists... Has ${trackId}?`, this.hasTrack(trackId));
+
     // Remove instanceId if present since instances share notes
     const { instanceId, ...noteWithoutInstanceId } = note;
     const noteToAdd = { ...noteWithoutInstanceId }; // Create a copy without instanceId
 
-    // Check if the incoming ID needs to be replaced
-    if (noteToAdd.id === -1 || noteToAdd.id === undefined || noteToAdd.id === null) {
-      const newId = this.nextNoteIdCounter++; // Get next ID and increment counter
-      console.log(`MidiManager: Assigning new ID ${newId} to incoming note (original ID: ${note.id})`);
-      noteToAdd.id = newId; 
+    if (this.storeAccessor) {
+      if (!this.storeAccessor.hasTrack(trackId)) {
+        throw new Error(`Cannot add note to track ${trackId}: track does not exist`);
+      }
+
+      // In Zustand mode, use the store accessor to add the note
+      // The store will assign the ID if needed
+      const assignedId = this.storeAccessor.addNoteToTrack(trackId, noteToAdd);
+      noteToAdd.id = assignedId;
+
+      // Notify subscribers
+      const updatedNotes = this.storeAccessor.getTrackNotes(trackId);
+      this.notifyTrackSubscribers(trackId, updatedNotes);
+
+      // Persist to DB with debouncing
+      this.debouncePersistence(trackId, updatedNotes);
     } else {
-      // Ensure the counter is always ahead of any explicitly provided IDs
-      this.nextNoteIdCounter = Math.max(this.nextNoteIdCounter, noteToAdd.id + 1);
+      // Legacy mode
+      console.log(`>>> MidiManager: Current track keys before add attempt:`, Array.from(this.tracks.keys()));
+
+      const notes = this.getTrackNotes(trackId);
+      if (notes === null) {
+        throw new Error(`Cannot add note to track ${trackId}: track does not exist`);
+      }
+
+      // Check if the incoming ID needs to be replaced
+      if (noteToAdd.id === -1 || noteToAdd.id === undefined || noteToAdd.id === null) {
+        const newId = this.nextNoteIdCounter++;
+        console.log(`MidiManager: Assigning new ID ${newId} to incoming note (original ID: ${note.id})`);
+        noteToAdd.id = newId;
+      } else {
+        // Ensure the counter is always ahead of any explicitly provided IDs
+        this.nextNoteIdCounter = Math.max(this.nextNoteIdCounter, noteToAdd.id + 1);
+      }
+
+      // Add the note with the correct ID
+      const updatedNotes = [...notes, noteToAdd];
+
+      // Update the track with the new note - this will notify subscribers too
+      this.updateTrack(trackId, updatedNotes);
     }
-    
-    // Add the note with the correct ID
-    const updatedNotes = [...notes, noteToAdd]; 
-    
-    // Update the track with the new note - this will notify subscribers too
-    this.updateTrack(trackId, updatedNotes);
   }
 
   /**
@@ -202,19 +289,37 @@ export class MidiManager {
   async removeNoteFromTrack(trackId: string, noteId: number): Promise<void> {
     console.log("MidiManager: current notes:", this.getTrackNotes(trackId));
     console.log(`MidiManager: Removing note ${noteId} from track ${trackId}`);
-    
-    // Get existing notes - will throw if track doesn't exist
-    const notes = this.getTrackNotes(trackId);
-    if (notes === null) {
-      throw new Error(`Cannot remove note from track ${trackId}: track does not exist`);
+
+    if (this.storeAccessor) {
+      if (!this.storeAccessor.hasTrack(trackId)) {
+        throw new Error(`Cannot remove note from track ${trackId}: track does not exist`);
+      }
+
+      // In Zustand mode, use the store accessor to remove the note
+      this.storeAccessor.removeNoteFromTrack(trackId, noteId);
+
+      // Notify subscribers
+      const updatedNotes = this.storeAccessor.getTrackNotes(trackId);
+      this.notifyTrackSubscribers(trackId, updatedNotes);
+
+      // Persist to DB with debouncing
+      this.debouncePersistence(trackId, updatedNotes);
+
+      console.log("MidiManager: updated notes:", updatedNotes);
+    } else {
+      // Legacy mode
+      const notes = this.getTrackNotes(trackId);
+      if (notes === null) {
+        throw new Error(`Cannot remove note from track ${trackId}: track does not exist`);
+      }
+
+      // Filter out the note to be removed
+      const updatedNotes = notes.filter(note => note.id !== noteId);
+
+      // Update the track without the removed note - this will notify subscribers too
+      this.updateTrack(trackId, updatedNotes);
+      console.log("MidiManager: updated notes:", this.getTrackNotes(trackId));
     }
-    
-    // Filter out the note to be removed
-    const updatedNotes = notes.filter(note => note.id !== noteId);
-    
-    // Update the track without the removed note - this will notify subscribers too
-    this.updateTrack(trackId, updatedNotes);
-    console.log("MidiManager: updated notes:", this.getTrackNotes(trackId));
   }
 
   /**
@@ -224,25 +329,42 @@ export class MidiManager {
    * @throws Error if the track doesn't exist or note not found
    */
   async updateNote(trackId: string, updatedNote: Note): Promise<void> {
-    // Get existing notes - will throw if track doesn't exist
-    const notes = this.getTrackNotes(trackId);
-    if (notes === null) {
-      throw new Error(`Cannot update note in track ${trackId}: track does not exist`);
+    if (this.storeAccessor) {
+      if (!this.storeAccessor.hasTrack(trackId)) {
+        throw new Error(`Cannot update note in track ${trackId}: track does not exist`);
+      }
+
+      // In Zustand mode, use the store accessor to update the note
+      // The store will throw if the note doesn't exist
+      this.storeAccessor.updateNoteInTrack(trackId, updatedNote);
+
+      // Notify subscribers
+      const updatedNotes = this.storeAccessor.getTrackNotes(trackId);
+      this.notifyTrackSubscribers(trackId, updatedNotes);
+
+      // Persist to DB with debouncing
+      this.debouncePersistence(trackId, updatedNotes);
+    } else {
+      // Legacy mode
+      const notes = this.getTrackNotes(trackId);
+      if (notes === null) {
+        throw new Error(`Cannot update note in track ${trackId}: track does not exist`);
+      }
+
+      // Check if the note exists
+      const noteExists = notes.some(note => note.id === updatedNote.id);
+      if (!noteExists) {
+        throw new Error(`Cannot update note ${updatedNote.id} in track ${trackId}: note not found`);
+      }
+
+      // Update the specific note (create a copy to avoid mutation)
+      const updatedNotes = notes.map(note =>
+        note.id === updatedNote.id ? {...updatedNote} : note
+      );
+
+      // Update the track with the modified notes - this will notify subscribers too
+      this.updateTrack(trackId, updatedNotes);
     }
-    
-    // Check if the note exists
-    const noteExists = notes.some(note => note.id === updatedNote.id);
-    if (!noteExists) {
-      throw new Error(`Cannot update note ${updatedNote.id} in track ${trackId}: note not found`);
-    }
-    
-    // Update the specific note (create a copy to avoid mutation)
-    const updatedNotes = notes.map(note => 
-      note.id === updatedNote.id ? {...updatedNote} : note
-    );
-    
-    // Update the track with the modified notes - this will notify subscribers too
-    this.updateTrack(trackId, updatedNotes);
   }
 
   /**

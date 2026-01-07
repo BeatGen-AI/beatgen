@@ -147,16 +147,27 @@ export const useStudioStore = create<StudioStoreState>()(immer((set, get) => {
   };
 }));
 
-// --- Post-Creation Initialization --- 
+// --- Post-Creation Initialization ---
 // Example: Initialize history state after store creation
 // This ensures the manager exists and the state reflects reality
 const initialState = useStudioStore.getState();
 if (initialState._updateHistoryState) {
     initialState._updateHistoryState();
 }
-// Optionally initialize the core store instance here if needed sooner
-// const coreStore = useStudioStore.getState().store;
-// if (coreStore && !useStudioStore.getState().isInitialized) {
-//   // Might need to trigger initializeAudio manually or ensure Store constructor handles it
-//   console.log("Performing post-creation store setup...");
-// } 
+
+// Connect MidiManager to Zustand store (Phase 1 - Unified State Migration)
+// This enables MidiManager to read/write notes from Zustand state instead of its internal Map
+const storeInstance = initialState.store;
+if (storeInstance) {
+    const zustandAccessor = {
+        getTrackNotes: (trackId: string) => useStudioStore.getState().getTrackNotes(trackId),
+        setTrackNotes: (trackId: string, notes: any[]) => useStudioStore.getState().setTrackNotes(trackId, notes),
+        addNoteToTrack: (trackId: string, note: any) => useStudioStore.getState().addNoteToTrack(trackId, note),
+        removeNoteFromTrack: (trackId: string, noteId: number) => useStudioStore.getState().removeNoteFromTrack(trackId, noteId),
+        updateNoteInTrack: (trackId: string, note: any) => useStudioStore.getState().updateNoteInTrack(trackId, note),
+        hasTrack: (trackId: string) => useStudioStore.getState().hasTrackById(trackId),
+        initializeTrackNotes: (trackId: string) => useStudioStore.getState().initializeTrackNotes(trackId),
+    };
+    storeInstance.connectMidiManagerToZustand(zustandAccessor);
+    console.log('studioStore: MidiManager connected to Zustand store for unified state management');
+} 

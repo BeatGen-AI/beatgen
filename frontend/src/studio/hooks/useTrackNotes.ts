@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Note } from '../../types/note';
 import { useStudioStore } from '../stores/studioStore';
 
@@ -11,48 +10,26 @@ export interface UseTrackNotesResult {
 }
 
 /**
- * Custom hook to get real-time MIDI notes for a track from MidiManager.
- * Subscribes to updates and returns the latest notes.
- * 
+ * Custom hook to get MIDI notes for a track from Zustand store.
+ * Uses Zustand selectors for reactivity - re-renders when notes change.
+ *
  * @param trackId The ID of the track to get notes for
  * @returns Object with notes array and hasTrack boolean
  */
 export function useTrackNotes(trackId: string | undefined): UseTrackNotesResult {
-  const { store } = useStudioStore();
-  const midiManager = store?.getMidiManager();
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [hasTrack, setHasTrack] = useState(false);
-  
-  useEffect(() => {
-    if (!midiManager || !trackId) {
-      setNotes([]);
-      setHasTrack(false);
-      return;
-    }
-    
-    // Check if track exists in MidiManager
-    const trackExists = midiManager.hasTrack(trackId);
-    setHasTrack(trackExists);
-    
-    if (trackExists) {
-      // Get initial notes
-      const initialNotes = midiManager.getTrackNotes(trackId);
-      setNotes(initialNotes || []);
-    } else {
-      setNotes([]);
-    }
-    
-    // Subscribe to updates for this specific track
-    const unsubscribe = midiManager.subscribeToTrack(trackId, (_, updatedNotes) => {
-      console.log(`useTrackNotes: Received update for track ${trackId}, ${updatedNotes.length} notes`);
-      setNotes(updatedNotes);
-      setHasTrack(true); // Track now exists if we're getting updates
-    });
-    
-    return () => {
-      unsubscribe();
-    };
-  }, [midiManager, trackId]);
-  
-  return { notes, hasTrack };
+  // Subscribe to noteVersion to trigger re-renders when notes change
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _noteVersion = useStudioStore(state => state.noteVersion);
+
+  // Get notes directly from Zustand store via selector
+  const notes = useStudioStore(state =>
+    trackId ? state.getTrackNotes(trackId) : []
+  );
+
+  // Check if track exists in store
+  const hasTrack = useStudioStore(state =>
+    trackId ? state.hasTrackById(trackId) : false
+  );
+
+  return { notes: notes || [], hasTrack };
 }

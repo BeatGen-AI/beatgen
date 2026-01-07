@@ -20,9 +20,11 @@ import { db } from '../../core/db/dexie-client'; // Import db instance
 import SampleManager from '../../core/samples/sampleManager';
 import { produce } from 'immer'; // Import produce
 import { getAudioDuration, calculateAudioDurationTicks } from '../../utils/audioAnalysis';
+import { getMidiNotesForKey } from '../../../utils/music_utils';
 
 // Define the state properties for this slice
 export interface ProjectSlice {
+  projectId: string | null;
   projectTitle: string;
   bpm: number;
   timeSignature: [number, number];
@@ -33,6 +35,8 @@ export interface ProjectSlice {
   handleProjectParamChange: (param: ProjectParam, value: any) => Promise<void>;
   handleKeySignatureChange: (keySignature: string) => Promise<void>;
   updateBPMState: (bpm: number) => Promise<void>;
+  setProjectId: (id: string) => void;
+  getKeyNotes: () => number[];
 }
 
 // Create the slice function
@@ -76,8 +80,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
       }
     });
 
-    // Update all audio systems
-    store.projectManager.setTempo(bpm);
+    // Update Tone.js transport (ProjectManager sync removed - Zustand is source of truth)
     Tone.getTransport().bpm.value = bpm;
 
     // Sync the AudioEngine after BPM change (only if currently playing)
@@ -99,9 +102,10 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     })); 
 
     if (!store) { console.warn("Store not available in handleProjectParamChange"); return; }
+    // Note: ProjectManager sync removed - Zustand is the single source of truth
     switch (param) {
       case 'projectTitle':
-        store.projectManager.setProjectName(value as string);
+        // Zustand state already updated above via Immer
         break;
       case 'bpm':
         await updateBPMState(value as number);
@@ -238,53 +242,22 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
   };
 
   // Helper to initialize project settings using Immer
+  // Note: ProjectManager sync removed - Zustand is the single source of truth
   const initializeProjectSettings = async (projectData: ProjectWithTracks) => {
-     const { _withStore, store } = rootGet();
-     const initSettings = async (passedStore: Store, projectData: ProjectWithTracks) => {
-        // Update state using Immer
-        set(produce((draft: RootState) => {
-            draft.projectTitle = projectData.name;
-            draft.bpm = projectData.bpm;
-            draft.timeSignature = [ projectData.time_signature_numerator, projectData.time_signature_denominator ];
-            draft.keySignature = projectData.key_signature;
-        }));
-        
-        // 1. Ensure project exists in the manager
-        const projectManager = passedStore.getProjectManager();
-        let currentProjectInstance = projectManager.getCurrentProject();
-        if (!currentProjectInstance || (projectData.id && currentProjectInstance.id !== projectData.id)) {
-             // If no current project or ID mismatch, create/set the new one
-             console.log("Creating/Setting project in manager:", projectData.name);
-             // Create project and immediately set the correct backend ID
-             passedStore.projectManager.createProject(projectData.name);
-             if (projectData.id) {
-                 passedStore.projectManager.setProjectId(projectData.id);
-                 console.log("Set ProjectManager ID to backend ID:", projectData.id);
-             }
-             // Re-fetch the instance AFTER creation/setting
-             currentProjectInstance = passedStore.projectManager.getCurrentProject();
-        } 
-        
-        // 2. Call methods on the manager's instance
-        if (currentProjectInstance) {
-            // Assuming currentProjectInstance is the correct class type with methods
-            projectManager.setTempo(projectData.bpm);
-            projectManager.setTimeSignature(projectData.time_signature_numerator, projectData.time_signature_denominator);
-            projectManager.setProjectName(projectData.name); 
-        } else {
-            console.error("Failed to get valid project instance in initSettings after create/get");
-        }
-        
-        // 3. Update Tone.js Transport
-        Tone.Transport.bpm.value = projectData.bpm;
-        Tone.Transport.timeSignature = [ projectData.time_signature_numerator, projectData.time_signature_denominator ];
+    // Update Zustand state using Immer
+    set(produce((draft: RootState) => {
+      draft.projectId = projectData.id || null;
+      draft.projectTitle = projectData.name;
+      draft.bpm = projectData.bpm;
+      draft.timeSignature = [projectData.time_signature_numerator, projectData.time_signature_denominator];
+      draft.keySignature = projectData.key_signature;
+    }));
 
-        // Return the instance obtained from the manager
-        return currentProjectInstance; // Return the instance we retrieved/created
-     }
-     if (!_withStore) return null;
-     // Pass projectData correctly
-     return _withStore(async (storeInstance) => await initSettings(storeInstance, projectData))(); 
+    // Update Tone.js Transport
+    Tone.Transport.bpm.value = projectData.bpm;
+    Tone.Transport.timeSignature = [projectData.time_signature_numerator, projectData.time_signature_denominator];
+
+    console.log(`Initialized project settings: ${projectData.name}, BPM: ${projectData.bpm}, ID: ${projectData.id}`);
   };
 
   // Refined processTrack for loading state (no history)
@@ -676,7 +649,21 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     return _withErrorHandling(loadLogic, 'loadProject')();
   };
 
+  // Set project ID in Zustand state
+  const setProjectId = (id: string) => {
+    set(produce((draft: RootState) => {
+      draft.projectId = id;
+    }));
+  };
+
+  // Get key notes based on current key signature
+  const getKeyNotes = (): number[] => {
+    const keySignature = rootGet().keySignature;
+    return getMidiNotesForKey(keySignature);
+  };
+
   return {
+    projectId: null,
     projectTitle: "Untitled Project",
     bpm: 120,
     timeSignature: [4, 4],
@@ -687,5 +674,7 @@ export const createProjectSlice: StoreSliceCreator<ProjectSlice> = (set, get) =>
     handleProjectParamChange,
     handleKeySignatureChange,
     updateBPMState,
+    setProjectId,
+    getKeyNotes,
   };
 };

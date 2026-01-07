@@ -57,10 +57,7 @@ export class KeySignatureAction extends BaseAction {
     }
     
     private async updateKeySignature(keySignature: string): Promise<void> {
-        if (this.store.projectManager && typeof this.store.projectManager.setKey === 'function') {
-            this.store.projectManager.setKey(keySignature);
-        }
-        
+        // Note: ProjectManager sync removed - Zustand is the single source of truth
         await this.get().handleProjectParamChange('keySignature', keySignature);
     }
     

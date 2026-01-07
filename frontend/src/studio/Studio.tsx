@@ -63,6 +63,7 @@ function Studio({ projectId }: StudioProps) {
     keySignature,
     zoomLevel,
     projectTitle,
+    setProjectId,
     canUndo,
     canRedo,
     measureCount,
@@ -176,13 +177,11 @@ function Studio({ projectId }: StudioProps) {
     onProjectIdUpdate: (projectId) => {
       console.log('Studio: Updating project ID from auto-save:', projectId);
       setExistingProjectId(projectId);
-      
-      // CRITICAL FIX: Update the ProjectManager with the backend project ID
-      if (store?.projectManager) {
-        store.projectManager.setProjectId(projectId);
-        console.log('Studio: Updated ProjectManager with backend project ID:', projectId);
-      }
-      
+
+      // Update Zustand store with the backend project ID
+      setProjectId(projectId);
+      console.log('Studio: Updated Zustand store with backend project ID:', projectId);
+
       // Update URL to include the new project ID
       const newUrl = `/studio?projectId=${projectId}`;
       window.history.replaceState({}, '', newUrl);

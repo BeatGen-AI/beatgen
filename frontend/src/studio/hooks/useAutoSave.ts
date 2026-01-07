@@ -67,10 +67,9 @@ export const useAutoSave = (options: UseAutoSaveOptions = {}): UseAutoSaveReturn
   // Callback to get current project state
   const getCurrentProjectState = useCallback(() => {
     const state = useStudioStore.getState();
-    
-    // Get project ID from ProjectManager if available, fallback to ref
-    const projectManagerId = state.store?.projectManager.getCurrentProject()?.id;
-    const currentProjectId = projectManagerId || projectIdRef.current;
+
+    // Get project ID from Zustand state, fallback to ref
+    const currentProjectId = state.projectId || projectIdRef.current;
     
 
     

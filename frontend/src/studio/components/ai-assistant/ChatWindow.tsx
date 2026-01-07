@@ -114,9 +114,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
   
   
   // Access the store for executing actions and project context
-  const { 
+  const {
     store,
-    handleAddTrack, 
+    handleAddTrack,
     handleTrackVolumeChange,
     handleTrackMuteToggle,
     handleTrackPositionChange,
@@ -126,6 +126,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
     tracks,
     updateTrackState,
     // Add project context for musical parameters
+    projectId: storeProjectId,
     bpm,
     timeSignature,
     keySignature,
@@ -588,7 +589,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, controlBarHeig
       
       // Prepare context with proper model selection
       const context: any = {
-        project_id: store?.projectManager.getCurrentProject()?.id,
+        project_id: storeProjectId,
         model: selectedModel,
         track_id: trackId,
         bpm: bpm,

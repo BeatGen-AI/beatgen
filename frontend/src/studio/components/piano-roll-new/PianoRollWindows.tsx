@@ -27,9 +27,7 @@ const PianoRollWindows: React.FC = memo(() => {
   const snapToGrid = useStudioStore(state => state.snapToGrid);
   const setSelectedTool = useStudioStore(state => state.setSelectedTool);
   const toggleSnapToGrid = useStudioStore(state => state.toggleSnapToGrid);
-  const getKeyNotes = useCallback(() => {
-    return store?.getProjectManager()?.getKeyNotes() || [];
-  }, [store]);
+  const getKeyNotes = useStudioStore(state => state.getKeyNotes);
   
   const [prevNotesByTrack, setPrevNotesByTrack] = useState<Record<string, NoteState[]>>({});
   
