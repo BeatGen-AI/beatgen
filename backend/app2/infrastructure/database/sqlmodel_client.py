@@ -21,6 +21,15 @@ logger = get_logger("beatgen.database.sqlmodel")
 
 # Get the database URL and convert to async
 DATABASE_URL = settings.db.URL
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set. Set it in backend/.env (see backend/.env.example).")
+
+# libpq sslmode values that asyncpg's `ssl` connect arg accepts verbatim.
+_VALID_SSL_MODES = {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+# SSL is required unless DATABASE_URL explicitly opts out with a standard
+# `sslmode=` query parameter (e.g. `?sslmode=disable` for a local Postgres).
+DATABASE_SSL_MODE = "require"
+
 # Remove SSL and application_name from URL and convert to async (we'll handle these in connect_args)
 ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 # Remove query parameters that are incompatible with asyncpg
@@ -29,9 +38,16 @@ if "?" in ASYNC_DATABASE_URL:
     # Remove sslmode and application_name from query params
     clean_params = []
     for param in query_params.split("&"):
-        if not param.startswith("sslmode=") and not param.startswith("application_name="):
+        if param.startswith("sslmode="):
+            DATABASE_SSL_MODE = param.split("=", 1)[1]
+            if DATABASE_SSL_MODE not in _VALID_SSL_MODES:
+                raise ValueError(
+                    f"Unsupported sslmode '{DATABASE_SSL_MODE}' in DATABASE_URL. "
+                    f"Expected one of: {sorted(_VALID_SSL_MODES)}"
+                )
+        elif not param.startswith("application_name="):
             clean_params.append(param)
-    
+
     if clean_params:
         ASYNC_DATABASE_URL = base_url + "?" + "&".join(clean_params)
     else:
@@ -65,6 +81,7 @@ logger.info(f"Supabase connection mode: {connection_mode}")
 # Configure connection args based on pooling mode
 statement_cache_size = 0 if is_transaction_mode else 100
 logger.info(f"Setting statement_cache_size to: {statement_cache_size}")
+logger.info(f"Database SSL mode: {DATABASE_SSL_MODE}")
 
 def get_connect_args():
     """Get connection args optimized for Supabase pooling mode"""
@@ -78,7 +95,7 @@ def get_connect_args():
                 "application_name": "beatgen",
                 "statement_timeout": "30s"
             },
-            "ssl": "require",
+            "ssl": DATABASE_SSL_MODE,
         }
         logger.info("Using transaction mode settings: statement_cache_size=0, unique prepared statement names, NullPool")
     else:
@@ -91,7 +108,7 @@ def get_connect_args():
                 "application_name": "beatgen",
                 "statement_timeout": "30s"
             },
-            "ssl": "require",
+            "ssl": DATABASE_SSL_MODE,
         }
         logger.info("Using session/direct mode settings with statement caching")
     
@@ -118,7 +135,7 @@ else:
         pool_timeout=10,
         pool_pre_ping=True,
         connect_args={
-            "ssl": "require",
+            "ssl": DATABASE_SSL_MODE,
             # Prepared statements work fine in session mode
             "statement_cache_size": 100,  # Default is fine
             "command_timeout": 60,
