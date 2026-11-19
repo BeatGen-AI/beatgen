@@ -59,6 +59,10 @@ Flows that must work end to end:
   `platform/types/storage.ts`) read `process.env.REACT_APP_SUPABASE_URL` (always undefined
   under Vite) and fall back to the production Supabase URL, so local assets can't load.
   Parent fixes after the frontend merge.
+- The hardcoded production storage host `fmpafpwdkegazcerrnso.supabase.co` returns NXDOMAIN
+  (control `*.supabase.co` hosts resolve), so that Supabase project is gone or paused. The
+  deployed frontend uses the same fallback, so production asset downloads likely fail today
+  (not verified in the production UI). `api.beatgen.com/health` and `app.beatgen.com` respond.
 - PrimeReact 11 moved to the PrimeUI license (runtime warning when unconfigured). Pinned to
   the newest OSS 10.x; license change is the user's decision.
 - GitHub Actions `claude-review` does not run: "account is locked due to a billing issue".
