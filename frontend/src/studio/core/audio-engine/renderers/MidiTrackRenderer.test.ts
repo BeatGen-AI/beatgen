@@ -74,7 +74,7 @@ class MockAudioContext {
 
 // Mock js-synthesizer module
 vi.mock('js-synthesizer', () => ({
-  AudioWorkletNodeSynthesizer: vi.fn().mockImplementation(() => {
+  AudioWorkletNodeSynthesizer: vi.fn().mockImplementation(function () {
     mockSynthInstance = createMockSynth();
     return mockSynthInstance;
   }),
