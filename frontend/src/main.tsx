@@ -1,3 +1,4 @@
+import { PrimeReactProvider } from '@primereact/core/config';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { PostHogProvider } from 'posthog-js/react';
@@ -69,7 +70,9 @@ if (document.getElementById('root')) {
           <AuthProvider>
             <UserProvider>
               <ThemeProvider>
-                <RouterProvider router={router} />
+                <PrimeReactProvider>
+                  <RouterProvider router={router} />
+                </PrimeReactProvider>
               </ThemeProvider>
             </UserProvider>
           </AuthProvider>
