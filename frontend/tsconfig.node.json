@@ -5,6 +5,7 @@
     "lib": ["ES2023"],
     "module": "ESNext",
     "skipLibCheck": true,
+    "types": ["node", "vitest/globals"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -22,6 +23,7 @@
     
     /* Path aliases */
     "paths": {
+      "src/*": ["./src/*"],
       "@src/*": ["../old_code/*"],
       "@core/*": ["../old_code/core/*"],
       "@components/*": ["../old_code/components/*"],
