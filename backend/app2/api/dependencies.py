@@ -131,6 +131,11 @@ async def get_current_user(
     Raises:
         UnauthorizedException: If the token is invalid
     """
+    # Reject a missing, empty or whitespace-only bearer token before any verification
+    # (`Authorization: Bearer ` yields an empty token from OAuth2PasswordBearer).
+    if not isinstance(token, str) or not token.strip():
+        raise UnauthorizedException("Could not validate credentials")
+
     # Check if user info is already cached in this request
     # Use full hash to avoid collision risk
     cache_key = f"current_user_{hashlib.sha256(token.encode()).hexdigest()}"

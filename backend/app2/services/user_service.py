@@ -11,7 +11,7 @@ from app2.core.exceptions import (
 )
 from app2.repositories.user_repository import UserRepository
 from app2.models.user import User
-from app2.infrastructure.database.supabase_client import supabase
+from app2.infrastructure.database.supabase_client import supabase, new_auth_client
 
 logger = get_service_logger("user")
 
@@ -140,15 +140,17 @@ class UserService:
             # First verify the current password by attempting to sign in
             # Get user email from profile
             profile = await self.get_profile(user_id)
-            email = profile.get("email")
+            email = profile.email
 
             if not email:
                 logger.error(f"No email found for user ID: {user_id}")
                 raise ServiceException("User profile is incomplete")
 
-            # Try to authenticate with current password
+            # Verify the current password and change it on a per-request auth client: the session from this
+            # sign-in exists only on this client, so the update can only ever apply to this user.
+            auth_client = new_auth_client()
             try:
-                auth_response = supabase.client.auth.sign_in_with_password(
+                auth_response = auth_client.sign_in_with_password(
                     {"email": email, "password": current_password}
                 )
 
@@ -159,8 +161,13 @@ class UserService:
                 logger.error(f"Authentication failed: {str(auth_err)}")
                 raise UnauthorizedException("Current password is incorrect")
 
+            if str(auth_response.user.id) != str(user_id):
+                raise UnauthorizedException("Signed-in account does not match the authenticated user")
+
             # Change password using Supabase Auth
-            supabase.client.auth.update_user({"password": new_password})
+            update_response = auth_client.update_user({"password": new_password})
+            if not update_response.user or str(update_response.user.id) != str(user_id):
+                raise ServiceException("Password update did not apply to the authenticated user")
 
             logger.info(f"Password changed for user ID: {user_id}")
             return True

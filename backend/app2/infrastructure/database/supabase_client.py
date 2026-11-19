@@ -1,4 +1,4 @@
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 from typing import Dict, Any, Callable
 import traceback
 
@@ -7,6 +7,34 @@ from app2.core.logging import get_logger
 from app2.core.exceptions import DatabaseException
 
 logger = get_logger("beatgen.infrastructure.supabase")
+
+# Storage key under which the Supabase auth client keeps the PKCE code verifier of an OAuth sign-in
+# (`f"{STORAGE_KEY}-code-verifier"`, STORAGE_KEY = "supabase.auth.token" in gotrue / supabase_auth).
+PKCE_CODE_VERIFIER_KEY = "supabase.auth.token-code-verifier"
+
+
+def new_auth_client(storage: Any = None):
+    """Return a fresh Supabase auth client for one request.
+
+    The process-wide `supabase.client` must never be used for auth calls: sign-in, sign-up, code exchange and
+    `set_session` store the resulting session on the client that made the call, and every later call that relies
+    on a stored session (`get_user()` with a falsy token, `update_user()`, ...) would then act as whoever
+    authenticated last on that worker. A client created per request holds at most the session of the request that
+    created it and is discarded afterwards. `auto_refresh_token=False` keeps it from starting a refresh timer for a
+    session nobody holds any more, and `persist_session=False` keeps the session out of `storage`.
+
+    Args:
+        storage: Optional gotrue storage to use instead of a fresh in-memory one (only the OAuth start uses it, to
+            keep the PKCE code verifier until the callback).
+    """
+    if not settings.supabase.URL or not settings.supabase.KEY:
+        raise RuntimeError(
+            "Supabase auth is not configured: SUPABASE_URL and SUPABASE_KEY must be set"
+        )
+    options = ClientOptions(auto_refresh_token=False, persist_session=False)
+    if storage is not None:
+        options.storage = storage
+    return create_client(settings.supabase.URL, settings.supabase.KEY, options=options).auth
 
 
 class SupabaseClient:
@@ -97,21 +125,23 @@ class SupabaseClient:
         """Get a table reference"""
         return self._client.table(table_name)
 
-    def auth(self):
-        """Get the auth client"""
-        return self._client.auth
-
     def storage(self):
         """Get the storage client"""
         return self._client.storage
 
     def verify_token(self, token: str) -> Dict[str, Any]:
-        """Verify a Supabase JWT token and return the user info"""
+        """Verify a Supabase JWT token with the Supabase Auth API and return the user info.
+
+        The token must be non-empty: gotrue's `get_user()` treats a falsy token as "use the stored session".
+        The call is made on a fresh auth client that holds no session, so it can only ever check this token.
+        """
+        if not isinstance(token, str) or not token.strip():
+            raise DatabaseException("Authentication error: missing bearer token")
         try:
             logger.info(f"Verifying token: {token[:10]}...")
-            user_response = self._client.auth.get_user(token)
+            user_response = new_auth_client().get_user(token)
 
-            if user_response.user is None:
+            if user_response is None or user_response.user is None:
                 logger.error("No user found for provided token")
                 raise DatabaseException("Invalid authentication token")
 
