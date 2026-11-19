@@ -1,3 +1,4 @@
+import { SONG_GENERATION_MODEL } from "@/studio/constants/assistantModels";
 import React, { useState, useRef } from 'react';
 import {
   Dialog,
@@ -136,7 +137,7 @@ export default function GenerateSongModal({ open, onClose, onSaveAsProject }: Ge
         const connection = await interactWithAssistant({
           prompt: prompt,
           mode: 'generate',
-          model: 'Claude 4 Sonnet',
+          model: SONG_GENERATION_MODEL,
           context: {
             source: 'homepage_generation',
             auto_create_project: userIsAuthenticated // Create project automatically if authenticated

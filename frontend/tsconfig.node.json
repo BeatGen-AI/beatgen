@@ -21,7 +21,6 @@
     "noUncheckedSideEffectImports": false,
     
     /* Path aliases */
-    "baseUrl": ".",
     "paths": {
       "@src/*": ["../old_code/*"],
       "@core/*": ["../old_code/core/*"],

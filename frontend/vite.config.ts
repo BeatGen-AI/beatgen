@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { TanStackRouterVite } from '@tanstack/router-vite-plugin'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import fs from 'fs'
 import https from 'https'
 import path from "path"
@@ -19,7 +19,7 @@ export default defineConfig(({ command }) => {
     plugins: [
       react(),
       tailwindcss(),
-      TanStackRouterVite(),
+      tanstackRouter(),
     ],
     define: {
       // Provide browser-compatible values for Node.js globals

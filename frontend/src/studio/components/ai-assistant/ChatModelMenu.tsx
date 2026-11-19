@@ -1,3 +1,4 @@
+import { getModelCreditCost } from '@/studio/constants/assistantModels';
 import React from 'react';
 import {
   DropdownMenu,
@@ -8,23 +9,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Coins } from 'lucide-react';
 import { useAppTheme } from '../../../lib/theme-provider';
-
-// Model credit costs (matching backend MODEL_COSTS)
-const MODEL_CREDIT_COSTS: Record<string, number> = {
-  "Deepseek R1": 22,
-  "Deepseek V3": 16,
-  "Claude 4 Sonnet": 120,
-  "Claude 4 Opus": 600,
-  "Claude 3.7 Sonnet": 120,
-  "GPT-4.1": 80,
-  "GPT-4o": 100,
-  "o3": 400,
-  "o3-mini": 44,
-  "Gemini Pro 2.5": 50,
-  "Gemini Flash 2.5": 12,
-  "Llama 4 Maverick": 6,
-  "Llama 4 Scout": 4,
-};
 
 interface ChatModelMenuProps {
   triggerLabel: string; // Label for the trigger
@@ -42,7 +26,7 @@ const ChatModelMenu: React.FC<ChatModelMenuProps> = ({ triggerLabel, onSelect, m
   };
 
   const getCreditCost = (model: string): number => {
-    return MODEL_CREDIT_COSTS[model] || 10; // Fallback to 10 credits
+    return getModelCreditCost(model);
   };
 
   const getTextColor = () => {

@@ -189,7 +189,7 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
           />
         
           <div className="relative">
-            <Knob
+            <Knob.Root
               value={normalizedValue}
               readOnly={true}
               disabled={false} // Still want it to look active
@@ -198,11 +198,13 @@ const ControlKnob: React.FC<ControlKnobProps> = ({
               textColor="#888"
               valueColor={color}
               rangeColor="rgba(255,255,255,0.2)"
-              showValue={false}
               min={0}
               max={100}
               step={1}
-            />
+            >
+              <Knob.Range />
+              <Knob.Value />
+            </Knob.Root>
             <div
               className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none"
               style={{

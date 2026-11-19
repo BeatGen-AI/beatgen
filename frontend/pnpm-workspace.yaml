@@ -1,0 +1,16 @@
+minimumReleaseAgeExclude:
+  - '@posthog/core@1.69.1'
+  - '@supabase/auth-js@2.119.1'
+  - '@supabase/functions-js@2.119.1'
+  - '@supabase/postgrest-js@2.119.1'
+  - '@supabase/realtime-js@2.119.1'
+  - '@supabase/storage-js@2.119.1'
+  - '@supabase/supabase-js@2.119.1'
+  - '@testing-library/jest-dom@8.0.0'
+  - lucide-react@1.76.0
+  - posthog-js@1.451.2
+
+# Explicitly authorize the known dependency build hooks (pnpm 12 fails otherwise).
+allowBuilds:
+  core-js: true
+  esbuild: true
