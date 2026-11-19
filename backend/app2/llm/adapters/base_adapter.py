@@ -139,7 +139,7 @@ class ProviderAdapter(ABC):
                 result = event
         if result is None:
             raise RuntimeError(f"{self.model_info.display_name}: the agent run ended without a result")
-        return result.output, usage_to_dict(result.usage())
+        return result.output, usage_to_dict(result.usage)
 
     async def _stream(self, events: AsyncGenerator[Any, None]) -> AsyncGenerator[AnyStreamEvent, None]:
         yield StreamStartEvent(metadata={"model": self.model_name, "provider": self.model_info.provider_name})
@@ -151,7 +151,7 @@ class ProviderAdapter(ABC):
                 result = event
         if result is None:
             raise RuntimeError(f"{self.model_info.display_name}: the agent run ended without a result")
-        yield StreamEndEvent(final_usage=usage_to_dict(result.usage()))
+        yield StreamEndEvent(final_usage=usage_to_dict(result.usage))
 
     async def _run_events(
         self,
