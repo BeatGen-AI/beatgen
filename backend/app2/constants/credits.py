@@ -3,6 +3,10 @@ Credit system constants and helper functions for BeatGen
 """
 from typing import Dict, Any, Optional
 
+
+class UnknownModelCostError(ValueError):
+    """Raised when a model has no entry in MODEL_COSTS."""
+
 # Credit allocations per subscription tier (10x granular)
 CREDIT_ALLOCATIONS = {
     "free": {"monthly": 100, "rollover": False},
@@ -13,26 +17,27 @@ CREDIT_ALLOCATIONS = {
 
 # Credit costs per operation (10x granular)
 CREDIT_COSTS = {
-    "ai_music_generation": 10,  # Default fallback cost
     "audio_generation_fal": 10,
     "audio_inpainting": 10,
 }
 
-# Model-specific costs for AI music generation (1 dollar = 1 credit, rounded up)
+# Credit cost per assistant model, keyed by display name (the wire value the frontend sends).
+# Formula: ceil(40 x input $/1M tokens) at list prices as of 2026-11-19. Must match the lineup in
+# app2/llm/available_models.py and the frontend; see .scratch/app-refresh/spec.md.
 MODEL_COSTS = {
-    "Deepseek R1": 22,
-    "Deepseek V3": 16,  # Rounded up from $15.20
-    "Claude 4 Sonnet": 120,
-    "Claude 4 Opus": 600,
-    "Claude 3.7 Sonnet": 120,
-    "GPT-4.1": 80,
-    "GPT-4o": 100,
-    "o3": 400,
-    "o3-mini": 44,
-    "Gemini Pro 2.5": 50,
-    "Gemini Flash 2.5": 12,
-    "Llama 4 Maverick": 6,
-    "Llama 4 Scout": 4,  # Rounded up from $3.20
+    "Gemini 4 Carbon": 80,
+    "Gemini 3.8 Flash": 33,
+    "DeepSeek V4 Pro": 36,
+    "DeepSeek V4.1 Flash": 12,
+    "Claude Sonnet 5.5": 80,
+    "Claude Opus 5.5": 160,
+    "Claude Haiku 5.5": 4,
+    "GPT-6.2 Sol": 80,
+    "GPT-6.1 Terra": 40,
+    "GPT-6.2 Astra": 320,
+    "GPT-6 Luna": 4,
+    "Llama 4 Maverick": 14,
+    "Llama 4 Scout": 4,
 }
 
 # Special credit amounts
@@ -98,18 +103,21 @@ def get_operation_cost(operation: str) -> int:
 
 def get_model_credit_cost(model_display_name: str) -> int:
     """Get credit cost for a specific AI model.
-    
+
     Args:
-        model_display_name: The display name of the model (e.g., "Claude 4 Sonnet", "GPT-4o")
-        
+        model_display_name: The display name of the model (e.g., "Claude Sonnet 5.5", "GPT-6.2 Sol")
+
     Returns:
-        Credit cost for the model. Falls back to default ai_music_generation cost if model not found.
+        Credit cost for the model.
+
+    Raises:
+        UnknownModelCostError: if the model has no credit cost. There is no default cost.
     """
-    if model_display_name in MODEL_COSTS:
-        return MODEL_COSTS[model_display_name]
-    
-    # Fallback to default cost for unknown models
-    return CREDIT_COSTS["ai_music_generation"]
+    if model_display_name not in MODEL_COSTS:
+        raise UnknownModelCostError(
+            f"No credit cost defined for model {model_display_name!r}. Known models: {list(MODEL_COSTS)}"
+        )
+    return MODEL_COSTS[model_display_name]
 
 
 def get_available_models_with_costs() -> Dict[str, int]:
