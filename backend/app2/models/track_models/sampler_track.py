@@ -52,8 +52,11 @@ class SamplerTrack(SamplerTrackBase, table=True):
 
     __tablename__ = "sampler_tracks"
 
-    # Explicitly define the primary key
-    id: uuid.UUID = Field(primary_key=True, foreign_key="project_tracks.track_id")
+    # Explicitly define the primary key. Like the audio, MIDI and drum track ids it carries no foreign key:
+    # project_tracks is a many-to-many link with the composite primary key (project_id, track_id), so
+    # track_id alone is not unique and cannot be referenced (it made create_all fail on a fresh database).
+    # The project_tracks relationship below joins with explicit primaryjoin/foreign_keys instead.
+    id: uuid.UUID = Field(primary_key=True)
 
     # User relationship
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
