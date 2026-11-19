@@ -4,25 +4,24 @@ Backend service for the BeatGen Digital Audio Workstation (DAW) application.
 
 ## Setup
 
-1. Create a virtual environment:
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/). Run from `backend/`.
+
+1. Install dependencies (from `uv.lock`):
    ```
-   python -m venv venv
+   uv sync
+   ```
+   (or `uv pip install -r requirements.txt`; `requirements.txt` is generated from `uv.lock`, see its header)
+
+2. Create a `.env` file based on `.env.example` and configure your Supabase credentials.
+
+3. Run the server:
+   ```
+   uv run uvicorn app2.main:app --reload
    ```
 
-2. Activate the virtual environment:
-   - Windows: `venv\Scripts\activate`
-   - MacOS/Linux: `source venv/bin/activate`
-
-3. Install dependencies:
+4. Run the tests:
    ```
-   pip install -r requirements.txt
-   ```
-
-4. Create a `.env` file based on `.env.example` and configure your Supabase credentials.
-
-5. Run the server:
-   ```
-   uvicorn app.main:app --reload
+   uv run pytest
    ```
 
 ## API Endpoints
