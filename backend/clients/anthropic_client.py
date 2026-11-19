@@ -17,14 +17,12 @@ class AnthropicClient:
         system_prompt: str = "",
         thinking: bool = False,
         max_tokens: int = 20000,
-        temperature: float = 1,
     ):
         # Initialize both sync and async clients
-        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.async_client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.model = os.getenv("MODEL_ID")
+        self.client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        self.async_client = AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        self.model = os.environ["MODEL_ID"]
         self.max_tokens = max_tokens
-        self.temperature = temperature
         self.messages = []
         self.system_prompt = system_prompt
         self.thinking = thinking
@@ -37,9 +35,6 @@ class AnthropicClient:
 
     def set_max_tokens(self, max_tokens: int):
         self.max_tokens = max_tokens
-
-    def set_temperature(self, temperature: float):
-        self.temperature = temperature
 
     def get_messages(self):
         return self.messages
@@ -66,21 +61,23 @@ class AnthropicClient:
             f"Starting async API call to Anthropic with model {self.model} and message {message}"
         )
 
+        # No `temperature`: anthropic>=1 removed it from `messages.create`, and API version 2026-10-21 (the
+        # default of anthropic>=2) rejects sampling parameters on every model.
         params = {
             "model": self.model,
             "max_tokens": self.max_tokens,
-            "temperature": self.temperature,
             "messages": self.messages,
             "system": self.system_prompt,
             "stream": stream,
         }
 
         if tools:
+            # `tool_choice` stays `auto` (the default): current Claude models reject a forced `any`/`tool`.
             params["tools"] = tools
-            params["tool_choice"] = {"type": "any"}
 
         if thinking:
-            params["thinking"] = {"type": "enabled", "budget_tokens": 16000}
+            # Thinking budgets are rejected by current Claude models; adaptive thinking replaces them.
+            params["thinking"] = {"type": "adaptive"}
 
         # Use the async client to make the API call
         response = await self.async_client.messages.create(**params)

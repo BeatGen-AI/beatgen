@@ -15,7 +15,7 @@ def mock_load_dotenv(mocker):
     # The simplest is to just ensure config.py uses a mocked load_dotenv.
 
 # Now import the module we are testing AFTER the mock_load_dotenv fixture is defined (due to autouse=True)
-from llm import config
+from app2.llm import config
 
 @pytest.fixture(autouse=True)
 def manage_env_vars(monkeypatch):

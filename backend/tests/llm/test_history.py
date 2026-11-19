@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from llm.history import ChatMessage, MessageHistory
+from app2.llm.history import ChatMessage, MessageHistory
 
 
 def test_chat_message_creation():

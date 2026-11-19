@@ -1,12 +1,14 @@
 # CLAUDE.md - BeatGen Backend
 
 ## Run Commands
-- `python -m venv venv` - Create virtual environment
-- `source venv/bin/activate` - Activate virtual environment (Mac/Linux)
-- `venv\Scripts\activate` - Activate virtual environment (Windows)
-- `pip install -r requirements.txt` - Install dependencies
-- `uvicorn app.main:app --reload` - Run the development server
-- `pytest` - Run tests
+Run from `backend/`. Dependencies are declared in `pyproject.toml` and locked in `uv.lock`;
+`requirements.txt` is generated from the lock (see its header) - never edit it by hand.
+- `uv sync` - Create `.venv` and install runtime + dev dependencies from the lock
+- `uv pip install -r requirements.txt` - Alternative install of the pinned runtime dependencies
+- `uv add <pkg>` / edit `pyproject.toml` then `uv lock` - Change dependencies, then regenerate `requirements.txt` with
+  `uv export --format requirements.txt --no-hashes --no-dev --no-emit-project --locked -o requirements.txt`
+- `uv run uvicorn app2.main:app --reload` - Run the development server (needs `DATABASE_URL`; add `?sslmode=disable` for a local Postgres)
+- `uv run pytest` - Run tests
 
 ## Database Schema
 - **users** (public.users)

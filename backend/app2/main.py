@@ -66,9 +66,10 @@ async def init_db():
         await create_db_and_tables()
         logger.info("Database initialization complete")
     except Exception as e:
-        logger.error(f"Database initialization failed: {str(e)}")
-        logger.error(traceback.format_exc())
-        # Continue running even if database initialization fails
+        logger.critical(f"Database initialization failed, aborting startup: {str(e)}")
+        logger.critical(traceback.format_exc())
+        # Fail loudly: serving without a usable schema only hides the problem.
+        raise
 
 @app.on_event("startup")
 async def warm_jwt_cache():
