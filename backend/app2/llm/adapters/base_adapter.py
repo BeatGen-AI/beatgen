@@ -1,92 +1,204 @@
+import copy
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Any, AsyncGenerator, Dict, Optional, Sequence, Union, Tuple
+from typing import List, Any, AsyncGenerator, Dict, Optional, Sequence, Tuple
 
-from pydantic_ai import Agent
+import httpx2
+from pydantic_ai import Agent, AgentRunResultEvent
+from pydantic_ai.exceptions import ContentFilterError
 from pydantic_ai.messages import (
-    ModelMessage, 
+    ModelMessage,
     ModelRequest,
     ModelResponse,
-    UserPromptPart,
+    PartDeltaEvent,
+    PartStartEvent,
     TextPart,
-    SystemPromptPart,
-    ToolCallPart, 
-    ToolReturnPart
+    TextPartDelta,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
 )
+from pydantic_ai.models import Model
+from pydantic_ai.run import AgentRunResult
+from pydantic_ai.usage import RunUsage, UsageLimits
 
+from app2.llm.available_models import ModelInfo
 from app2.llm.history import ChatMessage, ToolResponseMessageContent
+from app2.llm.streaming import AnyStreamEvent, StreamEndEvent, StreamStartEvent, TextDeltaEvent
 
 logger = logging.getLogger(__name__)
 
+
+class ModelRefusalError(RuntimeError):
+    """The model (or its provider's safety system) declined the request.
+
+    Raised instead of returning the empty or partial output of a declined request. For Anthropic this is
+    `stop_reason == "refusal"` (after any server-side fallback also declined); other providers report the same
+    `content_filter` finish reason through pydantic-ai.
+    """
+
+    def __init__(self, model_display_name: str, provider_details: Optional[Dict[str, Any]] = None) -> None:
+        details = provider_details or {}
+        self.model_display_name = model_display_name
+        self.category: Optional[str] = details.get("refusal_category")
+        self.explanation: Optional[str] = details.get("refusal")
+        message = f"{model_display_name} declined this request"
+        if self.category:
+            message += f" (refusal category: {self.category})"
+        message += "."
+        if self.explanation:
+            message += f" {self.explanation}"
+        message += " Try rephrasing the request or choose another model."
+        super().__init__(message)
+
+
+def usage_to_dict(usage: RunUsage) -> Dict[str, int]:
+    """The token counts the chat session and the music agent track, from a pydantic-ai `RunUsage`."""
+    return {
+        "request_tokens": usage.input_tokens,
+        "response_tokens": usage.output_tokens,
+        "total_tokens": usage.input_tokens + usage.output_tokens,
+    }
+
+
 class ProviderAdapter(ABC):
     """
-    Abstract Base Class for provider adapters.
-    Each adapter will encapsulate the logic for interacting with a specific
-    LLM provider via Pydantic AI.
+    Base class for provider adapters.
+
+    A concrete adapter only builds the pydantic-ai `Model` for its provider. Running the agent, streaming,
+    refusal detection and usage reporting are shared.
+
+    Every request is streamed under the hood (`Agent.run_stream_events`), also when the caller asks for a complete
+    response: long, high-effort requests then can't hit non-streaming HTTP timeouts, and the response is parsed
+    from the same events in both modes.
     """
 
     def __init__(
         self,
-        model_name: str,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
+        model_info: ModelInfo,
         system_prompt: Optional[str] = None,
         tools: Optional[List[Any]] = None,
-        **kwargs: Any
+        http_client: Optional[httpx2.AsyncClient] = None,
     ) -> None:
         """
-        Initializes the adapter with common and provider-specific settings.
-
         Args:
-            model_name: The specific model name to use for this provider.
-            api_key: The API key for the provider, if required.
-            base_url: The base URL for the provider's API, if not the default.
-            system_prompt: An optional system prompt / initial instructions for the agent.
-            **kwargs: Additional provider-specific keyword arguments.
+            model_info: The lineup entry to use (provider, model ID, API key variable, per-model request settings).
+            system_prompt: Optional instructions for the agent.
+            tools: Optional pydantic-ai tools the model may call.
+            http_client: Optional HTTP client for the provider SDK (tests pass one with a mock transport);
+                the provider's default client is used when omitted.
         """
-        self.model_name = model_name
-        self.api_key = api_key
-        self.base_url = base_url
+        self.model_info = model_info
+        self.model_name = model_info.model_name
         self.system_prompt = system_prompt
         self.tools = tools
-        self.provider_kwargs = kwargs
-        self.agent = self._initialize_agent()
+        self.model = self._build_model(
+            api_key=model_info.get_api_key(),
+            http_client=http_client,
+            # A copy, so nothing pydantic-ai does with the settings can touch the shared lineup entry.
+            settings=copy.deepcopy(dict(model_info.model_settings)),
+        )
+        self.agent = Agent(
+            model=self.model,
+            instructions=system_prompt,
+            tools=tools or (),
+        )
 
     @abstractmethod
-    def _initialize_agent(self) -> Agent:
-        """
-        Initializes and returns the Pydantic AI Agent configured for this provider.
-        This method will be implemented by concrete subclasses.
-        """
-        pass
+    def _build_model(
+        self, *, api_key: str, settings: Dict[str, Any], http_client: Optional[httpx2.AsyncClient]
+    ) -> Model:
+        """Build the pydantic-ai model for `self.model_info`, with `settings` as its default request settings."""
 
-    @abstractmethod
     async def send_message_async(
         self,
         user_prompt: str,
         history: Sequence[ModelMessage],
         stream: bool = False,
         model_settings: Optional[Dict[str, Any]] = None,
-        usage_limits: Optional[Dict[str, Any]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None
-    ) -> Union[Any, Tuple[Any, Optional[Dict[str, Any]]]]:
+        usage_limits: Optional[UsageLimits] = None,
+    ) -> Any:
         """
-        Sends messages to the LLM and gets a response.
-
-        Args:
-            user_prompt: The current prompt or message from the user.
-            history: A sequence of Pydantic AI ModelMessage objects representing the prior conversation.
-            stream: Whether to stream the response.
-            model_settings: Provider-specific model settings.
-            usage_limits: Usage limits for the request.
-            tools: Optional list of Pydantic AI tool functions for the LLM to use.
+        Sends a message to the model.
 
         Returns:
-            If stream is False, returns tuple of (response_content, usage_dict)
-                where usage_dict contains: request_tokens, response_tokens, total_tokens
-            If stream is True, returns an AsyncGenerator yielding response events
+            If stream is False, a tuple of (response text, usage dict with request_tokens, response_tokens and
+            total_tokens).
+            If stream is True, an async generator of `StreamStartEvent`, `TextDeltaEvent` (one per new chunk of
+            text) and a final `StreamEndEvent`. Errors are raised from the generator, never yielded.
+
+        Raises:
+            ModelRefusalError: if the model declined the request.
         """
-        pass
+        events = self._run_events(user_prompt, history, model_settings, usage_limits)
+        if stream:
+            return self._stream(events)
+        result: Optional[AgentRunResult[str]] = None
+        async for event in events:
+            if isinstance(event, AgentRunResult):
+                result = event
+        if result is None:
+            raise RuntimeError(f"{self.model_info.display_name}: the agent run ended without a result")
+        return result.output, usage_to_dict(result.usage)
+
+    async def _stream(self, events: AsyncGenerator[Any, None]) -> AsyncGenerator[AnyStreamEvent, None]:
+        yield StreamStartEvent(metadata={"model": self.model_name, "provider": self.model_info.provider_name})
+        result: Optional[AgentRunResult[str]] = None
+        async for event in events:
+            if isinstance(event, str):
+                yield TextDeltaEvent(delta=event)
+            elif isinstance(event, AgentRunResult):
+                result = event
+        if result is None:
+            raise RuntimeError(f"{self.model_info.display_name}: the agent run ended without a result")
+        yield StreamEndEvent(final_usage=usage_to_dict(result.usage))
+
+    async def _run_events(
+        self,
+        user_prompt: str,
+        history: Sequence[ModelMessage],
+        model_settings: Optional[Dict[str, Any]],
+        usage_limits: Optional[UsageLimits],
+    ) -> AsyncGenerator[Any, None]:
+        """Yield each new chunk of response text (`str`), then the `AgentRunResult` once refusals are ruled out."""
+        try:
+            async with self.agent.run_stream_events(
+                user_prompt,
+                message_history=list(history),
+                model_settings=model_settings or None,
+                usage_limits=usage_limits,
+            ) as run_events:
+                async for event in run_events:
+                    if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                        if event.part.content:
+                            yield event.part.content
+                    elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                        if event.delta.content_delta:
+                            yield event.delta.content_delta
+                    elif isinstance(event, AgentRunResultEvent):
+                        self._raise_on_refusal(event.result.new_messages())
+                        yield event.result
+        except ContentFilterError as e:
+            # pydantic-ai raises this itself when a declined response carries no text.
+            responses = [m for m in self._messages_from_error(e) if isinstance(m, ModelResponse)]
+            raise ModelRefusalError(
+                self.model_info.display_name, responses[-1].provider_details if responses else None
+            ) from e
+
+    def _raise_on_refusal(self, messages: Sequence[ModelMessage]) -> None:
+        """Fail loudly when any response of the run was declined: its text is partial or empty, never a result."""
+        for message in messages:
+            if isinstance(message, ModelResponse) and message.finish_reason == "content_filter":
+                raise ModelRefusalError(self.model_info.display_name, message.provider_details)
+
+    @staticmethod
+    def _messages_from_error(error: ContentFilterError) -> List[ModelMessage]:
+        from pydantic_ai.messages import ModelMessagesTypeAdapter
+
+        body = getattr(error, "body", None)
+        if not body:
+            return []
+        return list(ModelMessagesTypeAdapter.validate_json(body))
 
     def format_pydantic_ai_messages(self, chat_history: List[ChatMessage]) -> List[ModelMessage]:
         """
@@ -98,11 +210,6 @@ class ProviderAdapter(ABC):
             if msg.role == "user":
                 pydantic_ai_history.append(ModelRequest(parts=[UserPromptPart(content=str(msg.content))]))
             elif msg.role == "assistant":
-                # Assistant content could be simple text or tool calls.
-                # This simplified version assumes text or a dict that can represent a ToolCallPart if needed.
-                # For now, let's assume assistant message is primarily text for history.
-                # If the assistant response included tool calls, those would be handled by the agent
-                # and the subsequent tool results would be in history as ToolReturnPart.
                 if isinstance(msg.content, dict) and "tool_name" in msg.content and "args" in msg.content and "tool_call_id" in msg.content:
                     pydantic_ai_history.append(
                         ModelResponse(parts=[
@@ -114,16 +221,10 @@ class ProviderAdapter(ABC):
                         ])
                     )
                 else:
-                     pydantic_ai_history.append(ModelResponse(parts=[TextPart(content=str(msg.content))]))
+                    pydantic_ai_history.append(ModelResponse(parts=[TextPart(content=str(msg.content))]))
             elif msg.role == "system":
-                # System messages are typically handled by Agent's instructions/system_prompt,
-                # not as part of the iterative message_history like user/assistant messages.
-                # However, if one were to be included, it might look like this, but it's unusual for history.
-                # pydantic_ai_history.append(ModelRequest(parts=[SystemPromptPart(content=str(msg.content))]))
-                # For now, we'll skip adding system messages directly to the formatted history 
-                # as they are usually set on the agent itself.
-                logger.warning(f"System role in ChatMessage history is usually handled by agent's system_prompt/instructions, not direct history. Skipping: {msg.content}")
-                pass
+                # System instructions are set on the agent, not replayed as history.
+                logger.warning(f"System role in ChatMessage history is handled by the agent's instructions. Skipping: {msg.content}")
             elif msg.role == "tool":
                 if isinstance(msg.content, ToolResponseMessageContent):
                     pydantic_ai_history.append(
@@ -139,10 +240,5 @@ class ProviderAdapter(ABC):
                     logger.warning(f"Tool role in ChatMessage history does not have ToolResponseMessageContent. Skipping: {msg.content}")
             else:
                 logger.warning(f"Unknown role '{msg.role}' in ChatMessage history. Skipping: {msg.content}")
-        
-        return pydantic_ai_history
 
-    # Placeholder for token counting - to be implemented by concrete adapters if possible
-    # @abstractmethod
-    # async def get_token_count_async(self, messages: List[ChatMessage]) -> int:
-    #     pass 
+        return pydantic_ai_history

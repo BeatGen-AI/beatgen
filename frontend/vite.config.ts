@@ -1,8 +1,9 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import { TanStackRouterVite } from '@tanstack/router-vite-plugin'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import fs from 'fs'
 import https from 'https'
+import type { IncomingMessage } from 'http'
 import path from "path"
 import tailwindcss from "@tailwindcss/vite"
 
@@ -11,15 +12,57 @@ import tailwindcss from "@tailwindcss/vite"
 // console.log('Source path exists:', fs.existsSync(srcPath))
 
 // https://vitejs.dev/config/
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command, mode }) => {
   const isDev = command === 'serve';
+  // Every variable from the env files and the process environment (process env wins).
+  const env = { ...loadEnv(mode, __dirname, ''), ...process.env };
+
+  // Asset URLs are built from VITE_SUPABASE_URL (src/platform/config/supabase.ts). A build
+  // without it would ship a frontend whose instruments and samples cannot load, so fail
+  // the build instead of the app.
+  if (command === 'build' && !env.VITE_SUPABASE_URL) {
+    throw new Error('VITE_SUPABASE_URL must be set to the Supabase project URL for production builds.');
+  }
+
+  // Dev-server switches, all optional; the defaults keep the HTTPS localhost setup.
+  // DEV_SERVER_HTTPS=false serves plain HTTP (e.g. behind a TLS-terminating preview proxy).
+  if (env.DEV_SERVER_HTTPS !== undefined && !['true', 'false'].includes(env.DEV_SERVER_HTTPS)) {
+    throw new Error(`DEV_SERVER_HTTPS must be "true" or "false", got "${env.DEV_SERVER_HTTPS}"`);
+  }
+  const devHttps = isDev && env.DEV_SERVER_HTTPS !== 'false';
+  // DEV_SERVER_ALLOWED_HOSTS: "all", or a comma-separated host list (".example.com" matches subdomains).
+  const allowedHosts = env.DEV_SERVER_ALLOWED_HOSTS === undefined
+    ? undefined
+    : env.DEV_SERVER_ALLOWED_HOSTS === 'all'
+      ? true
+      : env.DEV_SERVER_ALLOWED_HOSTS.split(',').map((host) => host.trim()).filter(Boolean);
+  // DEV_SUPABASE_PROXY_TARGET: proxy /storage/v1 to a Supabase stack (pairs with an empty
+  // VITE_SUPABASE_URL), so public assets load same-origin, including through remote previews.
+  // API prefixes served by the backend. Some share a name with SPA routes (/projects,
+  // /credits), so browser page navigations (GET asking for HTML) bypass the proxy and get
+  // the app; API calls from axios/fetch (JSON) go to the backend.
+  const backendTarget = {
+    target: 'https://localhost:8000',
+    changeOrigin: true,
+    secure: false, // the local backend uses the self-signed frontend/.cert pair
+    agent: new https.Agent({ minVersion: 'TLSv1.2' }),
+    bypass: (req: IncomingMessage) =>
+      req.method === 'GET' && req.headers.accept?.includes('text/html') ? req.url : undefined,
+  };
+  const backendProxy = Object.fromEntries(
+    ['/auth', '/users', '/projects', '/sounds', '/soundfonts', '/drum-samples', '/assistant',
+      '/health', '/subscriptions', '/webhooks', '/credits'].map((prefix) => [prefix, backendTarget])
+  );
+  const supabaseProxy = env.DEV_SUPABASE_PROXY_TARGET
+    ? { '/storage/v1': { target: env.DEV_SUPABASE_PROXY_TARGET, changeOrigin: true } }
+    : {};
 
   return {
     envPrefix: ['VITE_', 'DEV_VITE_', 'PROD_VITE_'], // Allow VITE_, DEV_VITE_, and PROD_VITE_ prefixes
     plugins: [
       react(),
       tailwindcss(),
-      TanStackRouterVite(),
+      tanstackRouter(),
     ],
     define: {
       // Provide browser-compatible values for Node.js globals
@@ -40,83 +83,12 @@ export default defineConfig(({ command }) => {
     },
     server: {
       port: 5173, // Default Vite port
+      ...(allowedHosts === undefined ? {} : { allowedHosts }),
       proxy: {
-        // '/api': {
-        //   target: 'https://localhost:8000', // Use HTTPS to match backend
-        //   changeOrigin: true,
-        //   secure: false, // Allow self-signed certificates
-        //   agent: new https.Agent({
-        //      minVersion: 'TLSv1.2'
-        //   })
-        // }
-        '/auth': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/users': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/projects/': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/sounds': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/soundfonts': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/drum-samples': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/assistant': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/health': { 
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/subscriptions': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/webhooks': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        },
-        '/credits/': {
-          target: 'https://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          agent: new https.Agent({ minVersion: 'TLSv1.2' })
-        }
+        ...supabaseProxy,
+        ...backendProxy,
       },
-      https: isDev ? {
+      https: devHttps ? {
         key: fs.readFileSync(path.resolve(__dirname, '.cert/key.pem')),
         cert: fs.readFileSync(path.resolve(__dirname, '.cert/cert.pem'))
       } : undefined, // HTTPS only for dev server

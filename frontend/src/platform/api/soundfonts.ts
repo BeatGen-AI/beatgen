@@ -1,5 +1,6 @@
 import { InstrumentFileRead } from '../types/project';
 import { apiClient } from './client';
+import { getSupabaseStorageBaseUrl } from '../config/supabase';
 
 
 /**
@@ -29,7 +30,7 @@ export const getPublicSoundfont = async (id: string): Promise<InstrumentFileRead
  * This constructs a public download URL for the provided storage key
  */
 export const getSoundfontDownloadUrl = (storageKey: string, isPublic: boolean = true): string => {
-  const baseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co';
+  const baseUrl = getSupabaseStorageBaseUrl();
   const prefix = isPublic ? 'soundfonts_public' : 'soundfonts_private';
   return `${baseUrl}/storage/v1/object/public/assets/${prefix}/${storageKey}`;
 };

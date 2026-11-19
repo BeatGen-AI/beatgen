@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 # Create a singleton Stripe client
 stripe_client = stripe.StripeClient(api_key=settings.stripe.SECRET_KEY)
 
+# Checkout `ui_mode` as our API (and the frontend) names it -> the value Stripe expects. The Stripe API version
+# pinned by stripe-python 17 (2026-11-18.endive) names these modes `hosted_page` / `embedded_page`.
+CHECKOUT_UI_MODES = {"hosted": "hosted_page", "embedded": "embedded_page"}
+
 
 class StripeService:
     def __init__(self):
@@ -72,6 +76,8 @@ class StripeService:
         ui_mode: str = "hosted"  # "hosted" or "embedded"
     ) -> Dict[str, Any]:
         """Create a Stripe checkout session for subscription"""
+        if ui_mode not in CHECKOUT_UI_MODES:
+            raise ValueError(f"Unsupported checkout ui_mode {ui_mode!r}; expected one of {sorted(CHECKOUT_UI_MODES)}")
         customer_id = await self.create_or_get_customer(user)
         
         try:
@@ -81,7 +87,8 @@ class StripeService:
             
             session_params = {
                 "customer": customer_id,
-                "payment_method_types": ["card"],
+                # API 2026-11-18.endive replaced `payment_method_types` with this filter on the dynamic set.
+                "allowed_payment_method_types": ["card"],
                 "mode": "subscription",
                 "line_items": [{
                     "price": price_id,
@@ -90,7 +97,7 @@ class StripeService:
                 "metadata": {
                     "user_id": str(user.id),
                 },
-                "ui_mode": ui_mode,
+                "ui_mode": CHECKOUT_UI_MODES[ui_mode],
             }
             
             # Add any embedded-specific parameters here if needed
@@ -285,36 +292,7 @@ class StripeService:
             subscription_id = stripe_subscription['id']
             status = stripe_subscription['status']
             
-            # For webhook events, we need to get period dates from the invoice
-            if 'current_period_start' in stripe_subscription:
-                current_period_start = stripe_subscription['current_period_start']
-                current_period_end = stripe_subscription['current_period_end']
-            else:
-                # Use billing_cycle_anchor as start date
-                current_period_start = stripe_subscription.get('billing_cycle_anchor', stripe_subscription['created'])
-                
-                # Calculate period end based on the plan interval
-                plan = stripe_subscription.get('plan', {})
-                interval = plan.get('interval', 'month')
-                interval_count = plan.get('interval_count', 1)
-                
-                # Calculate end date based on interval
-                if interval == 'month':
-                    # Add months
-                    from dateutil.relativedelta import relativedelta
-                    start_dt = datetime.fromtimestamp(current_period_start)
-                    end_dt = start_dt + relativedelta(months=interval_count)
-                    current_period_end = int(end_dt.timestamp())
-                elif interval == 'year':
-                    # Add years
-                    from dateutil.relativedelta import relativedelta
-                    start_dt = datetime.fromtimestamp(current_period_start)
-                    end_dt = start_dt + relativedelta(years=interval_count)
-                    current_period_end = int(end_dt.timestamp())
-                else:
-                    # Default to 30 days for other intervals
-                    current_period_end = current_period_start + (30 * 24 * 60 * 60 * interval_count)
-            
+            current_period_start, current_period_end = subscription_billing_period(stripe_subscription)
             cancel_at_period_end = stripe_subscription['cancel_at_period_end']
             canceled_at = stripe_subscription.get('canceled_at')
             trial_end = stripe_subscription.get('trial_end')
@@ -420,7 +398,7 @@ class StripeService:
                 user_id=user_id,
                 stripe_event_id=stripe_event["id"],
                 stripe_invoice_id=invoice.get("id"),
-                stripe_payment_intent_id=invoice.get("payment_intent"),
+                stripe_payment_intent_id=_invoice_payment_intent_id(invoice),
                 event_type=stripe_event["type"],
                 amount_cents=invoice.get("amount_paid"),
                 currency=invoice.get("currency"),
@@ -433,5 +411,41 @@ class StripeService:
     
     @staticmethod
     def verify_webhook_signature(payload: bytes, signature: str, webhook_secret: str) -> Dict[str, Any]:
-        """Verify webhook signature and return event"""
-        return stripe.Webhook.construct_event(payload, signature, webhook_secret)
+        """Verify the webhook signature and return the event as a plain dict.
+
+        stripe-python's `StripeObject` is no longer a `dict` (no `.get()`, not JSON-serializable), so the event is
+        converted once here and every handler works on plain dicts.
+        """
+        return stripe.Webhook.construct_event(payload, signature, webhook_secret).to_dict()
+
+
+def subscription_billing_period(stripe_subscription: Dict[str, Any]) -> tuple[int, int]:
+    """(current_period_start, current_period_end) of a subscription payload, as Unix timestamps.
+
+    Since Stripe API version 2025-03-31.basil the billing period lives on each subscription item, not on the
+    subscription. Payloads of older API versions (e.g. an older webhook endpoint version) still carry it top-level.
+    """
+    if "current_period_start" in stripe_subscription:
+        return stripe_subscription["current_period_start"], stripe_subscription["current_period_end"]
+    items = stripe_subscription["items"]["data"]
+    if not items:
+        raise ValueError(
+            f"Stripe subscription {stripe_subscription['id']} has no items to read its billing period from"
+        )
+    return items[0]["current_period_start"], items[0]["current_period_end"]
+
+
+def _invoice_payment_intent_id(invoice: Dict[str, Any]) -> Optional[str]:
+    """The invoice's PaymentIntent ID, if the payload carries one.
+
+    Since API version 2025-03-31.basil `Invoice.payment_intent` is gone; payments are listed under
+    `invoice.payments` (included only when expanded). Older API versions send `payment_intent` top-level.
+    """
+    if "payment_intent" in invoice:
+        return invoice["payment_intent"]
+    for invoice_payment in (invoice.get("payments") or {}).get("data", []):
+        payment = invoice_payment.get("payment") or {}
+        if payment.get("type") == "payment_intent":
+            payment_intent = payment.get("payment_intent")
+            return payment_intent if isinstance(payment_intent, str) else payment_intent["id"]
+    return None

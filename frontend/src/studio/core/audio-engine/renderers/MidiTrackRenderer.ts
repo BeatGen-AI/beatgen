@@ -118,7 +118,7 @@ export class MidiTrackRenderer implements ITrackRenderer {
     }
 
     await this.audioContext.audioWorklet.addModule(
-      '/js-synthesizer/libfluidsynth-2.3.0.js'
+      '/js-synthesizer/libfluidsynth-2.4.6.js'
     );
     await this.audioContext.audioWorklet.addModule(
       '/js-synthesizer/js-synthesizer.worklet.js'

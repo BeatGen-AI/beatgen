@@ -1,0 +1,15 @@
+# Local development services that the Supabase CLI stack does not provide.
+# Started by `make dev-services`; the Supabase stack itself is `make supabase-start`.
+name: beatgen-dev
+
+services:
+  redis:
+    # The backend requires Redis (user profile caching, request management).
+    image: redis:8-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

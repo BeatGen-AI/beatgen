@@ -70,6 +70,7 @@ from app2.llm.music_gen_service.music_utils import get_scale_pitch_classes, vali
 from app2.llm.music_gen_service.chord_progression_analysis import analyze_chord_progression
 
 from app2.llm.chat_wrapper import ChatSession
+from app2.llm.adapters.base_adapter import ModelRefusalError
 from app2.llm.available_models import ModelInfo
 from app2.llm.streaming import TextDeltaEvent
 
@@ -220,18 +221,14 @@ class MusicGenerationAgent:
         logger.info(f"🔍 MUSIC AGENT: Full request_context: {self.context.request_context}")
         
         return ChatSession(
-            provider_name=self.context.model_info.provider_name,
-            model_name=self.context.model_info.model_name,
+            model_info=self.context.model_info,
             queue=self.context.queue,
             system_prompt=system_prompt,
-            api_key=self.context.model_info.api_key,
-            base_url=self.context.model_info.base_url,
             project_id=self.context.request_context.get('project_id') if self.context.request_context else None,
             db_session=self.context.session,
             request_id=self.context.queue.get_request_id() if self.context.queue else None,
             mode='generate',
             step=step,
-            **getattr(self.context.model_info, 'provider_kwargs', {})
         )
 
     def _get_parameter_determination_prompt(self) -> str:
@@ -386,6 +383,8 @@ Choose sounds that fit the tempo and style of the composition."""
                     last_error = TypeError(f"ChatSession returned unexpected data type: {type(response_data)}. Content: {str(response_data)[:200]}...")
                     logger.info(f"Error on attempt {attempt + 1}: {last_error}")
 
+            except ModelRefusalError:
+                raise  # a declined request is never retried or treated as output
             except json.JSONDecodeError as jde:
                 last_error = jde
                 logger.info(f"ERROR on attempt {attempt + 1} (JSONDecodeError) for {output_type.__name__}: {jde}. Raw: '{raw_llm_output_data_str if raw_llm_output_data_str else 'N/A'}...'")
@@ -478,7 +477,7 @@ Provide only your reasoning and suggestions conversationally. Do NOT output JSON
             raise
         except Exception as e:
             logger.error(f"Error streaming explanation for musical parameters: {e}")
-            await self.context.queue.error("Failed to stream parameter explanation.") 
+            await self.context.queue.error(f"Failed to stream parameter explanation: {e}")
             raise
 
         await self.context.queue.add_chunk("\n\n")
@@ -775,7 +774,7 @@ This chord progression will provide the harmonic foundation for the track. Let m
             logger.info("Finished streaming chord generation explanation")
         except Exception as e:
             logger.error(f"Error streaming chord generation explanation: {e}")
-            await self.context.queue.error("Failed to stream chord explanation.")
+            await self.context.queue.error(f"Failed to stream chord explanation: {e}")
             return
 
         await self.context.queue.add_chunk("\n\n")
@@ -832,7 +831,7 @@ This chord progression will provide the harmonic foundation for the track. Let m
 
         except Exception as e:
             logger.error(f"Error during chord generation: {str(e)}")
-            await self.context.queue.error("Failed to generate chord progression.")
+            await self.context.queue.error(f"Failed to generate chord progression: {e}")
             raise
 
     # COMMENTED OUT: Melody explanation step removed per user request
@@ -1157,6 +1156,8 @@ Create interval-based melodies that follow the harmonic structure."""
                     break
                 else:
                     logger.info(f"Unexpected response type on attempt {attempt + 1}: {type(response_data)}")
+            except ModelRefusalError:
+                raise  # a declined request is never retried or treated as output
             except Exception as e:
                 logger.info(f"Error on melody generation attempt {attempt + 1}: {e}")
             
@@ -1444,6 +1445,8 @@ Create rhythmic patterns that fit the composition style."""
                     last_error = TypeError(f"ChatSession returned unexpected data type for drum patterns: {type(response_data)}. Content: {str(response_data)[:200]}...")
                     logger.info(f"Error on attempt {attempt + 1}: {last_error}")
 
+            except ModelRefusalError:
+                raise  # a declined request is never retried or treated as output
             except json.JSONDecodeError as jde:
                 last_error = jde
                 logger.info(f"ERROR on attempt {attempt + 1} (JSONDecodeError) for CreateDrumBeat: {jde}. Raw: '{raw_llm_output_str if raw_llm_output_str else 'N/A'}...'")
@@ -1636,6 +1639,8 @@ Respond with just the prompt text - no quotes, no additional formatting, just th
                 logger.error(f"Unexpected response format from LLM: {type(response_data)}")
                 raise ValueError("Failed to generate user-style prompt: unexpected response format")
                 
+        except ModelRefusalError:
+            raise  # a declined request must not be replaced by a fallback prompt
         except Exception as e:
             logger.error(f"Error generating user-style prompt: {e}")
             # Fallback to a basic user-style prompt

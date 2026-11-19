@@ -9,7 +9,11 @@ from fastapi import Request, Response
 
 from app2.core.logging import get_service_logger
 from app2.core.exceptions import UnauthorizedException, ServiceException, ValidationException, NotFoundException
-from app2.infrastructure.database.supabase_client import supabase
+from app2.infrastructure.database.supabase_client import (
+    supabase,
+    new_auth_client,
+    PKCE_CODE_VERIFIER_KEY,
+)
 from app2.infrastructure.jwt_verifier import jwt_verifier
 from app2.repositories.user_repository import UserRepository
 from app2.models.user import User
@@ -17,6 +21,40 @@ from app2.core.config import settings
 from app2.services.credits_service import credits_service
 
 logger = get_service_logger("auth")
+
+
+class _PKCEVerifierStorage:
+    """gotrue storage that keeps only the PKCE code verifier of the OAuth flow started last on this worker.
+
+    `get_google_auth_url` starts the OAuth flow on a per-request auth client backed by this storage, so the code
+    verifier survives until `handle_google_callback`, which reads it and exchanges the code on a fresh per-request
+    client (no session is ever stored on a shared client). This keeps the previous single-slot, per-worker behavior
+    of the verifier; it holds no session or token.
+    """
+
+    def __init__(self) -> None:
+        self._items: Dict[str, str] = {}
+
+    def get_item(self, key: str) -> Optional[str]:
+        return self._items.get(key)
+
+    def set_item(self, key: str, value: str) -> None:
+        if key != PKCE_CODE_VERIFIER_KEY:
+            raise RuntimeError(f"Refusing to store {key!r} in the shared OAuth PKCE verifier storage")
+        self._items[key] = value
+
+    def remove_item(self, key: str) -> None:
+        self._items.pop(key, None)
+
+
+_oauth_pkce_storage = _PKCEVerifierStorage()
+
+
+def _require_token(token: Optional[str]) -> str:
+    """Reject a missing, empty or whitespace-only bearer token before any verification."""
+    if not isinstance(token, str) or not token.strip():
+        raise UnauthorizedException("Missing bearer token")
+    return token
 
 
 class AuthService:
@@ -60,7 +98,7 @@ class AuthService:
         logger.info(f"Creating new user with email: {email}")
         try:
             # Register user with Supabase Auth
-            auth_response = supabase.client.auth.sign_up({
+            auth_response = new_auth_client().sign_up({
                 "email": email, 
                 "password": password
             })
@@ -154,7 +192,7 @@ class AuthService:
 
         try:
             # Sign in with Supabase Auth using the determined email
-            auth_response = supabase.client.auth.sign_in_with_password(login_payload)
+            auth_response = new_auth_client().sign_in_with_password(login_payload)
 
             # Extract user data
             if not auth_response.user:
@@ -206,7 +244,7 @@ class AuthService:
                 logger.info(f"Using default redirect: {default_redirect}")
             
             # Use Supabase Auth to send password reset email
-            supabase.client.auth.reset_password_email(email, options)
+            new_auth_client().reset_password_email(email, options)
             logger.info(f"Password reset email sent to: {email}")
             return True
         except Exception as e:
@@ -228,6 +266,7 @@ class AuthService:
         Raises:
             UnauthorizedException: If the token is invalid
         """
+        _require_token(token)
         logger.debug(f"Verifying token: {token[:10]}...")
         
         # Default to JWT verification (can be overridden with env var AUTH_USE_JWT_VERIFICATION=false)
@@ -347,7 +386,7 @@ class AuthService:
             logger.info("Using Supabase's built-in PKCE handling")
 
             # Use Supabase client to get the OAuth URL.
-            auth_response = supabase.client.auth.sign_in_with_oauth(
+            auth_response = new_auth_client(storage=_oauth_pkce_storage).sign_in_with_oauth(
                 {
                     "provider": "google",
                     "options": {
@@ -470,17 +509,26 @@ class AuthService:
         Returns:
             True if successful
         """
+        _require_token(access_token)
         try:
             logger.info(f"Adding password auth to user {user_id}")
-            
-            # Use Supabase's native updateUser method - more secure than HTTP calls
-            supabase.client.auth.update_user({
-                "password": password
-            })
-            
+
+            # Act only as the caller: a per-request auth client carrying the caller's own access token.
+            # GoTrue re-validates the token, and we check it belongs to the verified user before changing anything.
+            auth_client = new_auth_client()
+            session_response = auth_client.set_session(access_token, "")
+            if not session_response.user or str(session_response.user.id) != str(user_id):
+                raise UnauthorizedException("Access token does not belong to the authenticated user")
+
+            update_response = auth_client.update_user({"password": password})
+            if not update_response.user or str(update_response.user.id) != str(user_id):
+                raise ServiceException("Password update did not apply to the authenticated user")
+
             logger.info("Password set successfully - user can now sign in with email/password")
             return True
-                
+
+        except UnauthorizedException:
+            raise
         except Exception as e:
             logger.error(f"Error adding password auth: {str(e)}")
             raise ServiceException(f"Failed to add password: {str(e)}")
@@ -512,7 +560,9 @@ class AuthService:
             
             # Set the session with the recovery token
             # Supabase's Python client handles this through set_session
-            auth_response = supabase.client.auth.set_session(recovery_token, recovery_token)
+            # A per-request auth client, so the recovery session never lands on a shared client.
+            auth_client = new_auth_client()
+            auth_response = auth_client.set_session(recovery_token, recovery_token)
             
             if not auth_response.user:
                 logger.error("Failed to exchange recovery token for session - no user returned")
@@ -522,11 +572,11 @@ class AuthService:
             
             # Now we have a valid session, update the password
             logger.info("Updating password with active session...")
-            update_response = supabase.client.auth.update_user({
+            update_response = auth_client.update_user({
                 "password": password
             })
             
-            if update_response.user:
+            if update_response.user and str(update_response.user.id) == str(auth_response.user.id):
                 logger.info(f"Password successfully reset for user: {update_response.user.id}")
                 return True
             else:
@@ -570,8 +620,15 @@ class AuthService:
 
             # Use Supabase's built-in session exchange (no custom PKCE needed)
             logger.info("Exchanging code for session using Supabase's built-in flow...")
-            auth_response = supabase.client.auth.exchange_code_for_session( # type: ignore
-                {"auth_code": code}
+            code_verifier = _oauth_pkce_storage.get_item(PKCE_CODE_VERIFIER_KEY)
+            if not code_verifier:
+                raise UnauthorizedException(
+                    "Google authentication failed: no OAuth flow in progress on this server (PKCE code verifier missing)."
+                )
+            _oauth_pkce_storage.remove_item(PKCE_CODE_VERIFIER_KEY)
+            # Exchange on a fresh per-request client, so the new session is never stored on a shared client.
+            auth_response = new_auth_client().exchange_code_for_session(
+                {"auth_code": code, "code_verifier": code_verifier}
             )
             logger.info("Code exchanged successfully.")
 

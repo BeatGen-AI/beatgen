@@ -1,5 +1,6 @@
 import { DrumSamplePublicRead } from '../types/dto/public_models/drum_samples';
 import { apiClient } from './client';
+import { getSupabaseStorageBaseUrl } from '../config/supabase';
 
 // export interface Soundfont {
 //   id: string;
@@ -35,9 +36,7 @@ export const getPublicDrumSample = async (id: string): Promise<DrumSamplePublicR
  * Constructs a public download URL for the provided storage key.
  */
 export const getDrumSampleDownloadUrl = (storageKey: string): string => {
-  // Ensure the environment variable is correctly accessed or provide a default
-  // @ts-ignore Linter error about 'process', assuming build tool (e.g., CRA) handles this
-  const baseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co';
+  const baseUrl = getSupabaseStorageBaseUrl();
   // Updated path prefix for public drum samples
   const prefix = 'drum_samples_public';
   return `${baseUrl}/storage/v1/object/public/assets/${prefix}/${storageKey}`;

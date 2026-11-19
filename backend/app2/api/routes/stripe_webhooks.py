@@ -303,7 +303,7 @@ async def handle_checkout_completed(checkout_session):
                 # For checkout completion, we need to retrieve the full subscription
                 # But we'll convert it to dict format for consistency
                 logger.info(f"🔵 CHECKOUT - Retrieving subscription from Stripe: {checkout_session['subscription']}")
-                subscription = stripe_client.subscriptions.retrieve(checkout_session['subscription'])
+                subscription = stripe_client.v1.subscriptions.retrieve(checkout_session['subscription'])
                 logger.info(f"✅ CHECKOUT - Retrieved subscription {subscription.id} from checkout session")
                 
                 # Convert to dict and sync

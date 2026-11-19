@@ -80,7 +80,7 @@ class AudioContextManager {
 
         console.log("AudioContextManager: Adding required AudioWorklet modules...");
         try {
-            await this._context.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.3.0.js');
+            await this._context.audioWorklet.addModule('/js-synthesizer/libfluidsynth-2.4.6.js');
             await this._context.audioWorklet.addModule('/js-synthesizer/js-synthesizer.worklet.js');
             // Add other worklets if needed here
             console.log("AudioContextManager: AudioWorklet modules added.");

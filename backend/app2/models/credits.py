@@ -75,7 +75,7 @@ class CreditTransaction(SQLModel, table=True):
     
     # AI Generation specific fields (null for non-AI transactions)
     model_provider: Optional[str] = None  # openai, anthropic, deepseek, etc
-    model_name: Optional[str] = None  # gpt-4, claude-3, deepseek-v2, etc
+    model_name: Optional[str] = None  # provider model ID, e.g. claude-sonnet-5-5, gpt-6.2-sol
     request_tokens: Optional[int] = None  # Input tokens used
     response_tokens: Optional[int] = None  # Output tokens generated
     total_tokens: Optional[int] = None  # Total tokens (request + response)

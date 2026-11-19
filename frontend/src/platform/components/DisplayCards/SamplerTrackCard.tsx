@@ -88,6 +88,7 @@ const SamplerTrackCard: React.FC<SamplerTrackCardProps> = ({
       <div className="h-[35px] w-full">
         <AudioPreview
           audioUrl={track.audio_storage_key || ''}
+          storageType={track.storage_type}
           variant="card"
           duration={track.audio_file_duration}
           isPlaying={isPlaying}

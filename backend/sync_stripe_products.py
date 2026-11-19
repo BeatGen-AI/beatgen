@@ -2,8 +2,8 @@
 Script to sync Stripe products and prices to our database
 """
 import asyncio
-from sqlmodel import Session, select
-from app2.infrastructure.database.sqlmodel_client import engine
+from sqlmodel import select
+from app2.infrastructure.database.sqlmodel_client import get_async_session
 from app2.models.subscription import SubscriptionPlan, BillingPeriod
 from app2.services.stripe_service import stripe_client
 import logging
@@ -12,22 +12,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def sync_products_and_prices():
+async def sync_products_and_prices():
     """Sync all active products and prices from Stripe"""
-    # Get all active products
-    products = stripe_client.products.list()
-    active_products = [p for p in products.data if p['active']]
+    # StripeObject is not a dict in current stripe-python: work on plain dicts.
+    products = [p.to_dict() for p in stripe_client.v1.products.list().data]
+    active_products = [p for p in products if p['active']]
     logger.info(f"Found {len(active_products)} active products")
     
     # Get all active prices
-    prices = stripe_client.prices.list()
-    active_prices = [p for p in prices.data if p['active']]
+    prices = [p.to_dict() for p in stripe_client.v1.prices.list().data]
+    active_prices = [p for p in prices if p['active']]
     logger.info(f"Found {len(active_prices)} active prices")
     
     # Create a map of product_id to product
-    product_map = {p['id']: p for p in products.data}
+    product_map = {p['id']: p for p in products}
     
-    with Session(engine) as session:
+    # The engine is async (asyncpg); a sync Session cannot use it.
+    async with get_async_session() as session:
         for price in active_prices:
             # Skip if product not found or not active
             product = product_map.get(price['product'])
@@ -39,7 +40,7 @@ def sync_products_and_prices():
             stmt = select(SubscriptionPlan).where(
                 SubscriptionPlan.stripe_price_id == price['id']
             )
-            existing_plan = session.exec(stmt).first()
+            existing_plan = (await session.execute(stmt)).scalars().first()
             
             if existing_plan:
                 logger.info(f"Plan already exists for price {price['id']}")
@@ -81,9 +82,9 @@ def sync_products_and_prices():
             session.add(plan)
             logger.info(f"Created plan: {product['name']} - {billing_period.value} (${price.get('unit_amount', 0)/100})")
         
-        session.commit()
+        await session.commit()
         logger.info("Sync completed successfully")
 
 
 if __name__ == "__main__":
-    sync_products_and_prices()
+    asyncio.run(sync_products_and_prices())

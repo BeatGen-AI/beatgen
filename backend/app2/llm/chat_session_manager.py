@@ -123,7 +123,7 @@ class ChatSessionManager:
         Args:
             project_id: Project ID for session isolation (each project has its own conversation)
             mode: Mode (edit, chat, etc.) for context isolation
-            model: Model name to use
+            model: Display name of the lineup model to use (required; see app2.llm.available_models)
             sse_queue: SSE queue for streaming
             user_id: User ID (for logging/debugging purposes)
             track_context: Track context for edit mode
@@ -136,6 +136,9 @@ class ChatSessionManager:
         """
         # Ensure cleanup task is running
         self._ensure_cleanup_task()
+
+        # Resolve the model first: a missing or unknown model fails the request, there is no default model.
+        model_info = available_models.get_model_by_name(model)
 
         session_key = self._get_session_key(project_id, mode)
         current_time = time.time()
@@ -155,6 +158,12 @@ class ChatSessionManager:
             chat_session.db_session = db_session
             chat_session.request_id = request_id
             chat_session.mode = mode
+
+            # Honor the model chosen for this request (the user may have switched models).
+            if chat_session.model_info is not model_info:
+                logger.info(f"Switching ChatSession {session_key} from {chat_session.model_info.display_name} to {model_info.display_name}")
+                chat_session.switch_model(model_info)
+                session_data['model'] = model
             
             # Update track context in system prompt if it changed
             if mode == "edit" and track_context:
@@ -169,9 +178,6 @@ class ChatSessionManager:
         # Create new session
         logger.info(f"Creating new ChatSession: {session_key} with model: {model} (project: {project_id})")
 
-        # Get model info
-        model_info = available_models.get_model_by_name(model) if model else available_models.ALL_MODELS[0]
-
         # Build system prompt based on mode
         if mode == "edit":
             system_prompt = self._build_edit_system_prompt(track_context)
@@ -183,18 +189,14 @@ class ChatSessionManager:
 
         # Create ChatSession
         chat_session = ChatSession(
-            provider_name=model_info.provider_name,
-            model_name=model_info.model_name,
+            model_info=model_info,
             queue=sse_queue,
             system_prompt=system_prompt,
-            api_key=model_info.get_api_key(),
-            base_url=getattr(model_info, 'base_url', None),
             tools=tools,
             project_id=project_id,
             db_session=db_session,
             request_id=request_id,
             mode=mode,
-            **getattr(model_info, 'provider_kwargs', {}),
             **kwargs
         )
 

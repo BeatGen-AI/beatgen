@@ -1,41 +1,31 @@
 #!/bin/bash
+# Vendor js-synthesizer's browser files into public/js-synthesizer.
+#
+# The AudioWorklet scripts are loaded by URL (audioContextManager.ts, MidiTrackRenderer.ts,
+# index.html), so they are copied out of node_modules and committed. They MUST match the
+# installed npm `js-synthesizer` version: the main-thread library and the worklet agree on a
+# processor name that changes between releases. Re-run this after upgrading js-synthesizer.
+#
+# Usage (from frontend/, after `npm ci`): ./setup-js-synthesizer.sh
+set -euo pipefail
 
-# Setup script for js-synthesizer
-# This script copies the required js-synthesizer files to the public directory
+FLUIDSYNTH_VERSION="2.4.6"  # keep in sync with the libfluidsynth-*.js URLs in src/ and index.html
+SRC="node_modules/js-synthesizer"
+DEST="public/js-synthesizer"
 
-# Create the target directory
-mkdir -p public/js-synthesizer
-
-echo "Installing js-synthesizer package..."
-npm install --save js-synthesizer
-
-echo "Copying files from node_modules to public/js-synthesizer..."
-
-# Copy the main js-synthesizer files
-cp node_modules/js-synthesizer/dist/js-synthesizer.js public/js-synthesizer/
-cp node_modules/js-synthesizer/dist/js-synthesizer.js.map public/js-synthesizer/
-cp node_modules/js-synthesizer/dist/js-synthesizer.min.js public/js-synthesizer/
-cp node_modules/js-synthesizer/dist/js-synthesizer.min.js.map public/js-synthesizer/
-
-# Copy worklet files
-cp node_modules/js-synthesizer/dist/js-synthesizer.worklet.js public/js-synthesizer/
-cp node_modules/js-synthesizer/dist/js-synthesizer.worklet.js.map public/js-synthesizer/
-cp node_modules/js-synthesizer/dist/js-synthesizer.worklet.min.js public/js-synthesizer/
-cp node_modules/js-synthesizer/dist/js-synthesizer.worklet.min.js.map public/js-synthesizer/
-
-# Copy libfluidsynth files (from externals directory)
-cp node_modules/js-synthesizer/externals/libfluidsynth-2.3.0.js public/js-synthesizer/
-
-# Check if we have the required files
-if [ ! -f public/js-synthesizer/libfluidsynth-2.3.0.js ]; then
-  echo "Warning: libfluidsynth-2.3.0.js was not found or could not be copied."
-  echo "Manually copy this file to public/js-synthesizer/ if needed."
+if [ ! -d "$SRC" ]; then
+  echo "error: $SRC not found; run npm ci first" >&2
+  exit 1
 fi
 
-if [ ! -f public/js-synthesizer/js-synthesizer.js ]; then
-  echo "Warning: js-synthesizer.js was not found or could not be copied."
-  echo "Manually copy this file to public/js-synthesizer/ if needed."
-fi
+rm -rf "$DEST"
+mkdir -p "$DEST"
+for file in js-synthesizer.js js-synthesizer.js.map js-synthesizer.min.js js-synthesizer.min.js.map \
+            js-synthesizer.worklet.js js-synthesizer.worklet.js.map \
+            js-synthesizer.worklet.min.js js-synthesizer.worklet.min.js.map; do
+  cp "$SRC/dist/$file" "$DEST/"
+done
+cp "$SRC/externals/libfluidsynth-$FLUIDSYNTH_VERSION.js" "$DEST/"
+cp "$SRC/externals/LICENSE.fluidsynth.txt" "$DEST/"
 
-echo "All files copied successfully to public/js-synthesizer/"
-echo "Don't forget to make this script executable with: chmod +x setup-js-synthesizer.sh"
+echo "Vendored js-synthesizer $(node -p "require('./$SRC/package.json').version") with libfluidsynth $FLUIDSYNTH_VERSION into $DEST"

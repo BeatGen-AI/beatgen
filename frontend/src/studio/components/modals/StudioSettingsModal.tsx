@@ -1,3 +1,4 @@
+import { AVAILABLE_MODELS } from "@/studio/constants/assistantModels";
 import React, { useState, useEffect } from 'react';
 import { Palette, Settings, Brain } from 'lucide-react';
 import { useAppTheme, useTheme } from '../../../lib/theme-provider';
@@ -23,18 +24,13 @@ export interface StudioSettingsModalProps {
   onClose: () => void;
 }
 
-// Dummy data for assistant models - replace with actual data source
-const assistantModels = [
-  { id: 'model1', name: 'GPT-4' },
-  { id: 'model2', name: 'Claude 3 Opus' },
-  { id: 'model3', name: 'Gemini Pro' },
-];
+const assistantModels = AVAILABLE_MODELS.map(name => ({ id: name, name }));
 
 export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps) => {
   const { mode, studioMode } = useAppTheme();
   const { homepageTheme, studioTheme, setHomepageTheme, setStudioTheme } = useTheme();
   
-  const [selectedAssistantModel, setSelectedAssistantModel] = useState(assistantModels[0]?.id || '');
+  const [selectedAssistantModel, setSelectedAssistantModel] = useState<string>(assistantModels[0].id);
 
   const handleAssistantModelChange = (value: string) => {
     setSelectedAssistantModel(value);

@@ -306,6 +306,14 @@ export const downloadAudioTrackFile = async (storageKey: string): Promise<Blob> 
 };
 
 /**
+ * Download a file from storage, resolving the bucket from its storage type
+ * (e.g. sampler tracks made from public drum samples live in the public assets bucket).
+ */
+export const downloadStoredFile = async (storageKey: string, storageType: StorageType): Promise<Blob> => {
+  return await downloadFile(storageKey, storageType);
+};
+
+/**
  * Download a drum sample file from public storage
  * @param storageKey The storage key of the file
  * @returns The file as a Blob, or throws if file doesn't exist

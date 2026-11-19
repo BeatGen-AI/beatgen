@@ -197,6 +197,10 @@ class AssistantRequestModel(AssistantRequest):
     mode: Literal["generate", "edit", "chat", "generate-audio"]
 
 
+# Modes whose `model` is an assistant LLM display name (generate-audio's `model` names an audio model instead)
+LLM_MODES = ("generate", "edit")
+
+
 # Response schema for request creation
 class RequestCreationResponse(BaseModel):
     """Response for request creation"""
@@ -229,6 +233,12 @@ async def create_assistant_request(
     for streaming results.
     """
     try:
+        # The LLM modes need a model from the lineup; reject a missing or unknown one before doing anything
+        # (UnknownModelError / UnknownModelCostError are ValueErrors -> 400 below). There is no default model.
+        if request.mode in LLM_MODES:
+            available_models.get_model_by_name(request.model)
+            get_model_credit_cost(request.model)
+
         # Check rate limits
         if not await request_manager.can_create_request(user.get("id")):
             raise HTTPException(
@@ -653,8 +663,8 @@ async def process_generate_request(
             details=f"Current balance: {user_credits_info.get('balance', 0)}, Cost: {model_cost} credits"
         )
         
-        selected_model_info.api_key = selected_model_info.get_api_key()
-        logger.info(f"Selected model: {selected_model_info}")
+        selected_model_info.get_api_key()  # fail before generating if the provider key is missing
+        logger.info(f"Selected model: {selected_model_info.display_name} ({selected_model_info.provider_name}:{selected_model_info.model_name})")
         
         # Prepare request context with project_id for assistant message saving
         enhanced_context = context.context.copy() if context.context else {}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { downloadAudioTrackFile } from '../../../platform/api/sounds';
+import { downloadAudioTrackFile, downloadStoredFile } from '../../../platform/api/sounds';
+import { StorageType } from '../../../platform/types/storage';
 
 // Global audio context to prevent it from being closed/recreated
 let globalAudioContext: AudioContext | null = null;
@@ -14,6 +15,8 @@ const getGlobalAudioContext = () => {
 
 interface AudioPreviewProps {
   audioUrl: string; // Storage key for the audio file or blob URL
+  // Where a storage key lives; omitted means user audio (tracks bucket).
+  storageType?: `${StorageType}`;
   variant: 'track' | 'card';
   duration?: number; // Required for track variant
   isPlaying?: boolean;
@@ -25,6 +28,7 @@ interface AudioPreviewProps {
 
 const AudioPreview: React.FC<AudioPreviewProps> = ({
   audioUrl,
+  storageType,
   variant,
   duration,
   isPlaying = false,
@@ -127,7 +131,9 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
       } else {
         // Download audio file using the API (storage key)
         try {
-          audioBlob = await downloadAudioTrackFile(audioUrlOrKey);
+          audioBlob = storageType
+            ? await downloadStoredFile(audioUrlOrKey, storageType as StorageType)
+            : await downloadAudioTrackFile(audioUrlOrKey);
         } catch (downloadError) {
           // If the file doesn't exist in storage, throw a specific error
           console.warn(`Failed to download audio file: ${audioUrlOrKey}`, downloadError);
@@ -229,7 +235,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({
     };
 
     loadWaveform();
-  }, [audioUrl, variant]);
+  }, [audioUrl, storageType, variant]);
 
 
   // Note: We're using a global audio context that persists across component lifecycles
