@@ -129,8 +129,10 @@ file_size_limit = "50MiB"
 public = true
 file_size_limit = "50MiB"
 
+# Public: the frontend reads user audio through /storage/v1/object/public/tracks/...
+# (frontend/src/platform/types/storage.ts), so a private bucket breaks audio tracks.
 [storage.buckets.tracks]
-public = false
+public = true
 file_size_limit = "50MiB"
 
 [storage.buckets.profile-pics]
