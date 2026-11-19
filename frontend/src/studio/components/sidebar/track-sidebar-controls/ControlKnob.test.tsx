@@ -18,6 +18,6 @@ describe('ControlKnob with PrimeReact 11', () => {
     expect(paths?.[0].getAttribute('d')).toContain('M ');
     expect(paths?.[1].getAttribute('d')).toContain('M ');
     expect(paths?.[1].getAttribute('stroke')).toBe('#1976d2');
-    expect(getByText('50')).toBeInTheDocument();
+    expect(getByText('50').textContent).toBe('50');
   });
 });
