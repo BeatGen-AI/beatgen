@@ -38,6 +38,31 @@ Flows that must work end to end:
   2026-12-01. `gpt-3.5-turbo` is also the backend's implicit default
   (`chat_session_manager.py`: `ALL_MODELS[0]`).
 
+## Findings during the refresh (verified 2026-11-19)
+
+- **SECURITY (critical, affects production code paths):** the backend shares ONE Supabase
+  client per process, and sign-up/login/set_session store the session on it.
+  1. `Authorization: Bearer ` (empty token) authenticates as the last user who logged in on
+     that worker (JWT verify fails, falls back to `auth.get_user("")`, which uses the stored
+     session).
+  2. `POST /auth/add-password` ignores the caller and sets the password of the last user who
+     logged in on that worker (account takeover). Reproduced with two accounts.
+  Fix assigned to the backend upgrade child (own commits, cherry-pickable as a hotfix).
+- The model metadata cannot create a fresh database: `sampler_tracks.id` has a foreign key
+  to `project_tracks.track_id`, which is not unique (composite PK). `create_all` runs in one
+  transaction, so no tables get created, and `main.py` swallows the error. Assigned to the
+  backend child.
+- `storagetype` enum is `create_type=False`; created by `supabase/migrations`.
+- Redis is a hard runtime dependency (`/users/me` 500s without it), even with
+  `USE_DISTRIBUTED_REQUESTS=false`. Provided by `docker-compose.dev.yml`.
+- Frontend storage helpers (`platform/api/soundfonts.ts`, `platform/api/drum_samples.ts`,
+  `platform/types/storage.ts`) read `process.env.REACT_APP_SUPABASE_URL` (always undefined
+  under Vite) and fall back to the production Supabase URL, so local assets can't load.
+  Parent fixes after the frontend merge.
+- PrimeReact 11 moved to the PrimeUI license (runtime warning when unconfigured). Pinned to
+  the newest OSS 10.x; license change is the user's decision.
+- GitHub Actions `claude-review` does not run: "account is locked due to a billing issue".
+
 ## Contract: assistant model lineup
 
 The frontend sends the **display name** as the wire value (`model` / `chatModel`); the backend

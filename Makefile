@@ -1,6 +1,7 @@
 # Makefile for the beatgen project
 
-.PHONY: install build run clean install-frontend run-frontend install-backend run-backend all help regen-certs lint lint-backend lint-frontend format format-backend format-frontend
+.PHONY: install build run clean install-frontend run-frontend install-backend run-backend all help regen-certs lint lint-backend lint-frontend format format-backend format-frontend \
+	setup dev-certs supabase-keys supabase-start supabase-stop supabase-reset supabase-status dev-services dev-services-stop local-env seed-local local-up local-down
 
 # Default target
 all: install build run
@@ -61,6 +62,14 @@ help:
 	@echo "  run-frontend     - Run the frontend development server"
 	@echo "  run-backend      - Run the backend server"
 	@echo "  clean            - Remove build artifacts and dependencies"
+	@echo ""
+	@echo "Local stack (Docker; see docs/local-development.md):"
+	@echo "  setup            - Install deps, dev TLS certs, local JWT signing key"
+	@echo "  local-up         - Start Supabase + Redis, write env files if missing, seed"
+	@echo "  local-down       - Stop Supabase + Redis (data is kept)"
+	@echo "  supabase-reset   - Wipe the local database and storage, re-apply migrations"
+	@echo "  local-env        - (Re)write backend/.env + frontend/.env.local for the local stack"
+	@echo "  seed-local       - Seed local instruments and drum samples"
 	@echo "  help             - Show this help message"
 
 # Regenerate SSL certificates for localhost using mkcert
@@ -90,3 +99,64 @@ format-frontend: ## format code with eslint
 lint: lint-backend lint-frontend
 
 format: format-backend format-frontend
+
+# ---------------------------------------------------------------------------
+# Local development stack: Supabase CLI (auth, storage, Postgres) + Redis.
+# ---------------------------------------------------------------------------
+SUPABASE := npx --yes supabase@3.2.0
+
+# One-time workspace setup: dependencies, dev TLS certs, local JWT signing key.
+setup: install dev-certs supabase-keys
+
+# Self-signed TLS for the HTTPS dev servers (frontend/.cert is git-ignored).
+# `make regen-certs` is the mkcert alternative that browsers trust.
+dev-certs:
+	@if [ -f frontend/.cert/key.pem ] && [ -f frontend/.cert/cert.pem ]; then \
+		echo "frontend/.cert already exists"; \
+	else \
+		mkdir -p frontend/.cert && \
+		openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+			-keyout frontend/.cert/key.pem -out frontend/.cert/cert.pem -subj "/CN=localhost" \
+			-addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1"; \
+	fi
+
+# The backend only accepts asymmetric (ES256/RS256) Supabase JWTs, so the local stack
+# signs with a generated ES256 key (supabase/signing_keys.json, git-ignored).
+supabase-keys:
+	@if [ -f supabase/signing_keys.json ]; then \
+		echo "supabase/signing_keys.json already exists"; \
+	else \
+		echo '[]' > supabase/signing_keys.json && \
+		$(SUPABASE) gen signing-key --algorithm ES256 --append </dev/null; \
+	fi
+
+supabase-start: supabase-keys
+	$(SUPABASE) start
+
+supabase-stop:
+	$(SUPABASE) stop
+
+supabase-status:
+	$(SUPABASE) status
+
+# Destroys local data: re-creates the database, re-applies supabase/migrations, re-creates buckets.
+supabase-reset:
+	$(SUPABASE) db reset
+
+dev-services:
+	docker compose -f docker-compose.dev.yml up -d --wait
+
+dev-services-stop:
+	docker compose -f docker-compose.dev.yml stop
+
+# Writes backend/.env and frontend/.env.local from `supabase status` (never overwrites).
+local-env:
+	python3 scripts/local_env.py --if-missing
+
+seed-local:
+	cd backend && uv run python scripts/seed_local_dev.py --skip-if-remote
+
+local-up: supabase-start dev-services local-env seed-local
+
+local-down: supabase-stop dev-services-stop
+
