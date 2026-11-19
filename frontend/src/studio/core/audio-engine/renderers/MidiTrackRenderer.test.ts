@@ -175,7 +175,7 @@ describe('MidiTrackRenderer', () => {
       // Check addModule was called for both worklet files
       const mockContext = (renderer as any).audioContext as MockAudioContext;
       expect(mockContext.audioWorklet.addModule).toHaveBeenCalledWith(
-        '/js-synthesizer/libfluidsynth-2.3.0.js'
+        '/js-synthesizer/libfluidsynth-2.4.6.js'
       );
       expect(mockContext.audioWorklet.addModule).toHaveBeenCalledWith(
         '/js-synthesizer/js-synthesizer.worklet.js'

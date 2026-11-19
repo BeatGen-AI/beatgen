@@ -1,3 +1,5 @@
+import { getSupabaseStorageBaseUrl } from '../config/supabase';
+
 /**
  * Storage type enum matching the backend PostgreSQL enum
  */
@@ -16,7 +18,7 @@ export enum StorageType {
  * @returns The full URL to access the file
  */
 export function getStorageUrl(storageKey: string, storageType?: StorageType): string {
-  const baseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://fmpafpwdkegazcerrnso.supabase.co';
+  const baseUrl = getSupabaseStorageBaseUrl();
   
   // Check if storageKey is empty or undefined
   if (!storageKey) {
