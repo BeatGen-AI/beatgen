@@ -30,7 +30,7 @@ export const StudioSettingsModal = ({ open, onClose }: StudioSettingsModalProps)
   const { mode, studioMode } = useAppTheme();
   const { homepageTheme, studioTheme, setHomepageTheme, setStudioTheme } = useTheme();
   
-  const [selectedAssistantModel, setSelectedAssistantModel] = useState(assistantModels[0].id);
+  const [selectedAssistantModel, setSelectedAssistantModel] = useState<string>(assistantModels[0].id);
 
   const handleAssistantModelChange = (value: string) => {
     setSelectedAssistantModel(value);

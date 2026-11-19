@@ -52,7 +52,7 @@ const convertNotesToMidiBlob = async (notes: Note[], trackName: string): Promise
         });
 
         const midiArray = midi.toArray();
-        const midiBlob = new Blob([midiArray], { type: 'audio/midi' });
+        const midiBlob = new Blob([new Uint8Array(midiArray)], { type: 'audio/midi' });
         console.log(`Successfully generated MIDI blob (size: ${midiBlob.size})`);
         return midiBlob;
     } catch (error) {

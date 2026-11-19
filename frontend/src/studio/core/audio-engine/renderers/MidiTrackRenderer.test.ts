@@ -213,7 +213,7 @@ describe('MidiTrackRenderer', () => {
     it('should throw on worklet load failure', async () => {
       const mockContext = new MockAudioContext();
       mockContext.audioWorklet.addModule.mockRejectedValue(new Error('Module failed'));
-      (global as any).AudioContext = vi.fn().mockImplementation(() => mockContext);
+      (global as any).AudioContext = vi.fn().mockImplementation(function () { return mockContext; });
 
       const failingRenderer = new MidiTrackRenderer(soundfontCache);
 
