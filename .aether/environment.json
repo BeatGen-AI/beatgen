@@ -1,0 +1,15 @@
+{
+  "setup": "make setup",
+  "setup_on_boot": "make local-up",
+  "terminals": [
+    {
+      "name": "backend",
+      "command": "make run-backend"
+    },
+    {
+      "name": "frontend",
+      "command": "DEV_SERVER_HTTPS=false DEV_SERVER_ALLOWED_HOSTS=all make run-frontend",
+      "port": 5173
+    }
+  ]
+}

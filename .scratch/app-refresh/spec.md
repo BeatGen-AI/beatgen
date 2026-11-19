@@ -1,6 +1,6 @@
 # App refresh (2026-11): up to date, running, working
 
-Status: in-progress
+Status: in-progress (frontend #203 and backend #204 integrated)
 
 ## Goal
 
@@ -66,6 +66,18 @@ Flows that must work end to end:
 - PrimeReact 11 moved to the PrimeUI license (runtime warning when unconfigured). Pinned to
   the newest OSS 10.x; license change is the user's decision.
 - GitHub Actions `claude-review` does not run: "account is locked due to a billing issue".
+- Fixed in #204 and verified on the merged stack: empty/whitespace bearer -> 401; add-password only
+  changes the caller's password (per-request Supabase auth clients); fresh DB builds all 16
+  tables; a failed `create_db_and_tables` aborts startup.
+- Pre-existing, not fixed (needs a product decision): opening `/studio?projectId=...` by full page
+  load (reload, direct link) shows an empty project until the first click, because project
+  loading awaits `AudioContext.resume()` (audioContextManager.ts), which Chrome holds until a user
+  gesture. Opening from the dashboard (a click) works. Possible fix: load project data first and
+  resume audio on first interaction / play.
+- Pre-existing: assistant SSE `error` events include the server traceback (internal paths) sent
+  to the client.
+- Perplexity: Sonar Chat Completions support ended 2026-09-27 per Perplexity docs;
+  `perplexity_client` (optional research enhancement) is unchanged pending a decision.
 
 ## Contract: assistant model lineup
 
