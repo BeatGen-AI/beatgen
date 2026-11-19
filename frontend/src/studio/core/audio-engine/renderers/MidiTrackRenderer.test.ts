@@ -74,7 +74,7 @@ class MockAudioContext {
 
 // Mock js-synthesizer module
 vi.mock('js-synthesizer', () => ({
-  AudioWorkletNodeSynthesizer: vi.fn().mockImplementation(() => {
+  AudioWorkletNodeSynthesizer: vi.fn().mockImplementation(function () {
     mockSynthInstance = createMockSynth();
     return mockSynthInstance;
   }),
@@ -213,7 +213,7 @@ describe('MidiTrackRenderer', () => {
     it('should throw on worklet load failure', async () => {
       const mockContext = new MockAudioContext();
       mockContext.audioWorklet.addModule.mockRejectedValue(new Error('Module failed'));
-      (global as any).AudioContext = vi.fn().mockImplementation(() => mockContext);
+      (global as any).AudioContext = vi.fn().mockImplementation(function () { return mockContext; });
 
       const failingRenderer = new MidiTrackRenderer(soundfontCache);
 

@@ -26,7 +26,7 @@ let mockPlayerInstances: ReturnType<typeof createMockPlayer>[];
 
 vi.mock('./SamplerChannelPlayer', () => {
   return {
-    SamplerChannelPlayer: vi.fn().mockImplementation(() => {
+    SamplerChannelPlayer: vi.fn().mockImplementation(function () {
       const instance = createMockPlayer();
       mockPlayerInstances.push(instance);
       return instance;
@@ -46,7 +46,7 @@ let mockChannelInstances: ReturnType<typeof createMockChannel>[];
 
 vi.mock('tone', () => {
   return {
-    Channel: vi.fn().mockImplementation(() => {
+    Channel: vi.fn().mockImplementation(function () {
       const instance = createMockChannel();
       mockChannelInstances.push(instance);
       return instance;
@@ -146,13 +146,13 @@ describe('SamplerTrackRenderer', () => {
     buffers = new Map([['buffer-1', createMockBuffer()]]);
 
     // Reset mock implementations
-    (SamplerChannelPlayer as unknown as Mock).mockImplementation(() => {
+    (SamplerChannelPlayer as unknown as Mock).mockImplementation(function () {
       const instance = createMockPlayer();
       mockPlayerInstances.push(instance);
       return instance;
     });
 
-    (Tone.Channel as unknown as Mock).mockImplementation(() => {
+    (Tone.Channel as unknown as Mock).mockImplementation(function () {
       const instance = createMockChannel();
       mockChannelInstances.push(instance);
       return instance;

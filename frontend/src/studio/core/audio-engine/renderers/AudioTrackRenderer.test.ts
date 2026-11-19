@@ -41,8 +41,8 @@ const mockTransport = {
 
 vi.mock('tone', () => ({
   default: {},
-  Player: vi.fn().mockImplementation(() => mockPlayer()),
-  Channel: vi.fn().mockImplementation(() => mockChannel()),
+  Player: vi.fn().mockImplementation(function () { return mockPlayer(); }),
+  Channel: vi.fn().mockImplementation(function () { return mockChannel(); }),
   getTransport: vi.fn(() => mockTransport),
   now: vi.fn(() => 0),
 }));

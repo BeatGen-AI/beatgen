@@ -8,312 +8,128 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-// Import Routes
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AudioTracksRouteImport } from './routes/audio-tracks'
+import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as CompleteProfileRouteImport } from './routes/complete-profile'
+import { Route as CreditsRouteImport } from './routes/credits'
+import { Route as DrumTracksRouteImport } from './routes/drum-tracks'
+import { Route as HomeRouteImport } from './routes/home'
+import { Route as MidiTracksRouteImport } from './routes/midi-tracks'
+import { Route as OauthCallbackRouteImport } from './routes/oauth-callback'
+import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SamplerTracksRouteImport } from './routes/sampler-tracks'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as StudioRouteImport } from './routes/studio'
+import { Route as AccountSubscriptionRouteImport } from './routes/account.subscription'
+import { Route as CheckoutReturnRouteImport } from './routes/checkout/return'
+import { Route as SubscriptionCancelRouteImport } from './routes/subscription.cancel'
+import { Route as SubscriptionSuccessRouteImport } from './routes/subscription.success'
 
-import { Route as rootRoute } from './routes/__root'
-import { Route as StudioImport } from './routes/studio'
-import { Route as SettingsImport } from './routes/settings'
-import { Route as SamplerTracksImport } from './routes/sampler-tracks'
-import { Route as ResetPasswordImport } from './routes/reset-password'
-import { Route as ProjectsImport } from './routes/projects'
-import { Route as ProfileImport } from './routes/profile'
-import { Route as PricingImport } from './routes/pricing'
-import { Route as OauthCallbackImport } from './routes/oauth-callback'
-import { Route as MidiTracksImport } from './routes/midi-tracks'
-import { Route as HomeImport } from './routes/home'
-import { Route as DrumTracksImport } from './routes/drum-tracks'
-import { Route as CreditsImport } from './routes/credits'
-import { Route as CompleteProfileImport } from './routes/complete-profile'
-import { Route as CheckoutImport } from './routes/checkout'
-import { Route as AudioTracksImport } from './routes/audio-tracks'
-import { Route as IndexImport } from './routes/index'
-import { Route as SubscriptionSuccessImport } from './routes/subscription.success'
-import { Route as SubscriptionCancelImport } from './routes/subscription.cancel'
-import { Route as CheckoutReturnImport } from './routes/checkout/return'
-import { Route as AccountSubscriptionImport } from './routes/account.subscription'
-
-// Create/Update Routes
-
-const StudioRoute = StudioImport.update({
-  id: '/studio',
-  path: '/studio',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const SettingsRoute = SettingsImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const SamplerTracksRoute = SamplerTracksImport.update({
-  id: '/sampler-tracks',
-  path: '/sampler-tracks',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const ResetPasswordRoute = ResetPasswordImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const ProjectsRoute = ProjectsImport.update({
-  id: '/projects',
-  path: '/projects',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const ProfileRoute = ProfileImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const PricingRoute = PricingImport.update({
-  id: '/pricing',
-  path: '/pricing',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const OauthCallbackRoute = OauthCallbackImport.update({
-  id: '/oauth-callback',
-  path: '/oauth-callback',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const MidiTracksRoute = MidiTracksImport.update({
-  id: '/midi-tracks',
-  path: '/midi-tracks',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const HomeRoute = HomeImport.update({
-  id: '/home',
-  path: '/home',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const DrumTracksRoute = DrumTracksImport.update({
-  id: '/drum-tracks',
-  path: '/drum-tracks',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const CreditsRoute = CreditsImport.update({
-  id: '/credits',
-  path: '/credits',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const CompleteProfileRoute = CompleteProfileImport.update({
-  id: '/complete-profile',
-  path: '/complete-profile',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const CheckoutRoute = CheckoutImport.update({
-  id: '/checkout',
-  path: '/checkout',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const AudioTracksRoute = AudioTracksImport.update({
-  id: '/audio-tracks',
-  path: '/audio-tracks',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const IndexRoute = IndexImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const SubscriptionSuccessRoute = SubscriptionSuccessImport.update({
-  id: '/subscription/success',
-  path: '/subscription/success',
-  getParentRoute: () => rootRoute,
+const AudioTracksRoute = AudioTracksRouteImport.update({
+  id: '/audio-tracks',
+  path: '/audio-tracks',
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const SubscriptionCancelRoute = SubscriptionCancelImport.update({
-  id: '/subscription/cancel',
-  path: '/subscription/cancel',
-  getParentRoute: () => rootRoute,
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-const CheckoutReturnRoute = CheckoutReturnImport.update({
+const CompleteProfileRoute = CompleteProfileRouteImport.update({
+  id: '/complete-profile',
+  path: '/complete-profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreditsRoute = CreditsRouteImport.update({
+  id: '/credits',
+  path: '/credits',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DrumTracksRoute = DrumTracksRouteImport.update({
+  id: '/drum-tracks',
+  path: '/drum-tracks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MidiTracksRoute = MidiTracksRouteImport.update({
+  id: '/midi-tracks',
+  path: '/midi-tracks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthCallbackRoute = OauthCallbackRouteImport.update({
+  id: '/oauth-callback',
+  path: '/oauth-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsRoute = ProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SamplerTracksRoute = SamplerTracksRouteImport.update({
+  id: '/sampler-tracks',
+  path: '/sampler-tracks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudioRoute = StudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountSubscriptionRoute = AccountSubscriptionRouteImport.update({
+  id: '/account/subscription',
+  path: '/account/subscription',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutReturnRoute = CheckoutReturnRouteImport.update({
   id: '/return',
   path: '/return',
   getParentRoute: () => CheckoutRoute,
 } as any)
-
-const AccountSubscriptionRoute = AccountSubscriptionImport.update({
-  id: '/account/subscription',
-  path: '/account/subscription',
-  getParentRoute: () => rootRoute,
+const SubscriptionCancelRoute = SubscriptionCancelRouteImport.update({
+  id: '/subscription/cancel',
+  path: '/subscription/cancel',
+  getParentRoute: () => rootRouteImport,
 } as any)
-
-// Populate the FileRoutesByPath interface
-
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/audio-tracks': {
-      id: '/audio-tracks'
-      path: '/audio-tracks'
-      fullPath: '/audio-tracks'
-      preLoaderRoute: typeof AudioTracksImport
-      parentRoute: typeof rootRoute
-    }
-    '/checkout': {
-      id: '/checkout'
-      path: '/checkout'
-      fullPath: '/checkout'
-      preLoaderRoute: typeof CheckoutImport
-      parentRoute: typeof rootRoute
-    }
-    '/complete-profile': {
-      id: '/complete-profile'
-      path: '/complete-profile'
-      fullPath: '/complete-profile'
-      preLoaderRoute: typeof CompleteProfileImport
-      parentRoute: typeof rootRoute
-    }
-    '/credits': {
-      id: '/credits'
-      path: '/credits'
-      fullPath: '/credits'
-      preLoaderRoute: typeof CreditsImport
-      parentRoute: typeof rootRoute
-    }
-    '/drum-tracks': {
-      id: '/drum-tracks'
-      path: '/drum-tracks'
-      fullPath: '/drum-tracks'
-      preLoaderRoute: typeof DrumTracksImport
-      parentRoute: typeof rootRoute
-    }
-    '/home': {
-      id: '/home'
-      path: '/home'
-      fullPath: '/home'
-      preLoaderRoute: typeof HomeImport
-      parentRoute: typeof rootRoute
-    }
-    '/midi-tracks': {
-      id: '/midi-tracks'
-      path: '/midi-tracks'
-      fullPath: '/midi-tracks'
-      preLoaderRoute: typeof MidiTracksImport
-      parentRoute: typeof rootRoute
-    }
-    '/oauth-callback': {
-      id: '/oauth-callback'
-      path: '/oauth-callback'
-      fullPath: '/oauth-callback'
-      preLoaderRoute: typeof OauthCallbackImport
-      parentRoute: typeof rootRoute
-    }
-    '/pricing': {
-      id: '/pricing'
-      path: '/pricing'
-      fullPath: '/pricing'
-      preLoaderRoute: typeof PricingImport
-      parentRoute: typeof rootRoute
-    }
-    '/profile': {
-      id: '/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof ProfileImport
-      parentRoute: typeof rootRoute
-    }
-    '/projects': {
-      id: '/projects'
-      path: '/projects'
-      fullPath: '/projects'
-      preLoaderRoute: typeof ProjectsImport
-      parentRoute: typeof rootRoute
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordImport
-      parentRoute: typeof rootRoute
-    }
-    '/sampler-tracks': {
-      id: '/sampler-tracks'
-      path: '/sampler-tracks'
-      fullPath: '/sampler-tracks'
-      preLoaderRoute: typeof SamplerTracksImport
-      parentRoute: typeof rootRoute
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsImport
-      parentRoute: typeof rootRoute
-    }
-    '/studio': {
-      id: '/studio'
-      path: '/studio'
-      fullPath: '/studio'
-      preLoaderRoute: typeof StudioImport
-      parentRoute: typeof rootRoute
-    }
-    '/account/subscription': {
-      id: '/account/subscription'
-      path: '/account/subscription'
-      fullPath: '/account/subscription'
-      preLoaderRoute: typeof AccountSubscriptionImport
-      parentRoute: typeof rootRoute
-    }
-    '/checkout/return': {
-      id: '/checkout/return'
-      path: '/return'
-      fullPath: '/checkout/return'
-      preLoaderRoute: typeof CheckoutReturnImport
-      parentRoute: typeof CheckoutImport
-    }
-    '/subscription/cancel': {
-      id: '/subscription/cancel'
-      path: '/subscription/cancel'
-      fullPath: '/subscription/cancel'
-      preLoaderRoute: typeof SubscriptionCancelImport
-      parentRoute: typeof rootRoute
-    }
-    '/subscription/success': {
-      id: '/subscription/success'
-      path: '/subscription/success'
-      fullPath: '/subscription/success'
-      preLoaderRoute: typeof SubscriptionSuccessImport
-      parentRoute: typeof rootRoute
-    }
-  }
-}
-
-// Create and export the route tree
-
-interface CheckoutRouteChildren {
-  CheckoutReturnRoute: typeof CheckoutReturnRoute
-}
-
-const CheckoutRouteChildren: CheckoutRouteChildren = {
-  CheckoutReturnRoute: CheckoutReturnRoute,
-}
-
-const CheckoutRouteWithChildren = CheckoutRoute._addFileChildren(
-  CheckoutRouteChildren,
-)
+const SubscriptionSuccessRoute = SubscriptionSuccessRouteImport.update({
+  id: '/subscription/success',
+  path: '/subscription/success',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -337,7 +153,6 @@ export interface FileRoutesByFullPath {
   '/subscription/cancel': typeof SubscriptionCancelRoute
   '/subscription/success': typeof SubscriptionSuccessRoute
 }
-
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/audio-tracks': typeof AudioTracksRoute
@@ -360,9 +175,8 @@ export interface FileRoutesByTo {
   '/subscription/cancel': typeof SubscriptionCancelRoute
   '/subscription/success': typeof SubscriptionSuccessRoute
 }
-
 export interface FileRoutesById {
-  __root__: typeof rootRoute
+  __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/audio-tracks': typeof AudioTracksRoute
   '/checkout': typeof CheckoutRouteWithChildren
@@ -384,7 +198,6 @@ export interface FileRoutesById {
   '/subscription/cancel': typeof SubscriptionCancelRoute
   '/subscription/success': typeof SubscriptionSuccessRoute
 }
-
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
@@ -454,7 +267,6 @@ export interface FileRouteTypes {
     | '/subscription/success'
   fileRoutesById: FileRoutesById
 }
-
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AudioTracksRoute: typeof AudioTracksRoute
@@ -477,6 +289,163 @@ export interface RootRouteChildren {
   SubscriptionSuccessRoute: typeof SubscriptionSuccessRoute
 }
 
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audio-tracks': {
+      id: '/audio-tracks'
+      path: '/audio-tracks'
+      fullPath: '/audio-tracks'
+      preLoaderRoute: typeof AudioTracksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/complete-profile': {
+      id: '/complete-profile'
+      path: '/complete-profile'
+      fullPath: '/complete-profile'
+      preLoaderRoute: typeof CompleteProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/credits': {
+      id: '/credits'
+      path: '/credits'
+      fullPath: '/credits'
+      preLoaderRoute: typeof CreditsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/drum-tracks': {
+      id: '/drum-tracks'
+      path: '/drum-tracks'
+      fullPath: '/drum-tracks'
+      preLoaderRoute: typeof DrumTracksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/midi-tracks': {
+      id: '/midi-tracks'
+      path: '/midi-tracks'
+      fullPath: '/midi-tracks'
+      preLoaderRoute: typeof MidiTracksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth-callback': {
+      id: '/oauth-callback'
+      path: '/oauth-callback'
+      fullPath: '/oauth-callback'
+      preLoaderRoute: typeof OauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects': {
+      id: '/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sampler-tracks': {
+      id: '/sampler-tracks'
+      path: '/sampler-tracks'
+      fullPath: '/sampler-tracks'
+      preLoaderRoute: typeof SamplerTracksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/studio': {
+      id: '/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account/subscription': {
+      id: '/account/subscription'
+      path: '/account/subscription'
+      fullPath: '/account/subscription'
+      preLoaderRoute: typeof AccountSubscriptionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout/return': {
+      id: '/checkout/return'
+      path: '/return'
+      fullPath: '/checkout/return'
+      preLoaderRoute: typeof CheckoutReturnRouteImport
+      parentRoute: typeof CheckoutRoute
+    }
+    '/subscription/cancel': {
+      id: '/subscription/cancel'
+      path: '/subscription/cancel'
+      fullPath: '/subscription/cancel'
+      preLoaderRoute: typeof SubscriptionCancelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/subscription/success': {
+      id: '/subscription/success'
+      path: '/subscription/success'
+      fullPath: '/subscription/success'
+      preLoaderRoute: typeof SubscriptionSuccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+  }
+}
+
+interface CheckoutRouteChildren {
+  CheckoutReturnRoute: typeof CheckoutReturnRoute
+}
+
+const CheckoutRouteChildren: CheckoutRouteChildren = {
+  CheckoutReturnRoute: CheckoutReturnRoute,
+}
+
+const CheckoutRouteWithChildren = CheckoutRoute._addFileChildren(
+  CheckoutRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AudioTracksRoute: AudioTracksRoute,
@@ -498,102 +467,6 @@ const rootRouteChildren: RootRouteChildren = {
   SubscriptionCancelRoute: SubscriptionCancelRoute,
   SubscriptionSuccessRoute: SubscriptionSuccessRoute,
 }
-
-export const routeTree = rootRoute
+export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-/* ROUTE_MANIFEST_START
-{
-  "routes": {
-    "__root__": {
-      "filePath": "__root.tsx",
-      "children": [
-        "/",
-        "/audio-tracks",
-        "/checkout",
-        "/complete-profile",
-        "/credits",
-        "/drum-tracks",
-        "/home",
-        "/midi-tracks",
-        "/oauth-callback",
-        "/pricing",
-        "/profile",
-        "/projects",
-        "/reset-password",
-        "/sampler-tracks",
-        "/settings",
-        "/studio",
-        "/account/subscription",
-        "/subscription/cancel",
-        "/subscription/success"
-      ]
-    },
-    "/": {
-      "filePath": "index.tsx"
-    },
-    "/audio-tracks": {
-      "filePath": "audio-tracks.tsx"
-    },
-    "/checkout": {
-      "filePath": "checkout.tsx",
-      "children": [
-        "/checkout/return"
-      ]
-    },
-    "/complete-profile": {
-      "filePath": "complete-profile.tsx"
-    },
-    "/credits": {
-      "filePath": "credits.tsx"
-    },
-    "/drum-tracks": {
-      "filePath": "drum-tracks.tsx"
-    },
-    "/home": {
-      "filePath": "home.tsx"
-    },
-    "/midi-tracks": {
-      "filePath": "midi-tracks.tsx"
-    },
-    "/oauth-callback": {
-      "filePath": "oauth-callback.tsx"
-    },
-    "/pricing": {
-      "filePath": "pricing.tsx"
-    },
-    "/profile": {
-      "filePath": "profile.tsx"
-    },
-    "/projects": {
-      "filePath": "projects.tsx"
-    },
-    "/reset-password": {
-      "filePath": "reset-password.tsx"
-    },
-    "/sampler-tracks": {
-      "filePath": "sampler-tracks.tsx"
-    },
-    "/settings": {
-      "filePath": "settings.tsx"
-    },
-    "/studio": {
-      "filePath": "studio.tsx"
-    },
-    "/account/subscription": {
-      "filePath": "account.subscription.tsx"
-    },
-    "/checkout/return": {
-      "filePath": "checkout/return.tsx",
-      "parent": "/checkout"
-    },
-    "/subscription/cancel": {
-      "filePath": "subscription.cancel.tsx"
-    },
-    "/subscription/success": {
-      "filePath": "subscription.success.tsx"
-    }
-  }
-}
-ROUTE_MANIFEST_END */

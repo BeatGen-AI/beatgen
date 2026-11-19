@@ -1,3 +1,4 @@
+import { AVAILABLE_MODELS } from "@/studio/constants/assistantModels";
 import React, { useState, useEffect, useRef } from 'react';
 import {IconX} from '@tabler/icons-react';
 import { IconAi } from '@tabler/icons-react';
@@ -63,7 +64,7 @@ interface ChatWindowProps {
 }
 
 // Define available AI models (placeholder)
-const AVAILABLE_MODELS = ["Gemini Pro 2.5", "Gemini Flash 2.5", "Deepseek R1", "Deepseek V3", "Claude 4 Sonnet", "Claude 4 Opus", "Claude 3.7 Sonnet",  "GPT-4.1", "GPT-4o", "o3", "o3-mini", "Llama 4 Maverick", "Llama 4 Scout"];
+
 
 // Get available audio generation models from config
 const AVAILABLE_AUDIO_MODELS = getAvailableAudioModels();
